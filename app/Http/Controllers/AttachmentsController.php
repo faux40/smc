@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Events\AttachmentCreated;
 use App\Events\AttachmentDeleted;
 use App\Models\Attachment;
+use App\Models\Training;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -23,6 +24,7 @@ class AttachmentsController extends Controller
      */
     private const ALLOWED_ATTACHABLE_TYPES = [
         User::class,
+        Training::class,
     ];
 
     private const STORAGE_DISK = 'linode';

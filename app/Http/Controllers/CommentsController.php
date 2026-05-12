@@ -6,6 +6,7 @@ use App\Events\CommentCreated;
 use App\Events\CommentDeleted;
 use App\Events\CommentUpdated;
 use App\Models\Comment;
+use App\Models\Training;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,7 @@ class CommentsController extends Controller
      */
     private const ALLOWED_COMMENTABLE_TYPES = [
         User::class,
+        Training::class,
     ];
 
     public function index(Request $request): JsonResponse

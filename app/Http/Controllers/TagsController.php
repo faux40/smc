@@ -8,6 +8,7 @@ use App\Events\TagDeleted;
 use App\Events\TagDetached;
 use App\Events\TagUpdated;
 use App\Models\Tag;
+use App\Models\Training;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -25,6 +26,7 @@ class TagsController extends Controller
      */
     private const ALLOWED_TAGGABLE_TYPES = [
         User::class,
+        Training::class,
     ];
 
     /**

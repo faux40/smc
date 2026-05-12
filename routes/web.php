@@ -5,6 +5,7 @@ use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\StdFrequenciesController;
 use App\Http\Controllers\TagsController;
+use App\Http\Controllers\TrainingsController;
 use App\Http\Controllers\UsersController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -56,6 +57,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/std-frequencies', [StdFrequenciesController::class, 'store'])->name('std-frequencies.store');
     Route::patch('api/std-frequencies/{stdFrequency}', [StdFrequenciesController::class, 'update'])->name('std-frequencies.update');
     Route::delete('api/std-frequencies/{stdFrequency}', [StdFrequenciesController::class, 'destroy'])->name('std-frequencies.destroy');
+
+    // Trainings library — first concrete module. Read open to any org
+    // member (downstream rqmt_elements pickers need the list); CRUD is
+    // Owner/SA/Admin. Inertia page lives at /trainings (Vue route).
+    Route::get('api/trainings', [TrainingsController::class, 'index'])->name('trainings.index');
+    Route::post('api/trainings', [TrainingsController::class, 'store'])->name('trainings.store');
+    Route::patch('api/trainings/{training}', [TrainingsController::class, 'update'])->name('trainings.update');
+    Route::delete('api/trainings/{training}', [TrainingsController::class, 'destroy'])->name('trainings.destroy');
+
+    Route::inertia('trainings', 'trainings/Index')->name('trainings.page');
 });
 
 // Permanent realtime smoke canary. Dispatches a RealtimePing event on
