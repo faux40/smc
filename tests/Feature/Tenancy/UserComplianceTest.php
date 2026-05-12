@@ -278,7 +278,7 @@ class UserComplianceTest extends TestCase
         // One requirement with TWO elements: one current, one overdue.
         // The assignment should roll up to overdue.
         $req = Requirement::factory()->for($this->org, 'organization')->create();
-        $currentElement = RqmtElement::factory()
+        RqmtElement::factory()
             ->for($this->org, 'organization')
             ->for($req, 'requirement')
             ->state([
@@ -289,7 +289,7 @@ class UserComplianceTest extends TestCase
                 'initial_only' => false,
             ])
             ->create();
-        $overdueElement = RqmtElement::factory()
+        RqmtElement::factory()
             ->for($this->org, 'organization')
             ->for($req, 'requirement')
             ->state([
@@ -306,10 +306,9 @@ class UserComplianceTest extends TestCase
             ->for($req, 'requirement')
             ->create(['start_date' => $this->now->subMonths(2)->toDateString()]);
 
-        // Touch the as_needed element (always-current) but leave the
-        // initial_only element uncompleted (will be overdue).
-        $_unusedElement = $currentElement;
-
+        // The as_needed element rolls up as current; the initial_only
+        // element (uncompleted, past start) rolls up as overdue. Worst-of
+        // makes the assignment overdue.
         $result = $this->calc()->compute($this->user, $this->now);
 
         $this->assertCount(1, $result['groups']['overdue']);
@@ -393,6 +392,76 @@ class UserComplianceTest extends TestCase
         $result = $this->calc()->compute($this->user, $this->now);
 
         $this->assertCount(2, $result['completions']);
+    }
+
+    public function test_summarize_org_counts_assignments_by_status_across_users(): void
+    {
+        // User A: 1 overdue (initial_only never completed past start_date).
+        $reqA = Requirement::factory()->for($this->org, 'organization')->create();
+        RqmtElement::factory()
+            ->for($this->org, 'organization')
+            ->for($reqA, 'requirement')
+            ->state([
+                'module_type' => Training::class,
+                'module_id' => $this->training->id,
+                'initial_only' => true,
+                'repeating' => false,
+                'as_needed' => false,
+            ])
+            ->create();
+        Assignment::factory()
+            ->for($this->org, 'organization')
+            ->for($this->user, 'user')
+            ->for($reqA, 'requirement')
+            ->create(['start_date' => $this->now->subMonths(2)->toDateString()]);
+
+        // User B: 1 current (as_needed element, always current).
+        $userB = User::factory()->for($this->org, 'organization')->create();
+        $reqB = Requirement::factory()->for($this->org, 'organization')->create();
+        RqmtElement::factory()
+            ->for($this->org, 'organization')
+            ->for($reqB, 'requirement')
+            ->state([
+                'module_type' => Training::class,
+                'module_id' => $this->training->id,
+                'initial_only' => false,
+                'repeating' => false,
+                'as_needed' => true,
+            ])
+            ->create();
+        Assignment::factory()
+            ->for($this->org, 'organization')
+            ->for($userB, 'user')
+            ->for($reqB, 'requirement')
+            ->create();
+
+        $summary = $this->calc()->summarizeOrg($this->org, $this->now);
+
+        $this->assertSame(1, $summary['counts']['overdue']);
+        $this->assertSame(1, $summary['counts']['current']);
+        $this->assertSame(0, $summary['counts']['due_soon']);
+        $this->assertSame(2, $summary['total_assignments']);
+        $this->assertSame(2, $summary['total_users']);
+        $this->assertSame(1, $summary['users_with_overdue']);
+    }
+
+    public function test_summarize_org_is_org_scoped(): void
+    {
+        // Same setUp $this->user belongs to $this->org. Build a second
+        // org with its own user/assignment that summarizeOrg must not see.
+        $otherOrg = Organization::factory()->create();
+        $otherUser = User::factory()->for($otherOrg, 'organization')->create();
+        $otherReq = Requirement::factory()->for($otherOrg, 'organization')->create();
+        Assignment::factory()
+            ->for($otherOrg, 'organization')
+            ->for($otherUser, 'user')
+            ->for($otherReq, 'requirement')
+            ->create(['start_date' => $this->now->subMonths(2)->toDateString()]);
+
+        $summary = $this->calc()->summarizeOrg($this->org, $this->now);
+
+        $this->assertSame(0, $summary['total_assignments']);
+        $this->assertSame(1, $summary['total_users']);
     }
 
     public function test_custom_due_soon_window_is_respected(): void

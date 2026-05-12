@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Assignment;
 use App\Models\Completion;
+use App\Models\Organization;
 use App\Models\RqmtElement;
 use App\Models\StdFrequency;
 use App\Models\User;
@@ -124,6 +125,69 @@ class UserComplianceCalculator
         return [
             'groups' => $groups,
             'completions' => $serialisedCompletions,
+        ];
+    }
+
+    /**
+     * Org-wide rollup driving Phase 14 dashboard widgets. Sums every
+     * user's per-assignment status (computed by compute()) into a single
+     * counts map plus headline totals.
+     *
+     * Iterates users — fine for orgs in the hundreds (DevDataSeeder ships
+     * 21 in BG). When orgs grow past a few thousand users this should
+     * move to a query-based aggregation; for now the per-user math is
+     * the single source of truth so the dashboard can't drift from the
+     * detail page.
+     *
+     * @return array{
+     *     counts: array{overdue:int, due_soon:int, current:int, never_started:int, inactive:int},
+     *     total_assignments: int,
+     *     total_users: int,
+     *     users_with_overdue: int
+     * }
+     */
+    public function summarizeOrg(Organization $org, ?CarbonImmutable $now = null): array
+    {
+        $now = $now ?? CarbonImmutable::now();
+
+        $counts = [
+            self::STATUS_OVERDUE => 0,
+            self::STATUS_DUE_SOON => 0,
+            self::STATUS_CURRENT => 0,
+            self::STATUS_NEVER_STARTED => 0,
+            self::STATUS_INACTIVE => 0,
+        ];
+
+        $totalAssignments = 0;
+        $usersWithOverdue = 0;
+
+        $users = User::query()
+            ->where('org_id', $org->id)
+            ->get();
+
+        foreach ($users as $user) {
+            $result = $this->compute($user, $now);
+            $hasOverdue = false;
+
+            foreach ($result['groups'] as $status => $rows) {
+                $n = count($rows);
+                $counts[$status] += $n;
+                $totalAssignments += $n;
+                if ($status === self::STATUS_OVERDUE && $n > 0) {
+                    $hasOverdue = true;
+                }
+            }
+
+            if ($hasOverdue) {
+                $usersWithOverdue++;
+            }
+        }
+
+        return [
+            'counts' => $counts,
+            'total_assignments' => $totalAssignments,
+            'total_users' => $users->count(),
+            'users_with_overdue' => $usersWithOverdue,
         ];
     }
 
