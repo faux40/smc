@@ -1,6 +1,7 @@
 <?php
 
 use App\Events\RealtimePing;
+use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\TagsController;
 use App\Http\Controllers\UsersController;
 use Illuminate\Http\Request;
@@ -30,6 +31,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('api/tags/{tag}', [TagsController::class, 'destroy'])->name('tags.destroy');
     Route::post('api/tags/attach', [TagsController::class, 'attach'])->name('tags.attach');
     Route::post('api/tags/detach', [TagsController::class, 'detach'])->name('tags.detach');
+
+    // Polymorphic comment API — consumed by <CommentsList>. Anyone in the
+    // org can read/post; author-only edit; author OR admin+ delete.
+    Route::get('api/comments', [CommentsController::class, 'index'])->name('comments.index');
+    Route::post('api/comments', [CommentsController::class, 'store'])->name('comments.store');
+    Route::patch('api/comments/{comment}', [CommentsController::class, 'update'])->name('comments.update');
+    Route::delete('api/comments/{comment}', [CommentsController::class, 'destroy'])->name('comments.destroy');
 });
 
 // Permanent realtime smoke canary. Dispatches a RealtimePing event on

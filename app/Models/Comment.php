@@ -21,6 +21,7 @@ class Comment extends Model
         'commentable_type',
         'commentable_id',
         'author_id',
+        'parent_id',
         'body',
     ];
 
@@ -32,5 +33,10 @@ class Comment extends Model
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'author_id');
+    }
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Comment::class, 'parent_id');
     }
 }

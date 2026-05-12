@@ -5,6 +5,7 @@ import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileCo
 import DeleteUser from '@/components/DeleteUser.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import CommentsList from '@/components/CommentsList.vue';
 import TagsField from '@/components/TagsField.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -174,6 +175,18 @@ const user = computed(() => page.props.auth.user);
                         (user as any).isAdmin,
                 )
             "
+        />
+    </div>
+
+    <div class="space-y-3">
+        <Heading
+            variant="small"
+            title="Comments"
+            description="Notes on your profile."
+        />
+        <CommentsList
+            morphable-type="App\Models\User"
+            :morphable-id="user.id"
         />
     </div>
 
