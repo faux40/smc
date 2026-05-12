@@ -1,6 +1,7 @@
 <?php
 
 use App\Events\RealtimePing;
+use App\Http\Controllers\AssignmentsController;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\RequirementsController;
@@ -88,6 +89,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/requirements/{requirement}/elements', [RqmtElementsController::class, 'store'])->name('requirements.elements.store');
     Route::patch('api/rqmt-elements/{rqmtElement}', [RqmtElementsController::class, 'update'])->name('rqmt-elements.update');
     Route::delete('api/rqmt-elements/{rqmtElement}', [RqmtElementsController::class, 'destroy'])->name('rqmt-elements.destroy');
+
+    // Assignments — flat API with query filters (?user_id=…, ?requirement_id=…).
+    // All gated Owner/SA/Admin in Phase 10; self-view added in 12.3.
+    // No UI yet — store is consumed by upcoming Phase 11/12 pages.
+    Route::get('api/assignments', [AssignmentsController::class, 'index'])->name('assignments.index');
+    Route::post('api/assignments', [AssignmentsController::class, 'store'])->name('assignments.store');
+    Route::patch('api/assignments/{assignment}', [AssignmentsController::class, 'update'])->name('assignments.update');
+    Route::delete('api/assignments/{assignment}', [AssignmentsController::class, 'destroy'])->name('assignments.destroy');
 
     Route::get('requirements/{requirement}', function (\App\Models\Requirement $requirement) {
         abort_unless(auth()->user()->org_id === $requirement->org_id, 403);
