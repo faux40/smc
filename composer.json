@@ -16,6 +16,7 @@
         "laravel/reverb": "^1.10",
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.14",
+        "league/flysystem-aws-s3-v3": "^3.32",
         "spatie/laravel-activitylog": "^4.12",
         "spatie/laravel-permission": "^7.4"
     },

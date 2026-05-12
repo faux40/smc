@@ -1,6 +1,7 @@
 <?php
 
 use App\Events\RealtimePing;
+use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\TagsController;
 use App\Http\Controllers\UsersController;
@@ -38,6 +39,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/comments', [CommentsController::class, 'store'])->name('comments.store');
     Route::patch('api/comments/{comment}', [CommentsController::class, 'update'])->name('comments.update');
     Route::delete('api/comments/{comment}', [CommentsController::class, 'destroy'])->name('comments.destroy');
+
+    // Polymorphic attachment API — consumed by <AttachmentsList>. Any org
+    // member can read/upload; uploader OR admin+ can delete. Download
+    // 302-redirects to a signed temporary URL on the Linode disk.
+    Route::get('api/attachments', [AttachmentsController::class, 'index'])->name('attachments.index');
+    Route::post('api/attachments', [AttachmentsController::class, 'store'])->name('attachments.store');
+    Route::delete('api/attachments/{attachment}', [AttachmentsController::class, 'destroy'])->name('attachments.destroy');
+    Route::get('api/attachments/{attachment}/download', [AttachmentsController::class, 'download'])->name('attachments.download');
 });
 
 // Permanent realtime smoke canary. Dispatches a RealtimePing event on

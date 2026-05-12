@@ -5,6 +5,7 @@ import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileCo
 import DeleteUser from '@/components/DeleteUser.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import AttachmentsList from '@/components/AttachmentsList.vue';
 import CommentsList from '@/components/CommentsList.vue';
 import TagsField from '@/components/TagsField.vue';
 import { Button } from '@/components/ui/button';
@@ -185,6 +186,18 @@ const user = computed(() => page.props.auth.user);
             description="Notes on your profile."
         />
         <CommentsList
+            morphable-type="App\Models\User"
+            :morphable-id="user.id"
+        />
+    </div>
+
+    <div class="space-y-3">
+        <Heading
+            variant="small"
+            title="Attachments"
+            description="Files attached to your profile."
+        />
+        <AttachmentsList
             morphable-type="App\Models\User"
             :morphable-id="user.id"
         />

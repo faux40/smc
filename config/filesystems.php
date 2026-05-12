@@ -60,6 +60,23 @@ return [
             'report' => false,
         ],
 
+        // Linode Object Storage is S3-compatible. Attachments live here in
+        // both dev + prod. Credentials live in .env (LINODE_*); we set the
+        // bucket + endpoint here. temporaryUrl() works since the driver is
+        // s3 under the hood — Linode generates signed URLs for the bucket.
+        'linode' => [
+            'driver' => 's3',
+            'key' => env('LINODE_ACCESS_KEY'),
+            'secret' => env('LINODE_SECRET_KEY'),
+            'region' => env('LINODE_REGION'),
+            'bucket' => env('LINODE_BUCKET'),
+            'url' => env('LINODE_URL'),
+            'endpoint' => env('LINODE_ENDPOINT'),
+            'use_path_style_endpoint' => env('LINODE_PATH_STYLE', true),
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*
