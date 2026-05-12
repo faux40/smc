@@ -3,6 +3,7 @@
 use App\Events\RealtimePing;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\CommentsController;
+use App\Http\Controllers\RequirementsController;
 use App\Http\Controllers\StdFrequenciesController;
 use App\Http\Controllers\TagsController;
 use App\Http\Controllers\TrainingsController;
@@ -67,6 +68,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('api/trainings/{training}', [TrainingsController::class, 'destroy'])->name('trainings.destroy');
 
     Route::inertia('trainings', 'trainings/Index')->name('trainings.page');
+
+    // Requirements library — named groups of rqmt_elements (9.2 adds the
+    // nested element API). Anyone can list; CRUD is Owner/SA/Admin.
+    Route::get('api/requirements', [RequirementsController::class, 'index'])->name('requirements.index');
+    Route::post('api/requirements', [RequirementsController::class, 'store'])->name('requirements.store');
+    Route::patch('api/requirements/{requirement}', [RequirementsController::class, 'update'])->name('requirements.update');
+    Route::delete('api/requirements/{requirement}', [RequirementsController::class, 'destroy'])->name('requirements.destroy');
+
+    Route::inertia('requirements', 'requirements/Index')->name('requirements.page');
 });
 
 // Permanent realtime smoke canary. Dispatches a RealtimePing event on

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { GraduationCap, LayoutGrid, Menu, Search, Users as UsersIcon } from 'lucide-vue-next';
+import { ClipboardList, GraduationCap, LayoutGrid, Menu, Search, Users as UsersIcon } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
@@ -36,6 +36,7 @@ import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
+import { page as requirementsPage } from '@/routes/requirements';
 import { page as trainingsPage } from '@/routes/trainings';
 import { index as usersIndex } from '@/routes/users';
 import type { BreadcrumbItem, NavItem } from '@/types';
@@ -71,6 +72,7 @@ const mainNavItems = computed<NavItem[]>(() => {
     if (u && (u.isOwner || u.isSuperAdmin || u.isAdmin)) {
         items.push({ title: 'Users', href: usersIndex(), icon: UsersIcon });
         items.push({ title: 'Trainings', href: trainingsPage(), icon: GraduationCap });
+        items.push({ title: 'Requirements', href: requirementsPage(), icon: ClipboardList });
     }
 
     return items;

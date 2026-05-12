@@ -7,6 +7,7 @@ use App\Events\TagCreated;
 use App\Events\TagDeleted;
 use App\Events\TagDetached;
 use App\Events\TagUpdated;
+use App\Models\Requirement;
 use App\Models\Tag;
 use App\Models\Training;
 use App\Models\User;
@@ -27,6 +28,7 @@ class TagsController extends Controller
     private const ALLOWED_TAGGABLE_TYPES = [
         User::class,
         Training::class,
+        Requirement::class,
     ];
 
     /**
