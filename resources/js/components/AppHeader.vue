@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { ClipboardList, GraduationCap, LayoutGrid, Menu, Search, Users as UsersIcon } from 'lucide-vue-next';
+import { ClipboardList, GraduationCap, LayoutGrid, Menu, Search, Tags as TagsIcon, Users as UsersIcon } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
@@ -37,6 +37,7 @@ import { getInitials } from '@/composables/useInitials';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { page as requirementsPage } from '@/routes/requirements';
+import { page as tagsPage } from '@/routes/tags';
 import { page as trainingsPage } from '@/routes/trainings';
 import { index as usersIndex } from '@/routes/users';
 import type { BreadcrumbItem, NavItem } from '@/types';
@@ -73,6 +74,7 @@ const mainNavItems = computed<NavItem[]>(() => {
         items.push({ title: 'Users', href: usersIndex(), icon: UsersIcon });
         items.push({ title: 'Trainings', href: trainingsPage(), icon: GraduationCap });
         items.push({ title: 'Requirements', href: requirementsPage(), icon: ClipboardList });
+        items.push({ title: 'Tags', href: tagsPage(), icon: TagsIcon });
     }
 
     return items;

@@ -19,6 +19,11 @@ export interface TagRow {
     id: string;
     name: string;
     color: string | null;
+    // How many morphable rows this tag is attached to across the org.
+    // Hydrated by GET /api/tags and patched in place by TagAttached /
+    // TagDetached broadcasts. Defaults to 0 for tags created in this
+    // tab — the broadcast handler will reconcile.
+    attached_count: number;
 }
 
 function defaultHeaders(): Record<string, string> {
@@ -81,8 +86,11 @@ export const useTagsStore = defineStore('tags', () => {
             { name, color },
             { headers: defaultHeaders() },
         );
-        library.value = [...library.value, data];
-        return data;
+        // POST /api/tags returns only id/name/color — backfill the count
+        // so the library shape stays consistent.
+        const row: TagRow = { ...data, attached_count: data.attached_count ?? 0 };
+        library.value = [...library.value, row];
+        return row;
     }
 
     async function rename(id: string, name: string, color: string | null = null): Promise<void> {
@@ -91,7 +99,10 @@ export const useTagsStore = defineStore('tags', () => {
             { name, color },
             { headers: defaultHeaders() },
         );
-        library.value = library.value.map((t) => (t.id === id ? data : t));
+        // PATCH returns id/name/color — preserve the locally-tracked count.
+        library.value = library.value.map((t) =>
+            t.id === id ? { ...t, ...data, attached_count: t.attached_count } : t,
+        );
     }
 
     async function destroy(id: string): Promise<void> {
@@ -113,8 +124,17 @@ export const useTagsStore = defineStore('tags', () => {
         );
         const key = keyOf(morphable);
         const cur = attached.value[key] ?? [];
+        // Originating tab: bump locally because the broadcast self-echo is
+        // filtered out (X-Origin-Tab). Peer tabs increment via the TagAttached
+        // handler. Guard on the morphable-level idempotency since attach is
+        // a syncWithoutDetaching on the server too.
         if (!cur.includes(tagId)) {
             attached.value = { ...attached.value, [key]: [...cur, tagId] };
+            library.value = library.value.map((t) =>
+                t.id === tagId
+                    ? { ...t, attached_count: t.attached_count + 1 }
+                    : t,
+            );
         }
     }
 
@@ -126,7 +146,15 @@ export const useTagsStore = defineStore('tags', () => {
         );
         const key = keyOf(morphable);
         const cur = attached.value[key] ?? [];
+        const wasAttached = cur.includes(tagId);
         attached.value = { ...attached.value, [key]: cur.filter((id) => id !== tagId) };
+        if (wasAttached) {
+            library.value = library.value.map((t) =>
+                t.id === tagId
+                    ? { ...t, attached_count: Math.max(0, t.attached_count - 1) }
+                    : t,
+            );
+        }
     }
 
     /**
@@ -140,13 +168,25 @@ export const useTagsStore = defineStore('tags', () => {
 
         const { bind } = useRealtime(`org.${orgId}`);
 
-        bind('TagCreated', (p: TagRow) => {
+        bind('TagCreated', (p: Partial<TagRow> & { id: string; name: string }) => {
             if (!library.value.some((t) => t.id === p.id)) {
-                library.value = [...library.value, p];
+                library.value = [
+                    ...library.value,
+                    {
+                        id: p.id,
+                        name: p.name,
+                        color: p.color ?? null,
+                        attached_count: p.attached_count ?? 0,
+                    },
+                ];
             }
         });
-        bind('TagUpdated', (p: TagRow) => {
-            library.value = library.value.map((t) => (t.id === p.id ? p : t));
+        bind('TagUpdated', (p: Partial<TagRow> & { id: string; name: string }) => {
+            library.value = library.value.map((t) =>
+                t.id === p.id
+                    ? { ...t, name: p.name, color: p.color ?? null }
+                    : t,
+            );
         });
         bind('TagDeleted', (p: { id: string }) => {
             library.value = library.value.filter((t) => t.id !== p.id);
@@ -159,14 +199,30 @@ export const useTagsStore = defineStore('tags', () => {
         bind('TagAttached', (p: { tag_id: string; taggable_type: string; taggable_id: string }) => {
             const key = `${p.taggable_type}::${p.taggable_id}`;
             const cur = attached.value[key] ?? [];
-            if (!cur.includes(p.tag_id)) {
+            // Only bump the library count if the attach is actually new for
+            // this morphable (idempotent attaches must not double-count).
+            const newAttachment = !cur.includes(p.tag_id);
+            if (newAttachment) {
                 attached.value = { ...attached.value, [key]: [...cur, p.tag_id] };
+                library.value = library.value.map((t) =>
+                    t.id === p.tag_id
+                        ? { ...t, attached_count: t.attached_count + 1 }
+                        : t,
+                );
             }
         });
         bind('TagDetached', (p: { tag_id: string; taggable_type: string; taggable_id: string }) => {
             const key = `${p.taggable_type}::${p.taggable_id}`;
             const cur = attached.value[key] ?? [];
+            const wasAttached = cur.includes(p.tag_id);
             attached.value = { ...attached.value, [key]: cur.filter((id) => id !== p.tag_id) };
+            if (wasAttached) {
+                library.value = library.value.map((t) =>
+                    t.id === p.tag_id
+                        ? { ...t, attached_count: Math.max(0, t.attached_count - 1) }
+                        : t,
+                );
+            }
         });
     }
 

@@ -40,6 +40,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/tags/attach', [TagsController::class, 'attach'])->name('tags.attach');
     Route::post('api/tags/detach', [TagsController::class, 'detach'])->name('tags.detach');
 
+    // Tags library admin page. Read open to any org member (the page
+    // hides write UI for non-admins); write API enforces role via policy.
+    Route::inertia('tags', 'tags/Index')->name('tags.page');
+
     // Polymorphic comment API — consumed by <CommentsList>. Anyone in the
     // org can read/post; author-only edit; author OR admin+ delete.
     Route::get('api/comments', [CommentsController::class, 'index'])->name('comments.index');

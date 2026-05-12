@@ -16,6 +16,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import TagPill from '@/components/TagPill.vue';
 import { useTagsStore, type TagRow } from '@/stores/tags';
 
 type Mode = 'left' | 'right';
@@ -91,24 +92,9 @@ const showCreateRow = computed(
     () => props.canManageLibrary && query.value.trim().length > 0 && !exactMatch.value,
 );
 
-const pillClasses = computed(() => {
-    const base = 'inline-flex items-center gap-1 rounded-full font-medium ring-1 ring-inset';
-    const sized = props.size === 'md' ? 'px-2.5 py-1 text-sm' : 'px-2 py-0.5 text-xs';
-    return `${base} ${sized}`;
-});
-
 const rowAlignClass = computed(() =>
     props.align === 'right' ? 'justify-end' : 'justify-start',
 );
-
-const pillStyle = (tag: TagRow): Record<string, string> => {
-    const c = tag.color ?? '#6b7280';
-    return {
-        backgroundColor: `${c}1f`,
-        color: c,
-        boxShadow: `inset 0 0 0 1px ${c}40`,
-    };
-};
 
 const attach = async (tag: TagRow) => {
     error.value = null;
@@ -170,13 +156,12 @@ const closePicker = () => {
         </p>
 
         <div class="flex flex-wrap items-center gap-2" :class="rowAlignClass">
-            <span
+            <TagPill
                 v-for="tag in attached"
                 :key="tag.id"
-                :class="pillClasses"
-                :style="pillStyle(tag)"
+                :tag="tag"
+                :size="size"
             >
-                {{ tag.name }}
                 <button
                     v-if="!readonly"
                     type="button"
@@ -186,7 +171,7 @@ const closePicker = () => {
                 >
                     &times;
                 </button>
-            </span>
+            </TagPill>
 
             <span
                 v-if="attached.length === 0 && readonly"
@@ -223,9 +208,7 @@ const closePicker = () => {
                     class="cursor-pointer px-3 py-1.5 text-sm hover:bg-accent"
                     @click="attach(tag)"
                 >
-                    <span :class="pillClasses" :style="pillStyle(tag)">
-                        {{ tag.name }}
-                    </span>
+                    <TagPill :tag="tag" :size="size" />
                 </li>
                 <li
                     v-if="

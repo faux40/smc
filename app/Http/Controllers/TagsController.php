@@ -40,12 +40,27 @@ class TagsController extends Controller
     {
         Gate::authorize('viewAny', Tag::class);
 
+        // attached_count drives the usage badge on <TagPill> in the library
+        // admin page. Single subquery rather than withCount on a poly relation
+        // we don't model — `taggables` already cascades by tag_id.
         $tags = Tag::query()
             ->where('org_id', $request->user()->org_id)
+            ->select(['id', 'name', 'color'])
+            ->selectSub(
+                DB::table('taggables')
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('taggables.tag_id', 'tags.id'),
+                'attached_count',
+            )
             ->orderBy('name')
-            ->get(['id', 'name', 'color']);
+            ->get();
 
-        return response()->json($tags);
+        return response()->json($tags->map(fn (Tag $t) => [
+            'id' => $t->id,
+            'name' => $t->name,
+            'color' => $t->color,
+            'attached_count' => (int) ($t->attached_count ?? 0),
+        ]));
     }
 
     public function store(Request $request): JsonResponse

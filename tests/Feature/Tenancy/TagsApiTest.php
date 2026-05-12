@@ -46,6 +46,34 @@ class TagsApiTest extends TestCase
             ->assertJsonCount(2);
     }
 
+    public function test_index_returns_attached_count_per_tag(): void
+    {
+        // Library admin needs to see usage per tag at a glance. The count is
+        // a single selectSub on tags.id in TagsController::index — drives the
+        // count badge on <TagPill> in pages/tags/Index.vue.
+        $org = Organization::factory()->create();
+        $owner = $this->ownerOf($org);
+        $userA = User::factory()->for($org, 'organization')->create();
+        $userB = User::factory()->for($org, 'organization')->create();
+        $training = \App\Models\Training::factory()->for($org, 'organization')->create();
+        $tagUsed = Tag::factory()->for($org, 'organization')->create(['name' => 'safety']);
+        $tagOrphan = Tag::factory()->for($org, 'organization')->create(['name' => 'unused']);
+
+        // Attach `safety` to two users + one training → expect 3.
+        $userA->tags()->attach($tagUsed->id);
+        $userB->tags()->attach($tagUsed->id);
+        $training->tags()->attach($tagUsed->id);
+
+        $rows = $this->actingAs($owner)
+            ->getJson('/api/tags')
+            ->assertOk()
+            ->json();
+
+        $byId = collect($rows)->keyBy('id');
+        $this->assertSame(3, $byId[$tagUsed->id]['attached_count']);
+        $this->assertSame(0, $byId[$tagOrphan->id]['attached_count']);
+    }
+
     public function test_index_is_org_scoped(): void
     {
         $orgA = Organization::factory()->create();
