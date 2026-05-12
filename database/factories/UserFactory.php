@@ -88,4 +88,13 @@ class UserFactory extends Factory
             'status' => 'disabled',
         ]);
     }
+
+    /**
+     * Assign a role after the user is created. Caller is responsible for
+     * ensuring the role exists (e.g., by seeding RoleSeeder first).
+     */
+    public function withRole(string $role): static
+    {
+        return $this->afterCreating(fn (User $user) => $user->assignRole($role));
+    }
 }
