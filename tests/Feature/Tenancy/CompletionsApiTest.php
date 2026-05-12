@@ -62,12 +62,26 @@ class CompletionsApiTest extends TestCase
             ->assertJsonPath('0.rqmt_element_ids.0', $element->id);
     }
 
-    public function test_manager_cannot_list(): void
+    public function test_manager_can_list(): void
     {
+        // Phase 13.2 widened CompletionPolicy: Manager can viewAny + create
+        // (matching the AssignmentPolicy widening). Update + delete remain
+        // Owner/SA/Admin.
         $org = Organization::factory()->create();
         $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
 
         $this->actingAs($manager)
+            ->getJson('/api/completions')
+            ->assertOk();
+    }
+
+    public function test_selfedit_cannot_list(): void
+    {
+        // Sanity guard: the widening stops at Manager.
+        $org = Organization::factory()->create();
+        $self = User::factory()->for($org, 'organization')->withRole('SelfEdit')->create();
+
+        $this->actingAs($self)
             ->getJson('/api/completions')
             ->assertForbidden();
     }
@@ -162,20 +176,47 @@ class CompletionsApiTest extends TestCase
         $this->assertDatabaseHas('completion_elements', ['completion_id' => $id, 'rqmt_element_id' => $elementB->id]);
     }
 
-    public function test_manager_cannot_create(): void
+    public function test_manager_can_create_but_not_update_or_delete(): void
     {
-        $org = Organization::factory()->create();
+        ['user' => $user, 'training' => $training, 'element' => $element, 'org' => $org] = $this->scaffold();
         $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
-        $user = User::factory()->for($org, 'organization')->create();
-        $training = Training::factory()->for($org, 'organization')->create();
 
-        $this->actingAs($manager)
+        $created = $this->actingAs($manager)
             ->postJson('/api/completions', [
                 'user_id' => $user->id,
                 'module_type' => Training::class,
                 'module_id' => $training->id,
                 'completion_date' => '2026-05-10',
-                'rqmt_element_ids' => [],
+                'rqmt_element_ids' => [$element->id],
+            ])
+            ->assertCreated()
+            ->json();
+
+        // Update + delete still admin-only.
+        $this->actingAs($manager)
+            ->patchJson("/api/completions/{$created['id']}", [
+                'completion_date' => '2026-05-11',
+                'rqmt_element_ids' => [$element->id],
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($manager)
+            ->deleteJson("/api/completions/{$created['id']}")
+            ->assertForbidden();
+    }
+
+    public function test_selfedit_cannot_create(): void
+    {
+        ['user' => $user, 'training' => $training, 'element' => $element, 'org' => $org] = $this->scaffold();
+        $self = User::factory()->for($org, 'organization')->withRole('SelfEdit')->create();
+
+        $this->actingAs($self)
+            ->postJson('/api/completions', [
+                'user_id' => $user->id,
+                'module_type' => Training::class,
+                'module_id' => $training->id,
+                'completion_date' => '2026-05-10',
+                'rqmt_element_ids' => [$element->id],
             ])
             ->assertForbidden();
     }

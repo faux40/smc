@@ -26,6 +26,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('users', [UsersController::class, 'index'])->name('users.index');
     Route::post('users', [UsersController::class, 'store'])->name('users.store');
+
+    // Lean JSON user list for downstream picker UX (assignment +
+    // completion form modals). Manager+ via inline role gate; UsersController
+    // viewAny otherwise stays admin-only.
+    Route::get('api/users', [UsersController::class, 'pickerList'])->name('users.picker');
     Route::patch('users/{user}', [UsersController::class, 'update'])->name('users.update');
     Route::post('users/{user}/disable', [UsersController::class, 'disable'])->name('users.disable');
     Route::post('users/{user}/enable', [UsersController::class, 'enable'])->name('users.enable');
@@ -106,6 +111,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('api/rqmt-elements/{rqmtElement}', [RqmtElementsController::class, 'update'])->name('rqmt-elements.update');
     Route::delete('api/rqmt-elements/{rqmtElement}', [RqmtElementsController::class, 'destroy'])->name('rqmt-elements.destroy');
 
+    // Candidate elements for a given module identity (Phase 10.2 spec
+    // hook): used by the manual Completion form to multi-select every
+    // element in the org that points at the chosen module.
+    Route::get('api/rqmt-elements/candidates', [RqmtElementsController::class, 'candidates'])->name('rqmt-elements.candidates');
+
     // Assignments — flat API with query filters (?user_id=…, ?requirement_id=…).
     // All gated Owner/SA/Admin in Phase 10; self-view added in 12.3.
     // No UI yet — store is consumed by upcoming Phase 11/12 pages.
@@ -116,12 +126,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Completions — flat API with optional ?user_id filter. Pivot to
     // rqmt_elements is sync()'d from the rqmt_element_ids array in the
-    // request payload. All gated Owner/SA/Admin in Phase 10; self-create
-    // and self-view land in 12.3.
+    // request payload. Phase 13.2 widened the policy for Manager+;
+    // self-create / self-view still land in 13.3.
     Route::get('api/completions', [CompletionsController::class, 'index'])->name('completions.index');
     Route::post('api/completions', [CompletionsController::class, 'store'])->name('completions.store');
     Route::patch('api/completions/{completion}', [CompletionsController::class, 'update'])->name('completions.update');
     Route::delete('api/completions/{completion}', [CompletionsController::class, 'destroy'])->name('completions.destroy');
+
+    // Phase 13.2 admin pages for manual single-record entry. Lists +
+    // create / edit modal; the bulk flow lives at /workflows/bulk-assignment.
+    Route::inertia('assignments', 'assignments/Index')->name('assignments.page');
+    Route::inertia('completions', 'completions/Index')->name('completions.page');
 
     Route::get('requirements/{requirement}', function (\App\Models\Requirement $requirement) {
         abort_unless(auth()->user()->org_id === $requirement->org_id, 403);

@@ -26,6 +26,73 @@ class RqmtElementsApiTest extends TestCase
         $this->seed(RoleSeeder::class);
     }
 
+    public function test_candidates_returns_elements_matching_module(): void
+    {
+        // The Phase 10.2 "candidate elements" endpoint: given a module
+        // identity, list every rqmt_element in the org that points at it.
+        // Drives the manual Completion form's element multi-select.
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $reqA = Requirement::factory()->for($org, 'organization')->create();
+        $reqB = Requirement::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+        $otherTraining = Training::factory()->for($org, 'organization')->create();
+
+        // Two elements pointing at $training — one per requirement.
+        RqmtElement::factory()
+            ->for($org, 'organization')->for($reqA, 'requirement')
+            ->state(['module_type' => Training::class, 'module_id' => $training->id, 'name' => 'A'])
+            ->create();
+        RqmtElement::factory()
+            ->for($org, 'organization')->for($reqB, 'requirement')
+            ->state(['module_type' => Training::class, 'module_id' => $training->id, 'name' => 'B'])
+            ->create();
+
+        // One element pointing at a different module — must not appear.
+        RqmtElement::factory()
+            ->for($org, 'organization')->for($reqA, 'requirement')
+            ->state(['module_type' => Training::class, 'module_id' => $otherTraining->id, 'name' => 'C'])
+            ->create();
+
+        $rows = $this->actingAs($admin)
+            ->getJson('/api/rqmt-elements/candidates?module_type='.urlencode(Training::class)."&module_id={$training->id}")
+            ->assertOk()
+            ->assertJsonCount(2)
+            ->json();
+
+        $this->assertEqualsCanonicalizing(['A', 'B'], collect($rows)->pluck('name')->all());
+        // Each row carries the parent requirement name (joined in the controller).
+        $this->assertNotNull($rows[0]['requirement_name']);
+    }
+
+    public function test_candidates_does_not_leak_cross_org_elements(): void
+    {
+        $orgA = Organization::factory()->create();
+        $orgB = Organization::factory()->create();
+        $adminA = User::factory()->for($orgA, 'organization')->withRole('Admin')->create();
+        $reqB = Requirement::factory()->for($orgB, 'organization')->create();
+        $trainingB = Training::factory()->for($orgB, 'organization')->create();
+        RqmtElement::factory()
+            ->for($orgB, 'organization')->for($reqB, 'requirement')
+            ->state(['module_type' => Training::class, 'module_id' => $trainingB->id])
+            ->create();
+
+        $this->actingAs($adminA)
+            ->getJson('/api/rqmt-elements/candidates?module_type='.urlencode(Training::class)."&module_id={$trainingB->id}")
+            ->assertOk()
+            ->assertJsonCount(0);
+    }
+
+    public function test_candidates_rejects_unknown_module_type(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->getJson('/api/rqmt-elements/candidates?module_type=App%5CModels%5COrganization&module_id=abc')
+            ->assertStatus(422);
+    }
+
     public function test_anyone_in_org_can_list_elements(): void
     {
         $org = Organization::factory()->create();

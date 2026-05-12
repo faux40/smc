@@ -9,8 +9,10 @@ use App\Events\UserUpdated;
 use App\Http\Requests\CreateUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
@@ -67,6 +69,34 @@ class UsersController extends Controller
             ],
             'can_create' => Gate::check('create', User::class),
         ]);
+    }
+
+    /**
+     * Lean JSON list of active org users for downstream picker UX
+     * (assignment / completion form modals). Manager+ gate matches the
+     * widened Assignment / Completion policies — the people who can
+     * pick users in those workflows.
+     */
+    public function pickerList(Request $request): JsonResponse
+    {
+        abort_unless(
+            Auth::user()->hasAnyRole(['Owner', 'SuperAdmin', 'Admin', 'Manager']),
+            403,
+        );
+
+        $users = User::query()
+            ->where('status', 'active')
+            ->orderBy('l_name')
+            ->orderBy('f_name')
+            ->get(['id', 'f_name', 'l_name', 'email']);
+
+        return response()->json($users->map(fn (User $u) => [
+            'id' => $u->id,
+            'name' => $u->name,
+            'f_name' => $u->f_name,
+            'l_name' => $u->l_name,
+            'email' => $u->email,
+        ]));
     }
 
     public function store(CreateUserRequest $request): RedirectResponse

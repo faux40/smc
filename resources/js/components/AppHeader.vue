@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { ClipboardList, GraduationCap, LayoutGrid, Menu, Search, Tags as TagsIcon, Users as UsersIcon, Workflow } from 'lucide-vue-next';
+import { CheckCircle2, ClipboardList, ClipboardCheck, GraduationCap, LayoutGrid, Menu, Search, Tags as TagsIcon, Users as UsersIcon, Workflow } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
@@ -36,6 +36,8 @@ import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
+import { page as assignmentsPage } from '@/routes/assignments';
+import { page as completionsPage } from '@/routes/completions';
 import { page as requirementsPage } from '@/routes/requirements';
 import { page as tagsPage } from '@/routes/tags';
 import { page as trainingsPage } from '@/routes/trainings';
@@ -83,9 +85,12 @@ const mainNavItems = computed<NavItem[]>(() => {
         items.push({ title: 'Tags', href: tagsPage(), icon: TagsIcon });
     }
 
-    // Bulk-assignment workflow opens to Manager+ (matches the widened
-    // AssignmentPolicy from Phase 13.1).
+    // Manager+ admin entries — manual single-record entry pages and
+    // the bulk-assignment workflow. Matches the widened Assignment /
+    // Completion policies (Phases 13.1 + 13.2).
     if (u && (u.isOwner || u.isSuperAdmin || u.isAdmin || u.isManager)) {
+        items.push({ title: 'Assignments', href: assignmentsPage(), icon: ClipboardCheck });
+        items.push({ title: 'Completions', href: completionsPage(), icon: CheckCircle2 });
         items.push({ title: 'Bulk assign', href: bulkAssignmentPage(), icon: Workflow });
     }
 

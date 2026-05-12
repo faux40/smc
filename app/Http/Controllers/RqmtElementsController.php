@@ -6,14 +6,56 @@ use App\Events\RqmtElementCreated;
 use App\Events\RqmtElementDeleted;
 use App\Events\RqmtElementUpdated;
 use App\Http\Requests\RqmtElementRequest;
+use App\Http\Requests\CompletionRequest;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 class RqmtElementsController extends Controller
 {
+    /**
+     * "Candidate elements" endpoint flagged in the Phase 10.2 spec: given
+     * a module identity (type + id), return every rqmt_element in the
+     * org that points at it. Powers the multi-select on the manual
+     * Completion form so an admin can credit a user for one module
+     * against several Requirements at once. Same role gate as the
+     * Completion create path (Owner/SA/Admin/Manager).
+     */
+    public function candidates(Request $request): JsonResponse
+    {
+        Gate::authorize('viewAny', RqmtElement::class);
+
+        $orgId = Auth::user()->org_id;
+
+        $data = $request->validate([
+            'module_type' => ['required', 'string', Rule::in(CompletionRequest::ALLOWED_MODULE_TYPES)],
+            'module_id' => ['required', 'string'],
+        ]);
+
+        $rows = RqmtElement::query()
+            ->where('module_type', $data['module_type'])
+            ->where('module_id', $data['module_id'])
+            ->with('requirement:id,name')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json($rows->map(fn (RqmtElement $e) => [
+            'id' => $e->id,
+            'requirement_id' => $e->requirement_id,
+            'requirement_name' => $e->requirement?->name,
+            'name' => $e->name,
+            'description' => $e->description,
+            'initial_only' => $e->initial_only,
+            'repeating' => $e->repeating,
+            'std_freq_id' => $e->std_freq_id,
+            'as_needed' => $e->as_needed,
+        ]));
+    }
+
     public function index(Requirement $requirement): JsonResponse
     {
         // Same-org check on the parent requirement; the global scope already
