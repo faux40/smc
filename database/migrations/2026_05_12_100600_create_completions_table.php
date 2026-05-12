@@ -12,14 +12,10 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('org_id')->constrained('organizations')->cascadeOnDelete();
             $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
-            // Nullable: per v14 spec, completions can stand alone — a user
-            // can complete a module without being assigned. The rqmt_element
-            // link is the satisfaction target when present; absent = the
-            // user just has credit for the underlying module.
-            $table->foreignUuid('rqmt_element_id')->nullable()->constrained('rqmt_elements')->nullOnDelete();
             // Poly to the actual module record (Training today; future
-            // Inspection / Cert / etc.). For a completion to satisfy a
-            // rqmt_element it must match the element's module_type.
+            // Inspection / Cert / etc.). The rqmt_element links live in
+            // the `completion_elements` pivot — one completion can
+            // satisfy many elements (and therefore many Requirements).
             $table->string('module_type');
             $table->string('module_id');
             // Satisfaction facts.
@@ -33,7 +29,7 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->index('org_id');
-            $table->index(['user_id', 'rqmt_element_id']);
+            $table->index('user_id');
             $table->index(['module_type', 'module_id']);
         });
     }

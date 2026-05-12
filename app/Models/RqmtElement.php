@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -55,8 +55,17 @@ class RqmtElement extends Model
         return $this->belongsTo(StdFrequency::class, 'std_freq_id');
     }
 
-    public function completions(): HasMany
+    /**
+     * Completions that credit this element. v15 spec moved the link to the
+     * `completion_elements` pivot — a completion may credit several elements.
+     */
+    public function completions(): BelongsToMany
     {
-        return $this->hasMany(Completion::class, 'rqmt_element_id');
+        return $this->belongsToMany(
+            Completion::class,
+            'completion_elements',
+            'rqmt_element_id',
+            'completion_id',
+        );
     }
 }

@@ -117,12 +117,15 @@ class DomainCoreSchemaTest extends TestCase
     public function test_completions_table_shape(): void
     {
         $this->assertTrue(Schema::hasColumns('completions', [
-            'id', 'org_id', 'user_id', 'rqmt_element_id',
+            'id', 'org_id', 'user_id',
             'module_type', 'module_id',
             'completion_date', 'certification_date', 'expire_date',
             'cert_ident', 'notes',
             'created_at', 'updated_at', 'deleted_at',
         ]));
+        // The rqmt_element link moved out to the `completion_elements` pivot
+        // in v15 — assert the column is gone so we can't regress.
+        $this->assertFalse(Schema::hasColumn('completions', 'rqmt_element_id'));
 
         $org = Organization::factory()->create();
         $user = User::factory()->for($org, 'organization')->create();
@@ -140,21 +143,58 @@ class DomainCoreSchemaTest extends TestCase
         $completion = Completion::factory()
             ->for($org, 'organization')
             ->for($user, 'user')
-            ->for($element, 'rqmtElement')
             ->state([
                 'module_type' => Training::class,
                 'module_id' => $training->id,
             ])
             ->create();
+        $completion->rqmtElements()->sync([$element->id]);
 
         $this->assertSame($user->id, $completion->user_id);
-        $this->assertSame($element->id, $completion->rqmt_element_id);
+        $this->assertSame([$element->id], $completion->rqmtElements()->pluck('rqmt_elements.id')->all());
+    }
+
+    public function test_completion_elements_pivot_shape(): void
+    {
+        $this->assertTrue(Schema::hasColumns('completion_elements', [
+            'completion_id', 'rqmt_element_id',
+        ]));
+
+        $org = Organization::factory()->create();
+        $user = User::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+        $elementA = RqmtElement::factory()
+            ->for($org, 'organization')
+            ->for($req, 'requirement')
+            ->state(['module_type' => Training::class, 'module_id' => $training->id])
+            ->create();
+        $elementB = RqmtElement::factory()
+            ->for($org, 'organization')
+            ->for($req, 'requirement')
+            ->state(['module_type' => Training::class, 'module_id' => $training->id])
+            ->create();
+
+        $completion = Completion::factory()
+            ->for($org, 'organization')
+            ->for($user, 'user')
+            ->state(['module_type' => Training::class, 'module_id' => $training->id])
+            ->create();
+
+        // One completion can credit several elements (v15 spec).
+        $completion->rqmtElements()->sync([$elementA->id, $elementB->id]);
+
+        $this->assertEqualsCanonicalizing(
+            [$elementA->id, $elementB->id],
+            $completion->rqmtElements()->pluck('rqmt_elements.id')->all(),
+        );
     }
 
     public function test_completion_can_exist_without_assignment(): void
     {
-        // v14 spec: completions stand alone. A user can complete a module
-        // without being assigned; future assignments are pre-satisfied.
+        // v15 spec: completions stand alone. A user can complete a module
+        // without being assigned (still must link to an element in the system,
+        // but that's an application-layer rule, not a schema rule).
         $org = Organization::factory()->create();
         $user = User::factory()->for($org, 'organization')->create();
         $req = Requirement::factory()->for($org, 'organization')->create();
@@ -174,13 +214,14 @@ class DomainCoreSchemaTest extends TestCase
         $completion = Completion::factory()
             ->for($org, 'organization')
             ->for($user, 'user')
-            ->for($element, 'rqmtElement')
             ->state([
                 'module_type' => Training::class,
                 'module_id' => $training->id,
             ])
             ->create();
+        $completion->rqmtElements()->sync([$element->id]);
 
         $this->assertNotNull($completion->id);
+        $this->assertCount(1, $completion->rqmtElements);
     }
 }

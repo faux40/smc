@@ -20,8 +20,8 @@ class CompletionFactory extends Factory
         return [
             'org_id' => Organization::factory(),
             'user_id' => fn (array $attrs) => User::factory()->create(['org_id' => $attrs['org_id']])->id,
-            // Nullable — completions stand alone per v14 spec.
-            'rqmt_element_id' => null,
+            // rqmt_element links live in the `completion_elements` pivot —
+            // attach via $completion->rqmtElements()->sync([...]) after create.
             // Default to a Training-typed module record.
             'module_type' => Training::class,
             'module_id' => fn (array $attrs) => Training::factory()->create(['org_id' => $attrs['org_id']])->id,
