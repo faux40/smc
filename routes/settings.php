@@ -26,4 +26,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('user-password.update');
 
     Route::inertia('settings/appearance', 'settings/Appearance')->name('appearance.edit');
+
+    // Std frequencies admin — Inertia page renders the shell; data + mutations
+    // flow through /api/std-frequencies via useStdFrequenciesStore. The
+    // JSON controller gates writes via StdFrequencyPolicy (Owner/SA/Admin).
+    Route::inertia('settings/frequencies', 'settings/Frequencies')->name('frequencies.edit');
 });

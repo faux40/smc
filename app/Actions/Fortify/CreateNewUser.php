@@ -7,6 +7,7 @@ use App\Concerns\ProfileValidationRules;
 use App\Events\OrganizationCreated;
 use App\Events\UserRegistered;
 use App\Models\Organization;
+use App\Models\StdFrequency;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -23,6 +24,23 @@ use Laravel\Fortify\Contracts\CreatesNewUsers;
 class CreateNewUser implements CreatesNewUsers
 {
     use PasswordValidationRules, ProfileValidationRules;
+
+    /**
+     * Sensible per-org defaults seeded on registration. Admins can edit /
+     * delete / add via /settings/frequencies. A more comprehensive new-org
+     * seeder script is planned and will supersede this inline seed; capture
+     * it here so downstream forms (Trainings, RqmtElements, Assignments) have
+     * a non-empty picker on day one.
+     *
+     * @var array<int, array{name: string, repeat_days: int}>
+     */
+    private const DEFAULT_FREQUENCIES = [
+        ['name' => 'Annual', 'repeat_days' => 365],
+        ['name' => 'Semi-Annual', 'repeat_days' => 180],
+        ['name' => 'Quarterly', 'repeat_days' => 90],
+        ['name' => 'Monthly', 'repeat_days' => 30],
+        ['name' => 'Every 10 days', 'repeat_days' => 10],
+    ];
 
     /**
      * @param  array<string, string>  $input
@@ -51,6 +69,14 @@ class CreateNewUser implements CreatesNewUsers
 
             $org->update(['owner_user_id' => $user->id]);
             $user->assignRole('Owner');
+
+            foreach (self::DEFAULT_FREQUENCIES as $row) {
+                StdFrequency::create([
+                    'org_id' => $org->id,
+                    'name' => $row['name'],
+                    'repeat_days' => $row['repeat_days'],
+                ]);
+            }
 
             return [$user->fresh(), $org->fresh()];
         });

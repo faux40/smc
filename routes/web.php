@@ -3,6 +3,7 @@
 use App\Events\RealtimePing;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\CommentsController;
+use App\Http\Controllers\StdFrequenciesController;
 use App\Http\Controllers\TagsController;
 use App\Http\Controllers\UsersController;
 use Illuminate\Http\Request;
@@ -47,6 +48,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/attachments', [AttachmentsController::class, 'store'])->name('attachments.store');
     Route::delete('api/attachments/{attachment}', [AttachmentsController::class, 'destroy'])->name('attachments.destroy');
     Route::get('api/attachments/{attachment}/download', [AttachmentsController::class, 'download'])->name('attachments.download');
+
+    // Std frequencies — per-org timing presets used by downstream forms.
+    // Read open to any auth'd org member (everywhere needs the picker);
+    // CRUD is Owner/SA/Admin.
+    Route::get('api/std-frequencies', [StdFrequenciesController::class, 'index'])->name('std-frequencies.index');
+    Route::post('api/std-frequencies', [StdFrequenciesController::class, 'store'])->name('std-frequencies.store');
+    Route::patch('api/std-frequencies/{stdFrequency}', [StdFrequenciesController::class, 'update'])->name('std-frequencies.update');
+    Route::delete('api/std-frequencies/{stdFrequency}', [StdFrequenciesController::class, 'destroy'])->name('std-frequencies.destroy');
 });
 
 // Permanent realtime smoke canary. Dispatches a RealtimePing event on
