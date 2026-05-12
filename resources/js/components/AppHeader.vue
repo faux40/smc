@@ -169,7 +169,14 @@ const rightNavItems: NavItem[] = [];
                     </Sheet>
                 </div>
 
-                <Link :href="dashboard()" class="flex items-center gap-x-2">
+                <!-- Fixed-width logo slot. PNG (~4.3:1) at h-16 wants
+                     ~275px wide; w-72 (288px) gives a little breathing
+                     room. shrink-0 stops the parent flex row from
+                     compressing it when the nav crowds in. -->
+                <Link
+                    :href="dashboard()"
+                    class="flex w-72 shrink-0 items-center gap-x-2"
+                >
                     <AppLogo />
                 </Link>
 
