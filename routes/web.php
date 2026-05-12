@@ -14,6 +14,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
 
     Route::get('users', [UsersController::class, 'index'])->name('users.index');
+    Route::post('users', [UsersController::class, 'store'])->name('users.store');
 });
 
 // Permanent realtime smoke canary. Dispatches a RealtimePing event on

@@ -1,0 +1,114 @@
+<?php
+
+namespace Tests\Feature\Tenancy;
+
+use App\Events\UserRegistered;
+use App\Models\Organization;
+use App\Models\User;
+use Database\Seeders\RoleSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
+use Tests\TestCase;
+
+class UsersStoreTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(RoleSeeder::class);
+    }
+
+    private function ownerOf(Organization $org): User
+    {
+        $owner = User::factory()->forOrganization($org)->create();
+        $org->update(['owner_user_id' => $owner->id]);
+        $owner->assignRole('Owner');
+
+        return $owner;
+    }
+
+    public function test_admin_can_create_user_with_default_role_none(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->forOrganization($org)->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->post(route('users.store'), [
+                'name' => 'Ada Lovelace',
+                'email' => 'ada@example.com',
+            ])
+            ->assertRedirect(route('users.index'));
+
+        $created = User::where('email', 'ada@example.com')->first();
+        $this->assertNotNull($created);
+        $this->assertSame($org->id, $created->org_id);
+        $this->assertSame('active', $created->status);
+        $this->assertTrue($created->hasRole('None'));
+    }
+
+    public function test_admin_can_create_no_login_user(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->forOrganization($org)->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->post(route('users.store'), [
+                'name' => 'Frank Forklift',
+            ])
+            ->assertRedirect(route('users.index'));
+
+        $created = User::where('name', 'Frank Forklift')->first();
+        $this->assertNotNull($created);
+        $this->assertNull($created->email);
+        $this->assertNull($created->password);
+    }
+
+    public function test_manager_cannot_create_user(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = User::factory()->forOrganization($org)->withRole('Manager')->create();
+
+        $this->actingAs($manager)
+            ->post(route('users.store'), ['name' => 'No', 'email' => 'no@example.com'])
+            ->assertForbidden();
+    }
+
+    public function test_email_must_be_globally_unique(): void
+    {
+        $orgA = Organization::factory()->create();
+        $orgB = Organization::factory()->create();
+        User::factory()->forOrganization($orgA)->create(['email' => 'taken@example.com']);
+        $admin = User::factory()->forOrganization($orgB)->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->from(route('users.index'))
+            ->post(route('users.store'), ['name' => 'X', 'email' => 'taken@example.com'])
+            ->assertSessionHasErrors('email');
+    }
+
+    public function test_name_is_required(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->forOrganization($org)->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->from(route('users.index'))
+            ->post(route('users.store'), ['email' => 'a@b.com'])
+            ->assertSessionHasErrors('name');
+    }
+
+    public function test_create_dispatches_user_registered(): void
+    {
+        Event::fake([UserRegistered::class]);
+
+        $org = Organization::factory()->create();
+        $admin = User::factory()->forOrganization($org)->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->post(route('users.store'), ['name' => 'Ada', 'email' => 'ada@example.com']);
+
+        Event::assertDispatched(UserRegistered::class);
+    }
+}

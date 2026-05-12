@@ -11,9 +11,11 @@
  * 4.1 is the read substrate.
  */
 
+import { router } from '@inertiajs/vue3';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useRealtime } from '@/composables/useRealtime';
+import { store as usersStore } from '@/routes/users';
 
 export interface UserRow {
     id: string;
@@ -97,6 +99,24 @@ export const useUsersStore = defineStore('users', () => {
 
     const count = computed(() => users.value.length);
 
+    /**
+     * Admin add-user. Routes through Inertia so the request carries CSRF and
+     * the X-Origin-Tab header already wired in app.ts. The response is the
+     * users/Index page redrawn; Inertia re-runs the page setup which calls
+     * store.hydrate() — so no manual cache patch needed here. Peer tabs
+     * receive UserRegistered on the org channel and call applyAdded.
+     */
+    function create(
+        form: { name: string; email: string | null },
+        opts: { onSuccess?: () => void; onError?: (errors: Record<string, string>) => void } = {},
+    ): void {
+        router.post(usersStore().url, form as unknown as Record<string, string>, {
+            preserveScroll: true,
+            onSuccess: () => opts.onSuccess?.(),
+            onError: (errors) => opts.onError?.(errors as Record<string, string>),
+        });
+    }
+
     return {
         users,
         count,
@@ -105,5 +125,6 @@ export const useUsersStore = defineStore('users', () => {
         applyAdded,
         applyUpdated,
         applySoftDeleted,
+        create,
     };
 });

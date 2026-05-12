@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { onMounted, ref, watch } from 'vue';
+import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,6 +77,8 @@ const applyFilters = () => {
 const roles = ['Owner', 'SuperAdmin', 'Admin', 'Manager', 'SelfEdit', 'SelfView', 'None'];
 
 const isSelf = (row: UserRow): boolean => row.id === authUser?.id;
+
+const showAddModal = ref(false);
 </script>
 
 <template>
@@ -87,7 +90,9 @@ const isSelf = (row: UserRow): boolean => row.id === authUser?.id;
                 title="Users"
                 description="Manage members of your organization."
             />
-            <Button v-if="can_create" disabled>+ Add user</Button>
+            <Button v-if="can_create" @click="showAddModal = true">
+                + Add user
+            </Button>
         </div>
 
         <div class="flex flex-wrap items-center gap-3">
@@ -202,5 +207,10 @@ const isSelf = (row: UserRow): boolean => row.id === authUser?.id;
                 </tbody>
             </table>
         </div>
+
+        <UserFormModal
+            v-model:open="showAddModal"
+            mode="create"
+        />
     </div>
 </template>

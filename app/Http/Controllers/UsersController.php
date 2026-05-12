@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\UserRegistered;
+use App\Http\Requests\CreateUserRequest;
 use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -51,5 +55,21 @@ class UsersController extends Controller
             ],
             'can_create' => Gate::check('create', User::class),
         ]);
+    }
+
+    public function store(CreateUserRequest $request): RedirectResponse
+    {
+        $user = User::create([
+            'org_id' => $request->user()->org_id,
+            'name' => $request->validated('name'),
+            'email' => $request->validated('email'),
+            'password' => null,
+        ]);
+
+        $user->assignRole('None');
+
+        event(new UserRegistered($user->fresh()));
+
+        return Redirect::route('users.index');
     }
 }
