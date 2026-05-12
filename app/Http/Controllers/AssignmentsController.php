@@ -52,7 +52,7 @@ class AssignmentsController extends Controller
             'end_date' => $data['end_date'] ?? null,
         ]);
 
-        event(new AssignmentCreated($assignment));
+        event(new AssignmentCreated($assignment, actorId: Auth::id()));
 
         return response()->json($this->serialize($assignment), 201);
     }

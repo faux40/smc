@@ -14,8 +14,17 @@ class CompletionCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Completion $completion)
-    {
+    /**
+     * @param  Completion  $completion
+     * @param  string|null $actorId    Acting user id. The notification
+     *                                 listener uses this to suppress
+     *                                 self-actions (don't notify yourself
+     *                                 about your own completion record).
+     */
+    public function __construct(
+        public readonly Completion $completion,
+        public readonly ?string $actorId = null,
+    ) {
     }
 
     /** @return array<int, PrivateChannel> */

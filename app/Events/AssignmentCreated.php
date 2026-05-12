@@ -14,8 +14,31 @@ class AssignmentCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Assignment $assignment)
-    {
+    /**
+     * @param  Assignment  $assignment
+     * @param  string|null  $actorId    User id that triggered the create.
+     *                                  The notification listener uses this
+     *                                  to suppress self-actions (don't
+     *                                  notify yourself about your own
+     *                                  creation). Captured at dispatch
+     *                                  time so queued listeners keep
+     *                                  access even after the request
+     *                                  lifecycle ends.
+     * @param  bool         $fromBulk   True when fired from the bulk-
+     *                                  assignment flow (Phase 13.1).
+     *                                  The listener uses this to skip
+     *                                  per-pair notifications so users
+     *                                  don't get 50 inbox entries from
+     *                                  one bulk action. (A future polish
+     *                                  could coalesce into a single
+     *                                  "you got N new assignments"
+     *                                  digest.)
+     */
+    public function __construct(
+        public readonly Assignment $assignment,
+        public readonly ?string $actorId = null,
+        public readonly bool $fromBulk = false,
+    ) {
     }
 
     /** @return array<int, PrivateChannel> */

@@ -151,8 +151,11 @@ class BulkAssignmentsController extends Controller
 
         // Broadcast outside the transaction so subscribers don't get
         // a "phantom" assignment if the transaction rolls back.
+        // fromBulk=true tells the notification listener to skip per-row
+        // inbox entries (admin running bulk would otherwise spam each
+        // user with N notifications).
         foreach ($newAssignments as $assignment) {
-            event(new AssignmentCreated($assignment));
+            event(new AssignmentCreated($assignment, actorId: Auth::id(), fromBulk: true));
         }
 
         return response()->json([

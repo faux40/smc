@@ -54,7 +54,7 @@ class CompletionsController extends Controller
             return $c;
         });
 
-        event(new CompletionCreated($completion->fresh()));
+        event(new CompletionCreated($completion->fresh(), actorId: Auth::id()));
 
         return response()->json($this->serialize($completion->fresh()->load('rqmtElements:id')), 201);
     }
