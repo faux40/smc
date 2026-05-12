@@ -4,6 +4,7 @@ use App\Events\RealtimePing;
 use App\Http\Controllers\AssignmentsController;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\CommentsController;
+use App\Http\Controllers\CompletionsController;
 use App\Http\Controllers\RequirementsController;
 use App\Http\Controllers\RqmtElementsController;
 use App\Http\Controllers\StdFrequenciesController;
@@ -97,6 +98,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/assignments', [AssignmentsController::class, 'store'])->name('assignments.store');
     Route::patch('api/assignments/{assignment}', [AssignmentsController::class, 'update'])->name('assignments.update');
     Route::delete('api/assignments/{assignment}', [AssignmentsController::class, 'destroy'])->name('assignments.destroy');
+
+    // Completions — flat API with optional ?user_id filter. Pivot to
+    // rqmt_elements is sync()'d from the rqmt_element_ids array in the
+    // request payload. All gated Owner/SA/Admin in Phase 10; self-create
+    // and self-view land in 12.3.
+    Route::get('api/completions', [CompletionsController::class, 'index'])->name('completions.index');
+    Route::post('api/completions', [CompletionsController::class, 'store'])->name('completions.store');
+    Route::patch('api/completions/{completion}', [CompletionsController::class, 'update'])->name('completions.update');
+    Route::delete('api/completions/{completion}', [CompletionsController::class, 'destroy'])->name('completions.destroy');
 
     Route::get('requirements/{requirement}', function (\App\Models\Requirement $requirement) {
         abort_unless(auth()->user()->org_id === $requirement->org_id, 403);
