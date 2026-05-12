@@ -15,6 +15,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('users', [UsersController::class, 'index'])->name('users.index');
     Route::post('users', [UsersController::class, 'store'])->name('users.store');
+    Route::patch('users/{user}', [UsersController::class, 'update'])->name('users.update');
 });
 
 // Permanent realtime smoke canary. Dispatches a RealtimePing event on

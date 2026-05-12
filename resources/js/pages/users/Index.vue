@@ -78,7 +78,21 @@ const roles = ['Owner', 'SuperAdmin', 'Admin', 'Manager', 'SelfEdit', 'SelfView'
 
 const isSelf = (row: UserRow): boolean => row.id === authUser?.id;
 
-const showAddModal = ref(false);
+const modalOpen = ref(false);
+const modalMode = ref<'create' | 'edit'>('create');
+const editingUser = ref<UserRow | null>(null);
+
+const openCreate = () => {
+    modalMode.value = 'create';
+    editingUser.value = null;
+    modalOpen.value = true;
+};
+
+const openEdit = (row: UserRow) => {
+    modalMode.value = 'edit';
+    editingUser.value = row;
+    modalOpen.value = true;
+};
 </script>
 
 <template>
@@ -90,7 +104,7 @@ const showAddModal = ref(false);
                 title="Users"
                 description="Manage members of your organization."
             />
-            <Button v-if="can_create" @click="showAddModal = true">
+            <Button v-if="can_create" @click="openCreate">
                 + Add user
             </Button>
         </div>
@@ -175,8 +189,9 @@ const showAddModal = ref(false);
                         <td class="space-x-3 px-4 py-2 text-right">
                             <button
                                 v-if="u.can_edit"
-                                disabled
-                                class="text-xs text-muted-foreground/60"
+                                type="button"
+                                class="text-xs text-primary hover:underline"
+                                @click="openEdit(u)"
                             >
                                 Edit
                             </button>
@@ -209,8 +224,9 @@ const showAddModal = ref(false);
         </div>
 
         <UserFormModal
-            v-model:open="showAddModal"
-            mode="create"
+            v-model:open="modalOpen"
+            :mode="modalMode"
+            :target="editingUser"
         />
     </div>
 </template>

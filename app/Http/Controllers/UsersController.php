@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Events\UserRegistered;
+use App\Events\UserUpdated;
 use App\Http\Requests\CreateUserRequest;
+use App\Http\Requests\UpdateUserRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -69,6 +71,24 @@ class UsersController extends Controller
         $user->assignRole('None');
 
         event(new UserRegistered($user->fresh()));
+
+        return Redirect::route('users.index');
+    }
+
+    public function update(UpdateUserRequest $request, User $user): RedirectResponse
+    {
+        $data = $request->validated();
+
+        $user->update([
+            'name' => $data['name'],
+            'email' => $data['email'] ?? null,
+            'status' => $data['status'],
+        ]);
+
+        // syncRoles replaces all roles atomically — matches the one-role-per-user invariant.
+        $user->syncRoles([$data['role']]);
+
+        event(new UserUpdated($user->fresh()->load('roles:id,name')));
 
         return Redirect::route('users.index');
     }

@@ -15,7 +15,7 @@ import { router } from '@inertiajs/vue3';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useRealtime } from '@/composables/useRealtime';
-import { store as usersStore } from '@/routes/users';
+import { store as usersStore, update as usersUpdate } from '@/routes/users';
 
 export interface UserRow {
     id: string;
@@ -117,6 +117,18 @@ export const useUsersStore = defineStore('users', () => {
         });
     }
 
+    function update(
+        id: string,
+        form: { name: string; email: string | null; role: string; status: 'active' | 'disabled' },
+        opts: { onSuccess?: () => void; onError?: (errors: Record<string, string>) => void } = {},
+    ): void {
+        router.patch(usersUpdate(id).url, form as unknown as Record<string, string>, {
+            preserveScroll: true,
+            onSuccess: () => opts.onSuccess?.(),
+            onError: (errors) => opts.onError?.(errors as Record<string, string>),
+        });
+    }
+
     return {
         users,
         count,
@@ -126,5 +138,6 @@ export const useUsersStore = defineStore('users', () => {
         applyUpdated,
         applySoftDeleted,
         create,
+        update,
     };
 });
