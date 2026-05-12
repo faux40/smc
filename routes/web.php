@@ -16,6 +16,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('users', [UsersController::class, 'index'])->name('users.index');
     Route::post('users', [UsersController::class, 'store'])->name('users.store');
     Route::patch('users/{user}', [UsersController::class, 'update'])->name('users.update');
+    Route::post('users/{user}/disable', [UsersController::class, 'disable'])->name('users.disable');
+    Route::post('users/{user}/enable', [UsersController::class, 'enable'])->name('users.enable');
+    Route::delete('users/{user}', [UsersController::class, 'destroy'])->name('users.destroy');
 });
 
 // Permanent realtime smoke canary. Dispatches a RealtimePing event on

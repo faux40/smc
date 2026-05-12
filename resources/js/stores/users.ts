@@ -15,7 +15,13 @@ import { router } from '@inertiajs/vue3';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useRealtime } from '@/composables/useRealtime';
-import { store as usersStore, update as usersUpdate } from '@/routes/users';
+import {
+    destroy as usersDestroy,
+    disable as usersDisable,
+    enable as usersEnable,
+    store as usersStore,
+    update as usersUpdate,
+} from '@/routes/users';
 
 export interface UserRow {
     id: string;
@@ -129,6 +135,27 @@ export const useUsersStore = defineStore('users', () => {
         });
     }
 
+    function disable(id: string, opts: { onSuccess?: () => void } = {}): void {
+        router.post(usersDisable(id).url, {}, {
+            preserveScroll: true,
+            onSuccess: () => opts.onSuccess?.(),
+        });
+    }
+
+    function enable(id: string, opts: { onSuccess?: () => void } = {}): void {
+        router.post(usersEnable(id).url, {}, {
+            preserveScroll: true,
+            onSuccess: () => opts.onSuccess?.(),
+        });
+    }
+
+    function destroy(id: string, opts: { onSuccess?: () => void } = {}): void {
+        router.delete(usersDestroy(id).url, {
+            preserveScroll: true,
+            onSuccess: () => opts.onSuccess?.(),
+        });
+    }
+
     return {
         users,
         count,
@@ -139,5 +166,8 @@ export const useUsersStore = defineStore('users', () => {
         applySoftDeleted,
         create,
         update,
+        disable,
+        enable,
+        destroy,
     };
 });

@@ -93,6 +93,19 @@ const openEdit = (row: UserRow) => {
     editingUser.value = row;
     modalOpen.value = true;
 };
+
+const toggleStatus = (row: UserRow) => {
+    if (row.status === 'active') {
+        store.disable(row.id);
+    } else {
+        store.enable(row.id);
+    }
+};
+
+const remove = (row: UserRow) => {
+    if (!window.confirm(`Delete ${row.name}? This soft-deletes the user — they can no longer log in.`)) return;
+    store.destroy(row.id);
+};
 </script>
 
 <template>
@@ -197,15 +210,17 @@ const openEdit = (row: UserRow) => {
                             </button>
                             <button
                                 v-if="u.can_disable && !isSelf(u)"
-                                disabled
-                                class="text-xs text-muted-foreground/60"
+                                type="button"
+                                class="text-xs text-amber-700 hover:underline dark:text-amber-400"
+                                @click="toggleStatus(u)"
                             >
-                                Disable
+                                {{ u.status === 'active' ? 'Disable' : 'Enable' }}
                             </button>
                             <button
                                 v-if="u.can_delete && !isSelf(u)"
-                                disabled
-                                class="text-xs text-muted-foreground/60"
+                                type="button"
+                                class="text-xs text-destructive hover:underline"
+                                @click="remove(u)"
                             >
                                 Delete
                             </button>

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Events\UserRegistered;
+use App\Events\UserSoftDeleted;
+use App\Events\UserStatusChanged;
 use App\Events\UserUpdated;
 use App\Http\Requests\CreateUserRequest;
 use App\Http\Requests\UpdateUserRequest;
@@ -89,6 +91,39 @@ class UsersController extends Controller
         $user->syncRoles([$data['role']]);
 
         event(new UserUpdated($user->fresh()->load('roles:id,name')));
+
+        return Redirect::route('users.index');
+    }
+
+    public function disable(User $user): RedirectResponse
+    {
+        Gate::authorize('disable', $user);
+
+        $user->update(['status' => 'disabled']);
+
+        event(new UserStatusChanged($user->fresh()));
+
+        return Redirect::route('users.index');
+    }
+
+    public function enable(User $user): RedirectResponse
+    {
+        Gate::authorize('enable', $user);
+
+        $user->update(['status' => 'active']);
+
+        event(new UserStatusChanged($user->fresh()));
+
+        return Redirect::route('users.index');
+    }
+
+    public function destroy(User $user): RedirectResponse
+    {
+        Gate::authorize('delete', $user);
+
+        $user->delete();
+
+        event(new UserSoftDeleted($user));
 
         return Redirect::route('users.index');
     }
