@@ -16,10 +16,12 @@ class DatabaseSeeder extends Seeder
             TemplateOrgSeeder::class,
         ]);
 
-        // Dev-only convenience: a known-good owner account for quick login.
-        // Production envs never see this.
+        // Dev-only convenience: a known-good owner account for quick login,
+        // then a populated org (users / trainings / requirements / assignments)
+        // layered on top via DevDataSeeder. Production envs never see this.
         if (app()->environment('local')) {
             $this->call(DevSeeder::class);
+            $this->call(DevDataSeeder::class);
         }
     }
 }
