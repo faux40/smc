@@ -1,4 +1,6 @@
 import { createInertiaApp, router } from '@inertiajs/vue3';
+import { createPinia } from 'pinia';
+import { createApp, h, type DefineComponent } from 'vue';
 import { initializeTheme } from '@/composables/useAppearance';
 import AppLayout from '@/layouts/AppLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
@@ -24,6 +26,12 @@ createInertiaApp({
     },
     progress: {
         color: '#4B5563',
+    },
+    setup({ el, App, props, plugin }) {
+        createApp({ render: () => h(App as DefineComponent, props) })
+            .use(plugin)
+            .use(createPinia())
+            .mount(el);
     },
 });
 

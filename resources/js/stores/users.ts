@@ -1,0 +1,109 @@
+/*
+ * Users store — the data relay between the org's users list and the UI.
+ *
+ * Per the Pinia-relay principle (smc_specs/claude_thoughts.md), components
+ * never call fetch / axios / router.post for user data. They call store
+ * methods. The store owns the in-memory cache, hydrates from Inertia
+ * page props on first paint, and subscribes to the org channel so peer
+ * mutations are applied without a manual reload.
+ *
+ * Mutation methods (create/update/disable/enable/destroy) land in 4.2+.
+ * 4.1 is the read substrate.
+ */
+
+import { defineStore } from 'pinia';
+import { computed, ref } from 'vue';
+import { useRealtime } from '@/composables/useRealtime';
+
+export interface UserRow {
+    id: string;
+    name: string;
+    email: string | null;
+    status: 'active' | 'disabled';
+    role: string | null;
+    created_at: string | null;
+    can_edit: boolean;
+    can_disable: boolean;
+    can_delete: boolean;
+}
+
+interface BroadcastUser {
+    id: string;
+    name?: string;
+    email?: string | null;
+    status?: 'active' | 'disabled';
+}
+
+export const useUsersStore = defineStore('users', () => {
+    const users = ref<UserRow[]>([]);
+    const subscribedOrgId = ref<string | null>(null);
+
+    function hydrate(initial: UserRow[]) {
+        users.value = [...initial];
+    }
+
+    /**
+     * Subscribe to `org.{orgId}` so peer tabs see UserRegistered /
+     * UserUpdated / UserSoftDeleted broadcasts and patch the cache
+     * accordingly. The composable's self-echo filter skips broadcasts
+     * originated by this tab.
+     */
+    function subscribe(orgId: string) {
+        if (subscribedOrgId.value === orgId) return;
+        subscribedOrgId.value = orgId;
+
+        const { bind } = useRealtime(`org.${orgId}`);
+
+        bind('UserRegistered', (payload: BroadcastUser) => applyAdded(payload));
+        bind('UserUpdated', (payload: BroadcastUser) => applyUpdated(payload));
+        bind('UserStatusChanged', (payload: BroadcastUser) => applyUpdated(payload));
+        bind('UserSoftDeleted', (payload: BroadcastUser) => applySoftDeleted(payload.id));
+    }
+
+    function applyAdded(payload: BroadcastUser) {
+        if (users.value.some((u) => u.id === payload.id)) return;
+        users.value = [
+            ...users.value,
+            {
+                id: payload.id,
+                name: payload.name ?? '',
+                email: payload.email ?? null,
+                status: payload.status ?? 'active',
+                role: null,
+                created_at: null,
+                can_edit: false,
+                can_disable: false,
+                can_delete: false,
+            },
+        ];
+    }
+
+    function applyUpdated(payload: BroadcastUser) {
+        users.value = users.value.map((u) =>
+            u.id === payload.id
+                ? {
+                      ...u,
+                      name: payload.name ?? u.name,
+                      email: payload.email ?? u.email,
+                      status: payload.status ?? u.status,
+                  }
+                : u,
+        );
+    }
+
+    function applySoftDeleted(id: string) {
+        users.value = users.value.filter((u) => u.id !== id);
+    }
+
+    const count = computed(() => users.value.length);
+
+    return {
+        users,
+        count,
+        hydrate,
+        subscribe,
+        applyAdded,
+        applyUpdated,
+        applySoftDeleted,
+    };
+});

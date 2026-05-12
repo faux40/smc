@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-vue-next';
+import { Link, usePage } from '@inertiajs/vue3';
+import { BookOpen, FolderGit2, LayoutGrid, Users } from 'lucide-vue-next';
+import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -15,15 +16,32 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { index as usersIndex } from '@/routes/users';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
+const page = usePage();
+const authUser = computed(() => page.props.auth.user as { isOwner?: boolean; isSuperAdmin?: boolean; isAdmin?: boolean } | null);
+
+const mainNavItems = computed<NavItem[]>(() => {
+    const items: NavItem[] = [
+        {
+            title: 'Dashboard',
+            href: dashboard(),
+            icon: LayoutGrid,
+        },
+    ];
+
+    const u = authUser.value;
+    if (u && (u.isOwner || u.isSuperAdmin || u.isAdmin)) {
+        items.push({
+            title: 'Users',
+            href: usersIndex(),
+            icon: Users,
+        });
+    }
+
+    return items;
+});
 
 const footerNavItems: NavItem[] = [
     {
