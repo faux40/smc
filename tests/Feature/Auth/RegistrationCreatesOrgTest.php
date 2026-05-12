@@ -1,0 +1,70 @@
+<?php
+
+namespace Tests\Feature\Auth;
+
+use App\Events\OrganizationCreated;
+use App\Events\UserRegistered;
+use App\Models\Organization;
+use App\Models\User;
+use Database\Seeders\RoleSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
+use Tests\TestCase;
+
+class RegistrationCreatesOrgTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(RoleSeeder::class);
+    }
+
+    public function test_register_creates_user_and_org_in_transaction(): void
+    {
+        $this->post(route('register'), [
+            'name' => 'Ada Lovelace',
+            'org_name' => 'Acme Co',
+            'email' => 'ada@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])->assertRedirect();
+
+        $user = User::where('email', 'ada@example.com')->firstOrFail();
+        $org = Organization::find($user->org_id);
+
+        $this->assertNotNull($org);
+        $this->assertSame('Acme Co', $org->name);
+        $this->assertSame($user->id, $org->owner_user_id);
+        $this->assertTrue($user->hasRole('Owner'));
+    }
+
+    public function test_register_requires_org_name(): void
+    {
+        $this->from(route('register'))
+            ->post(route('register'), [
+                'name' => 'Ada',
+                'email' => 'a@example.com',
+                'password' => 'password',
+                'password_confirmation' => 'password',
+            ])
+            ->assertSessionHasErrors('org_name');
+    }
+
+    public function test_register_broadcasts_organization_created_and_user_registered(): void
+    {
+        Event::fake([OrganizationCreated::class, UserRegistered::class]);
+
+        $this->post(route('register'), [
+            'name' => 'Ada',
+            'org_name' => 'Acme',
+            'email' => 'ada@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])->assertRedirect();
+
+        Event::assertDispatched(OrganizationCreated::class);
+        Event::assertDispatched(UserRegistered::class);
+    }
+}

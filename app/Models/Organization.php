@@ -6,6 +6,7 @@ use Database\Factories\OrganizationFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Organization extends Model
@@ -17,4 +18,9 @@ class Organization extends Model
         'owner_user_id',
         'name',
     ];
+
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class, 'org_id');
+    }
 }

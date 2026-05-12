@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\Events\UserSoftDeleted;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
@@ -50,12 +51,18 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
+        // Owners can't self-delete — the org always needs an Owner. The
+        // exit paths are ownership-transfer (deferred) or org-delete.
+        abort_if($user->hasRole('Owner'), 403, 'Owners cannot self-delete. Transfer ownership or delete the organization.');
+
         Auth::logout();
 
         $user->delete();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
+        event(new UserSoftDeleted($user));
 
         return redirect('/');
     }

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/profile';
+import { edit as organizationEdit } from '@/routes/organization';
 import { send } from '@/routes/verification';
 
 type Props = {
@@ -107,5 +108,20 @@ const user = computed(() => page.props.auth.user);
         </Form>
     </div>
 
-    <DeleteUser />
+    <div v-if="(user as any).isOwner" class="space-y-3">
+        <Heading
+            variant="small"
+            title="Delete account"
+            description="Owners cannot delete their own account."
+        />
+        <p class="text-sm text-muted-foreground">
+            Transfer ownership (coming later) or delete the entire organization
+            from
+            <Link :href="organizationEdit().url" class="underline">
+                organization settings
+            </Link>
+            instead.
+        </p>
+    </div>
+    <DeleteUser v-else />
 </template>
