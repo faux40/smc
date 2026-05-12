@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToOrganization;
+use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasComments;
+use App\Models\Concerns\HasTags;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -30,7 +33,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use BelongsToOrganization, HasFactory, HasRoles, HasUuids, Notifiable, SoftDeletes, TwoFactorAuthenticatable;
+    use BelongsToOrganization, HasAttachments, HasComments, HasFactory, HasRoles, HasTags, HasUuids, Notifiable, SoftDeletes, TwoFactorAuthenticatable;
 
     /**
      * Computed display name. Appears in toArray() / Inertia props so
