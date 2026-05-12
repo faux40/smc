@@ -31,6 +31,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // completion form modals). Manager+ via inline role gate; UsersController
     // viewAny otherwise stays admin-only.
     Route::get('api/users', [UsersController::class, 'pickerList'])->name('users.picker');
+
+    // Phase 13.3 user detail + compliance endpoint. The Inertia page
+    // is gated to admin/manager (any user) or self (own user); the
+    // JSON endpoint applies the same gate before computing.
+    Route::get('users/{user}', [UsersController::class, 'show'])->name('users.show');
+    Route::get('api/users/{user}/compliance', [UsersController::class, 'compliance'])->name('users.compliance');
     Route::patch('users/{user}', [UsersController::class, 'update'])->name('users.update');
     Route::post('users/{user}/disable', [UsersController::class, 'disable'])->name('users.disable');
     Route::post('users/{user}/enable', [UsersController::class, 'enable'])->name('users.enable');

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { onMounted, ref, watch } from 'vue';
 import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import Heading from '@/components/Heading.vue';
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { index } from '@/routes/users';
+import { index, show as userShow } from '@/routes/users';
 import { useUsersStore, type UserRow } from '@/stores/users';
 
 type Filters = {
@@ -173,7 +173,12 @@ const remove = (row: UserRow) => {
                 <tbody class="divide-y divide-border">
                     <tr v-for="u in store.users" :key="u.id">
                         <td class="px-4 py-2">
-                            {{ u.name }}
+                            <Link
+                                :href="userShow(u.id)"
+                                class="font-medium text-primary hover:underline"
+                            >
+                                {{ u.name }}
+                            </Link>
                             <span
                                 v-if="isSelf(u)"
                                 class="ml-1 text-xs text-muted-foreground"

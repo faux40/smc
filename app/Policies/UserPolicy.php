@@ -7,10 +7,29 @@ use App\Models\User;
 class UserPolicy
 {
     private const ADMIN_ROLES = ['Owner', 'SuperAdmin', 'Admin'];
+    private const STAFF_VIEW_ROLES = ['Owner', 'SuperAdmin', 'Admin', 'Manager'];
 
     public function viewAny(User $actor): bool
     {
         return $actor->hasAnyRole(self::ADMIN_ROLES);
+    }
+
+    /**
+     * Per-user detail page authz (Phase 13.3). Admin / Manager can view
+     * any user in their org; any role (including SelfView / SelfEdit /
+     * None) can view their own user. Cross-org always denied.
+     */
+    public function viewDetail(User $actor, User $target): bool
+    {
+        if ($actor->org_id !== $target->org_id) {
+            return false;
+        }
+
+        if ($actor->id === $target->id) {
+            return true;
+        }
+
+        return $actor->hasAnyRole(self::STAFF_VIEW_ROLES);
     }
 
     public function create(User $actor): bool

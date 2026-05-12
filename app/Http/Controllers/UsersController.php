@@ -9,10 +9,10 @@ use App\Events\UserUpdated;
 use App\Http\Requests\CreateUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\User;
+use App\Services\UserComplianceCalculator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
@@ -80,7 +80,7 @@ class UsersController extends Controller
     public function pickerList(Request $request): JsonResponse
     {
         abort_unless(
-            Auth::user()->hasAnyRole(['Owner', 'SuperAdmin', 'Admin', 'Manager']),
+            $request->user()->hasAnyRole(['Owner', 'SuperAdmin', 'Admin', 'Manager']),
             403,
         );
 
@@ -97,6 +97,46 @@ class UsersController extends Controller
             'l_name' => $u->l_name,
             'email' => $u->email,
         ]));
+    }
+
+    /**
+     * Per-user detail page (Phase 13.3). Renders the Inertia shell with
+     * the basic user header; compliance + completion timelines stream
+     * in via the JSON `compliance()` endpoint on mount.
+     */
+    public function show(User $user): Response
+    {
+        Gate::authorize('viewDetail', $user);
+
+        return Inertia::render('users/Show', [
+            'subject' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'f_name' => $user->f_name,
+                'm_name' => $user->m_name,
+                'l_name' => $user->l_name,
+                'prefix_name' => $user->prefix_name,
+                'suffix_name' => $user->suffix_name,
+                'email' => $user->email,
+                'status' => $user->status,
+                'role' => $user->roles->first()?->name,
+            ],
+        ]);
+    }
+
+    /**
+     * JSON compliance payload for the user detail page. Groups
+     * assignments by status (overdue / due_soon / current /
+     * never_started / inactive) and returns the full completion
+     * history (per the v15 "credit for unassigned" path stays visible).
+     */
+    public function compliance(User $user, UserComplianceCalculator $calculator): JsonResponse
+    {
+        Gate::authorize('viewDetail', $user);
+
+        $payload = $calculator->compute($user);
+
+        return response()->json($payload);
     }
 
     public function store(CreateUserRequest $request): RedirectResponse
