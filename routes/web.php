@@ -1,6 +1,7 @@
 <?php
 
 use App\Events\RealtimePing;
+use App\Http\Controllers\TagsController;
 use App\Http\Controllers\UsersController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +20,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('users/{user}/disable', [UsersController::class, 'disable'])->name('users.disable');
     Route::post('users/{user}/enable', [UsersController::class, 'enable'])->name('users.enable');
     Route::delete('users/{user}', [UsersController::class, 'destroy'])->name('users.destroy');
+
+    // Polymorphic tag API — library CRUD + poly attach/detach. Consumed by
+    // the reusable <TagsField> Vue component. Library CRUD is Owner/SA/Admin;
+    // attach/detach is open to any auth'd org member.
+    Route::get('api/tags', [TagsController::class, 'index'])->name('tags.index');
+    Route::post('api/tags', [TagsController::class, 'store'])->name('tags.store');
+    Route::patch('api/tags/{tag}', [TagsController::class, 'update'])->name('tags.update');
+    Route::delete('api/tags/{tag}', [TagsController::class, 'destroy'])->name('tags.destroy');
+    Route::post('api/tags/attach', [TagsController::class, 'attach'])->name('tags.attach');
+    Route::post('api/tags/detach', [TagsController::class, 'detach'])->name('tags.detach');
 });
 
 // Permanent realtime smoke canary. Dispatches a RealtimePing event on

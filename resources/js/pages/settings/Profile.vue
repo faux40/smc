@@ -5,6 +5,7 @@ import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileCo
 import DeleteUser from '@/components/DeleteUser.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import TagsField from '@/components/TagsField.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,9 +16,10 @@ import { send } from '@/routes/verification';
 type Props = {
     mustVerifyEmail: boolean;
     status?: string;
+    tagIds: string[];
 };
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
 defineOptions({
     layout: {
@@ -153,6 +155,26 @@ const user = computed(() => page.props.auth.user);
                 >
             </div>
         </Form>
+    </div>
+
+    <div class="space-y-3">
+        <Heading
+            variant="small"
+            title="Tags"
+            description="Apply tags to yourself for grouping and filtering."
+        />
+        <TagsField
+            morphable-type="App\Models\User"
+            :morphable-id="user.id"
+            :initial-tag-ids="props.tagIds"
+            :can-manage-library="
+                Boolean(
+                    (user as any).isOwner ||
+                        (user as any).isSuperAdmin ||
+                        (user as any).isAdmin,
+                )
+            "
+        />
     </div>
 
     <div v-if="(user as any).isOwner" class="space-y-3">
