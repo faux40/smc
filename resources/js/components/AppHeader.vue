@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { ClipboardList, GraduationCap, LayoutGrid, Menu, Search, Tags as TagsIcon, Users as UsersIcon } from 'lucide-vue-next';
+import { ClipboardList, GraduationCap, LayoutGrid, Menu, Search, Tags as TagsIcon, Users as UsersIcon, Workflow } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
@@ -39,6 +39,7 @@ import { dashboard } from '@/routes';
 import { page as requirementsPage } from '@/routes/requirements';
 import { page as tagsPage } from '@/routes/tags';
 import { page as trainingsPage } from '@/routes/trainings';
+import { bulkAssignment as bulkAssignmentPage } from '@/routes/workflows';
 import { index as usersIndex } from '@/routes/users';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
@@ -53,7 +54,12 @@ const props = withDefaults(defineProps<Props>(), {
 const page = usePage();
 const auth = computed(() => page.props.auth);
 const authUser = computed(
-    () => page.props.auth.user as { isOwner?: boolean; isSuperAdmin?: boolean; isAdmin?: boolean } | null,
+    () => page.props.auth.user as {
+        isOwner?: boolean;
+        isSuperAdmin?: boolean;
+        isAdmin?: boolean;
+        isManager?: boolean;
+    } | null,
 );
 const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
 
@@ -75,6 +81,12 @@ const mainNavItems = computed<NavItem[]>(() => {
         items.push({ title: 'Trainings', href: trainingsPage(), icon: GraduationCap });
         items.push({ title: 'Requirements', href: requirementsPage(), icon: ClipboardList });
         items.push({ title: 'Tags', href: tagsPage(), icon: TagsIcon });
+    }
+
+    // Bulk-assignment workflow opens to Manager+ (matches the widened
+    // AssignmentPolicy from Phase 13.1).
+    if (u && (u.isOwner || u.isSuperAdmin || u.isAdmin || u.isManager)) {
+        items.push({ title: 'Bulk assign', href: bulkAssignmentPage(), icon: Workflow });
     }
 
     return items;

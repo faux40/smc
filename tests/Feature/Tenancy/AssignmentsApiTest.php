@@ -43,14 +43,72 @@ class AssignmentsApiTest extends TestCase
             ->assertJsonCount(1);
     }
 
-    public function test_manager_cannot_list_assignments_in_phase_10(): void
+    public function test_manager_can_list_assignments(): void
     {
-        // Self-view lands in Phase 12.3; for now anything non-admin is 403.
+        // Phase 13.1 broadened the AssignmentPolicy: Manager can viewAny
+        // + create to drive the tag-bulk-assignment flow. Update + delete
+        // remain Owner/SA/Admin.
         $org = Organization::factory()->create();
         $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $user = User::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+        Assignment::factory()
+            ->for($org, 'organization')
+            ->for($user, 'user')
+            ->for($req, 'requirement')
+            ->create();
 
         $this->actingAs($manager)
             ->getJson('/api/assignments')
+            ->assertOk()
+            ->assertJsonCount(1);
+    }
+
+    public function test_selfedit_cannot_list_assignments(): void
+    {
+        // Sanity guard: the policy widening stops at Manager. SelfEdit /
+        // SelfView / None still 403 until Phase 12.3 (self-view).
+        $org = Organization::factory()->create();
+        $self = User::factory()->for($org, 'organization')->withRole('SelfEdit')->create();
+
+        $this->actingAs($self)
+            ->getJson('/api/assignments')
+            ->assertForbidden();
+    }
+
+    public function test_manager_can_create_but_not_update_or_delete(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $member = User::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+
+        $created = $this->actingAs($manager)
+            ->postJson('/api/assignments', [
+                'user_id' => $member->id,
+                'requirement_id' => $req->id,
+                'name' => 'X',
+                'initial_only' => true,
+                'repeating' => false,
+                'as_needed' => false,
+                'start_date' => '2026-05-12',
+            ])
+            ->assertCreated()
+            ->json();
+
+        // Update is still admin-only.
+        $this->actingAs($manager)
+            ->patchJson("/api/assignments/{$created['id']}", [
+                'name' => 'Renamed',
+                'initial_only' => true,
+                'repeating' => false,
+                'as_needed' => false,
+                'start_date' => '2026-05-12',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($manager)
+            ->deleteJson("/api/assignments/{$created['id']}")
             ->assertForbidden();
     }
 
@@ -135,14 +193,14 @@ class AssignmentsApiTest extends TestCase
         ]);
     }
 
-    public function test_manager_cannot_create(): void
+    public function test_selfedit_cannot_create(): void
     {
         $org = Organization::factory()->create();
-        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $self = User::factory()->for($org, 'organization')->withRole('SelfEdit')->create();
         $member = User::factory()->for($org, 'organization')->create();
         $req = Requirement::factory()->for($org, 'organization')->create();
 
-        $this->actingAs($manager)
+        $this->actingAs($self)
             ->postJson('/api/assignments', [
                 'user_id' => $member->id,
                 'requirement_id' => $req->id,

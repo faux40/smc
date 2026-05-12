@@ -3,6 +3,7 @@
 use App\Events\RealtimePing;
 use App\Http\Controllers\AssignmentsController;
 use App\Http\Controllers\AttachmentsController;
+use App\Http\Controllers\BulkAssignmentsController;
 use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\CompletionsController;
 use App\Http\Controllers\RequirementsController;
@@ -43,6 +44,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Tags library admin page. Read open to any org member (the page
     // hides write UI for non-admins); write API enforces role via policy.
     Route::inertia('tags', 'tags/Index')->name('tags.page');
+
+    // Tag-driven bulk assignment (Phase 13.1 flagship). preview returns
+    // the user × requirement cross-product for a chosen tag plus the
+    // already-assigned pairs so the matrix UI can pre-lock cells. store
+    // takes a hand-picked pairs[] list and creates the missing
+    // assignments in one transaction. Manager+ gated via AssignmentPolicy.
+    Route::get('api/bulk-assignments/preview', [BulkAssignmentsController::class, 'preview'])->name('bulk-assignments.preview');
+    Route::post('api/bulk-assignments', [BulkAssignmentsController::class, 'store'])->name('bulk-assignments.store');
+
+    Route::inertia('workflows/bulk-assignment', 'workflows/BulkAssignment')->name('workflows.bulk-assignment');
 
     // Polymorphic comment API — consumed by <CommentsList>. Anyone in the
     // org can read/post; author-only edit; author OR admin+ delete.
