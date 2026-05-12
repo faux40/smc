@@ -26,6 +26,11 @@ import {
 export interface UserRow {
     id: string;
     name: string;
+    f_name: string;
+    m_name: string | null;
+    l_name: string;
+    prefix_name: string | null;
+    suffix_name: string | null;
     email: string | null;
     status: 'active' | 'disabled';
     role: string | null;
@@ -38,6 +43,11 @@ export interface UserRow {
 interface BroadcastUser {
     id: string;
     name?: string;
+    f_name?: string;
+    m_name?: string | null;
+    l_name?: string;
+    prefix_name?: string | null;
+    suffix_name?: string | null;
     email?: string | null;
     status?: 'active' | 'disabled';
 }
@@ -75,6 +85,11 @@ export const useUsersStore = defineStore('users', () => {
             {
                 id: payload.id,
                 name: payload.name ?? '',
+                f_name: payload.f_name ?? '',
+                m_name: payload.m_name ?? null,
+                l_name: payload.l_name ?? '',
+                prefix_name: payload.prefix_name ?? null,
+                suffix_name: payload.suffix_name ?? null,
                 email: payload.email ?? null,
                 status: payload.status ?? 'active',
                 role: null,
@@ -92,7 +107,12 @@ export const useUsersStore = defineStore('users', () => {
                 ? {
                       ...u,
                       name: payload.name ?? u.name,
-                      email: payload.email ?? u.email,
+                      f_name: payload.f_name ?? u.f_name,
+                      m_name: payload.m_name !== undefined ? payload.m_name : u.m_name,
+                      l_name: payload.l_name ?? u.l_name,
+                      prefix_name: payload.prefix_name !== undefined ? payload.prefix_name : u.prefix_name,
+                      suffix_name: payload.suffix_name !== undefined ? payload.suffix_name : u.suffix_name,
+                      email: payload.email !== undefined ? payload.email : u.email,
                       status: payload.status ?? u.status,
                   }
                 : u,
@@ -112,8 +132,16 @@ export const useUsersStore = defineStore('users', () => {
      * store.hydrate() — so no manual cache patch needed here. Peer tabs
      * receive UserRegistered on the org channel and call applyAdded.
      */
+    interface NamePayload {
+        f_name: string;
+        m_name: string | null;
+        l_name: string;
+        prefix_name: string | null;
+        suffix_name: string | null;
+    }
+
     function create(
-        form: { name: string; email: string | null },
+        form: NamePayload & { email: string | null },
         opts: { onSuccess?: () => void; onError?: (errors: Record<string, string>) => void } = {},
     ): void {
         router.post(usersStore().url, form as unknown as Record<string, string>, {
@@ -125,7 +153,7 @@ export const useUsersStore = defineStore('users', () => {
 
     function update(
         id: string,
-        form: { name: string; email: string | null; role: string; status: 'active' | 'disabled' },
+        form: NamePayload & { email: string | null; role: string; status: 'active' | 'disabled' },
         opts: { onSuccess?: () => void; onError?: (errors: Record<string, string>) => void } = {},
     ): void {
         router.patch(usersUpdate(id).url, form as unknown as Record<string, string>, {

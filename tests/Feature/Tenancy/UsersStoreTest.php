@@ -36,7 +36,8 @@ class UsersStoreTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('users.store'), [
-                'name' => 'Ada Lovelace',
+                'f_name' => 'Ada',
+                'l_name' => 'Lovelace',
                 'email' => 'ada@example.com',
             ])
             ->assertRedirect(route('users.index'));
@@ -55,11 +56,12 @@ class UsersStoreTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('users.store'), [
-                'name' => 'Frank Forklift',
+                'f_name' => 'Frank',
+                'l_name' => 'Forklift',
             ])
             ->assertRedirect(route('users.index'));
 
-        $created = User::where('name', 'Frank Forklift')->first();
+        $created = User::where('f_name', 'Frank')->where('l_name', 'Forklift')->first();
         $this->assertNotNull($created);
         $this->assertNull($created->email);
         $this->assertNull($created->password);
@@ -71,7 +73,7 @@ class UsersStoreTest extends TestCase
         $manager = User::factory()->forOrganization($org)->withRole('Manager')->create();
 
         $this->actingAs($manager)
-            ->post(route('users.store'), ['name' => 'No', 'email' => 'no@example.com'])
+            ->post(route('users.store'), ['f_name' => 'No', 'l_name' => 'Way', 'email' => 'no@example.com'])
             ->assertForbidden();
     }
 
@@ -84,7 +86,7 @@ class UsersStoreTest extends TestCase
 
         $this->actingAs($admin)
             ->from(route('users.index'))
-            ->post(route('users.store'), ['name' => 'X', 'email' => 'taken@example.com'])
+            ->post(route('users.store'), ['f_name' => 'X', 'l_name' => 'Y', 'email' => 'taken@example.com'])
             ->assertSessionHasErrors('email');
     }
 
@@ -96,7 +98,7 @@ class UsersStoreTest extends TestCase
         $this->actingAs($admin)
             ->from(route('users.index'))
             ->post(route('users.store'), ['email' => 'a@b.com'])
-            ->assertSessionHasErrors('name');
+            ->assertSessionHasErrors(['f_name', 'l_name']);
     }
 
     public function test_create_dispatches_user_registered(): void
@@ -107,7 +109,7 @@ class UsersStoreTest extends TestCase
         $admin = User::factory()->forOrganization($org)->withRole('Admin')->create();
 
         $this->actingAs($admin)
-            ->post(route('users.store'), ['name' => 'Ada', 'email' => 'ada@example.com']);
+            ->post(route('users.store'), ['f_name' => 'Ada', 'l_name' => 'L', 'email' => 'ada@example.com']);
 
         Event::assertDispatched(UserRegistered::class);
     }

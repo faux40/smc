@@ -24,7 +24,8 @@ class RegistrationCreatesOrgTest extends TestCase
     public function test_register_creates_user_and_org_in_transaction(): void
     {
         $this->post(route('register'), [
-            'name' => 'Ada Lovelace',
+            'f_name' => 'Ada',
+            'l_name' => 'Lovelace',
             'org_name' => 'Acme Co',
             'email' => 'ada@example.com',
             'password' => 'password',
@@ -44,7 +45,8 @@ class RegistrationCreatesOrgTest extends TestCase
     {
         $this->from(route('register'))
             ->post(route('register'), [
-                'name' => 'Ada',
+                'f_name' => 'Ada',
+                'l_name' => 'L',
                 'email' => 'a@example.com',
                 'password' => 'password',
                 'password_confirmation' => 'password',
@@ -57,7 +59,8 @@ class RegistrationCreatesOrgTest extends TestCase
         Event::fake([OrganizationCreated::class, UserRegistered::class]);
 
         $this->post(route('register'), [
-            'name' => 'Ada',
+            'f_name' => 'Ada',
+            'l_name' => 'Lovelace',
             'org_name' => 'Acme',
             'email' => 'ada@example.com',
             'password' => 'password',

@@ -40,7 +40,11 @@ class CreateNewUser implements CreatesNewUsers
 
             $user = User::create([
                 'org_id' => $org->id,
-                'name' => $input['name'],
+                'f_name' => $input['f_name'],
+                'm_name' => $input['m_name'] ?? null,
+                'l_name' => $input['l_name'],
+                'prefix_name' => $input['prefix_name'] ?? null,
+                'suffix_name' => $input['suffix_name'] ?? null,
                 'email' => $input['email'],
                 'password' => $input['password'],
             ]);

@@ -16,7 +16,14 @@ return new class extends Migration
             // inside the same DB transaction). Application policy is "always
             // set" — the BelongsToOrganization scope assumes non-null.
             $table->foreignUuid('org_id')->nullable()->constrained('organizations')->cascadeOnDelete();
-            $table->string('name');
+            // Name split into 5 fields: f_name + l_name required, the rest
+            // optional. The User model exposes a `name` accessor that
+            // composes them for display.
+            $table->string('f_name');
+            $table->string('m_name')->nullable();
+            $table->string('l_name');
+            $table->string('prefix_name')->nullable();
+            $table->string('suffix_name')->nullable();
             // Email + password both nullable: no-login users (frontline workers
             // managed by an admin) have neither.
             $table->string('email')->nullable();

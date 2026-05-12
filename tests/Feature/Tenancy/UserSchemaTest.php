@@ -5,7 +5,6 @@ namespace Tests\Feature\Tenancy;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -16,7 +15,9 @@ class UserSchemaTest extends TestCase
     public function test_users_table_has_expected_columns(): void
     {
         $this->assertTrue(Schema::hasColumns('users', [
-            'id', 'org_id', 'name', 'email', 'email_verified_at',
+            'id', 'org_id',
+            'f_name', 'm_name', 'l_name', 'prefix_name', 'suffix_name',
+            'email', 'email_verified_at',
             'password', 'remember_token', 'status', 'deleted_at',
             'created_at', 'updated_at',
             'two_factor_secret', 'two_factor_recovery_codes', 'two_factor_confirmed_at',

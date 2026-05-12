@@ -37,7 +37,8 @@ class UsersUpdateTest extends TestCase
 
         $this->actingAs($admin)
             ->patch(route('users.update', $target), [
-                'name' => 'Updated Name',
+                'f_name' => 'Updated',
+                'l_name' => 'Name',
                 'email' => 'updated@example.com',
                 'role' => 'None',
                 'status' => 'active',
@@ -57,7 +58,8 @@ class UsersUpdateTest extends TestCase
 
         $this->actingAs($admin)
             ->patch(route('users.update', $target), [
-                'name' => $target->name,
+                'f_name' => $target->f_name,
+                'l_name' => $target->l_name,
                 'role' => 'Manager',
                 'status' => 'active',
             ])
@@ -75,7 +77,8 @@ class UsersUpdateTest extends TestCase
 
         $this->actingAs($admin)
             ->patch(route('users.update', $owner), [
-                'name' => 'Hacked',
+                'f_name' => 'Hacked',
+                'l_name' => 'Hacker',
                 'role' => 'None',
                 'status' => 'active',
             ])
@@ -92,7 +95,8 @@ class UsersUpdateTest extends TestCase
         $this->actingAs($admin)
             ->from(route('users.index'))
             ->patch(route('users.update', $target), [
-                'name' => $target->name,
+                'f_name' => $target->f_name,
+                'l_name' => $target->l_name,
                 'role' => 'Owner',
                 'status' => 'active',
             ])
@@ -108,7 +112,8 @@ class UsersUpdateTest extends TestCase
         // Re-submitting the same email should NOT trip the unique rule.
         $this->actingAs($admin)
             ->patch(route('users.update', $target), [
-                'name' => 'New Name',
+                'f_name' => 'New',
+                'l_name' => 'Name',
                 'email' => 'mine@example.com',
                 'role' => 'None',
                 'status' => 'active',
@@ -126,7 +131,8 @@ class UsersUpdateTest extends TestCase
         $this->actingAs($admin)
             ->from(route('users.index'))
             ->patch(route('users.update', $target), [
-                'name' => 'X',
+                'f_name' => 'X',
+                'l_name' => 'Y',
                 'email' => 'taken@example.com',
                 'role' => 'None',
                 'status' => 'active',
@@ -144,7 +150,8 @@ class UsersUpdateTest extends TestCase
 
         $this->actingAs($admin)
             ->patch(route('users.update', $target), [
-                'name' => 'New',
+                'f_name' => 'New',
+                'l_name' => 'Name',
                 'role' => 'None',
                 'status' => 'active',
             ]);
@@ -160,7 +167,8 @@ class UsersUpdateTest extends TestCase
 
         $this->actingAs($manager)
             ->patch(route('users.update', $target), [
-                'name' => 'X',
+                'f_name' => 'X',
+                'l_name' => 'Y',
                 'role' => 'None',
                 'status' => 'active',
             ])

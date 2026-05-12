@@ -86,8 +86,8 @@ class UsersIndexTest extends TestCase
     {
         $org = Organization::factory()->create();
         $owner = $this->ownerOf($org);
-        User::factory()->forOrganization($org)->create(['name' => 'Forklift Frank', 'email' => 'frank@example.com']);
-        User::factory()->forOrganization($org)->create(['name' => 'Alice Andersen', 'email' => 'alice@example.com']);
+        User::factory()->forOrganization($org)->create(['f_name' => 'Forklift', 'l_name' => 'Frank', 'email' => 'frank@example.com']);
+        User::factory()->forOrganization($org)->create(['f_name' => 'Alice', 'l_name' => 'Andersen', 'email' => 'alice@example.com']);
 
         $this->actingAs($owner)
             ->get(route('users.index', ['q' => 'Forklift']))

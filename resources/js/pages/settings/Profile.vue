@@ -51,18 +51,65 @@ const user = computed(() => page.props.auth.user);
             class="space-y-6"
             v-slot="{ errors, processing }"
         >
-            <div class="grid gap-2">
-                <Label for="name">Name</Label>
-                <Input
-                    id="name"
-                    class="mt-1 block w-full"
-                    name="name"
-                    :default-value="user.name"
-                    required
-                    autocomplete="name"
-                    placeholder="Full name"
-                />
-                <InputError class="mt-2" :message="errors.name" />
+            <div class="grid grid-cols-2 gap-3">
+                <div class="grid gap-2">
+                    <Label for="f_name">First name</Label>
+                    <Input
+                        id="f_name"
+                        class="mt-1 block w-full"
+                        name="f_name"
+                        :default-value="(user as any).f_name"
+                        required
+                        autocomplete="given-name"
+                    />
+                    <InputError class="mt-2" :message="(errors as any).f_name" />
+                </div>
+                <div class="grid gap-2">
+                    <Label for="l_name">Last name</Label>
+                    <Input
+                        id="l_name"
+                        class="mt-1 block w-full"
+                        name="l_name"
+                        :default-value="(user as any).l_name"
+                        required
+                        autocomplete="family-name"
+                    />
+                    <InputError class="mt-2" :message="(errors as any).l_name" />
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3">
+                <div class="grid gap-2">
+                    <Label for="prefix_name">Prefix</Label>
+                    <Input
+                        id="prefix_name"
+                        class="mt-1 block w-full"
+                        name="prefix_name"
+                        :default-value="(user as any).prefix_name"
+                    />
+                    <InputError class="mt-2" :message="(errors as any).prefix_name" />
+                </div>
+                <div class="grid gap-2">
+                    <Label for="m_name">Middle</Label>
+                    <Input
+                        id="m_name"
+                        class="mt-1 block w-full"
+                        name="m_name"
+                        :default-value="(user as any).m_name"
+                        autocomplete="additional-name"
+                    />
+                    <InputError class="mt-2" :message="(errors as any).m_name" />
+                </div>
+                <div class="grid gap-2">
+                    <Label for="suffix_name">Suffix</Label>
+                    <Input
+                        id="suffix_name"
+                        class="mt-1 block w-full"
+                        name="suffix_name"
+                        :default-value="(user as any).suffix_name"
+                    />
+                    <InputError class="mt-2" :message="(errors as any).suffix_name" />
+                </div>
             </div>
 
             <div class="grid gap-2">

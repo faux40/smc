@@ -34,7 +34,11 @@ const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
 const store = useUsersStore();
 
 interface FormState {
-    name: string;
+    f_name: string;
+    m_name: string;
+    l_name: string;
+    prefix_name: string;
+    suffix_name: string;
     email: string;
     role: string;
     status: 'active' | 'disabled';
@@ -43,7 +47,11 @@ interface FormState {
 const ASSIGNABLE_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'SelfEdit', 'SelfView', 'None'];
 
 const form = reactive<FormState>({
-    name: '',
+    f_name: '',
+    m_name: '',
+    l_name: '',
+    prefix_name: '',
+    suffix_name: '',
     email: '',
     role: 'None',
     status: 'active',
@@ -61,12 +69,27 @@ watch(
         if (!open) return;
         errors.value = {};
         if (isEdit.value && props.target) {
-            form.name = props.target.name;
-            form.email = props.target.email ?? '';
-            form.role = props.target.role ?? 'None';
-            form.status = props.target.status;
+            const t = props.target as UserRow & {
+                f_name?: string;
+                m_name?: string | null;
+                l_name?: string;
+                prefix_name?: string | null;
+                suffix_name?: string | null;
+            };
+            form.f_name = t.f_name ?? '';
+            form.m_name = t.m_name ?? '';
+            form.l_name = t.l_name ?? '';
+            form.prefix_name = t.prefix_name ?? '';
+            form.suffix_name = t.suffix_name ?? '';
+            form.email = t.email ?? '';
+            form.role = t.role ?? 'None';
+            form.status = t.status;
         } else {
-            form.name = '';
+            form.f_name = '';
+            form.m_name = '';
+            form.l_name = '';
+            form.prefix_name = '';
+            form.suffix_name = '';
             form.email = '';
             form.role = 'None';
             form.status = 'active';
@@ -89,22 +112,28 @@ const submit = () => {
         },
     };
 
+    const namePayload = {
+        f_name: form.f_name,
+        m_name: form.m_name.trim() === '' ? null : form.m_name,
+        l_name: form.l_name,
+        prefix_name: form.prefix_name.trim() === '' ? null : form.prefix_name,
+        suffix_name: form.suffix_name.trim() === '' ? null : form.suffix_name,
+    };
+    const email = form.email.trim() === '' ? null : form.email;
+
     if (isEdit.value && props.target) {
         store.update(
             props.target.id,
             {
-                name: form.name,
-                email: form.email.trim() === '' ? null : form.email,
+                ...namePayload,
+                email,
                 role: form.role,
                 status: form.status,
             },
             opts,
         );
     } else {
-        store.create(
-            { name: form.name, email: form.email.trim() === '' ? null : form.email },
-            opts,
-        );
+        store.create({ ...namePayload, email }, opts);
     }
 };
 </script>
@@ -132,15 +161,58 @@ const submit = () => {
                     </DialogDescription>
                 </DialogHeader>
 
-                <div class="grid gap-2">
-                    <Label for="user_name">Name</Label>
-                    <Input
-                        id="user_name"
-                        v-model="form.name"
-                        required
-                        autofocus
-                    />
-                    <InputError :message="errors.name" />
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="grid gap-2">
+                        <Label for="user_f_name">First name</Label>
+                        <Input
+                            id="user_f_name"
+                            v-model="form.f_name"
+                            required
+                            autofocus
+                            autocomplete="given-name"
+                        />
+                        <InputError :message="errors.f_name" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="user_l_name">Last name</Label>
+                        <Input
+                            id="user_l_name"
+                            v-model="form.l_name"
+                            required
+                            autocomplete="family-name"
+                        />
+                        <InputError :message="errors.l_name" />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="grid gap-2">
+                        <Label for="user_prefix_name">Prefix</Label>
+                        <Input
+                            id="user_prefix_name"
+                            v-model="form.prefix_name"
+                            placeholder="Dr."
+                        />
+                        <InputError :message="errors.prefix_name" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="user_m_name">Middle</Label>
+                        <Input
+                            id="user_m_name"
+                            v-model="form.m_name"
+                            autocomplete="additional-name"
+                        />
+                        <InputError :message="errors.m_name" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="user_suffix_name">Suffix</Label>
+                        <Input
+                            id="user_suffix_name"
+                            v-model="form.suffix_name"
+                            placeholder="Jr."
+                        />
+                        <InputError :message="errors.suffix_name" />
+                    </div>
                 </div>
 
                 <div class="grid gap-2">

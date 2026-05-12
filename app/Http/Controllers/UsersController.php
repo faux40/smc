@@ -30,17 +30,25 @@ class UsersController extends Controller
             ->with('roles:id,name')
             ->when(! $includeDisabled, fn ($q) => $q->where('status', 'active'))
             ->when($search !== '', fn ($q) => $q->where(function ($inner) use ($search) {
-                $inner->where('name', 'like', "%{$search}%")
+                $inner->where('f_name', 'like', "%{$search}%")
+                    ->orWhere('m_name', 'like', "%{$search}%")
+                    ->orWhere('l_name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%");
             }))
-            ->orderBy('name')
-            ->get(['id', 'org_id', 'name', 'email', 'status', 'created_at'])
+            ->orderBy('l_name')
+            ->orderBy('f_name')
+            ->get(['id', 'org_id', 'f_name', 'm_name', 'l_name', 'prefix_name', 'suffix_name', 'email', 'status', 'created_at'])
             ->when($roleFilter !== '', fn ($collection) => $collection->filter(
                 fn (User $u) => $u->roles->contains('name', $roleFilter),
             )->values())
             ->map(fn (User $u) => [
                 'id' => $u->id,
                 'name' => $u->name,
+                'f_name' => $u->f_name,
+                'm_name' => $u->m_name,
+                'l_name' => $u->l_name,
+                'prefix_name' => $u->prefix_name,
+                'suffix_name' => $u->suffix_name,
                 'email' => $u->email,
                 'status' => $u->status,
                 'role' => $u->roles->first()?->name,
@@ -65,7 +73,11 @@ class UsersController extends Controller
     {
         $user = User::create([
             'org_id' => $request->user()->org_id,
-            'name' => $request->validated('name'),
+            'f_name' => $request->validated('f_name'),
+            'm_name' => $request->validated('m_name'),
+            'l_name' => $request->validated('l_name'),
+            'prefix_name' => $request->validated('prefix_name'),
+            'suffix_name' => $request->validated('suffix_name'),
             'email' => $request->validated('email'),
             'password' => null,
         ]);
@@ -82,7 +94,11 @@ class UsersController extends Controller
         $data = $request->validated();
 
         $user->update([
-            'name' => $data['name'],
+            'f_name' => $data['f_name'],
+            'm_name' => $data['m_name'] ?? null,
+            'l_name' => $data['l_name'],
+            'prefix_name' => $data['prefix_name'] ?? null,
+            'suffix_name' => $data['suffix_name'] ?? null,
             'email' => $data['email'] ?? null,
             'status' => $data['status'],
         ]);

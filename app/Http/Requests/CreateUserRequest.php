@@ -21,7 +21,11 @@ class CreateUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'f_name' => ['required', 'string', 'max:255'],
+            'm_name' => ['nullable', 'string', 'max:255'],
+            'l_name' => ['required', 'string', 'max:255'],
+            'prefix_name' => ['nullable', 'string', 'max:32'],
+            'suffix_name' => ['nullable', 'string', 'max:32'],
             // Globally unique among non-soft-deleted rows (matches the partial
             // unique index). Nullable supports no-login users.
             'email' => [

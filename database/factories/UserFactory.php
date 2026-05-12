@@ -22,7 +22,11 @@ class UserFactory extends Factory
     {
         return [
             'org_id' => Organization::factory(),
-            'name' => fake()->name(),
+            'f_name' => fake()->firstName(),
+            'm_name' => null,
+            'l_name' => fake()->lastName(),
+            'prefix_name' => null,
+            'suffix_name' => null,
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),

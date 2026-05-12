@@ -9,31 +9,33 @@ use Illuminate\Validation\Rule;
 trait ProfileValidationRules
 {
     /**
-     * Get the validation rules used to validate user profiles.
-     *
      * @return array<string, array<int, ValidationRule|array<mixed>|string>>
      */
     protected function profileRules(int|string|null $userId = null): array
     {
         return [
-            'name' => $this->nameRules(),
+            ...$this->nameRules(),
             'email' => $this->emailRules($userId),
         ];
     }
 
     /**
-     * Get the validation rules used to validate user names.
+     * Five-column name shape: f_name + l_name required, the rest optional.
      *
-     * @return array<int, ValidationRule|array<mixed>|string>
+     * @return array<string, array<int, ValidationRule|array<mixed>|string>>
      */
     protected function nameRules(): array
     {
-        return ['required', 'string', 'max:255'];
+        return [
+            'f_name' => ['required', 'string', 'max:255'],
+            'm_name' => ['nullable', 'string', 'max:255'],
+            'l_name' => ['required', 'string', 'max:255'],
+            'prefix_name' => ['nullable', 'string', 'max:32'],
+            'suffix_name' => ['nullable', 'string', 'max:32'],
+        ];
     }
 
     /**
-     * Get the validation rules used to validate user emails.
-     *
      * @return array<int, ValidationRule|array<mixed>|string>
      */
     protected function emailRules(int|string|null $userId = null): array
