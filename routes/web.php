@@ -7,6 +7,7 @@ use App\Http\Controllers\BulkAssignmentsController;
 use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\CompletionsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\NotificationsController;
 use App\Http\Controllers\RequirementsController;
 use App\Http\Controllers\RqmtElementsController;
 use App\Http\Controllers\StdFrequenciesController;
@@ -24,6 +25,17 @@ Route::inertia('/', 'Welcome', [
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+
+    // Phase 15.2 in-app inbox. Index returns the actor's last 100
+    // notifications + unread count for the bell badge; mark-read flips
+    // a single row; mark-all-read flips everything unread for the
+    // actor. All implicitly scoped to the authenticated user via the
+    // Notifiable relation.
+    Route::get('api/notifications', [NotificationsController::class, 'index'])->name('notifications.index');
+    Route::post('api/notifications/{id}/read', [NotificationsController::class, 'markRead'])->name('notifications.read');
+    Route::post('api/notifications/read-all', [NotificationsController::class, 'markAllRead'])->name('notifications.read-all');
+
+    Route::inertia('notifications', 'notifications/Index')->name('notifications.page');
 
     // Phase 14 dashboard widget endpoints. One per widget so a later
     // user-prefs phase can add / remove / re-order them without
