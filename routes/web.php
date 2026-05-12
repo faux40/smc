@@ -4,10 +4,12 @@ use App\Events\RealtimePing;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\RequirementsController;
+use App\Http\Controllers\RqmtElementsController;
 use App\Http\Controllers\StdFrequenciesController;
 use App\Http\Controllers\TagsController;
 use App\Http\Controllers\TrainingsController;
 use App\Http\Controllers\UsersController;
+use Inertia\Inertia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
@@ -77,6 +79,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('api/requirements/{requirement}', [RequirementsController::class, 'destroy'])->name('requirements.destroy');
 
     Route::inertia('requirements', 'requirements/Index')->name('requirements.page');
+
+    // rqmt_elements: nested under a requirement. Element create+list are
+    // nested; update+delete take the element id directly (no parent
+    // lookup needed). All gated by RqmtElementPolicy (Owner/SA/Admin
+    // for writes; viewAny open).
+    Route::get('api/requirements/{requirement}/elements', [RqmtElementsController::class, 'index'])->name('requirements.elements.index');
+    Route::post('api/requirements/{requirement}/elements', [RqmtElementsController::class, 'store'])->name('requirements.elements.store');
+    Route::patch('api/rqmt-elements/{rqmtElement}', [RqmtElementsController::class, 'update'])->name('rqmt-elements.update');
+    Route::delete('api/rqmt-elements/{rqmtElement}', [RqmtElementsController::class, 'destroy'])->name('rqmt-elements.destroy');
+
+    Route::get('requirements/{requirement}', function (\App\Models\Requirement $requirement) {
+        abort_unless(auth()->user()->org_id === $requirement->org_id, 403);
+
+        return Inertia::render('requirements/Show', [
+            'requirement' => [
+                'id' => $requirement->id,
+                'name' => $requirement->name,
+                'description' => $requirement->description,
+            ],
+        ]);
+    })->name('requirements.show');
 });
 
 // Permanent realtime smoke canary. Dispatches a RealtimePing event on
