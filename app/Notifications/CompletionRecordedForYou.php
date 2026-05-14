@@ -21,6 +21,9 @@ class CompletionRecordedForYou extends Notification implements ShouldBroadcast, 
 {
     use ChannelsWithGatedMail, Queueable;
 
+    /** Preference key — see NotificationPreference::TYPES. */
+    public const TYPE = 'completion_recorded';
+
     public function __construct(public readonly Completion $completion)
     {
     }
@@ -31,7 +34,7 @@ class CompletionRecordedForYou extends Notification implements ShouldBroadcast, 
     public function toArray(object $notifiable): array
     {
         return [
-            'kind' => 'completion_recorded',
+            'kind' => self::TYPE,
             'completion_id' => $this->completion->id,
             'module_type' => $this->completion->module_type,
             'module_id' => $this->completion->module_id,

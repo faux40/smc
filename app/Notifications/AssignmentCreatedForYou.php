@@ -20,6 +20,9 @@ class AssignmentCreatedForYou extends Notification implements ShouldBroadcast, S
 {
     use ChannelsWithGatedMail, Queueable;
 
+    /** Preference key — see NotificationPreference::TYPES. */
+    public const TYPE = 'assignment_created';
+
     public function __construct(public readonly Assignment $assignment)
     {
     }
@@ -34,7 +37,7 @@ class AssignmentCreatedForYou extends Notification implements ShouldBroadcast, S
     public function toArray(object $notifiable): array
     {
         return [
-            'kind' => 'assignment_created',
+            'kind' => self::TYPE,
             'assignment_id' => $this->assignment->id,
             'requirement_id' => $this->assignment->requirement_id,
             'name' => $this->assignment->name,

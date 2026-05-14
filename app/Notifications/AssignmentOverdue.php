@@ -25,6 +25,9 @@ class AssignmentOverdue extends Notification implements ShouldBroadcast, ShouldQ
 {
     use ChannelsWithGatedMail, Queueable;
 
+    /** Preference key — see NotificationPreference::TYPES. */
+    public const TYPE = 'assignment_overdue';
+
     public function __construct(
         public readonly Assignment $assignment,
         public readonly ?string $nextDueDate,
@@ -38,7 +41,7 @@ class AssignmentOverdue extends Notification implements ShouldBroadcast, ShouldQ
     public function toArray(object $notifiable): array
     {
         return [
-            'kind' => 'assignment_overdue',
+            'kind' => self::TYPE,
             'assignment_id' => $this->assignment->id,
             'requirement_id' => $this->assignment->requirement_id,
             'name' => $this->assignment->name,
