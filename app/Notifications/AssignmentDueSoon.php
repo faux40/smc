@@ -3,9 +3,11 @@
 namespace App\Notifications;
 
 use App\Models\Assignment;
+use App\Notifications\Concerns\ChannelsWithGatedMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
-use Illuminate\Notifications\Messages\BroadcastMessage;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
@@ -13,26 +15,19 @@ use Illuminate\Notifications\Notification;
  * sees one of their assignments cross *into* `due_soon`. Edge-triggered:
  * fires once on the transition, not every day the assignment stays due.
  *
- * Phase 15.3: database + broadcast channels. Mail channel (gated by the
- * user's notification preferences) lands in 15.4.
+ * Delivers to the in-app inbox (`database`) + realtime bell
+ * (`broadcast`); the `mail` channel is added by ChannelsWithGatedMail
+ * when the deployment flag is on (Phase 15.4).
  */
-class AssignmentDueSoon extends Notification implements ShouldBroadcast
+class AssignmentDueSoon extends Notification implements ShouldBroadcast, ShouldQueue
 {
-    use Queueable;
+    use ChannelsWithGatedMail, Queueable;
 
     public function __construct(
         public readonly Assignment $assignment,
         public readonly ?string $nextDueDate,
         public readonly ?int $daysUntilDue,
     ) {
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    public function via(object $notifiable): array
-    {
-        return ['database', 'broadcast'];
     }
 
     /**
@@ -50,8 +45,22 @@ class AssignmentDueSoon extends Notification implements ShouldBroadcast
         ];
     }
 
-    public function toBroadcast(object $notifiable): BroadcastMessage
+    public function toMail(object $notifiable): MailMessage
     {
-        return new BroadcastMessage($this->toArray($notifiable));
+        $mail = (new MailMessage)
+            ->subject('Requirement due soon: '.$this->assignment->name)
+            ->greeting('Hello '.$notifiable->name.',')
+            ->line('Your requirement "'.$this->assignment->name.'" is coming due.');
+
+        if ($this->nextDueDate !== null) {
+            $window = $this->daysUntilDue !== null
+                ? ' (in '.$this->daysUntilDue.' day'.($this->daysUntilDue === 1 ? '' : 's').')'
+                : '';
+            $mail->line('Due date: '.$this->nextDueDate.$window.'.');
+        }
+
+        return $mail
+            ->action('View your requirements', route('users.show', $notifiable))
+            ->line('Log a completion before the due date to stay current.');
     }
 }

@@ -3,37 +3,31 @@
 namespace App\Notifications;
 
 use App\Models\Assignment;
+use App\Notifications\Concerns\ChannelsWithGatedMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
-use Illuminate\Notifications\Messages\BroadcastMessage;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
  * Sent to a User when an admin / manager creates an assignment for
- * them. Phase 15.1: database channel persists the row; broadcast
- * channel lights up the in-app inbox bell in realtime (the inbox UI
- * lands in 15.2). Mail channel comes in 15.4.
+ * them. Delivers to the in-app inbox (`database`) + realtime bell
+ * (`broadcast`); the `mail` channel is added by ChannelsWithGatedMail
+ * when the deployment flag is on (Phase 15.4).
  */
-class AssignmentCreatedForYou extends Notification implements ShouldBroadcast
+class AssignmentCreatedForYou extends Notification implements ShouldBroadcast, ShouldQueue
 {
-    use Queueable;
+    use ChannelsWithGatedMail, Queueable;
 
     public function __construct(public readonly Assignment $assignment)
     {
     }
 
     /**
-     * @return array<int, string>
-     */
-    public function via(object $notifiable): array
-    {
-        return ['database', 'broadcast'];
-    }
-
-    /**
      * Payload persisted into notifications.data + delivered to the
-     * frontend on broadcast. The inbox UI in 15.2 renders directly
-     * from this shape.
+     * frontend on broadcast. The inbox UI renders directly from this
+     * shape.
      *
      * @return array<string, mixed>
      */
@@ -50,10 +44,23 @@ class AssignmentCreatedForYou extends Notification implements ShouldBroadcast
         ];
     }
 
-    public function toBroadcast(object $notifiable): BroadcastMessage
+    public function toMail(object $notifiable): MailMessage
     {
-        // Wrap the same payload for the realtime channel so 15.2's
-        // inbox store can upsert on receipt.
-        return new BroadcastMessage($this->toArray($notifiable));
+        $mail = (new MailMessage)
+            ->subject('New requirement assigned: '.$this->assignment->name)
+            ->greeting('Hello '.$notifiable->name.',')
+            ->line('A new requirement has been assigned to you: '.$this->assignment->name.'.');
+
+        if ($this->assignment->description) {
+            $mail->line($this->assignment->description);
+        }
+
+        if ($this->assignment->start_date) {
+            $mail->line('Start date: '.$this->assignment->start_date->toDateString());
+        }
+
+        return $mail
+            ->action('View your requirements', route('users.show', $notifiable))
+            ->line('Log your completion once the requirement is met.');
     }
 }

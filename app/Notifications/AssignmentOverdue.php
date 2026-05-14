@@ -3,9 +3,11 @@
 namespace App\Notifications;
 
 use App\Models\Assignment;
+use App\Notifications\Concerns\ChannelsWithGatedMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
-use Illuminate\Notifications\Messages\BroadcastMessage;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
@@ -15,26 +17,19 @@ use Illuminate\Notifications\Notification;
  * `current` to `overdue` (watchdog missed the `due_soon` window) fires
  * only this, not `AssignmentDueSoon`.
  *
- * Phase 15.3: database + broadcast channels. Mail channel (gated by the
- * user's notification preferences) lands in 15.4.
+ * Delivers to the in-app inbox (`database`) + realtime bell
+ * (`broadcast`); the `mail` channel is added by ChannelsWithGatedMail
+ * when the deployment flag is on (Phase 15.4).
  */
-class AssignmentOverdue extends Notification implements ShouldBroadcast
+class AssignmentOverdue extends Notification implements ShouldBroadcast, ShouldQueue
 {
-    use Queueable;
+    use ChannelsWithGatedMail, Queueable;
 
     public function __construct(
         public readonly Assignment $assignment,
         public readonly ?string $nextDueDate,
         public readonly ?int $daysUntilDue,
     ) {
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    public function via(object $notifiable): array
-    {
-        return ['database', 'broadcast'];
     }
 
     /**
@@ -52,8 +47,24 @@ class AssignmentOverdue extends Notification implements ShouldBroadcast
         ];
     }
 
-    public function toBroadcast(object $notifiable): BroadcastMessage
+    public function toMail(object $notifiable): MailMessage
     {
-        return new BroadcastMessage($this->toArray($notifiable));
+        $mail = (new MailMessage)
+            ->error()
+            ->subject('Requirement overdue: '.$this->assignment->name)
+            ->greeting('Hello '.$notifiable->name.',')
+            ->line('Your requirement "'.$this->assignment->name.'" is now overdue.');
+
+        if ($this->nextDueDate !== null) {
+            // daysUntilDue is negative once overdue — report the magnitude.
+            $overdueBy = $this->daysUntilDue !== null
+                ? ' ('.abs($this->daysUntilDue).' day'.(abs($this->daysUntilDue) === 1 ? '' : 's').' overdue)'
+                : '';
+            $mail->line('Due date was: '.$this->nextDueDate.$overdueBy.'.');
+        }
+
+        return $mail
+            ->action('View your requirements', route('users.show', $notifiable))
+            ->line('Please log a completion as soon as possible to return to compliance.');
     }
 }
