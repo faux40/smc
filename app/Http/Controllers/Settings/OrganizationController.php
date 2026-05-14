@@ -26,8 +26,11 @@ class OrganizationController extends Controller
             'organization' => [
                 'id' => $org->id,
                 'name' => $org->name,
+                'timezone' => $org->timezone,
             ],
             'isOwner' => $user->hasRole('Owner'),
+            // Full IANA identifier list for the timezone picker.
+            'timezones' => \DateTimeZone::listIdentifiers(),
         ]);
     }
 

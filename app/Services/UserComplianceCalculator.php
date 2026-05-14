@@ -161,9 +161,7 @@ class UserComplianceCalculator
         $totalAssignments = 0;
         $usersWithOverdue = 0;
 
-        $users = User::query()
-            ->where('org_id', $org->id)
-            ->get();
+        $users = $this->orgUsers($org);
 
         foreach ($users as $user) {
             $result = $this->compute($user, $now);
@@ -189,6 +187,81 @@ class UserComplianceCalculator
             'total_users' => $users->count(),
             'users_with_overdue' => $usersWithOverdue,
         ];
+    }
+
+    /**
+     * Top N users in the org by overdue-assignment count, worst first.
+     * Drives the Phase 14 dashboard widget and the Phase 15.6 weekly
+     * manager digest — both read this single source so they can't drift.
+     *
+     * @return array<int, array{user_id: string, name: string, email: ?string, overdue_count: int}>
+     */
+    public function topOverdueUsers(Organization $org, int $limit, ?CarbonImmutable $now = null): array
+    {
+        $now = $now ?? CarbonImmutable::now();
+
+        $rows = [];
+        foreach ($this->orgUsers($org) as $user) {
+            $result = $this->compute($user, $now);
+            $overdueCount = count($result['groups'][self::STATUS_OVERDUE]);
+            if ($overdueCount === 0) {
+                continue;
+            }
+            $rows[] = [
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'overdue_count' => $overdueCount,
+            ];
+        }
+
+        usort($rows, fn ($a, $b) => $b['overdue_count'] <=> $a['overdue_count']);
+
+        return array_slice($rows, 0, $limit);
+    }
+
+    /**
+     * Up to N (user, assignment) pairs sitting in their due-soon
+     * window, earliest due first. Drives the dashboard widget and the
+     * manager digest.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function topDueSoon(Organization $org, int $limit, ?CarbonImmutable $now = null): array
+    {
+        $now = $now ?? CarbonImmutable::now();
+
+        $items = [];
+        foreach ($this->orgUsers($org) as $user) {
+            $result = $this->compute($user, $now);
+            foreach ($result['groups'][self::STATUS_DUE_SOON] as $row) {
+                $items[] = array_merge($row, [
+                    'user_id' => $user->id,
+                    'user_name' => $user->name,
+                ]);
+            }
+        }
+
+        usort(
+            $items,
+            fn ($a, $b) => ($a['days_until_due'] ?? PHP_INT_MAX) <=> ($b['days_until_due'] ?? PHP_INT_MAX),
+        );
+
+        return array_slice($items, 0, $limit);
+    }
+
+    /**
+     * Every user in the org. Soft-deleted users are excluded by the
+     * model's global scope; the org global scope is a no-op here since
+     * we filter on `org_id` explicitly.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, User>
+     */
+    private function orgUsers(Organization $org): \Illuminate\Database\Eloquent\Collection
+    {
+        return User::query()
+            ->where('org_id', $org->id)
+            ->get();
     }
 
     /**

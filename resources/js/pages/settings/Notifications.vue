@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import NotificationPreferencesController from '@/actions/App/Http/Controllers/Settings/NotificationPreferencesController';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
@@ -49,7 +50,36 @@ const TYPE_META: { key: string; label: string; description: string }[] = [
         label: 'Assignment overdue',
         description: 'When one of your requirements becomes overdue.',
     },
+    {
+        key: 'manager_digest',
+        label: 'Weekly manager digest',
+        description: 'A Monday-morning compliance rollup for your organization.',
+    },
 ];
+
+// The manager digest only goes to Owner / SuperAdmin / Admin / Manager
+// users, so the toggle is hidden for everyone else — their stored
+// preference still rides along in the form payload, ready if they're
+// ever promoted.
+const page = usePage();
+const authUser = computed(
+    () =>
+        page.props.auth.user as {
+            isOwner?: boolean;
+            isSuperAdmin?: boolean;
+            isAdmin?: boolean;
+            isManager?: boolean;
+        } | null,
+);
+const isManagerPlus = computed(() => {
+    const u = authUser.value;
+    return !!u && !!(u.isOwner || u.isSuperAdmin || u.isAdmin || u.isManager);
+});
+const visibleTypes = computed(() =>
+    TYPE_META.filter(
+        (t) => t.key !== 'manager_digest' || isManagerPlus.value,
+    ),
+);
 
 const form = useForm<{ preferences: PreferenceMatrix }>({
     preferences: JSON.parse(JSON.stringify(props.preferences)),
@@ -85,7 +115,7 @@ const submit = () => {
                 </div>
 
                 <div
-                    v-for="type in TYPE_META"
+                    v-for="type in visibleTypes"
                     :key="type.key"
                     class="grid grid-cols-[1fr_5rem_5rem] items-center gap-2 border-b px-4 py-3 last:border-b-0"
                 >

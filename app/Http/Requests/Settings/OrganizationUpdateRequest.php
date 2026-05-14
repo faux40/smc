@@ -21,6 +21,10 @@ class OrganizationUpdateRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            // Phase 15.6 — drives org-local scheduling of the weekly
+            // manager digest. `timezone` rule accepts any valid IANA
+            // identifier.
+            'timezone' => ['required', 'timezone'],
         ];
     }
 }

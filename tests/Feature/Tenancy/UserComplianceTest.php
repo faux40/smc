@@ -464,6 +464,88 @@ class UserComplianceTest extends TestCase
         $this->assertSame(1, $summary['total_users']);
     }
 
+    public function test_top_overdue_users_ranks_worst_first_and_respects_limit(): void
+    {
+        // $this->user: 2 overdue (initial_only, never completed, past start).
+        $this->requirementWithElement(['initial_only' => true, 'repeating' => false, 'as_needed' => false]);
+        $this->requirementWithElement(['initial_only' => true, 'repeating' => false, 'as_needed' => false]);
+
+        // userB: 1 overdue.
+        $userB = User::factory()->for($this->org, 'organization')->create();
+        $reqB = Requirement::factory()->for($this->org, 'organization')->create();
+        RqmtElement::factory()->for($this->org, 'organization')->for($reqB, 'requirement')->create([
+            'module_type' => Training::class,
+            'module_id' => $this->training->id,
+            'initial_only' => true,
+            'repeating' => false,
+            'as_needed' => false,
+        ]);
+        Assignment::factory()
+            ->for($this->org, 'organization')->for($userB, 'user')->for($reqB, 'requirement')
+            ->create(['start_date' => $this->now->subYear()->toDateString()]);
+
+        // userC: no assignments → absent from the list entirely.
+        User::factory()->for($this->org, 'organization')->create();
+
+        $rows = $this->calc()->topOverdueUsers($this->org, 10, $this->now);
+
+        $this->assertCount(2, $rows);
+        $this->assertSame($this->user->id, $rows[0]['user_id']);
+        $this->assertSame(2, $rows[0]['overdue_count']);
+        $this->assertSame($userB->id, $rows[1]['user_id']);
+        $this->assertSame(1, $rows[1]['overdue_count']);
+
+        // Limit caps the list to the worst N.
+        $capped = $this->calc()->topOverdueUsers($this->org, 1, $this->now);
+        $this->assertCount(1, $capped);
+        $this->assertSame($this->user->id, $capped[0]['user_id']);
+    }
+
+    public function test_top_due_soon_orders_by_days_until_due_and_respects_limit(): void
+    {
+        // $this->user: repeating element completed 20 days ago on a
+        // 30-day frequency → next_due ~10 days out.
+        [, $elA] = $this->requirementWithElement([
+            'initial_only' => false,
+            'repeating' => true,
+            'as_needed' => false,
+            'std_freq_id' => $this->monthly->id,
+        ]);
+        $this->completion($elA, $this->now->subDays(20)->toDateString());
+
+        // userB: completed 5 days ago → next_due ~25 days out.
+        $userB = User::factory()->for($this->org, 'organization')->create();
+        $reqB = Requirement::factory()->for($this->org, 'organization')->create();
+        $elB = RqmtElement::factory()->for($this->org, 'organization')->for($reqB, 'requirement')->create([
+            'module_type' => Training::class,
+            'module_id' => $this->training->id,
+            'initial_only' => false,
+            'repeating' => true,
+            'as_needed' => false,
+            'std_freq_id' => $this->monthly->id,
+        ]);
+        Assignment::factory()
+            ->for($this->org, 'organization')->for($userB, 'user')->for($reqB, 'requirement')
+            ->create(['start_date' => $this->now->subYear()->toDateString()]);
+        $cB = Completion::factory()->for($this->org, 'organization')->for($userB, 'user')->create([
+            'module_type' => Training::class,
+            'module_id' => $this->training->id,
+            'completion_date' => $this->now->subDays(5)->toDateString(),
+            'expire_date' => null,
+        ]);
+        $cB->rqmtElements()->sync([$elB->id]);
+
+        $items = $this->calc()->topDueSoon($this->org, 10, $this->now);
+
+        $this->assertCount(2, $items);
+        // Earliest due first.
+        $this->assertSame($this->user->id, $items[0]['user_id']);
+        $this->assertSame($userB->id, $items[1]['user_id']);
+        $this->assertLessThanOrEqual($items[1]['days_until_due'], $items[0]['days_until_due']);
+
+        $this->assertCount(1, $this->calc()->topDueSoon($this->org, 1, $this->now));
+    }
+
     public function test_custom_due_soon_window_is_respected(): void
     {
         // With a 14-day window the same scenario from the 60-day test

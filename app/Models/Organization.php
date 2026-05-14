@@ -17,6 +17,12 @@ class Organization extends Model
     protected $fillable = [
         'owner_user_id',
         'name',
+        'timezone',
+        'manager_digest_sent_at',
+    ];
+
+    protected $casts = [
+        'manager_digest_sent_at' => 'datetime',
     ];
 
     public function users(): HasMany

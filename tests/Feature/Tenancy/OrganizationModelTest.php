@@ -14,8 +14,18 @@ class OrganizationModelTest extends TestCase
     public function test_organizations_table_has_expected_columns(): void
     {
         $this->assertTrue(Schema::hasColumns('organizations', [
-            'id', 'owner_user_id', 'name', 'created_at', 'updated_at', 'deleted_at',
+            'id', 'owner_user_id', 'name', 'timezone', 'manager_digest_sent_at',
+            'created_at', 'updated_at', 'deleted_at',
         ]));
+    }
+
+    public function test_timezone_defaults_to_utc(): void
+    {
+        // Phase 15.6 — the digest command relies on this column always
+        // resolving to a valid IANA identifier.
+        $org = Organization::factory()->create();
+
+        $this->assertSame('UTC', $org->fresh()->timezone);
     }
 
     public function test_organizations_id_is_uuid(): void

@@ -19,8 +19,9 @@ import {
 import { edit } from '@/routes/organization';
 
 type Props = {
-    organization: { id: string; name: string };
+    organization: { id: string; name: string; timezone: string };
     isOwner: boolean;
+    timezones: string[];
 };
 
 const props = defineProps<Props>();
@@ -74,6 +75,29 @@ const submitDelete = () => {
                     required
                 />
                 <InputError class="mt-2" :message="errors.name" />
+            </div>
+            <div class="grid gap-2">
+                <Label for="timezone">Timezone</Label>
+                <select
+                    id="timezone"
+                    name="timezone"
+                    class="border-input bg-background mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                    required
+                >
+                    <option
+                        v-for="tz in props.timezones"
+                        :key="tz"
+                        :value="tz"
+                        :selected="tz === props.organization.timezone"
+                    >
+                        {{ tz }}
+                    </option>
+                </select>
+                <p class="text-xs text-muted-foreground">
+                    Used to schedule the weekly compliance digest at 8am
+                    local time on Mondays.
+                </p>
+                <InputError class="mt-2" :message="errors.timezone" />
             </div>
             <div class="flex items-center gap-4">
                 <Button :disabled="processing">Save</Button>

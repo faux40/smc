@@ -5,9 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Training;
-use App\Models\User;
 use App\Services\UserComplianceCalculator;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -45,64 +43,18 @@ class DashboardController extends Controller
     {
         $this->authorize($request);
 
-        $org = $this->orgFor($request);
-        $now = CarbonImmutable::now();
-
-        $users = User::query()
-            ->where('org_id', $org->id)
-            ->get();
-
-        $rows = [];
-        foreach ($users as $user) {
-            $result = $this->calculator->compute($user, $now);
-            $overdueCount = count($result['groups']['overdue']);
-            if ($overdueCount === 0) {
-                continue;
-            }
-            $rows[] = [
-                'user_id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'overdue_count' => $overdueCount,
-            ];
-        }
-
-        // Sort worst first; cap to the widget limit.
-        usort($rows, fn ($a, $b) => $b['overdue_count'] <=> $a['overdue_count']);
-        $rows = array_slice($rows, 0, self::OVERDUE_USERS_LIMIT);
-
-        return response()->json($rows);
+        return response()->json(
+            $this->calculator->topOverdueUsers($this->orgFor($request), self::OVERDUE_USERS_LIMIT),
+        );
     }
 
     public function dueSoon(Request $request): JsonResponse
     {
         $this->authorize($request);
 
-        $org = $this->orgFor($request);
-        $now = CarbonImmutable::now();
-
-        $users = User::query()
-            ->where('org_id', $org->id)
-            ->get();
-
-        $items = [];
-        foreach ($users as $user) {
-            $result = $this->calculator->compute($user, $now);
-            foreach ($result['groups']['due_soon'] as $row) {
-                $items[] = array_merge($row, [
-                    'user_id' => $user->id,
-                    'user_name' => $user->name,
-                ]);
-            }
-        }
-
-        // Earliest due first.
-        usort($items, function ($a, $b) {
-            return ($a['days_until_due'] ?? PHP_INT_MAX) <=> ($b['days_until_due'] ?? PHP_INT_MAX);
-        });
-        $items = array_slice($items, 0, self::DUE_SOON_LIMIT);
-
-        return response()->json($items);
+        return response()->json(
+            $this->calculator->topDueSoon($this->orgFor($request), self::DUE_SOON_LIMIT),
+        );
     }
 
     public function recentCompletions(Request $request): JsonResponse

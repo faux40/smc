@@ -115,8 +115,11 @@ class NotificationPreferencesTest extends TestCase
             'channel' => 'inapp',
             'enabled' => true,
         ]);
-        // 4 types × 2 channels, all upserted.
-        $this->assertSame(8, NotificationPreference::where('user_id', $user->id)->count());
+        // Every type × channel cell upserted.
+        $this->assertSame(
+            count(NotificationPreference::TYPES) * count(NotificationPreference::CHANNELS),
+            NotificationPreference::where('user_id', $user->id)->count(),
+        );
     }
 
     public function test_update_upserts_without_duplicating(): void
@@ -179,7 +182,10 @@ class NotificationPreferencesTest extends TestCase
             ->patch(route('notification-preferences.update'), ['preferences' => $this->fullMatrix(false)])
             ->assertSessionHasNoErrors();
 
-        $this->assertSame(8, NotificationPreference::where('user_id', $actor->id)->count());
+        $this->assertSame(
+            count(NotificationPreference::TYPES) * count(NotificationPreference::CHANNELS),
+            NotificationPreference::where('user_id', $actor->id)->count(),
+        );
         $this->assertSame(0, NotificationPreference::where('user_id', $other->id)->count());
     }
 }
