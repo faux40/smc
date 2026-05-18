@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, reactive, ref } from 'vue';
+import ErrorBanner from '@/components/ErrorBanner.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -14,8 +15,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useFieldErrors } from '@/composables/useFieldErrors';
 import { edit } from '@/routes/frequencies';
+import { useErrorStore } from '@/stores/errors';
 import { useStdFrequenciesStore, type StdFrequencyRow } from '@/stores/stdFrequencies';
+
+const PAGE_CTX = 'page:frequencies';
+const FORM_CTX = 'form:frequency';
 
 defineOptions({
     layout: {
@@ -44,11 +50,12 @@ interface FormState {
 }
 
 const form = reactive<FormState>({ name: '', repeat_days: '' });
-const formErrors = ref<Record<string, string>>({});
 const dialogOpen = ref(false);
 const editingId = ref<string | null>(null);
 const submitting = ref(false);
-const error = ref<string | null>(null);
+
+const errorStore = useErrorStore();
+const fieldErrors = useFieldErrors(FORM_CTX);
 
 const title = computed(() => (editingId.value ? 'Edit frequency' : 'New frequency'));
 
@@ -57,7 +64,7 @@ onMounted(async () => {
     try {
         await store.load();
     } catch (e) {
-        error.value = (e as Error).message;
+        errorStore.reportFromAxios(e, PAGE_CTX, { fallback: 'Failed to load frequencies' });
     }
 });
 
@@ -65,7 +72,7 @@ const openCreate = () => {
     editingId.value = null;
     form.name = '';
     form.repeat_days = '';
-    formErrors.value = {};
+    errorStore.clear(FORM_CTX);
     dialogOpen.value = true;
 };
 
@@ -73,13 +80,13 @@ const openEdit = (row: StdFrequencyRow) => {
     editingId.value = row.id;
     form.name = row.name;
     form.repeat_days = row.repeat_days;
-    formErrors.value = {};
+    errorStore.clear(FORM_CTX);
     dialogOpen.value = true;
 };
 
 const submit = async () => {
     submitting.value = true;
-    formErrors.value = {};
+    errorStore.clear(FORM_CTX);
     try {
         const days = typeof form.repeat_days === 'number' ? form.repeat_days : Number(form.repeat_days);
         if (editingId.value) {
@@ -88,16 +95,8 @@ const submit = async () => {
             await store.create(form.name, days);
         }
         dialogOpen.value = false;
-    } catch (e: unknown) {
-        const err = e as { response?: { data?: { errors?: Record<string, string[]> } } };
-        const errs = err.response?.data?.errors;
-        if (errs) {
-            formErrors.value = Object.fromEntries(
-                Object.entries(errs).map(([k, v]) => [k, v[0] ?? '']),
-            );
-        } else {
-            error.value = (e as Error).message;
-        }
+    } catch (e) {
+        errorStore.reportFromAxios(e, FORM_CTX, { fallback: 'Failed to save frequency' });
     } finally {
         submitting.value = false;
     }
@@ -105,11 +104,10 @@ const submit = async () => {
 
 const remove = async (row: StdFrequencyRow) => {
     if (!window.confirm(`Delete "${row.name}"?`)) return;
-    error.value = null;
     try {
         await store.destroy(row.id);
     } catch (e) {
-        error.value = (e as Error).message;
+        errorStore.reportFromAxios(e, PAGE_CTX, { fallback: 'Failed to delete frequency' });
     }
 };
 </script>
@@ -129,12 +127,7 @@ const remove = async (row: StdFrequencyRow) => {
             <Button v-if="canManage" @click="openCreate">+ Add frequency</Button>
         </div>
 
-        <p
-            v-if="error"
-            class="rounded bg-red-50 p-2 text-sm text-red-800 dark:bg-red-900/30 dark:text-red-200"
-        >
-            {{ error }}
-        </p>
+        <ErrorBanner :context="PAGE_CTX" />
 
         <div
             v-if="store.library.length === 0"
@@ -195,10 +188,12 @@ const remove = async (row: StdFrequencyRow) => {
                         </DialogDescription>
                     </DialogHeader>
 
+                    <ErrorBanner :context="FORM_CTX" />
+
                     <div class="grid gap-2">
                         <Label for="freq_name">Name</Label>
                         <Input id="freq_name" v-model="form.name" required autofocus />
-                        <InputError :message="formErrors.name" />
+                        <InputError :message="fieldErrors.message('name')" />
                     </div>
 
                     <div class="grid gap-2">
@@ -210,7 +205,7 @@ const remove = async (row: StdFrequencyRow) => {
                             min="1"
                             required
                         />
-                        <InputError :message="formErrors.repeat_days" />
+                        <InputError :message="fieldErrors.message('repeat_days')" />
                     </div>
 
                     <DialogFooter>
