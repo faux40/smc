@@ -29,11 +29,14 @@ const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
 const store = useTagsStore();
 
 const DEFAULT_COLOR = '#6b7280';
+const DEFAULT_FONT_COLOR = '#ffffff';
 
 const form = reactive({
     name: '',
     color: DEFAULT_COLOR,
     hasColor: true,
+    fontColor: DEFAULT_FONT_COLOR,
+    hasFontColor: false,
 });
 const errors = ref<Record<string, string>>({});
 const submitting = ref(false);
@@ -47,6 +50,7 @@ const previewTag = computed<TagRow>(() => ({
     id: props.target?.id ?? 'preview',
     name: form.name.trim() === '' ? 'Tag preview' : form.name,
     color: form.hasColor ? form.color : null,
+    font_color: form.hasFontColor ? form.fontColor : null,
     attached_count: props.target?.attached_count ?? 0,
 }));
 
@@ -59,10 +63,14 @@ watch(
             form.name = props.target.name;
             form.hasColor = props.target.color !== null;
             form.color = props.target.color ?? DEFAULT_COLOR;
+            form.hasFontColor = props.target.font_color !== null;
+            form.fontColor = props.target.font_color ?? DEFAULT_FONT_COLOR;
         } else {
             form.name = '';
             form.hasColor = true;
             form.color = DEFAULT_COLOR;
+            form.hasFontColor = false;
+            form.fontColor = DEFAULT_FONT_COLOR;
         }
     },
 );
@@ -72,10 +80,11 @@ const submit = async () => {
     errors.value = {};
     try {
         const color = form.hasColor ? form.color : null;
+        const fontColor = form.hasFontColor ? form.fontColor : null;
         if (isEdit.value && props.target) {
-            await store.rename(props.target.id, form.name, color);
+            await store.rename(props.target.id, form.name, color, fontColor);
         } else {
-            await store.create(form.name, color);
+            await store.create(form.name, color, fontColor);
         }
         emit('update:open', false);
     } catch (e: unknown) {
@@ -128,6 +137,26 @@ const submit = async () => {
                         </span>
                     </div>
                     <InputError :message="errors.color" />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label class="flex items-center gap-2">
+                        <Checkbox v-model="form.hasFontColor" />
+                        <span>Font color (override)</span>
+                    </Label>
+                    <div class="flex items-center gap-3">
+                        <input
+                            type="color"
+                            v-model="form.fontColor"
+                            :disabled="!form.hasFontColor"
+                            class="h-9 w-12 cursor-pointer rounded border border-input bg-background disabled:opacity-50"
+                            aria-label="Tag font color"
+                        />
+                        <span class="text-xs text-muted-foreground">
+                            {{ form.hasFontColor ? form.fontColor : 'Derived from color' }}
+                        </span>
+                    </div>
+                    <InputError :message="errors.font_color" />
                 </div>
 
                 <div class="grid gap-2">

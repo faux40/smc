@@ -70,17 +70,19 @@ class TagsController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'color' => self::COLOR_RULES,
+            'font_color' => self::COLOR_RULES,
         ]);
 
         $tag = Tag::create([
             'org_id' => $request->user()->org_id,
             'name' => $data['name'],
             'color' => $data['color'] ?? null,
+            'font_color' => $data['font_color'] ?? null,
         ]);
 
         event(new TagCreated($tag));
 
-        return response()->json($tag->only(['id', 'name', 'color']), 201);
+        return response()->json($tag->only(['id', 'name', 'color', 'font_color']), 201);
     }
 
     public function update(Request $request, Tag $tag): JsonResponse
@@ -90,13 +92,14 @@ class TagsController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'color' => self::COLOR_RULES,
+            'font_color' => self::COLOR_RULES,
         ]);
 
         $tag->update($data);
 
         event(new TagUpdated($tag->fresh()));
 
-        return response()->json($tag->only(['id', 'name', 'color']));
+        return response()->json($tag->only(['id', 'name', 'color', 'font_color']));
     }
 
     public function destroy(Tag $tag): JsonResponse

@@ -14,5 +14,5 @@ class Tag extends Model
     /** @use HasFactory<TagFactory> */
     use BelongsToOrganization, HasFactory, HasUuids, SoftDeletes;
 
-    protected $fillable = ['org_id', 'name', 'color'];
+    protected $fillable = ['org_id', 'name', 'color', 'font_color'];
 }

@@ -24,13 +24,14 @@ class TagUpdated implements ShouldBroadcast
         return [new PrivateChannel('org.'.$this->tag->org_id)];
     }
 
-    /** @return array{id: string, name: string, color: ?string, origin_tab: ?string} */
+    /** @return array{id: string, name: string, color: ?string, font_color: ?string, origin_tab: ?string} */
     public function broadcastWith(): array
     {
         return [
             'id' => $this->tag->id,
             'name' => $this->tag->name,
             'color' => $this->tag->color,
+            'font_color' => $this->tag->font_color,
             'origin_tab' => RealtimeOrigin::tab(),
         ];
     }

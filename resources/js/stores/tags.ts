@@ -19,6 +19,9 @@ export interface TagRow {
     id: string;
     name: string;
     color: string | null;
+    // Optional override for the pill's text color. Null means derive
+    // from `color` (the pre-feature default in TagPill).
+    font_color: string | null;
     // How many morphable rows this tag is attached to across the org.
     // Hydrated by GET /api/tags and patched in place by TagAttached /
     // TagDetached broadcasts. Defaults to 0 for tags created in this
@@ -80,26 +83,36 @@ export const useTagsStore = defineStore('tags', () => {
         attached.value = { ...attached.value, [keyOf(morphable)]: [...ids] };
     }
 
-    async function create(name: string, color: string | null = null): Promise<TagRow> {
+    async function create(
+        name: string,
+        color: string | null = null,
+        fontColor: string | null = null,
+    ): Promise<TagRow> {
         const { data } = await axios.post<TagRow>(
             '/api/tags',
-            { name, color },
+            { name, color, font_color: fontColor },
             { headers: defaultHeaders() },
         );
-        // POST /api/tags returns only id/name/color — backfill the count
-        // so the library shape stays consistent.
+        // POST /api/tags returns only id/name/color/font_color — backfill
+        // the count so the library shape stays consistent.
         const row: TagRow = { ...data, attached_count: data.attached_count ?? 0 };
         library.value = [...library.value, row];
         return row;
     }
 
-    async function rename(id: string, name: string, color: string | null = null): Promise<void> {
+    async function rename(
+        id: string,
+        name: string,
+        color: string | null = null,
+        fontColor: string | null = null,
+    ): Promise<void> {
         const { data } = await axios.patch<TagRow>(
             `/api/tags/${id}`,
-            { name, color },
+            { name, color, font_color: fontColor },
             { headers: defaultHeaders() },
         );
-        // PATCH returns id/name/color — preserve the locally-tracked count.
+        // PATCH returns id/name/color/font_color — preserve the
+        // locally-tracked count.
         library.value = library.value.map((t) =>
             t.id === id ? { ...t, ...data, attached_count: t.attached_count } : t,
         );
@@ -176,6 +189,7 @@ export const useTagsStore = defineStore('tags', () => {
                         id: p.id,
                         name: p.name,
                         color: p.color ?? null,
+                        font_color: p.font_color ?? null,
                         attached_count: p.attached_count ?? 0,
                     },
                 ];
@@ -184,7 +198,7 @@ export const useTagsStore = defineStore('tags', () => {
         bind('TagUpdated', (p: Partial<TagRow> & { id: string; name: string }) => {
             library.value = library.value.map((t) =>
                 t.id === p.id
-                    ? { ...t, name: p.name, color: p.color ?? null }
+                    ? { ...t, name: p.name, color: p.color ?? null, font_color: p.font_color ?? null }
                     : t,
             );
         });

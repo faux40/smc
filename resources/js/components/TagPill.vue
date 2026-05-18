@@ -36,10 +36,13 @@ const sizeClasses = computed(() =>
 );
 
 const swatchColor = computed(() => props.tag.color ?? '#6b7280');
+// Explicit font color overrides the derived behavior; null falls back
+// to the swatch color (the pre-feature look).
+const textColor = computed(() => props.tag.font_color ?? swatchColor.value);
 
 const pillStyle = computed<Record<string, string>>(() => ({
     backgroundColor: `${swatchColor.value}1f`,
-    color: swatchColor.value,
+    color: textColor.value,
     boxShadow: `inset 0 0 0 1px ${swatchColor.value}40`,
 }));
 

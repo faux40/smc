@@ -124,6 +124,59 @@ class TagsApiTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_create_persists_font_color(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/tags', [
+                'name' => 'safety',
+                'color' => '#ff0000',
+                'font_color' => '#ffffff',
+            ])
+            ->assertCreated()
+            ->assertJsonFragment(['font_color' => '#ffffff']);
+
+        $this->assertDatabaseHas('tags', [
+            'name' => 'safety',
+            'color' => '#ff0000',
+            'font_color' => '#ffffff',
+            'org_id' => $org->id,
+        ]);
+    }
+
+    public function test_create_validates_font_color_format(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/tags', [
+                'name' => 'bad',
+                'color' => '#ff0000',
+                'font_color' => 'puce',
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_create_accepts_null_font_color(): void
+    {
+        // Back-compat default: pre-feature tags rendered text derived
+        // from `color`. Null font_color on create stays null.
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/tags', ['name' => 'plain', 'color' => '#ff0000'])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('tags', [
+            'name' => 'plain',
+            'font_color' => null,
+        ]);
+    }
+
     public function test_admin_can_rename_tag(): void
     {
         $org = Organization::factory()->create();
@@ -135,6 +188,27 @@ class TagsApiTest extends TestCase
             ->assertOk();
 
         $this->assertSame('renamed', $tag->fresh()->name);
+    }
+
+    public function test_update_persists_font_color(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $tag = Tag::factory()->for($org, 'organization')->create([
+            'color' => '#ff0000',
+            'font_color' => null,
+        ]);
+
+        $this->actingAs($admin)
+            ->patchJson("/api/tags/{$tag->id}", [
+                'name' => $tag->name,
+                'color' => '#ff0000',
+                'font_color' => '#000000',
+            ])
+            ->assertOk()
+            ->assertJsonFragment(['font_color' => '#000000']);
+
+        $this->assertSame('#000000', $tag->fresh()->font_color);
     }
 
     public function test_cross_org_update_blocked(): void
