@@ -7,6 +7,23 @@ import { bunny } from 'laravel-vite-plugin/fonts';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+    server: {
+        // Vite is started with `--host 0.0.0.0` inside Docker so the
+        // container is reachable from the host. But we want the URLs
+        // Vite writes into the page (assets, HMR client) to use
+        // `localhost`, since that's what the browser can actually
+        // reach. Harmless when running outside Docker — the browser
+        // sees `localhost` either way.
+        origin: 'http://localhost:5173',
+        // Vite 6+ blocks cross-origin asset requests by default. The
+        // Laravel app and Vite are on different ports in dev (8000 vs
+        // 5173). `true` sends Access-Control-Allow-Origin: * — fine
+        // for a local dev server.
+        cors: true,
+        hmr: {
+            host: 'localhost',
+        },
+    },
     plugins: [
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.ts'],
