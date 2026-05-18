@@ -173,8 +173,13 @@ class UsersController extends Controller
             'status' => $data['status'],
         ]);
 
-        // syncRoles replaces all roles atomically — matches the one-role-per-user invariant.
-        $user->syncRoles([$data['role']]);
+        // role is absent from $data for Owner targets (the request
+        // rule is `prohibited` then); skip syncRoles so the Owner
+        // role stays intact. Otherwise syncRoles replaces all roles
+        // atomically to match the one-role-per-user invariant.
+        if (isset($data['role'])) {
+            $user->syncRoles([$data['role']]);
+        }
 
         event(new UserUpdated($user->fresh()->load('roles:id,name')));
 

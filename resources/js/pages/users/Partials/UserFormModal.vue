@@ -60,6 +60,7 @@ const errors = ref<Record<string, string>>({});
 const submitting = ref(false);
 
 const isEdit = computed(() => props.mode === 'edit');
+const isOwnerTarget = computed(() => isEdit.value && props.target?.role === 'Owner');
 const title = computed(() => (isEdit.value ? 'Edit user' : 'Add user'));
 const submitLabel = computed(() => (isEdit.value ? 'Save' : 'Add user'));
 
@@ -122,13 +123,16 @@ const submit = () => {
     const email = form.email.trim() === '' ? null : form.email;
 
     if (isEdit.value && props.target) {
+        // Owner role is managed by the (planned) ownership-transfer
+        // flow, not this form. Omit `role` entirely so the backend
+        // leaves the Owner's role intact.
         store.update(
             props.target.id,
             {
                 ...namePayload,
                 email,
-                role: form.role,
                 status: form.status,
+                ...(isOwnerTarget.value ? {} : { role: form.role }),
             },
             opts,
         );
@@ -229,21 +233,34 @@ const submit = () => {
                 <template v-if="isEdit">
                     <div class="grid gap-2">
                         <Label for="user_role">Role</Label>
-                        <Select v-model="form.role">
-                            <SelectTrigger id="user_role">
-                                <SelectValue placeholder="Pick a role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem
-                                    v-for="r in ASSIGNABLE_ROLES"
-                                    :key="r"
-                                    :value="r"
-                                >
-                                    {{ r }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <InputError :message="errors.role" />
+                        <template v-if="isOwnerTarget">
+                            <div
+                                id="user_role"
+                                class="flex items-center gap-2 rounded-md border border-input bg-muted/40 px-3 py-2 text-sm"
+                            >
+                                <span class="font-medium">Owner</span>
+                                <span class="text-xs text-muted-foreground">
+                                    Reassigned via the ownership-transfer flow (coming later).
+                                </span>
+                            </div>
+                        </template>
+                        <template v-else>
+                            <Select v-model="form.role">
+                                <SelectTrigger id="user_role">
+                                    <SelectValue placeholder="Pick a role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem
+                                        v-for="r in ASSIGNABLE_ROLES"
+                                        :key="r"
+                                        :value="r"
+                                    >
+                                        {{ r }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <InputError :message="errors.role" />
+                        </template>
                     </div>
 
                     <div class="grid gap-2">

@@ -153,7 +153,7 @@ export const useUsersStore = defineStore('users', () => {
 
     function update(
         id: string,
-        form: NamePayload & { email: string | null; role: string; status: 'active' | 'disabled' },
+        form: NamePayload & { email: string | null; role?: string; status: 'active' | 'disabled' },
         opts: { onSuccess?: () => void; onError?: (errors: Record<string, string>) => void } = {},
     ): void {
         router.patch(usersUpdate(id).url, form as unknown as Record<string, string>, {

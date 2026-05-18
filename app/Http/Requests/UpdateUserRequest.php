@@ -31,6 +31,15 @@ class UpdateUserRequest extends FormRequest
         /** @var User $target */
         $target = $this->route('user');
 
+        // Owner is locked: this form must not mutate role for an Owner
+        // target. `prohibited` rejects any incoming role value so a
+        // stale client (or a hostile caller) can't silently demote
+        // the Owner. Reassignment happens via the (planned) ownership-
+        // transfer flow.
+        $roleRule = $target->hasRole('Owner')
+            ? ['prohibited']
+            : ['required', Rule::in(self::ASSIGNABLE_ROLES)];
+
         return [
             'f_name' => ['required', 'string', 'max:255'],
             'm_name' => ['nullable', 'string', 'max:255'],
@@ -44,7 +53,7 @@ class UpdateUserRequest extends FormRequest
                 'max:255',
                 Rule::unique('users', 'email')->ignore($target->id)->whereNull('deleted_at'),
             ],
-            'role' => ['required', Rule::in(self::ASSIGNABLE_ROLES)],
+            'role' => $roleRule,
             'status' => ['required', Rule::in(['active', 'disabled'])],
         ];
     }
