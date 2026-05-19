@@ -8,10 +8,11 @@
  * compliance + completion data streams in via /api/users/{user}/compliance
  * so the page can refresh without an Inertia round-trip.
  */
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
 import Heading from '@/components/Heading.vue';
+import TagsField from '@/components/TagsField.vue';
 import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import { Badge } from '@/components/ui/badge';
 import { realtimeTabId } from '@/echo';
@@ -67,7 +68,19 @@ interface CompletionHistoryRow {
     rqmt_element_ids: string[];
 }
 
-const props = defineProps<{ subject: Subject }>();
+const props = defineProps<{ subject: Subject; tagIds: string[] }>();
+
+const page = usePage();
+const authUser = computed(
+    () => page.props.auth.user as {
+        isOwner?: boolean;
+        isSuperAdmin?: boolean;
+        isAdmin?: boolean;
+    } | null,
+);
+const canManageTagLibrary = computed(
+    () => Boolean(authUser.value?.isOwner || authUser.value?.isSuperAdmin || authUser.value?.isAdmin),
+);
 
 defineOptions({
     layout: {
@@ -163,6 +176,16 @@ function defaultHeaders(): Record<string, string> {
             <Badge :variant="subject.status === 'active' ? 'default' : 'secondary'">
                 {{ subject.status === 'active' ? 'Active' : 'Disabled' }}
             </Badge>
+        </div>
+
+        <div class="space-y-2">
+            <h2 class="text-sm font-semibold">Tags</h2>
+            <TagsField
+                morphable-type="App\Models\User"
+                :morphable-id="subject.id"
+                :initial-tag-ids="props.tagIds"
+                :can-manage-library="canManageTagLibrary"
+            />
         </div>
 
         <p

@@ -121,6 +121,9 @@ class UsersController extends Controller
                 'status' => $user->status,
                 'role' => $user->roles->first()?->name,
             ],
+            // TagsField is mounted on the page; hydrate it with the
+            // current attachments so it doesn't need a follow-up fetch.
+            'tagIds' => $user->tags()->pluck('tags.id')->all(),
         ]);
     }
 
