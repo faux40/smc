@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
+import ColorPicker from '@/components/ColorPicker.vue';
 import InputError from '@/components/InputError.vue';
 import TagPill from '@/components/TagPill.vue';
 import { Button } from '@/components/ui/button';
@@ -125,11 +126,9 @@ const submit = async () => {
                         <span>Color</span>
                     </Label>
                     <div class="flex items-center gap-3">
-                        <input
-                            type="color"
+                        <ColorPicker
                             v-model="form.color"
                             :disabled="!form.hasColor"
-                            class="h-9 w-12 cursor-pointer rounded border border-input bg-background disabled:opacity-50"
                             aria-label="Tag color"
                         />
                         <span class="text-xs text-muted-foreground">
@@ -145,11 +144,9 @@ const submit = async () => {
                         <span>Font color (override)</span>
                     </Label>
                     <div class="flex items-center gap-3">
-                        <input
-                            type="color"
+                        <ColorPicker
                             v-model="form.fontColor"
                             :disabled="!form.hasFontColor"
-                            class="h-9 w-12 cursor-pointer rounded border border-input bg-background disabled:opacity-50"
                             aria-label="Tag font color"
                         />
                         <span class="text-xs text-muted-foreground">

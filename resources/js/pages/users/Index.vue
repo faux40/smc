@@ -47,8 +47,13 @@ const store = useUsersStore();
 const page = usePage();
 const authUser = page.props.auth.user as AuthUser;
 
+// reka-ui's <Select> primitive rejects empty-string values on its
+// items (would clear the v-model and show the placeholder). Use a
+// sentinel for the "All roles" option and strip it back out before
+// the request goes to the backend.
+const ALL_ROLES = '__all';
 const search = ref(props.filters.q);
-const roleFilter = ref(props.filters.role);
+const roleFilter = ref(props.filters.role || ALL_ROLES);
 const includeDisabled = ref(props.filters.include_disabled);
 
 onMounted(() => {
@@ -67,7 +72,7 @@ const applyFilters = () => {
         index().url,
         {
             q: search.value || undefined,
-            role: roleFilter.value || undefined,
+            role: roleFilter.value && roleFilter.value !== ALL_ROLES ? roleFilter.value : undefined,
             include_disabled: includeDisabled.value ? 1 : undefined,
         },
         { preserveState: true, replace: true },
@@ -134,7 +139,7 @@ const remove = (row: UserRow) => {
                     <SelectValue placeholder="All roles" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="">All roles</SelectItem>
+                    <SelectItem :value="ALL_ROLES">All roles</SelectItem>
                     <SelectItem v-for="r in roles" :key="r" :value="r">
                         {{ r }}
                     </SelectItem>
