@@ -29,7 +29,7 @@ class UsersController extends Controller
         $includeDisabled = filter_var($request->query('include_disabled', false), FILTER_VALIDATE_BOOLEAN);
 
         $users = User::query()
-            ->with('roles:id,name')
+            ->with(['roles:id,name', 'tags:id'])
             ->when(! $includeDisabled, fn ($q) => $q->where('status', 'active'))
             ->when($search !== '', fn ($q) => $q->where(function ($inner) use ($search) {
                 $inner->where('f_name', 'like', "%{$search}%")
@@ -55,6 +55,10 @@ class UsersController extends Controller
                 'status' => $u->status,
                 'role' => $u->roles->first()?->name,
                 'created_at' => $u->created_at?->toDateTimeString(),
+                // TagsListCell hydrates the tags store with these so the
+                // first paint already shows attached pills without a
+                // follow-up fetch. Eager-loaded via `with('tags:id')`.
+                'tag_ids' => $u->tags->pluck('id')->all(),
                 'can_edit' => Gate::check('update', $u),
                 'can_disable' => Gate::check('disable', $u),
                 'can_delete' => Gate::check('delete', $u),

@@ -35,6 +35,10 @@ export interface UserRow {
     status: 'active' | 'disabled';
     role: string | null;
     created_at: string | null;
+    // Tag IDs attached to this user. Used to hydrate the tagsStore
+    // `attached` map on first paint so TagsListCell renders without a
+    // follow-up fetch.
+    tag_ids: string[];
     can_edit: boolean;
     can_disable: boolean;
     can_delete: boolean;
@@ -94,6 +98,9 @@ export const useUsersStore = defineStore('users', () => {
                 status: payload.status ?? 'active',
                 role: null,
                 created_at: null,
+                // Realtime-created rows arrive without tag attachments; the
+                // tagsStore reconciles via TagAttached broadcasts.
+                tag_ids: [],
                 can_edit: false,
                 can_disable: false,
                 can_delete: false,

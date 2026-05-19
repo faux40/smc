@@ -3,6 +3,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { onMounted, ref, watch } from 'vue';
 import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import Heading from '@/components/Heading.vue';
+import TagsListCell from '@/components/TagsListCell.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,6 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { index, show as userShow } from '@/routes/users';
+import { useTagsStore } from '@/stores/tags';
 import { useUsersStore, type UserRow } from '@/stores/users';
 
 type Filters = {
@@ -44,8 +46,22 @@ defineOptions({
 });
 
 const store = useUsersStore();
+const tagsStore = useTagsStore();
 const page = usePage();
 const authUser = page.props.auth.user as AuthUser;
+
+// TagsListCell on each row reads from `tagsStore.attached` keyed by
+// (morphableType, morphableId). Push the eager-loaded ids into that
+// map so the first paint already shows attached pills; subsequent
+// TagAttached / TagDetached broadcasts keep it in sync.
+function hydrateTagAttachments(rows: UserRow[]): void {
+    for (const u of rows) {
+        tagsStore.setAttached(
+            { type: 'App\\Models\\User', id: u.id },
+            u.tag_ids ?? [],
+        );
+    }
+}
 
 // reka-ui's <Select> primitive rejects empty-string values on its
 // items (would clear the v-model and show the placeholder). Use a
@@ -58,13 +74,24 @@ const includeDisabled = ref(props.filters.include_disabled);
 
 onMounted(() => {
     store.hydrate(props.users);
-    if (authUser?.org_id) store.subscribe(authUser.org_id);
+    hydrateTagAttachments(props.users);
+    if (authUser?.org_id) {
+        store.subscribe(authUser.org_id);
+        tagsStore.subscribe(authUser.org_id);
+    }
+    // TagPickerPopover needs the full library (sans already-attached)
+    // to render its grid. Subsequent renders rely on the realtime
+    // store — load once.
+    tagsStore.loadLibrary().catch(() => { /* surfaced through store */ });
 });
 
 // Re-hydrate on prop changes (Inertia partial reload after filter change).
 watch(
     () => props.users,
-    (next) => store.hydrate(next),
+    (next) => {
+        store.hydrate(next);
+        hydrateTagAttachments(next);
+    },
 );
 
 const applyFilters = () => {
@@ -173,6 +200,7 @@ const remove = (row: UserRow) => {
                         <th class="px-4 py-2 text-right font-medium">
                             Actions
                         </th>
+                        <th class="px-4 py-2 text-right font-medium">Tags</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
@@ -235,10 +263,16 @@ const remove = (row: UserRow) => {
                                 Delete
                             </button>
                         </td>
+                        <td class="px-4 py-2 text-right">
+                            <TagsListCell
+                                morphable-type="App\Models\User"
+                                :morphable-id="u.id"
+                            />
+                        </td>
                     </tr>
                     <tr v-if="store.users.length === 0">
                         <td
-                            colspan="5"
+                            colspan="6"
                             class="px-4 py-6 text-center text-muted-foreground"
                         >
                             No users match the current filters.

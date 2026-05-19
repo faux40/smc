@@ -125,4 +125,29 @@ class UsersIndexTest extends TestCase
             ->get(route('users.index'))
             ->assertInertia(fn (AssertableInertia $page) => $page->where('can_create', true));
     }
+
+    public function test_index_includes_tag_ids_per_user(): void
+    {
+        // TagsListCell on the row reads from the tags store; the host page
+        // hydrates the store from this `tag_ids` field at first paint.
+        $org = Organization::factory()->create();
+        $owner = $this->ownerOf($org);
+        $tagged = User::factory()->forOrganization($org)->create();
+        $untagged = User::factory()->forOrganization($org)->create();
+
+        $tagA = \App\Models\Tag::factory()->for($org, 'organization')->create();
+        $tagB = \App\Models\Tag::factory()->for($org, 'organization')->create();
+        $tagged->tags()->attach([$tagA->id, $tagB->id]);
+
+        $this->actingAs($owner)
+            ->get(route('users.index'))
+            ->assertInertia(function (AssertableInertia $page) use ($tagged, $untagged, $tagA, $tagB) {
+                $page->has('users', 3);
+
+                $rows = collect($page->toArray()['props']['users'])->keyBy('id');
+                $taggedIds = $rows[$tagged->id]['tag_ids'];
+                $this->assertEqualsCanonicalizing([$tagA->id, $tagB->id], $taggedIds);
+                $this->assertSame([], $rows[$untagged->id]['tag_ids']);
+            });
+    }
 }

@@ -9,8 +9,8 @@
  * commits the value and closes the popover.
  */
 
-import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from 'reka-ui';
 import { ref } from 'vue';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 const props = withDefaults(
     defineProps<{
@@ -44,7 +44,7 @@ function pick(color: string): void {
 </script>
 
 <template>
-    <PopoverRoot v-model:open="open">
+    <Popover v-model:open="open">
         <PopoverTrigger as-child>
             <button
                 type="button"
@@ -54,35 +54,33 @@ function pick(color: string): void {
                 :aria-label="ariaLabel"
             />
         </PopoverTrigger>
-        <PopoverPortal>
-            <PopoverContent
-                side="bottom"
-                align="start"
-                :side-offset="6"
-                class="z-50 w-56 rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-md outline-none"
-            >
-                <div class="grid grid-cols-6 gap-1.5">
-                    <button
-                        v-for="c in SWATCHES"
-                        :key="c"
-                        type="button"
-                        class="h-6 w-6 cursor-pointer rounded ring-1 ring-border hover:ring-2 hover:ring-primary"
-                        :style="{ backgroundColor: c }"
-                        :aria-label="c"
-                        @click="pick(c)"
-                    />
-                </div>
-                <div class="mt-2 flex items-center gap-2 border-t border-border pt-2">
-                    <input
-                        type="color"
-                        :value="modelValue"
-                        class="h-7 w-10 cursor-pointer rounded border border-input bg-background"
-                        :aria-label="`Custom ${ariaLabel.toLowerCase()}`"
-                        @change="(e) => pick((e.target as HTMLInputElement).value)"
-                    />
-                    <span class="text-xs text-muted-foreground">Custom</span>
-                </div>
-            </PopoverContent>
-        </PopoverPortal>
-    </PopoverRoot>
+        <PopoverContent
+            side="bottom"
+            align="start"
+            :side-offset="6"
+            class="w-56 p-2"
+        >
+            <div class="grid grid-cols-6 gap-1.5">
+                <button
+                    v-for="c in SWATCHES"
+                    :key="c"
+                    type="button"
+                    class="h-6 w-6 cursor-pointer rounded ring-1 ring-border hover:ring-2 hover:ring-primary"
+                    :style="{ backgroundColor: c }"
+                    :aria-label="c"
+                    @click="pick(c)"
+                />
+            </div>
+            <div class="mt-2 flex items-center gap-2 border-t border-border pt-2">
+                <input
+                    type="color"
+                    :value="modelValue"
+                    class="h-7 w-10 cursor-pointer rounded border border-input bg-background"
+                    :aria-label="`Custom ${ariaLabel.toLowerCase()}`"
+                    @change="(e) => pick((e.target as HTMLInputElement).value)"
+                />
+                <span class="text-xs text-muted-foreground">Custom</span>
+            </div>
+        </PopoverContent>
+    </Popover>
 </template>
