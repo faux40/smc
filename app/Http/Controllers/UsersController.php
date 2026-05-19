@@ -50,14 +50,30 @@ class UsersController extends Controller
                     ->orWhere('email', 'like', "%{$search}%");
             }))
             ->when(count($tagIds) > 0, function ($q) use ($tagIds, $tagsMode) {
+                // `taggables.taggable_id` is varchar (schema kept generic
+                // for mixed-PK morphs); `users.id` is uuid. Postgres
+                // won't auto-cast across the join, so the relation's
+                // default whereHas/whereDoesntHave error with 42883.
+                // Explicit `CAST(users.id AS text)` works on both
+                // sqlite (tests) and pgsql (dev/prod).
+                $tagSubquery = function ($sub, array $ids) {
+                    $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                        ->from('taggables')
+                        ->join('tags', 'tags.id', '=', 'taggables.tag_id')
+                        ->whereRaw('taggables.taggable_id = CAST(users.id AS text)')
+                        ->where('taggables.taggable_type', User::class)
+                        ->whereNull('tags.deleted_at')
+                        ->whereIn('tags.id', $ids);
+                };
+
                 if ($tagsMode === 'and') {
                     foreach ($tagIds as $tagId) {
-                        $q->whereHas('tags', fn ($t) => $t->where('tags.id', $tagId));
+                        $q->whereExists(fn ($sub) => $tagSubquery($sub, [$tagId]));
                     }
                 } elseif ($tagsMode === 'or') {
-                    $q->whereHas('tags', fn ($t) => $t->whereIn('tags.id', $tagIds));
+                    $q->whereExists(fn ($sub) => $tagSubquery($sub, $tagIds));
                 } else { // 'not'
-                    $q->whereDoesntHave('tags', fn ($t) => $t->whereIn('tags.id', $tagIds));
+                    $q->whereNotExists(fn ($sub) => $tagSubquery($sub, $tagIds));
                 }
             })
             ->orderBy('l_name')
