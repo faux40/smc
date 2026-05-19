@@ -150,4 +150,98 @@ class UsersIndexTest extends TestCase
                 $this->assertSame([], $rows[$untagged->id]['tag_ids']);
             });
     }
+
+    /**
+     * @return array{Organization, User, User, User, User, \App\Models\Tag, \App\Models\Tag}
+     */
+    private function setupTagFilterFixture(): array
+    {
+        $org = Organization::factory()->create();
+        $owner = $this->ownerOf($org);
+        $both = User::factory()->forOrganization($org)->create(['l_name' => 'Both']);
+        $onlyA = User::factory()->forOrganization($org)->create(['l_name' => 'OnlyA']);
+        $neither = User::factory()->forOrganization($org)->create(['l_name' => 'Neither']);
+
+        $tagA = \App\Models\Tag::factory()->for($org, 'organization')->create();
+        $tagB = \App\Models\Tag::factory()->for($org, 'organization')->create();
+        $both->tags()->attach([$tagA->id, $tagB->id]);
+        $onlyA->tags()->attach([$tagA->id]);
+
+        return [$org, $owner, $both, $onlyA, $neither, $tagA, $tagB];
+    }
+
+    public function test_tags_filter_and_requires_every_selected_tag(): void
+    {
+        [, $owner, $both, , , $tagA, $tagB] = $this->setupTagFilterFixture();
+
+        $this->actingAs($owner)
+            ->get(route('users.index', [
+                'tags' => [$tagA->id, $tagB->id],
+                'tags_mode' => 'and',
+            ]))
+            ->assertInertia(function (AssertableInertia $page) use ($both) {
+                $rows = collect($page->toArray()['props']['users']);
+                $this->assertSame([$both->id], $rows->pluck('id')->all());
+            });
+    }
+
+    public function test_tags_filter_or_matches_any_selected_tag(): void
+    {
+        [, $owner, $both, $onlyA, , $tagA, $tagB] = $this->setupTagFilterFixture();
+
+        $this->actingAs($owner)
+            ->get(route('users.index', [
+                'tags' => [$tagA->id, $tagB->id],
+                'tags_mode' => 'or',
+            ]))
+            ->assertInertia(function (AssertableInertia $page) use ($both, $onlyA) {
+                $ids = collect($page->toArray()['props']['users'])->pluck('id')->all();
+                $this->assertEqualsCanonicalizing([$both->id, $onlyA->id], $ids);
+            });
+    }
+
+    public function test_tags_filter_not_excludes_selected_tags(): void
+    {
+        [, $owner, , , $neither, $tagA, $tagB] = $this->setupTagFilterFixture();
+        // Owner is also untagged, so the "not" set is owner + neither.
+
+        $this->actingAs($owner)
+            ->get(route('users.index', [
+                'tags' => [$tagA->id, $tagB->id],
+                'tags_mode' => 'not',
+            ]))
+            ->assertInertia(function (AssertableInertia $page) use ($owner, $neither) {
+                $ids = collect($page->toArray()['props']['users'])->pluck('id')->all();
+                $this->assertEqualsCanonicalizing([$owner->id, $neither->id], $ids);
+            });
+    }
+
+    public function test_tags_filter_invalid_mode_defaults_to_and(): void
+    {
+        [, $owner, $both, , , $tagA, $tagB] = $this->setupTagFilterFixture();
+
+        $this->actingAs($owner)
+            ->get(route('users.index', [
+                'tags' => [$tagA->id, $tagB->id],
+                'tags_mode' => 'whatever',
+            ]))
+            ->assertInertia(function (AssertableInertia $page) use ($both) {
+                $rows = collect($page->toArray()['props']['users']);
+                $this->assertSame([$both->id], $rows->pluck('id')->all());
+                $page->where('filters.tags_mode', 'and');
+            });
+    }
+
+    public function test_tags_filter_empty_returns_unfiltered(): void
+    {
+        [, $owner] = $this->setupTagFilterFixture();
+
+        $this->actingAs($owner)
+            ->get(route('users.index'))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('users', 4)
+                ->where('filters.tags', [])
+                ->where('filters.tags_mode', 'and')
+            );
+    }
 }

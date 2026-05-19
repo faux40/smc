@@ -28,6 +28,18 @@ class UsersController extends Controller
         $roleFilter = trim((string) $request->query('role', ''));
         $includeDisabled = filter_var($request->query('include_disabled', false), FILTER_VALIDATE_BOOLEAN);
 
+        // Tag filter: tags=<uuid>,<uuid>&tags_mode=and|or|not
+        // - and: row must have *every* selected tag (whereHas per id)
+        // - or : row must have *any*   selected tag (whereHas whereIn)
+        // - not: row must have *none* of the selected tags (whereDoesntHave)
+        $tagIds = array_values(array_filter(
+            (array) $request->query('tags', []),
+            fn ($v) => is_string($v) && $v !== '',
+        ));
+        $tagsMode = in_array($request->query('tags_mode'), ['and', 'or', 'not'], true)
+            ? $request->query('tags_mode')
+            : 'and';
+
         $users = User::query()
             ->with(['roles:id,name', 'tags:id'])
             ->when(! $includeDisabled, fn ($q) => $q->where('status', 'active'))
@@ -37,6 +49,17 @@ class UsersController extends Controller
                     ->orWhere('l_name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%");
             }))
+            ->when(count($tagIds) > 0, function ($q) use ($tagIds, $tagsMode) {
+                if ($tagsMode === 'and') {
+                    foreach ($tagIds as $tagId) {
+                        $q->whereHas('tags', fn ($t) => $t->where('tags.id', $tagId));
+                    }
+                } elseif ($tagsMode === 'or') {
+                    $q->whereHas('tags', fn ($t) => $t->whereIn('tags.id', $tagIds));
+                } else { // 'not'
+                    $q->whereDoesntHave('tags', fn ($t) => $t->whereIn('tags.id', $tagIds));
+                }
+            })
             ->orderBy('l_name')
             ->orderBy('f_name')
             ->get(['id', 'org_id', 'f_name', 'm_name', 'l_name', 'prefix_name', 'suffix_name', 'email', 'status', 'created_at'])
@@ -70,6 +93,8 @@ class UsersController extends Controller
                 'q' => $search,
                 'role' => $roleFilter,
                 'include_disabled' => $includeDisabled,
+                'tags' => $tagIds,
+                'tags_mode' => $tagsMode,
             ],
             'can_create' => Gate::check('create', User::class),
         ]);

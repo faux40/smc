@@ -3,6 +3,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { onMounted, ref, watch } from 'vue';
 import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import Heading from '@/components/Heading.vue';
+import TagFilter, { type TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +24,8 @@ type Filters = {
     q: string;
     role: string;
     include_disabled: boolean;
+    tags: string[];
+    tags_mode: TagFilterMode;
 };
 
 type AuthUser = {
@@ -71,6 +74,8 @@ const ALL_ROLES = '__all';
 const search = ref(props.filters.q);
 const roleFilter = ref(props.filters.role || ALL_ROLES);
 const includeDisabled = ref(props.filters.include_disabled);
+const tagFilter = ref<string[]>(props.filters.tags ?? []);
+const tagFilterMode = ref<TagFilterMode>(props.filters.tags_mode ?? 'and');
 
 onMounted(() => {
     store.hydrate(props.users);
@@ -101,6 +106,10 @@ const applyFilters = () => {
             q: search.value || undefined,
             role: roleFilter.value && roleFilter.value !== ALL_ROLES ? roleFilter.value : undefined,
             include_disabled: includeDisabled.value ? 1 : undefined,
+            tags: tagFilter.value.length > 0 ? tagFilter.value : undefined,
+            // Only send mode when there are tags — keeps the URL clean
+            // when the filter is empty.
+            tags_mode: tagFilter.value.length > 0 ? tagFilterMode.value : undefined,
         },
         { preserveState: true, replace: true },
     );
@@ -200,7 +209,17 @@ const remove = (row: UserRow) => {
                         <th class="px-4 py-2 text-right font-medium">
                             Actions
                         </th>
-                        <th class="px-4 py-2 text-right font-medium">Tags</th>
+                        <th class="px-4 py-2 text-right font-medium">
+                            <div class="inline-flex items-center gap-2">
+                                <span>Tags</span>
+                                <TagFilter
+                                    v-model:tag-ids="tagFilter"
+                                    v-model:mode="tagFilterMode"
+                                    @update:tag-ids="applyFilters"
+                                    @update:mode="applyFilters"
+                                />
+                            </div>
+                        </th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-border">

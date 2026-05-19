@@ -51,6 +51,8 @@ async function onDetach(tagId: string): Promise<void> {
 
 <template>
     <div class="inline-flex flex-wrap items-center gap-1.5 align-middle">
+        <TagPickerPopover :available-tags="available" @select="onAttach" />
+
         <span
             v-for="tag in attached"
             :key="tag.id"
@@ -67,7 +69,5 @@ async function onDetach(tagId: string): Promise<void> {
                 <X class="size-3" :stroke-width="3" />
             </button>
         </span>
-
-        <TagPickerPopover :available-tags="available" @select="onAttach" />
     </div>
 </template>
