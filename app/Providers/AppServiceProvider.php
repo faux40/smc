@@ -2,11 +2,13 @@
 
 namespace App\Providers;
 
+use App\Auth\SafeEloquentUserProvider;
 use App\Events\AssignmentCreated;
 use App\Events\CompletionCreated;
 use App\Listeners\NotifyAssignmentCreated;
 use App\Listeners\NotifyCompletionRecorded;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -29,7 +31,21 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->registerAuthProvider();
         $this->registerEventListeners();
+    }
+
+    /**
+     * Phase 16.2: override the built-in "eloquent" provider driver so every
+     * UUID-keyed guard tolerates a malformed identifier (e.g. a stale recaller
+     * cookie) by degrading to "not authenticated" instead of a 500.
+     * config/auth.php keeps `'driver' => 'eloquent'`.
+     */
+    protected function registerAuthProvider(): void
+    {
+        Auth::provider('eloquent', function ($app, array $config) {
+            return new SafeEloquentUserProvider($app['hash'], $config['model']);
+        });
     }
 
     /**
