@@ -75,6 +75,39 @@ class TagsApiTest extends TestCase
         $this->assertSame(0, $byId[$tagOrphan->id]['attached_count']);
     }
 
+    public function test_index_returns_font_color_per_tag(): void
+    {
+        // The index feeds tagsStore.library, which every <TagPill> consumer
+        // reads — including the bulk-assignment tag dropdown. font_color is the
+        // per-tag text-color override; if index drops it the override silently
+        // vanishes wherever the library cache is the source. null means "derive
+        // from color" (TagPill's pre-feature default).
+        $org = Organization::factory()->create();
+        $owner = $this->ownerOf($org);
+        $withOverride = Tag::factory()->for($org, 'organization')->create([
+            'name' => 'override',
+            'color' => '#ff0000',
+            'font_color' => '#ffffff',
+        ]);
+        $withoutOverride = Tag::factory()->for($org, 'organization')->create([
+            'name' => 'plain',
+            'color' => '#00ff00',
+            'font_color' => null,
+        ]);
+
+        $byId = collect(
+            $this->actingAs($owner)
+                ->getJson('/api/tags')
+                ->assertOk()
+                ->json()
+        )->keyBy('id');
+
+        $this->assertArrayHasKey('font_color', $byId[$withOverride->id]);
+        $this->assertSame('#ffffff', $byId[$withOverride->id]['font_color']);
+        $this->assertArrayHasKey('font_color', $byId[$withoutOverride->id]);
+        $this->assertNull($byId[$withoutOverride->id]['font_color']);
+    }
+
     public function test_index_is_org_scoped(): void
     {
         $orgA = Organization::factory()->create();

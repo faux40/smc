@@ -364,7 +364,7 @@ function defaultHeaders(): Record<string, string> {
                                 :key="t.id"
                                 :value="t.id"
                             >
-                                {{ t.name }}
+                                <TagPill :tag="t" size="sm" />
                             </SelectItem>
                         </SelectContent>
                     </Select>

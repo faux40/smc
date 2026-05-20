@@ -45,7 +45,7 @@ class TagsController extends Controller
         // we don't model — `taggables` already cascades by tag_id.
         $tags = Tag::query()
             ->where('org_id', $request->user()->org_id)
-            ->select(['id', 'name', 'color'])
+            ->select(['id', 'name', 'color', 'font_color'])
             ->selectSub(
                 DB::table('taggables')
                     ->selectRaw('COUNT(*)')
@@ -59,6 +59,7 @@ class TagsController extends Controller
             'id' => $t->id,
             'name' => $t->name,
             'color' => $t->color,
+            'font_color' => $t->font_color,
             'attached_count' => (int) ($t->attached_count ?? 0),
         ]));
     }
