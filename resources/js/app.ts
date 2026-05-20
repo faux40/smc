@@ -2,6 +2,7 @@ import { createInertiaApp, router } from '@inertiajs/vue3';
 import { createPinia } from 'pinia';
 import { createApp, h } from 'vue';
 import type { DefineComponent } from 'vue';
+import ErrorBoundary from '@/components/ErrorBoundary.vue';
 import { initializeTheme } from '@/composables/useAppearance';
 import { realtimeTabId } from '@/echo';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -29,7 +30,16 @@ createInertiaApp({
         color: '#4B5563',
     },
     setup({ el, App, props, plugin }) {
-        createApp({ render: () => h(App as DefineComponent, props) })
+        if (!el) {
+            throw new Error(
+                'Inertia mount element not found — the #app root is missing from the page.',
+            );
+        }
+
+        createApp({
+            render: () =>
+                h(ErrorBoundary, () => h(App as DefineComponent, props)),
+        })
             .use(plugin)
             .use(createPinia())
             .mount(el);
