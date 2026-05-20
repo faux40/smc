@@ -14,9 +14,7 @@ class RequirementCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Requirement $requirement)
-    {
-    }
+    public function __construct(public readonly Requirement $requirement) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

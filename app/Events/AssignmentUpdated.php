@@ -14,9 +14,7 @@ class AssignmentUpdated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Assignment $assignment)
-    {
-    }
+    public function __construct(public readonly Assignment $assignment) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

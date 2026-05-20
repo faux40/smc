@@ -12,8 +12,8 @@
 import axios from 'axios';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { realtimeTabId } from '@/echo';
 import { useRealtime } from '@/composables/useRealtime';
+import { realtimeTabId } from '@/echo';
 
 export interface TagRow {
     id: string;
@@ -30,9 +30,10 @@ export interface TagRow {
 }
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -60,7 +61,10 @@ export const useTagsStore = defineStore('tags', () => {
     const subscribedOrgId = ref<string | null>(null);
 
     async function loadLibrary(): Promise<void> {
-        if (libraryLoaded.value) return;
+        if (libraryLoaded.value) {
+            return;
+        }
+
         const { data } = await axios.get<TagRow[]>('/api/tags', {
             headers: defaultHeaders(),
         });
@@ -74,6 +78,7 @@ export const useTagsStore = defineStore('tags', () => {
 
     function attachedTagsFor(morphable: MorphableKey): TagRow[] {
         const ids = attached.value[keyOf(morphable)] ?? [];
+
         return ids
             .map((id) => libraryById(id))
             .filter((t): t is TagRow => t !== undefined);
@@ -95,8 +100,12 @@ export const useTagsStore = defineStore('tags', () => {
         );
         // POST /api/tags returns only id/name/color/font_color — backfill
         // the count so the library shape stays consistent.
-        const row: TagRow = { ...data, attached_count: data.attached_count ?? 0 };
+        const row: TagRow = {
+            ...data,
+            attached_count: data.attached_count ?? 0,
+        };
         library.value = [...library.value, row];
+
         return row;
     }
 
@@ -114,7 +123,9 @@ export const useTagsStore = defineStore('tags', () => {
         // PATCH returns id/name/color/font_color — preserve the
         // locally-tracked count.
         library.value = library.value.map((t) =>
-            t.id === id ? { ...t, ...data, attached_count: t.attached_count } : t,
+            t.id === id
+                ? { ...t, ...data, attached_count: t.attached_count }
+                : t,
         );
     }
 
@@ -123,20 +134,30 @@ export const useTagsStore = defineStore('tags', () => {
         library.value = library.value.filter((t) => t.id !== id);
         // Strip the tag from every cached morphable's attached list.
         const next: Record<string, string[]> = {};
+
         for (const [key, ids] of Object.entries(attached.value)) {
             next[key] = ids.filter((tagId) => tagId !== id);
         }
+
         attached.value = next;
     }
 
-    async function attach(morphable: MorphableKey, tagId: string): Promise<void> {
+    async function attach(
+        morphable: MorphableKey,
+        tagId: string,
+    ): Promise<void> {
         await axios.post(
             '/api/tags/attach',
-            { tag_id: tagId, taggable_type: morphable.type, taggable_id: morphable.id },
+            {
+                tag_id: tagId,
+                taggable_type: morphable.type,
+                taggable_id: morphable.id,
+            },
             { headers: defaultHeaders() },
         );
         const key = keyOf(morphable);
         const cur = attached.value[key] ?? [];
+
         // Originating tab: bump locally because the broadcast self-echo is
         // filtered out (X-Origin-Tab). Peer tabs increment via the TagAttached
         // handler. Guard on the morphable-level idempotency since attach is
@@ -151,20 +172,34 @@ export const useTagsStore = defineStore('tags', () => {
         }
     }
 
-    async function detach(morphable: MorphableKey, tagId: string): Promise<void> {
+    async function detach(
+        morphable: MorphableKey,
+        tagId: string,
+    ): Promise<void> {
         await axios.post(
             '/api/tags/detach',
-            { tag_id: tagId, taggable_type: morphable.type, taggable_id: morphable.id },
+            {
+                tag_id: tagId,
+                taggable_type: morphable.type,
+                taggable_id: morphable.id,
+            },
             { headers: defaultHeaders() },
         );
         const key = keyOf(morphable);
         const cur = attached.value[key] ?? [];
         const wasAttached = cur.includes(tagId);
-        attached.value = { ...attached.value, [key]: cur.filter((id) => id !== tagId) };
+        attached.value = {
+            ...attached.value,
+            [key]: cur.filter((id) => id !== tagId),
+        };
+
         if (wasAttached) {
             library.value = library.value.map((t) =>
                 t.id === tagId
-                    ? { ...t, attached_count: Math.max(0, t.attached_count - 1) }
+                    ? {
+                          ...t,
+                          attached_count: Math.max(0, t.attached_count - 1),
+                      }
                     : t,
             );
         }
@@ -176,68 +211,112 @@ export const useTagsStore = defineStore('tags', () => {
      * by useRealtime; we don't need to dedupe here.
      */
     function subscribe(orgId: string): void {
-        if (subscribedOrgId.value === orgId) return;
+        if (subscribedOrgId.value === orgId) {
+            return;
+        }
+
         subscribedOrgId.value = orgId;
 
         const { bind } = useRealtime(`org.${orgId}`);
 
-        bind('TagCreated', (p: Partial<TagRow> & { id: string; name: string }) => {
-            if (!library.value.some((t) => t.id === p.id)) {
-                library.value = [
-                    ...library.value,
-                    {
-                        id: p.id,
-                        name: p.name,
-                        color: p.color ?? null,
-                        font_color: p.font_color ?? null,
-                        attached_count: p.attached_count ?? 0,
-                    },
-                ];
-            }
-        });
-        bind('TagUpdated', (p: Partial<TagRow> & { id: string; name: string }) => {
-            library.value = library.value.map((t) =>
-                t.id === p.id
-                    ? { ...t, name: p.name, color: p.color ?? null, font_color: p.font_color ?? null }
-                    : t,
-            );
-        });
+        bind(
+            'TagCreated',
+            (p: Partial<TagRow> & { id: string; name: string }) => {
+                if (!library.value.some((t) => t.id === p.id)) {
+                    library.value = [
+                        ...library.value,
+                        {
+                            id: p.id,
+                            name: p.name,
+                            color: p.color ?? null,
+                            font_color: p.font_color ?? null,
+                            attached_count: p.attached_count ?? 0,
+                        },
+                    ];
+                }
+            },
+        );
+        bind(
+            'TagUpdated',
+            (p: Partial<TagRow> & { id: string; name: string }) => {
+                library.value = library.value.map((t) =>
+                    t.id === p.id
+                        ? {
+                              ...t,
+                              name: p.name,
+                              color: p.color ?? null,
+                              font_color: p.font_color ?? null,
+                          }
+                        : t,
+                );
+            },
+        );
         bind('TagDeleted', (p: { id: string }) => {
             library.value = library.value.filter((t) => t.id !== p.id);
             const next: Record<string, string[]> = {};
+
             for (const [k, ids] of Object.entries(attached.value)) {
                 next[k] = ids.filter((id) => id !== p.id);
             }
+
             attached.value = next;
         });
-        bind('TagAttached', (p: { tag_id: string; taggable_type: string; taggable_id: string }) => {
-            const key = `${p.taggable_type}::${p.taggable_id}`;
-            const cur = attached.value[key] ?? [];
-            // Only bump the library count if the attach is actually new for
-            // this morphable (idempotent attaches must not double-count).
-            const newAttachment = !cur.includes(p.tag_id);
-            if (newAttachment) {
-                attached.value = { ...attached.value, [key]: [...cur, p.tag_id] };
-                library.value = library.value.map((t) =>
-                    t.id === p.tag_id
-                        ? { ...t, attached_count: t.attached_count + 1 }
-                        : t,
-                );
-            }
-        });
-        bind('TagDetached', (p: { tag_id: string; taggable_type: string; taggable_id: string }) => {
-            const key = `${p.taggable_type}::${p.taggable_id}`;
-            const cur = attached.value[key] ?? [];
-            const wasAttached = cur.includes(p.tag_id);
-            attached.value = { ...attached.value, [key]: cur.filter((id) => id !== p.tag_id) };
-            if (wasAttached) {
-                library.value = library.value.map((t) =>
-                    t.id === p.tag_id
-                        ? { ...t, attached_count: Math.max(0, t.attached_count - 1) }
-                        : t,
-                );
-            }
-        });
+        bind(
+            'TagAttached',
+            (p: {
+                tag_id: string;
+                taggable_type: string;
+                taggable_id: string;
+            }) => {
+                const key = `${p.taggable_type}::${p.taggable_id}`;
+                const cur = attached.value[key] ?? [];
+                // Only bump the library count if the attach is actually new for
+                // this morphable (idempotent attaches must not double-count).
+                const newAttachment = !cur.includes(p.tag_id);
+
+                if (newAttachment) {
+                    attached.value = {
+                        ...attached.value,
+                        [key]: [...cur, p.tag_id],
+                    };
+                    library.value = library.value.map((t) =>
+                        t.id === p.tag_id
+                            ? { ...t, attached_count: t.attached_count + 1 }
+                            : t,
+                    );
+                }
+            },
+        );
+        bind(
+            'TagDetached',
+            (p: {
+                tag_id: string;
+                taggable_type: string;
+                taggable_id: string;
+            }) => {
+                const key = `${p.taggable_type}::${p.taggable_id}`;
+                const cur = attached.value[key] ?? [];
+                const wasAttached = cur.includes(p.tag_id);
+                attached.value = {
+                    ...attached.value,
+                    [key]: cur.filter((id) => id !== p.tag_id),
+                };
+
+                if (wasAttached) {
+                    library.value = library.value.map((t) =>
+                        t.id === p.tag_id
+                            ? {
+                                  ...t,
+                                  attached_count: Math.max(
+                                      0,
+                                      t.attached_count - 1,
+                                  ),
+                              }
+                            : t,
+                    );
+                }
+            },
+        );
     }
 
     const libraryCount = computed(() => library.value.length);

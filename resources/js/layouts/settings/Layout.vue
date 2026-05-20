@@ -16,11 +16,12 @@ import type { NavItem } from '@/types';
 
 const page = usePage();
 const authUser = computed(
-    () => page.props.auth.user as {
-        isOwner?: boolean;
-        isSuperAdmin?: boolean;
-        isAdmin?: boolean;
-    } | null,
+    () =>
+        page.props.auth.user as {
+            isOwner?: boolean;
+            isSuperAdmin?: boolean;
+            isAdmin?: boolean;
+        } | null,
 );
 
 const sidebarNavItems = computed<NavItem[]>(() => {
@@ -32,6 +33,7 @@ const sidebarNavItems = computed<NavItem[]>(() => {
     ];
 
     const u = authUser.value;
+
     if (u && (u.isOwner || u.isSuperAdmin || u.isAdmin)) {
         items.push({ title: 'Organization', href: editOrganization() });
         items.push({ title: 'Std frequencies', href: editFrequencies() });

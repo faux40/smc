@@ -14,10 +14,11 @@ use App\Http\Controllers\StdFrequenciesController;
 use App\Http\Controllers\TagsController;
 use App\Http\Controllers\TrainingsController;
 use App\Http\Controllers\UsersController;
-use Inertia\Inertia;
+use App\Models\Requirement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
 Route::inertia('/', 'Welcome', [
@@ -166,7 +167,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('assignments', 'assignments/Index')->name('assignments.page');
     Route::inertia('completions', 'completions/Index')->name('completions.page');
 
-    Route::get('requirements/{requirement}', function (\App\Models\Requirement $requirement) {
+    Route::get('requirements/{requirement}', function (Requirement $requirement) {
         abort_unless(auth()->user()->org_id === $requirement->org_id, 403);
 
         return Inertia::render('requirements/Show', [

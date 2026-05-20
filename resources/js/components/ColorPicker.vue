@@ -10,9 +10,13 @@
  */
 
 import { ref } from 'vue';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 
-const props = withDefaults(
+withDefaults(
     defineProps<{
         modelValue: string;
         disabled?: boolean;
@@ -31,10 +35,30 @@ const open = ref(false);
 // 24 presets covering a useful spectrum. Tailwind-derived palette so
 // colors compose with the surrounding UI.
 const SWATCHES = [
-    '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e',
-    '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
-    '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#64748b',
-    '#475569', '#1f2937', '#000000', '#ffffff', '#dc2626', '#ca8a04',
+    '#ef4444',
+    '#f97316',
+    '#f59e0b',
+    '#eab308',
+    '#84cc16',
+    '#22c55e',
+    '#10b981',
+    '#14b8a6',
+    '#06b6d4',
+    '#0ea5e9',
+    '#3b82f6',
+    '#6366f1',
+    '#8b5cf6',
+    '#a855f7',
+    '#d946ef',
+    '#ec4899',
+    '#f43f5e',
+    '#64748b',
+    '#475569',
+    '#1f2937',
+    '#000000',
+    '#ffffff',
+    '#dc2626',
+    '#ca8a04',
 ];
 
 function pick(color: string): void {
@@ -71,7 +95,9 @@ function pick(color: string): void {
                     @click="pick(c)"
                 />
             </div>
-            <div class="mt-2 flex items-center gap-2 border-t border-border pt-2">
+            <div
+                class="mt-2 flex items-center gap-2 border-t border-border pt-2"
+            >
                 <input
                     type="color"
                     :value="modelValue"

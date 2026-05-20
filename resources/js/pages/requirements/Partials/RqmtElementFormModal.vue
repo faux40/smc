@@ -23,9 +23,11 @@ import {
 } from '@/components/ui/select';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import { useErrorStore } from '@/stores/errors';
-import { useRqmtElementsStore, type RqmtElementRow } from '@/stores/rqmtElements';
+import { useRqmtElementsStore } from '@/stores/rqmtElements';
+import type { RqmtElementRow } from '@/stores/rqmtElements';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
-import { useTrainingsStore, type TrainingRow } from '@/stores/trainings';
+import { useTrainingsStore } from '@/stores/trainings';
+import type { TrainingRow } from '@/stores/trainings';
 
 const FORM_CTX = 'form:rqmt-element';
 
@@ -81,6 +83,7 @@ onMounted(async () => {
     } catch {
         // Non-fatal — picker may be empty.
     }
+
     try {
         await frequencies.load();
     } catch {
@@ -91,8 +94,12 @@ onMounted(async () => {
 watch(
     () => props.open,
     (open) => {
-        if (!open) return;
+        if (!open) {
+            return;
+        }
+
         errorStore.clear(FORM_CTX);
+
         if (isEdit.value && props.target) {
             const t = props.target;
             form.module_type = t.module_type;
@@ -121,10 +128,20 @@ watch(
 watch(
     () => form.module_id,
     (newId) => {
-        if (isEdit.value) return;
-        if (!newId) return;
+        if (isEdit.value) {
+            return;
+        }
+
+        if (!newId) {
+            return;
+        }
+
         const t = trainings.library.find((x: TrainingRow) => x.id === newId);
-        if (!t) return;
+
+        if (!t) {
+            return;
+        }
+
         form.name = t.name;
         form.description = t.description ?? '';
         form.initial_only = t.initial_only;
@@ -138,17 +155,21 @@ watch(
 watch(
     () => form.repeating,
     (next) => {
-        if (!next) form.std_freq_id = null;
+        if (!next) {
+            form.std_freq_id = null;
+        }
     },
 );
 
 const submit = async () => {
     submitting.value = true;
     errorStore.clear(FORM_CTX);
+
     try {
         const payload = {
             name: form.name,
-            description: form.description.trim() === '' ? null : form.description,
+            description:
+                form.description.trim() === '' ? null : form.description,
             initial_only: form.initial_only,
             repeating: form.repeating,
             std_freq_id: form.repeating ? form.std_freq_id : null,
@@ -156,7 +177,11 @@ const submit = async () => {
         };
 
         if (isEdit.value && props.target) {
-            await elements.update(props.target.id, props.requirementId, payload);
+            await elements.update(
+                props.target.id,
+                props.requirementId,
+                payload,
+            );
         } else {
             if (!form.module_id) {
                 // Client-side check; surface as a field error only
@@ -167,17 +192,22 @@ const submit = async () => {
                     fieldErrors: { module_id: ['Pick a module.'] },
                     surface: 'field',
                 });
+
                 return;
             }
+
             await elements.create(props.requirementId, {
                 ...payload,
                 module_type: form.module_type,
                 module_id: form.module_id,
             });
         }
+
         emit('update:open', false);
     } catch (e) {
-        errorStore.reportFromAxios(e, FORM_CTX, { fallback: 'Failed to save element' });
+        errorStore.reportFromAxios(e, FORM_CTX, {
+            fallback: 'Failed to save element',
+        });
     } finally {
         submitting.value = false;
     }
@@ -192,9 +222,9 @@ const submit = async () => {
                     <DialogTitle>{{ title }}</DialogTitle>
                     <DialogDescription>
                         Elements bind a module (Training today; future
-                        Inspections / Certs / etc.) to a Requirement with
-                        their own timing flags. Picking a module pre-fills
-                        from its template — edit before saving.
+                        Inspections / Certs / etc.) to a Requirement with their
+                        own timing flags. Picking a module pre-fills from its
+                        template — edit before saving.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -250,7 +280,9 @@ const submit = async () => {
                         <Checkbox v-model="form.as_needed" />
                         As-needed
                     </label>
-                    <InputError :message="fieldErrors.message('initial_only')" />
+                    <InputError
+                        :message="fieldErrors.message('initial_only')"
+                    />
                     <InputError :message="fieldErrors.message('repeating')" />
                     <InputError :message="fieldErrors.message('as_needed')" />
                 </div>
@@ -277,7 +309,11 @@ const submit = async () => {
                 </div>
 
                 <DialogFooter>
-                    <Button type="button" variant="outline" @click="emit('update:open', false)">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        @click="emit('update:open', false)"
+                    >
                         Cancel
                     </Button>
                     <Button type="submit" :disabled="submitting">

@@ -2,17 +2,17 @@
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
+import AttachmentsList from '@/components/AttachmentsList.vue';
+import CommentsList from '@/components/CommentsList.vue';
 import DeleteUser from '@/components/DeleteUser.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
-import AttachmentsList from '@/components/AttachmentsList.vue';
-import CommentsList from '@/components/CommentsList.vue';
 import TagsField from '@/components/TagsField.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { edit } from '@/routes/profile';
 import { edit as organizationEdit } from '@/routes/organization';
+import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
 
 type Props = {
@@ -66,7 +66,10 @@ const user = computed(() => page.props.auth.user);
                         required
                         autocomplete="given-name"
                     />
-                    <InputError class="mt-2" :message="(errors as any).f_name" />
+                    <InputError
+                        class="mt-2"
+                        :message="(errors as any).f_name"
+                    />
                 </div>
                 <div class="grid gap-2">
                     <Label for="l_name">Last name</Label>
@@ -78,7 +81,10 @@ const user = computed(() => page.props.auth.user);
                         required
                         autocomplete="family-name"
                     />
-                    <InputError class="mt-2" :message="(errors as any).l_name" />
+                    <InputError
+                        class="mt-2"
+                        :message="(errors as any).l_name"
+                    />
                 </div>
             </div>
 
@@ -91,7 +97,10 @@ const user = computed(() => page.props.auth.user);
                         name="prefix_name"
                         :default-value="(user as any).prefix_name"
                     />
-                    <InputError class="mt-2" :message="(errors as any).prefix_name" />
+                    <InputError
+                        class="mt-2"
+                        :message="(errors as any).prefix_name"
+                    />
                 </div>
                 <div class="grid gap-2">
                     <Label for="m_name">Middle</Label>
@@ -102,7 +111,10 @@ const user = computed(() => page.props.auth.user);
                         :default-value="(user as any).m_name"
                         autocomplete="additional-name"
                     />
-                    <InputError class="mt-2" :message="(errors as any).m_name" />
+                    <InputError
+                        class="mt-2"
+                        :message="(errors as any).m_name"
+                    />
                 </div>
                 <div class="grid gap-2">
                     <Label for="suffix_name">Suffix</Label>
@@ -112,7 +124,10 @@ const user = computed(() => page.props.auth.user);
                         name="suffix_name"
                         :default-value="(user as any).suffix_name"
                     />
-                    <InputError class="mt-2" :message="(errors as any).suffix_name" />
+                    <InputError
+                        class="mt-2"
+                        :message="(errors as any).suffix_name"
+                    />
                 </div>
             </div>
 
@@ -172,8 +187,8 @@ const user = computed(() => page.props.auth.user);
             :can-manage-library="
                 Boolean(
                     (user as any).isOwner ||
-                        (user as any).isSuperAdmin ||
-                        (user as any).isAdmin,
+                    (user as any).isSuperAdmin ||
+                    (user as any).isAdmin,
                 )
             "
         />

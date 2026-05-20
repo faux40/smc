@@ -26,19 +26,30 @@ declare global {
 const TAB_ID_KEY = 'smc.tab_id';
 
 function generateUuid(): string {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    if (
+        typeof crypto !== 'undefined' &&
+        typeof crypto.randomUUID === 'function'
+    ) {
         return crypto.randomUUID();
     }
-    return 'tab-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+    return (
+        'tab-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+    );
 }
 
 function ensureTabId(): string {
-    if (typeof sessionStorage === 'undefined') return '';
+    if (typeof sessionStorage === 'undefined') {
+        return '';
+    }
+
     let id = sessionStorage.getItem(TAB_ID_KEY);
+
     if (!id) {
         id = generateUuid();
         sessionStorage.setItem(TAB_ID_KEY, id);
     }
+
     return id;
 }
 

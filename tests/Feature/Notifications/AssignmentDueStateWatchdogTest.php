@@ -40,8 +40,11 @@ class AssignmentDueStateWatchdogTest extends TestCase
     use RefreshDatabase;
 
     private Organization $org;
+
     private User $user;
+
     private StdFrequency $freq90;
+
     private Training $training;
 
     protected function setUp(): void

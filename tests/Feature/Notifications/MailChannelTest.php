@@ -30,6 +30,7 @@ class MailChannelTest extends TestCase
     use RefreshDatabase;
 
     private Organization $org;
+
     private User $user;
 
     protected function setUp(): void

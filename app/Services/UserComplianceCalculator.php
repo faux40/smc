@@ -44,9 +44,13 @@ class UserComplianceCalculator
     private const DEFAULT_DUE_SOON_DAYS = 60;
 
     public const STATUS_OVERDUE = 'overdue';
+
     public const STATUS_DUE_SOON = 'due_soon';
+
     public const STATUS_CURRENT = 'current';
+
     public const STATUS_NEVER_STARTED = 'never_started';
+
     public const STATUS_INACTIVE = 'inactive';
 
     /**
@@ -62,8 +66,7 @@ class UserComplianceCalculator
 
     public function __construct(
         private readonly int $dueSoonDays = self::DEFAULT_DUE_SOON_DAYS,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{

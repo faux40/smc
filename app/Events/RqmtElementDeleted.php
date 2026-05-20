@@ -17,8 +17,7 @@ class RqmtElementDeleted implements ShouldBroadcast
         public readonly string $elementId,
         public readonly string $requirementId,
         public readonly string $orgId,
-    ) {
-    }
+    ) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

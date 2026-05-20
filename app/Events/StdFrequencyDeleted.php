@@ -16,8 +16,7 @@ class StdFrequencyDeleted implements ShouldBroadcast
     public function __construct(
         public readonly string $frequencyId,
         public readonly string $orgId,
-    ) {
-    }
+    ) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

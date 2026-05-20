@@ -18,11 +18,12 @@
  * Pattern adapted from another app's TagPicker / TagPickerPopover.
  */
 
-import { computed } from 'vue';
 import { X } from 'lucide-vue-next';
+import { computed } from 'vue';
 import TagPickerPopover from '@/components/TagPickerPopover.vue';
 import TagPill from '@/components/TagPill.vue';
-import { useTagsStore, type TagRow } from '@/stores/tags';
+import { useTagsStore } from '@/stores/tags';
+import type { TagRow } from '@/stores/tags';
 
 const props = defineProps<{
     morphableType: string;
@@ -31,12 +32,18 @@ const props = defineProps<{
 
 const store = useTagsStore();
 
-const morphable = computed(() => ({ type: props.morphableType, id: props.morphableId }));
+const morphable = computed(() => ({
+    type: props.morphableType,
+    id: props.morphableId,
+}));
 
-const attached = computed<TagRow[]>(() => store.attachedTagsFor(morphable.value));
+const attached = computed<TagRow[]>(() =>
+    store.attachedTagsFor(morphable.value),
+);
 
 const available = computed<TagRow[]>(() => {
     const ids = new Set(attached.value.map((t) => t.id));
+
     return store.library.filter((t) => !ids.has(t.id));
 });
 
@@ -61,7 +68,7 @@ async function onDetach(tagId: string): Promise<void> {
                 type="button"
                 :aria-label="`Remove ${tag.name}`"
                 :title="`Remove ${tag.name}`"
-                class="absolute -right-1.5 -top-1.5 hidden size-4 cursor-pointer items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border hover:bg-destructive hover:text-destructive-foreground group-hover/tag:inline-flex"
+                class="absolute -top-1.5 -right-1.5 hidden size-4 cursor-pointer items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border group-hover/tag:inline-flex hover:bg-destructive hover:text-destructive-foreground"
                 @click.stop="onDetach(tag.id)"
             >
                 <X class="size-3" :stroke-width="3" />

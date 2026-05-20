@@ -15,7 +15,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import { useErrorStore } from '@/stores/errors';
-import { useRequirementsStore, type RequirementRow } from '@/stores/requirements';
+import { useRequirementsStore } from '@/stores/requirements';
+import type { RequirementRow } from '@/stores/requirements';
 
 const FORM_CTX = 'form:requirement';
 
@@ -37,13 +38,19 @@ const errorStore = useErrorStore();
 const fieldErrors = useFieldErrors(FORM_CTX);
 
 const isEdit = computed(() => props.mode === 'edit');
-const title = computed(() => (isEdit.value ? 'Edit requirement' : 'New requirement'));
+const title = computed(() =>
+    isEdit.value ? 'Edit requirement' : 'New requirement',
+);
 
 watch(
     () => props.open,
     (open) => {
-        if (!open) return;
+        if (!open) {
+            return;
+        }
+
         errorStore.clear(FORM_CTX);
+
         if (isEdit.value && props.target) {
             form.name = props.target.name;
             form.description = props.target.description ?? '';
@@ -57,19 +64,25 @@ watch(
 const submit = async () => {
     submitting.value = true;
     errorStore.clear(FORM_CTX);
+
     try {
         const payload = {
             name: form.name,
-            description: form.description.trim() === '' ? null : form.description,
+            description:
+                form.description.trim() === '' ? null : form.description,
         };
+
         if (isEdit.value && props.target) {
             await store.update(props.target.id, payload);
         } else {
             await store.create(payload);
         }
+
         emit('update:open', false);
     } catch (e) {
-        errorStore.reportFromAxios(e, FORM_CTX, { fallback: 'Failed to save requirement' });
+        errorStore.reportFromAxios(e, FORM_CTX, {
+            fallback: 'Failed to save requirement',
+        });
     } finally {
         submitting.value = false;
     }
@@ -109,7 +122,11 @@ const submit = async () => {
                 </div>
 
                 <DialogFooter>
-                    <Button type="button" variant="outline" @click="emit('update:open', false)">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        @click="emit('update:open', false)"
+                    >
                         Cancel
                     </Button>
                     <Button type="submit" :disabled="submitting">

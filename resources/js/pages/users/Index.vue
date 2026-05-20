@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { onMounted, ref, watch } from 'vue';
-import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import Heading from '@/components/Heading.vue';
-import TagFilter, { type TagFilterMode } from '@/components/TagFilter.vue';
+import TagFilter from '@/components/TagFilter.vue';
+import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import {
     Select,
@@ -14,11 +16,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import { index, show as userShow } from '@/routes/users';
 import { useTagsStore } from '@/stores/tags';
-import { useUsersStore, type UserRow } from '@/stores/users';
+import { useUsersStore } from '@/stores/users';
+import type { UserRow } from '@/stores/users';
 
 type Filters = {
     q: string;
@@ -80,14 +82,18 @@ const tagFilterMode = ref<TagFilterMode>(props.filters.tags_mode ?? 'and');
 onMounted(() => {
     store.hydrate(props.users);
     hydrateTagAttachments(props.users);
+
     if (authUser?.org_id) {
         store.subscribe(authUser.org_id);
         tagsStore.subscribe(authUser.org_id);
     }
+
     // TagPickerPopover needs the full library (sans already-attached)
     // to render its grid. Subsequent renders rely on the realtime
     // store — load once.
-    tagsStore.loadLibrary().catch(() => { /* surfaced through store */ });
+    tagsStore.loadLibrary().catch(() => {
+        /* surfaced through store */
+    });
 });
 
 // Re-hydrate on prop changes (Inertia partial reload after filter change).
@@ -104,18 +110,30 @@ const applyFilters = () => {
         index().url,
         {
             q: search.value || undefined,
-            role: roleFilter.value && roleFilter.value !== ALL_ROLES ? roleFilter.value : undefined,
+            role:
+                roleFilter.value && roleFilter.value !== ALL_ROLES
+                    ? roleFilter.value
+                    : undefined,
             include_disabled: includeDisabled.value ? 1 : undefined,
             tags: tagFilter.value.length > 0 ? tagFilter.value : undefined,
             // Only send mode when there are tags — keeps the URL clean
             // when the filter is empty.
-            tags_mode: tagFilter.value.length > 0 ? tagFilterMode.value : undefined,
+            tags_mode:
+                tagFilter.value.length > 0 ? tagFilterMode.value : undefined,
         },
         { preserveState: true, replace: true },
     );
 };
 
-const roles = ['Owner', 'SuperAdmin', 'Admin', 'Manager', 'SelfEdit', 'SelfView', 'None'];
+const roles = [
+    'Owner',
+    'SuperAdmin',
+    'Admin',
+    'Manager',
+    'SelfEdit',
+    'SelfView',
+    'None',
+];
 
 const isSelf = (row: UserRow): boolean => row.id === authUser?.id;
 
@@ -144,7 +162,14 @@ const toggleStatus = (row: UserRow) => {
 };
 
 const remove = (row: UserRow) => {
-    if (!window.confirm(`Delete ${row.name}? This soft-deletes the user — they can no longer log in.`)) return;
+    if (
+        !window.confirm(
+            `Delete ${row.name}? This soft-deletes the user — they can no longer log in.`,
+        )
+    ) {
+        return;
+    }
+
     store.destroy(row.id);
 };
 </script>
@@ -158,9 +183,7 @@ const remove = (row: UserRow) => {
                 title="Users"
                 description="Manage members of your organization."
             />
-            <Button v-if="can_create" @click="openCreate">
-                + Add user
-            </Button>
+            <Button v-if="can_create" @click="openCreate"> + Add user </Button>
         </div>
 
         <div class="flex flex-wrap items-center gap-3">
@@ -271,7 +294,9 @@ const remove = (row: UserRow) => {
                                 class="text-xs text-amber-700 hover:underline dark:text-amber-400"
                                 @click="toggleStatus(u)"
                             >
-                                {{ u.status === 'active' ? 'Disable' : 'Enable' }}
+                                {{
+                                    u.status === 'active' ? 'Disable' : 'Enable'
+                                }}
                             </button>
                             <button
                                 v-if="u.can_delete && !isSelf(u)"

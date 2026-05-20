@@ -5,7 +5,6 @@ namespace Tests\Feature\Tenancy;
 use App\Events\CommentCreated;
 use App\Events\CommentDeleted;
 use App\Events\CommentUpdated;
-use App\Models\Comment;
 use App\Models\Organization;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;

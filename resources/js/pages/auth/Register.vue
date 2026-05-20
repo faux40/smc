@@ -41,7 +41,9 @@ defineOptions({
                         name="f_name"
                         placeholder="First"
                     />
-                    <InputError :message="(errors as Record<string, string>).f_name" />
+                    <InputError
+                        :message="(errors as Record<string, string>).f_name"
+                    />
                 </div>
                 <div class="grid gap-2">
                     <Label for="l_name">Last name</Label>
@@ -54,7 +56,9 @@ defineOptions({
                         name="l_name"
                         placeholder="Last"
                     />
-                    <InputError :message="(errors as Record<string, string>).l_name" />
+                    <InputError
+                        :message="(errors as Record<string, string>).l_name"
+                    />
                 </div>
             </div>
 
@@ -68,7 +72,11 @@ defineOptions({
                         name="prefix_name"
                         placeholder="Dr."
                     />
-                    <InputError :message="(errors as Record<string, string>).prefix_name" />
+                    <InputError
+                        :message="
+                            (errors as Record<string, string>).prefix_name
+                        "
+                    />
                 </div>
                 <div class="grid gap-2">
                     <Label for="m_name">Middle</Label>
@@ -80,7 +88,9 @@ defineOptions({
                         name="m_name"
                         placeholder="Middle"
                     />
-                    <InputError :message="(errors as Record<string, string>).m_name" />
+                    <InputError
+                        :message="(errors as Record<string, string>).m_name"
+                    />
                 </div>
                 <div class="grid gap-2">
                     <Label for="suffix_name">Suffix</Label>
@@ -91,7 +101,11 @@ defineOptions({
                         name="suffix_name"
                         placeholder="Jr."
                     />
-                    <InputError :message="(errors as Record<string, string>).suffix_name" />
+                    <InputError
+                        :message="
+                            (errors as Record<string, string>).suffix_name
+                        "
+                    />
                 </div>
             </div>
 
@@ -105,7 +119,9 @@ defineOptions({
                     name="org_name"
                     placeholder="Your company or team"
                 />
-                <InputError :message="(errors as Record<string, string>).org_name" />
+                <InputError
+                    :message="(errors as Record<string, string>).org_name"
+                />
             </div>
 
             <div class="grid gap-2">

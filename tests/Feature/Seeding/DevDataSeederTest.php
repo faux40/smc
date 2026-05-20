@@ -6,6 +6,7 @@ use App\Models\Assignment;
 use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
+use App\Models\StdFrequency;
 use App\Models\Training;
 use App\Models\User;
 use Database\Seeders\DevDataSeeder;
@@ -111,7 +112,7 @@ class DevDataSeederTest extends TestCase
 
         // Every std_frequency in BG should back at least one training.
         $usedFreqIds = $repeating->pluck('std_freq_id')->unique()->values();
-        $bgFreqCount = \App\Models\StdFrequency::query()
+        $bgFreqCount = StdFrequency::query()
             ->withoutGlobalScope('organization')
             ->where('org_id', $org->id)
             ->count();

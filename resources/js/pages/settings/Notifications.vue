@@ -43,7 +43,8 @@ const TYPE_META: { key: string; label: string; description: string }[] = [
     {
         key: 'assignment_due_soon',
         label: 'Assignment due soon',
-        description: 'When one of your requirements is approaching its due date.',
+        description:
+            'When one of your requirements is approaching its due date.',
     },
     {
         key: 'assignment_overdue',
@@ -53,7 +54,8 @@ const TYPE_META: { key: string; label: string; description: string }[] = [
     {
         key: 'manager_digest',
         label: 'Weekly manager digest',
-        description: 'A Monday-morning compliance rollup for your organization.',
+        description:
+            'A Monday-morning compliance rollup for your organization.',
     },
 ];
 
@@ -73,12 +75,11 @@ const authUser = computed(
 );
 const isManagerPlus = computed(() => {
     const u = authUser.value;
+
     return !!u && !!(u.isOwner || u.isSuperAdmin || u.isAdmin || u.isManager);
 });
 const visibleTypes = computed(() =>
-    TYPE_META.filter(
-        (t) => t.key !== 'manager_digest' || isManagerPlus.value,
-    ),
+    TYPE_META.filter((t) => t.key !== 'manager_digest' || isManagerPlus.value),
 );
 
 const form = useForm<{ preferences: PreferenceMatrix }>({
@@ -143,13 +144,10 @@ const submit = () => {
                 </div>
             </div>
 
-            <p
-                v-if="!props.mailEnabled"
-                class="text-xs text-muted-foreground"
-            >
-                Email notifications are currently disabled for this
-                deployment. In-app preferences still apply; email toggles
-                will take effect once email is enabled.
+            <p v-if="!props.mailEnabled" class="text-xs text-muted-foreground">
+                Email notifications are currently disabled for this deployment.
+                In-app preferences still apply; email toggles will take effect
+                once email is enabled.
             </p>
 
             <div class="flex items-center gap-4">

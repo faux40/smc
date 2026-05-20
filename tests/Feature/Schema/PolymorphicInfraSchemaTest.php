@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Schema;
 
-use App\Models\Attachment;
 use App\Models\Comment;
 use App\Models\Organization;
 use App\Models\Tag;

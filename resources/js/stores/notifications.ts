@@ -41,9 +41,10 @@ interface BroadcastPayload {
 }
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -58,7 +59,9 @@ export const useNotificationsStore = defineStore('notifications', () => {
     const loaded = ref(false);
     const subscribedUserId = ref<string | null>(null);
 
-    const unread = computed(() => library.value.filter((n) => n.read_at === null));
+    const unread = computed(() =>
+        library.value.filter((n) => n.read_at === null),
+    );
 
     async function load(): Promise<void> {
         const { data } = await axios.get<IndexResponse>('/api/notifications', {
@@ -71,12 +74,15 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
     async function markRead(id: string): Promise<void> {
         const target = library.value.find((n) => n.id === id);
-        if (target && target.read_at !== null) return; // already read
-        const { data } = await axios.post<{ id: string; read_at: string | null }>(
-            `/api/notifications/${id}/read`,
-            {},
-            { headers: defaultHeaders() },
-        );
+
+        if (target && target.read_at !== null) {
+            return;
+        } // already read
+
+        const { data } = await axios.post<{
+            id: string;
+            read_at: string | null;
+        }>(`/api/notifications/${id}/read`, {}, { headers: defaultHeaders() });
         library.value = library.value.map((n) =>
             n.id === id ? { ...n, read_at: data.read_at } : n,
         );
@@ -85,7 +91,11 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
     async function markAllRead(): Promise<void> {
         const now = new Date().toISOString();
-        await axios.post('/api/notifications/read-all', {}, { headers: defaultHeaders() });
+        await axios.post(
+            '/api/notifications/read-all',
+            {},
+            { headers: defaultHeaders() },
+        );
         library.value = library.value.map((n) =>
             n.read_at === null ? { ...n, read_at: now } : n,
         );
@@ -98,14 +108,20 @@ export const useNotificationsStore = defineStore('notifications', () => {
      * Notifiable trait). Idempotent per user-id.
      */
     function subscribe(userId: string): void {
-        if (subscribedUserId.value === userId) return;
+        if (subscribedUserId.value === userId) {
+            return;
+        }
+
         subscribedUserId.value = userId;
 
         const echo = window.Echo;
-        if (!echo) return;
 
-        echo.private(`App.Models.User.${userId}`)
-            .notification((payload: BroadcastPayload) => {
+        if (!echo) {
+            return;
+        }
+
+        echo.private(`App.Models.User.${userId}`).notification(
+            (payload: BroadcastPayload) => {
                 // Laravel's broadcast envelope includes id + type
                 // alongside the user's toArray() payload. Reshape into
                 // a NotificationRow so the inbox renders consistently.
@@ -117,12 +133,18 @@ export const useNotificationsStore = defineStore('notifications', () => {
                     read_at: read_at ?? null,
                     created_at: created_at ?? new Date().toISOString(),
                 };
-                if (library.value.some((n) => n.id === row.id)) return;
+
+                if (library.value.some((n) => n.id === row.id)) {
+                    return;
+                }
+
                 library.value = [row, ...library.value];
+
                 if (row.read_at === null) {
                     unreadCount.value = unreadCount.value + 1;
                 }
-            });
+            },
+        );
     }
 
     return {

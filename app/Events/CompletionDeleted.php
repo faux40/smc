@@ -17,8 +17,7 @@ class CompletionDeleted implements ShouldBroadcast
         public readonly string $completionId,
         public readonly string $userId,
         public readonly string $orgId,
-    ) {
-    }
+    ) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

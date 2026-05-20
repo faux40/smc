@@ -111,7 +111,7 @@ class CompletionRequest extends FormRequest
                     }
                 }
             } else {
-                /** @var \App\Models\Completion|null $completion */
+                /** @var Completion|null $completion */
                 $completion = $this->route('completion');
                 $moduleType = $completion?->module_type;
                 $moduleId = $completion?->module_id;

@@ -11,19 +11,23 @@
 import { Link, usePage } from '@inertiajs/vue3';
 import { Bell } from 'lucide-vue-next';
 import { computed, onMounted } from 'vue';
-import { useNotificationsStore } from '@/stores/notifications';
 import { page as notificationsPage } from '@/routes/notifications';
+import { useNotificationsStore } from '@/stores/notifications';
 
 const store = useNotificationsStore();
 const page = usePage();
 
 const authUserId = computed(() => {
     const u = page.props.auth.user as unknown as { id?: string } | null;
+
     return u?.id ?? null;
 });
 
 onMounted(async () => {
-    if (authUserId.value) store.subscribe(authUserId.value);
+    if (authUserId.value) {
+        store.subscribe(authUserId.value);
+    }
+
     try {
         await store.load();
     } catch {
@@ -32,7 +36,10 @@ onMounted(async () => {
 });
 
 const badgeLabel = computed(() => {
-    if (store.unreadCount <= 0) return null;
+    if (store.unreadCount <= 0) {
+        return null;
+    }
+
     return store.unreadCount > 99 ? '99+' : String(store.unreadCount);
 });
 </script>
@@ -46,7 +53,7 @@ const badgeLabel = computed(() => {
         <Bell class="size-5 opacity-80" />
         <span
             v-if="badgeLabel"
-            class="absolute -top-0.5 -right-0.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 py-0.5 text-[10px] font-medium leading-none text-white tabular-nums ring-2 ring-background"
+            class="absolute -top-0.5 -right-0.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 py-0.5 text-[10px] leading-none font-medium text-white tabular-nums ring-2 ring-background"
         >
             {{ badgeLabel }}
         </span>

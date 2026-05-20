@@ -12,27 +12,28 @@
  * dependency on the store's state and re-renders when it changes.
  */
 
-import { computed, type ComputedRef } from 'vue';
+import { computed } from 'vue';
+import type { ComputedRef } from 'vue';
 import { useErrorStore } from '@/stores/errors';
 
 export interface UseFieldErrors {
     /** All field-error lists for this context, keyed by field name. */
-    all:     ComputedRef<Record<string, string[]>>;
+    all: ComputedRef<Record<string, string[]>>;
     /** First error message for a single field, or undefined. */
     message: (field: string) => string | undefined;
     /** True if a given field has any error attached. */
-    has:     (field: string) => boolean;
+    has: (field: string) => boolean;
     /** Wipe banner + field errors for this context (e.g. when a form opens). */
-    clear:   () => void;
+    clear: () => void;
 }
 
 export function useFieldErrors(context: string): UseFieldErrors {
     const store = useErrorStore();
 
     return {
-        all:     computed(() => store.getFieldErrors(context)),
+        all: computed(() => store.getFieldErrors(context)),
         message: (field) => store.getFieldError(context, field),
-        has:     (field) => store.getFieldError(context, field) !== undefined,
-        clear:   () => store.clear(context),
+        has: (field) => store.getFieldError(context, field) !== undefined,
+        clear: () => store.clear(context),
     };
 }

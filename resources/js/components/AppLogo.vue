@@ -24,6 +24,6 @@
         alt="Salt Mine Compliance"
         width="1401"
         height="326"
-        class="h-14 py-1 w-auto shrink-0 object-contain"
+        class="h-14 w-auto shrink-0 object-contain py-1"
     />
 </template>

@@ -23,12 +23,12 @@ class DashboardController extends Controller
     private const MANAGER_PLUS_ROLES = ['Owner', 'SuperAdmin', 'Admin', 'Manager'];
 
     private const DUE_SOON_LIMIT = 50;
+
     private const OVERDUE_USERS_LIMIT = 10;
+
     private const RECENT_COMPLETIONS_LIMIT = 10;
 
-    public function __construct(private readonly UserComplianceCalculator $calculator)
-    {
-    }
+    public function __construct(private readonly UserComplianceCalculator $calculator) {}
 
     public function summary(Request $request): JsonResponse
     {

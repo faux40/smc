@@ -5,8 +5,9 @@ import Heading from '@/components/Heading.vue';
 import TagPill from '@/components/TagPill.vue';
 import { Button } from '@/components/ui/button';
 import TagFormModal from '@/pages/tags/Partials/TagFormModal.vue';
-import { useTagsStore, type TagRow } from '@/stores/tags';
 import { page as tagsPage } from '@/routes/tags';
+import { useTagsStore } from '@/stores/tags';
+import type { TagRow } from '@/stores/tags';
 
 defineOptions({
     layout: {
@@ -18,15 +19,20 @@ const store = useTagsStore();
 const page = usePage();
 
 const authUser = computed(
-    () => page.props.auth.user as {
-        org_id?: string;
-        isOwner?: boolean;
-        isSuperAdmin?: boolean;
-        isAdmin?: boolean;
-    } | null,
+    () =>
+        page.props.auth.user as {
+            org_id?: string;
+            isOwner?: boolean;
+            isSuperAdmin?: boolean;
+            isAdmin?: boolean;
+        } | null,
 );
-const canManage = computed(
-    () => Boolean(authUser.value?.isOwner || authUser.value?.isSuperAdmin || authUser.value?.isAdmin),
+const canManage = computed(() =>
+    Boolean(
+        authUser.value?.isOwner ||
+        authUser.value?.isSuperAdmin ||
+        authUser.value?.isAdmin,
+    ),
 );
 
 const modalOpen = ref(false);
@@ -35,7 +41,10 @@ const editing = ref<TagRow | null>(null);
 const error = ref<string | null>(null);
 
 onMounted(async () => {
-    if (authUser.value?.org_id) store.subscribe(authUser.value.org_id);
+    if (authUser.value?.org_id) {
+        store.subscribe(authUser.value.org_id);
+    }
+
     try {
         await store.loadLibrary();
     } catch (e) {
@@ -60,11 +69,17 @@ const openEdit = (tag: TagRow) => {
 };
 
 const remove = async (tag: TagRow) => {
-    const msg = tag.attached_count > 0
-        ? `Delete tag "${tag.name}"? It's attached to ${tag.attached_count} item(s) — those attachments will be cleared.`
-        : `Delete tag "${tag.name}"?`;
-    if (!window.confirm(msg)) return;
+    const msg =
+        tag.attached_count > 0
+            ? `Delete tag "${tag.name}"? It's attached to ${tag.attached_count} item(s) — those attachments will be cleared.`
+            : `Delete tag "${tag.name}"?`;
+
+    if (!window.confirm(msg)) {
+        return;
+    }
+
     error.value = null;
+
     try {
         await store.destroy(tag.id);
     } catch (e) {
@@ -111,7 +126,11 @@ const remove = async (tag: TagRow) => {
                 <tbody class="divide-y divide-border">
                     <tr v-for="tag in sortedLibrary" :key="tag.id">
                         <td class="px-4 py-2">
-                            <TagPill :tag="tag" size="md" :count="tag.attached_count" />
+                            <TagPill
+                                :tag="tag"
+                                size="md"
+                                :count="tag.attached_count"
+                            />
                         </td>
                         <td class="space-x-3 px-4 py-2 text-right text-xs">
                             <button

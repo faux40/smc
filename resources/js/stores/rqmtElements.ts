@@ -9,8 +9,8 @@
 import axios from 'axios';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { realtimeTabId } from '@/echo';
 import { useRealtime } from '@/composables/useRealtime';
+import { realtimeTabId } from '@/echo';
 
 export interface RqmtElementRow {
     id: string;
@@ -38,12 +38,16 @@ export interface RqmtElementCreatePayload {
     as_needed: boolean;
 }
 
-export type RqmtElementUpdatePayload = Omit<RqmtElementCreatePayload, 'module_type' | 'module_id'>;
+export type RqmtElementUpdatePayload = Omit<
+    RqmtElementCreatePayload,
+    'module_type' | 'module_id'
+>;
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -62,7 +66,10 @@ export const useRqmtElementsStore = defineStore('rqmtElements', () => {
     }
 
     async function loadFor(requirementId: string): Promise<void> {
-        if (loaded.value[requirementId]) return;
+        if (loaded.value[requirementId]) {
+            return;
+        }
+
         const { data } = await axios.get<RqmtElementRow[]>(
             `/api/requirements/${requirementId}/elements`,
             { headers: defaultHeaders() },
@@ -71,7 +78,10 @@ export const useRqmtElementsStore = defineStore('rqmtElements', () => {
         loaded.value = { ...loaded.value, [requirementId]: true };
     }
 
-    async function create(requirementId: string, payload: RqmtElementCreatePayload): Promise<void> {
+    async function create(
+        requirementId: string,
+        payload: RqmtElementCreatePayload,
+    ): Promise<void> {
         await axios.post(
             `/api/requirements/${requirementId}/elements`,
             payload,
@@ -81,53 +91,105 @@ export const useRqmtElementsStore = defineStore('rqmtElements', () => {
         await loadFor(requirementId);
     }
 
-    async function update(elementId: string, requirementId: string, payload: RqmtElementUpdatePayload): Promise<void> {
-        await axios.patch(`/api/rqmt-elements/${elementId}`, payload, { headers: defaultHeaders() });
+    async function update(
+        elementId: string,
+        requirementId: string,
+        payload: RqmtElementUpdatePayload,
+    ): Promise<void> {
+        await axios.patch(`/api/rqmt-elements/${elementId}`, payload, {
+            headers: defaultHeaders(),
+        });
         loaded.value = { ...loaded.value, [requirementId]: false };
         await loadFor(requirementId);
     }
 
-    async function destroy(elementId: string, requirementId: string): Promise<void> {
-        await axios.delete(`/api/rqmt-elements/${elementId}`, { headers: defaultHeaders() });
+    async function destroy(
+        elementId: string,
+        requirementId: string,
+    ): Promise<void> {
+        await axios.delete(`/api/rqmt-elements/${elementId}`, {
+            headers: defaultHeaders(),
+        });
         const cur = lists.value[requirementId] ?? [];
-        lists.value = { ...lists.value, [requirementId]: cur.filter((e) => e.id !== elementId) };
+        lists.value = {
+            ...lists.value,
+            [requirementId]: cur.filter((e) => e.id !== elementId),
+        };
     }
 
     function subscribe(orgId: string): void {
-        if (subscribedOrgId.value === orgId) return;
+        if (subscribedOrgId.value === orgId) {
+            return;
+        }
+
         subscribedOrgId.value = orgId;
 
         const { bind } = useRealtime(`org.${orgId}`);
 
-        bind('RqmtElementCreated', (p: RqmtElementRow & { origin_tab?: string }) => {
-            const cur = lists.value[p.requirement_id];
-            if (!cur) return;
-            if (cur.some((e) => e.id === p.id)) return;
-            lists.value = {
-                ...lists.value,
-                [p.requirement_id]: [
-                    ...cur,
-                    { ...p, can_edit: false, can_delete: false },
-                ],
-            };
-        });
-        bind('RqmtElementUpdated', (p: RqmtElementRow & { origin_tab?: string }) => {
-            const cur = lists.value[p.requirement_id];
-            if (!cur) return;
-            lists.value = {
-                ...lists.value,
-                [p.requirement_id]: cur.map((e) => (e.id === p.id ? { ...e, ...p } : e)),
-            };
-        });
-        bind('RqmtElementDeleted', (p: { id: string; requirement_id: string }) => {
-            const cur = lists.value[p.requirement_id];
-            if (!cur) return;
-            lists.value = {
-                ...lists.value,
-                [p.requirement_id]: cur.filter((e) => e.id !== p.id),
-            };
-        });
+        bind(
+            'RqmtElementCreated',
+            (p: RqmtElementRow & { origin_tab?: string }) => {
+                const cur = lists.value[p.requirement_id];
+
+                if (!cur) {
+                    return;
+                }
+
+                if (cur.some((e) => e.id === p.id)) {
+                    return;
+                }
+
+                lists.value = {
+                    ...lists.value,
+                    [p.requirement_id]: [
+                        ...cur,
+                        { ...p, can_edit: false, can_delete: false },
+                    ],
+                };
+            },
+        );
+        bind(
+            'RqmtElementUpdated',
+            (p: RqmtElementRow & { origin_tab?: string }) => {
+                const cur = lists.value[p.requirement_id];
+
+                if (!cur) {
+                    return;
+                }
+
+                lists.value = {
+                    ...lists.value,
+                    [p.requirement_id]: cur.map((e) =>
+                        e.id === p.id ? { ...e, ...p } : e,
+                    ),
+                };
+            },
+        );
+        bind(
+            'RqmtElementDeleted',
+            (p: { id: string; requirement_id: string }) => {
+                const cur = lists.value[p.requirement_id];
+
+                if (!cur) {
+                    return;
+                }
+
+                lists.value = {
+                    ...lists.value,
+                    [p.requirement_id]: cur.filter((e) => e.id !== p.id),
+                };
+            },
+        );
     }
 
-    return { lists, loaded, listFor, loadFor, create, update, destroy, subscribe };
+    return {
+        lists,
+        loaded,
+        listFor,
+        loadFor,
+        create,
+        update,
+        destroy,
+        subscribe,
+    };
 });

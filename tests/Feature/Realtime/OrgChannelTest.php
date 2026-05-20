@@ -28,7 +28,7 @@ class OrgChannelTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $this->assertTrue((new OrgChannel())->join($user, $user->org_id));
+        $this->assertTrue((new OrgChannel)->join($user, $user->org_id));
     }
 
     public function test_denies_cross_org_user(): void
@@ -36,7 +36,7 @@ class OrgChannelTest extends TestCase
         $a = User::factory()->create();
         $b = User::factory()->create();
 
-        $this->assertFalse((new OrgChannel())->join($a, $b->org_id));
+        $this->assertFalse((new OrgChannel)->join($a, $b->org_id));
     }
 
     public function test_denies_no_login_user(): void
@@ -44,6 +44,6 @@ class OrgChannelTest extends TestCase
         $org = Organization::factory()->create();
         $noLogin = User::factory()->forOrganization($org)->noLogin()->create();
 
-        $this->assertFalse((new OrgChannel())->join($noLogin, $org->id));
+        $this->assertFalse((new OrgChannel)->join($noLogin, $org->id));
     }
 }

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Models\Organization;
+use App\Models\Tag;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -135,8 +136,8 @@ class UsersIndexTest extends TestCase
         $tagged = User::factory()->forOrganization($org)->create();
         $untagged = User::factory()->forOrganization($org)->create();
 
-        $tagA = \App\Models\Tag::factory()->for($org, 'organization')->create();
-        $tagB = \App\Models\Tag::factory()->for($org, 'organization')->create();
+        $tagA = Tag::factory()->for($org, 'organization')->create();
+        $tagB = Tag::factory()->for($org, 'organization')->create();
         $tagged->tags()->attach([$tagA->id, $tagB->id]);
 
         $this->actingAs($owner)
@@ -152,7 +153,7 @@ class UsersIndexTest extends TestCase
     }
 
     /**
-     * @return array{Organization, User, User, User, User, \App\Models\Tag, \App\Models\Tag}
+     * @return array{Organization, User, User, User, User, Tag, Tag}
      */
     private function setupTagFilterFixture(): array
     {
@@ -162,8 +163,8 @@ class UsersIndexTest extends TestCase
         $onlyA = User::factory()->forOrganization($org)->create(['l_name' => 'OnlyA']);
         $neither = User::factory()->forOrganization($org)->create(['l_name' => 'Neither']);
 
-        $tagA = \App\Models\Tag::factory()->for($org, 'organization')->create();
-        $tagB = \App\Models\Tag::factory()->for($org, 'organization')->create();
+        $tagA = Tag::factory()->for($org, 'organization')->create();
+        $tagB = Tag::factory()->for($org, 'organization')->create();
         $both->tags()->attach([$tagA->id, $tagB->id]);
         $onlyA->tags()->attach([$tagA->id]);
 

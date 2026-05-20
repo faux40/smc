@@ -13,9 +13,9 @@ import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
 import Heading from '@/components/Heading.vue';
 import TagsField from '@/components/TagsField.vue';
-import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import { Badge } from '@/components/ui/badge';
 import { realtimeTabId } from '@/echo';
+import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import { index as usersIndex } from '@/routes/users';
 
 interface Subject {
@@ -72,14 +72,19 @@ const props = defineProps<{ subject: Subject; tagIds: string[] }>();
 
 const page = usePage();
 const authUser = computed(
-    () => page.props.auth.user as {
-        isOwner?: boolean;
-        isSuperAdmin?: boolean;
-        isAdmin?: boolean;
-    } | null,
+    () =>
+        page.props.auth.user as {
+            isOwner?: boolean;
+            isSuperAdmin?: boolean;
+            isAdmin?: boolean;
+        } | null,
 );
-const canManageTagLibrary = computed(
-    () => Boolean(authUser.value?.isOwner || authUser.value?.isSuperAdmin || authUser.value?.isAdmin),
+const canManageTagLibrary = computed(() =>
+    Boolean(
+        authUser.value?.isOwner ||
+        authUser.value?.isSuperAdmin ||
+        authUser.value?.isAdmin,
+    ),
 );
 
 defineOptions({
@@ -102,6 +107,7 @@ onMounted(async () => {
 async function load(): Promise<void> {
     loading.value = true;
     error.value = null;
+
     try {
         const { data: resp } = await axios.get<CompliancePayload>(
             `/api/users/${props.subject.id}/compliance`,
@@ -123,7 +129,10 @@ const fullName = computed(() => {
         props.subject.l_name,
         props.subject.suffix_name,
     ].filter((s): s is string => Boolean(s));
-    return parts.length > 0 ? parts.join(' ') : (props.subject.email ?? 'Unnamed user');
+
+    return parts.length > 0
+        ? parts.join(' ')
+        : (props.subject.email ?? 'Unnamed user');
 });
 
 const ORDER: Array<{
@@ -131,28 +140,57 @@ const ORDER: Array<{
     label: string;
     description: string;
 }> = [
-    { key: 'overdue',       label: 'Overdue',     description: 'Past due. Address first.' },
-    { key: 'due_soon',      label: 'Due soon',    description: 'Within the next 60 days.' },
-    { key: 'current',       label: 'Current',     description: 'Satisfied for now.' },
-    { key: 'never_started', label: 'Not started', description: 'Future start_date or no clock yet.' },
-    { key: 'inactive',      label: 'Inactive',    description: 'end_date has passed — deactivated.' },
+    {
+        key: 'overdue',
+        label: 'Overdue',
+        description: 'Past due. Address first.',
+    },
+    {
+        key: 'due_soon',
+        label: 'Due soon',
+        description: 'Within the next 60 days.',
+    },
+    { key: 'current', label: 'Current', description: 'Satisfied for now.' },
+    {
+        key: 'never_started',
+        label: 'Not started',
+        description: 'Future start_date or no clock yet.',
+    },
+    {
+        key: 'inactive',
+        label: 'Inactive',
+        description: 'end_date has passed — deactivated.',
+    },
 ];
 
 const groupCount = (key: keyof CompliancePayload['groups']): number =>
     data.value?.groups[key].length ?? 0;
 
 const formatDueLabel = (row: AssignmentStatusRow): string => {
-    if (row.next_due_date === null) return '—';
-    if (row.days_until_due === null) return row.next_due_date;
-    if (row.days_until_due < 0) return `${row.next_due_date} (${Math.abs(row.days_until_due)}d overdue)`;
-    if (row.days_until_due === 0) return `${row.next_due_date} (today)`;
+    if (row.next_due_date === null) {
+        return '—';
+    }
+
+    if (row.days_until_due === null) {
+        return row.next_due_date;
+    }
+
+    if (row.days_until_due < 0) {
+        return `${row.next_due_date} (${Math.abs(row.days_until_due)}d overdue)`;
+    }
+
+    if (row.days_until_due === 0) {
+        return `${row.next_due_date} (today)`;
+    }
+
     return `${row.next_due_date} (${row.days_until_due}d)`;
 };
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -171,9 +209,13 @@ function defaultHeaders(): Record<string, string> {
             :description="subject.email ?? 'No email on file.'"
         />
 
-        <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <div
+            class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+        >
             <Badge variant="secondary">{{ subject.role ?? 'No role' }}</Badge>
-            <Badge :variant="subject.status === 'active' ? 'default' : 'secondary'">
+            <Badge
+                :variant="subject.status === 'active' ? 'default' : 'secondary'"
+            >
                 {{ subject.status === 'active' ? 'Active' : 'Disabled' }}
             </Badge>
         </div>
@@ -195,7 +237,9 @@ function defaultHeaders(): Record<string, string> {
             {{ error }}
         </p>
 
-        <p v-if="loading" class="text-sm text-muted-foreground">Loading compliance…</p>
+        <p v-if="loading" class="text-sm text-muted-foreground">
+            Loading compliance…
+        </p>
 
         <template v-if="data && !loading">
             <section
@@ -205,8 +249,12 @@ function defaultHeaders(): Record<string, string> {
             >
                 <div class="flex items-baseline gap-2">
                     <h2 class="text-base font-semibold">{{ group.label }}</h2>
-                    <Badge variant="secondary">{{ groupCount(group.key) }}</Badge>
-                    <span class="text-xs text-muted-foreground">{{ group.description }}</span>
+                    <Badge variant="secondary">{{
+                        groupCount(group.key)
+                    }}</Badge>
+                    <span class="text-xs text-muted-foreground">{{
+                        group.description
+                    }}</span>
                 </div>
 
                 <div
@@ -223,15 +271,28 @@ function defaultHeaders(): Record<string, string> {
                     <table class="min-w-full divide-y divide-border text-sm">
                         <thead class="bg-muted/40">
                             <tr>
-                                <th class="px-3 py-2 text-left font-medium">Requirement</th>
-                                <th class="px-3 py-2 text-left font-medium">Timing</th>
-                                <th class="px-3 py-2 text-left font-medium">Last completion</th>
-                                <th class="px-3 py-2 text-left font-medium">Next due</th>
-                                <th class="px-3 py-2 text-left font-medium">Status</th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    Requirement
+                                </th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    Timing
+                                </th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    Last completion
+                                </th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    Next due
+                                </th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    Status
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border">
-                            <tr v-for="row in data.groups[group.key]" :key="row.assignment_id">
+                            <tr
+                                v-for="row in data.groups[group.key]"
+                                :key="row.assignment_id"
+                            >
                                 <td class="px-3 py-2">
                                     {{ row.requirement_name }}
                                     <div
@@ -239,14 +300,24 @@ function defaultHeaders(): Record<string, string> {
                                         class="text-xs text-muted-foreground"
                                     >
                                         {{ row.start_date ?? '—' }}
-                                        <template v-if="row.end_date"> → {{ row.end_date }}</template>
+                                        <template v-if="row.end_date">
+                                            → {{ row.end_date }}</template
+                                        >
                                     </div>
                                 </td>
-                                <td class="px-3 py-2 text-xs">{{ row.timing }}</td>
-                                <td class="px-3 py-2 text-xs">{{ row.last_completion_date ?? '—' }}</td>
-                                <td class="px-3 py-2 text-xs">{{ formatDueLabel(row) }}</td>
+                                <td class="px-3 py-2 text-xs">
+                                    {{ row.timing }}
+                                </td>
+                                <td class="px-3 py-2 text-xs">
+                                    {{ row.last_completion_date ?? '—' }}
+                                </td>
+                                <td class="px-3 py-2 text-xs">
+                                    {{ formatDueLabel(row) }}
+                                </td>
                                 <td class="px-3 py-2">
-                                    <ComplianceStatusBadge :status="row.status" />
+                                    <ComplianceStatusBadge
+                                        :status="row.status"
+                                    />
                                 </td>
                             </tr>
                         </tbody>
@@ -257,9 +328,12 @@ function defaultHeaders(): Record<string, string> {
             <section class="flex flex-col gap-2">
                 <div class="flex items-baseline gap-2">
                     <h2 class="text-base font-semibold">Completion history</h2>
-                    <Badge variant="secondary">{{ data.completions.length }}</Badge>
+                    <Badge variant="secondary">{{
+                        data.completions.length
+                    }}</Badge>
                     <span class="text-xs text-muted-foreground">
-                        Every completion on file (including any that don't credit a current assignment).
+                        Every completion on file (including any that don't
+                        credit a current assignment).
                     </span>
                 </div>
 
@@ -277,20 +351,42 @@ function defaultHeaders(): Record<string, string> {
                     <table class="min-w-full divide-y divide-border text-sm">
                         <thead class="bg-muted/40">
                             <tr>
-                                <th class="px-3 py-2 text-left font-medium">Completion date</th>
-                                <th class="px-3 py-2 text-left font-medium">Expires</th>
-                                <th class="px-3 py-2 text-left font-medium">Cert</th>
-                                <th class="px-3 py-2 text-left font-medium">Credits</th>
-                                <th class="px-3 py-2 text-left font-medium">Notes</th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    Completion date
+                                </th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    Expires
+                                </th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    Cert
+                                </th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    Credits
+                                </th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    Notes
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border">
                             <tr v-for="c in data.completions" :key="c.id">
-                                <td class="px-3 py-2 text-xs">{{ c.completion_date ?? '—' }}</td>
-                                <td class="px-3 py-2 text-xs">{{ c.expire_date ?? '—' }}</td>
-                                <td class="px-3 py-2 text-xs">{{ c.cert_ident ?? '—' }}</td>
-                                <td class="px-3 py-2 text-xs">{{ c.rqmt_element_ids.length }} element(s)</td>
-                                <td class="px-3 py-2 text-xs text-muted-foreground">{{ c.notes ?? '' }}</td>
+                                <td class="px-3 py-2 text-xs">
+                                    {{ c.completion_date ?? '—' }}
+                                </td>
+                                <td class="px-3 py-2 text-xs">
+                                    {{ c.expire_date ?? '—' }}
+                                </td>
+                                <td class="px-3 py-2 text-xs">
+                                    {{ c.cert_ident ?? '—' }}
+                                </td>
+                                <td class="px-3 py-2 text-xs">
+                                    {{ c.rqmt_element_ids.length }} element(s)
+                                </td>
+                                <td
+                                    class="px-3 py-2 text-xs text-muted-foreground"
+                                >
+                                    {{ c.notes ?? '' }}
+                                </td>
                             </tr>
                         </tbody>
                     </table>

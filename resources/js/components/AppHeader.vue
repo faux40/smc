@@ -1,10 +1,20 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
-import { Bug, CheckCircle2, ClipboardList, ClipboardCheck, GraduationCap, LayoutGrid, Menu, Search, Tags as TagsIcon, Users as UsersIcon, Workflow } from 'lucide-vue-next';
+import {
+    Bug,
+    CheckCircle2,
+    ClipboardList,
+    ClipboardCheck,
+    GraduationCap,
+    LayoutGrid,
+    Menu,
+    Search,
+    Tags as TagsIcon,
+    Users as UsersIcon,
+    Workflow,
+} from 'lucide-vue-next';
 import { computed, onMounted } from 'vue';
-import { useRealtime } from '@/composables/useRealtime';
-import { useErrorStore } from '@/stores/errors';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
@@ -38,6 +48,7 @@ import {
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
+import { useRealtime } from '@/composables/useRealtime';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { page as assignmentsPage } from '@/routes/assignments';
@@ -45,8 +56,9 @@ import { page as completionsPage } from '@/routes/completions';
 import { page as requirementsPage } from '@/routes/requirements';
 import { page as tagsPage } from '@/routes/tags';
 import { page as trainingsPage } from '@/routes/trainings';
-import { bulkAssignment as bulkAssignmentPage } from '@/routes/workflows';
 import { index as usersIndex } from '@/routes/users';
+import { bulkAssignment as bulkAssignmentPage } from '@/routes/workflows';
+import { useErrorStore } from '@/stores/errors';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
 type Props = {
@@ -60,12 +72,13 @@ const props = withDefaults(defineProps<Props>(), {
 const page = usePage();
 const auth = computed(() => page.props.auth);
 const authUser = computed(
-    () => page.props.auth.user as {
-        isOwner?: boolean;
-        isSuperAdmin?: boolean;
-        isAdmin?: boolean;
-        isManager?: boolean;
-    } | null,
+    () =>
+        page.props.auth.user as {
+            isOwner?: boolean;
+            isSuperAdmin?: boolean;
+            isAdmin?: boolean;
+            isManager?: boolean;
+        } | null,
 );
 const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
 
@@ -82,10 +95,19 @@ const mainNavItems = computed<NavItem[]>(() => {
     ];
 
     const u = authUser.value;
+
     if (u && (u.isOwner || u.isSuperAdmin || u.isAdmin)) {
         items.push({ title: 'Users', href: usersIndex(), icon: UsersIcon });
-        items.push({ title: 'Trainings', href: trainingsPage(), icon: GraduationCap });
-        items.push({ title: 'Requirements', href: requirementsPage(), icon: ClipboardList });
+        items.push({
+            title: 'Trainings',
+            href: trainingsPage(),
+            icon: GraduationCap,
+        });
+        items.push({
+            title: 'Requirements',
+            href: requirementsPage(),
+            icon: ClipboardList,
+        });
         items.push({ title: 'Tags', href: tagsPage(), icon: TagsIcon });
     }
 
@@ -93,9 +115,21 @@ const mainNavItems = computed<NavItem[]>(() => {
     // the bulk-assignment workflow. Matches the widened Assignment /
     // Completion policies (Phases 13.1 + 13.2).
     if (u && (u.isOwner || u.isSuperAdmin || u.isAdmin || u.isManager)) {
-        items.push({ title: 'Assignments', href: assignmentsPage(), icon: ClipboardCheck });
-        items.push({ title: 'Completions', href: completionsPage(), icon: CheckCircle2 });
-        items.push({ title: 'Bulk assign', href: bulkAssignmentPage(), icon: Workflow });
+        items.push({
+            title: 'Assignments',
+            href: assignmentsPage(),
+            icon: ClipboardCheck,
+        });
+        items.push({
+            title: 'Completions',
+            href: completionsPage(),
+            icon: CheckCircle2,
+        });
+        items.push({
+            title: 'Bulk assign',
+            href: bulkAssignmentPage(),
+            icon: Workflow,
+        });
     }
 
     return items;
@@ -121,7 +155,9 @@ async function triggerRealtimePing(): Promise<void> {
     try {
         await axios.post('/realtime/ping', { message: 'header ping' });
     } catch (e) {
-        errorStore.reportFromAxios(e, 'temp:realtime-ping', { fallback: 'Realtime ping failed' });
+        errorStore.reportFromAxios(e, 'temp:realtime-ping', {
+            fallback: 'Realtime ping failed',
+        });
     }
 }
 </script>

@@ -14,9 +14,7 @@ class CompletionUpdated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Completion $completion)
-    {
-    }
+    public function __construct(public readonly Completion $completion) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

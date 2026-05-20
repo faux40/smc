@@ -30,8 +30,7 @@ class AssignmentDueSoon extends Notification implements ShouldBroadcast, ShouldQ
         public readonly Assignment $assignment,
         public readonly ?string $nextDueDate,
         public readonly ?int $daysUntilDue,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string, mixed>

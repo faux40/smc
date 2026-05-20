@@ -23,9 +23,7 @@ class AssignmentCreatedForYou extends Notification implements ShouldBroadcast, S
     /** Preference key — see NotificationPreference::TYPES. */
     public const TYPE = 'assignment_created';
 
-    public function __construct(public readonly Assignment $assignment)
-    {
-    }
+    public function __construct(public readonly Assignment $assignment) {}
 
     /**
      * Payload persisted into notifications.data + delivered to the

@@ -16,8 +16,7 @@ class TrainingDeleted implements ShouldBroadcast
     public function __construct(
         public readonly string $trainingId,
         public readonly string $orgId,
-    ) {
-    }
+    ) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

@@ -14,9 +14,7 @@ class UserStatusChanged implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly User $user)
-    {
-    }
+    public function __construct(public readonly User $user) {}
 
     /**
      * @return array<int, PrivateChannel>

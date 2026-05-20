@@ -40,7 +40,7 @@ abstract class TestCase extends BaseTestCase
         }
 
         $driver = config('database.default');
-        $name   = config('database.connections.'.$driver.'.database');
+        $name = config('database.connections.'.$driver.'.database');
 
         if ($driver !== 'sqlite' || $name !== ':memory:') {
             fwrite(

@@ -28,7 +28,8 @@ import {
 } from '@/components/ui/select';
 import { realtimeTabId } from '@/echo';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
-import { useTagsStore, type TagRow } from '@/stores/tags';
+import { useTagsStore } from '@/stores/tags';
+import type { TagRow } from '@/stores/tags';
 
 interface PreviewUser {
     id: string;
@@ -52,7 +53,10 @@ interface PreviewResponse {
 
 defineOptions({
     layout: {
-        breadcrumbs: [{ title: 'Workflows', href: '#' }, { title: 'Bulk assignment', href: '#' }],
+        breadcrumbs: [
+            { title: 'Workflows', href: '#' },
+            { title: 'Bulk assignment', href: '#' },
+        ],
     },
 });
 
@@ -61,20 +65,21 @@ const frequencies = useStdFrequenciesStore();
 const page = usePage();
 
 const authUser = computed(
-    () => page.props.auth.user as {
-        org_id?: string;
-        isOwner?: boolean;
-        isSuperAdmin?: boolean;
-        isAdmin?: boolean;
-        isManager?: boolean;
-    } | null,
+    () =>
+        page.props.auth.user as {
+            org_id?: string;
+            isOwner?: boolean;
+            isSuperAdmin?: boolean;
+            isAdmin?: boolean;
+            isManager?: boolean;
+        } | null,
 );
-const canUse = computed(
-    () => Boolean(
-        authUser.value?.isOwner
-        || authUser.value?.isSuperAdmin
-        || authUser.value?.isAdmin
-        || authUser.value?.isManager,
+const canUse = computed(() =>
+    Boolean(
+        authUser.value?.isOwner ||
+        authUser.value?.isSuperAdmin ||
+        authUser.value?.isAdmin ||
+        authUser.value?.isManager,
     ),
 );
 
@@ -100,7 +105,10 @@ const submitting = ref(false);
 const submitResult = ref<{ created: number; skipped: number } | null>(null);
 
 onMounted(async () => {
-    if (authUser.value?.org_id) tagsStore.subscribe(authUser.value.org_id);
+    if (authUser.value?.org_id) {
+        tagsStore.subscribe(authUser.value.org_id);
+    }
+
     try {
         await Promise.all([tagsStore.loadLibrary(), frequencies.load()]);
     } catch (e) {
@@ -109,8 +117,15 @@ onMounted(async () => {
 });
 
 const existingKeys = computed(() => {
-    if (!preview.value) return new Set<string>();
-    return new Set(preview.value.existing_pairs.map((p) => `${p.user_id}|${p.requirement_id}`));
+    if (!preview.value) {
+        return new Set<string>();
+    }
+
+    return new Set(
+        preview.value.existing_pairs.map(
+            (p) => `${p.user_id}|${p.requirement_id}`,
+        ),
+    );
 });
 
 watch(selectedTagId, async (tagId) => {
@@ -118,21 +133,34 @@ watch(selectedTagId, async (tagId) => {
     Object.keys(selection).forEach((k) => delete selection[k]);
     submitResult.value = null;
     previewError.value = null;
-    if (!tagId) return;
+
+    if (!tagId) {
+        return;
+    }
+
     loadingPreview.value = true;
+
     try {
-        const { data } = await axios.get<PreviewResponse>('/api/bulk-assignments/preview', {
-            params: { tag_id: tagId },
-            headers: defaultHeaders(),
-        });
+        const { data } = await axios.get<PreviewResponse>(
+            '/api/bulk-assignments/preview',
+            {
+                params: { tag_id: tagId },
+                headers: defaultHeaders(),
+            },
+        );
         preview.value = data;
         // Default every non-existing pair to selected.
-        const existing = new Set(data.existing_pairs.map((p) => `${p.user_id}|${p.requirement_id}`));
+        const existing = new Set(
+            data.existing_pairs.map((p) => `${p.user_id}|${p.requirement_id}`),
+        );
         data.users.forEach((u) => {
             selection[u.id] = {};
             data.requirements.forEach((r) => {
                 const key = `${u.id}|${r.id}`;
-                if (!existing.has(key)) selection[u.id][r.id] = true;
+
+                if (!existing.has(key)) {
+                    selection[u.id][r.id] = true;
+                }
             });
         });
     } catch (e) {
@@ -143,35 +171,52 @@ watch(selectedTagId, async (tagId) => {
 });
 
 const pickedPairs = computed(() => {
-    if (!preview.value) return [] as Array<{ user_id: string; requirement_id: string }>;
+    if (!preview.value) {
+        return [] as Array<{ user_id: string; requirement_id: string }>;
+    }
+
     const out: Array<{ user_id: string; requirement_id: string }> = [];
     preview.value.users.forEach((u) => {
         preview.value!.requirements.forEach((r) => {
             const key = `${u.id}|${r.id}`;
-            if (existingKeys.value.has(key)) return; // never re-create existing
+
+            if (existingKeys.value.has(key)) {
+                return;
+            } // never re-create existing
+
             if (selection[u.id]?.[r.id]) {
                 out.push({ user_id: u.id, requirement_id: r.id });
             }
         });
     });
+
     return out;
 });
 
 const totalCells = computed(() =>
-    preview.value ? preview.value.users.length * preview.value.requirements.length : 0,
+    preview.value
+        ? preview.value.users.length * preview.value.requirements.length
+        : 0,
 );
 
 const hasPreview = computed(
-    () => preview.value !== null && preview.value.users.length > 0 && preview.value.requirements.length > 0,
+    () =>
+        preview.value !== null &&
+        preview.value.users.length > 0 &&
+        preview.value.requirements.length > 0,
 );
 
 const fullName = (u: PreviewUser): string => {
     const parts = [u.f_name, u.l_name].filter(Boolean);
+
     return parts.length ? parts.join(' ') : (u.email ?? 'Unnamed');
 };
 
 const selectAll = () => {
-    if (!preview.value) return;
+    if (!preview.value) {
+        return;
+    }
+
     preview.value.users.forEach((u) => {
         preview.value!.requirements.forEach((r) => {
             if (!existingKeys.value.has(`${u.id}|${r.id}`)) {
@@ -183,9 +228,15 @@ const selectAll = () => {
 };
 
 const selectNone = () => {
-    if (!preview.value) return;
+    if (!preview.value) {
+        return;
+    }
+
     preview.value.users.forEach((u) => {
-        if (!selection[u.id]) return;
+        if (!selection[u.id]) {
+            return;
+        }
+
         Object.keys(selection[u.id]).forEach((k) => {
             selection[u.id][k] = false;
         });
@@ -193,10 +244,14 @@ const selectNone = () => {
 };
 
 const submit = async () => {
-    if (pickedPairs.value.length === 0) return;
+    if (pickedPairs.value.length === 0) {
+        return;
+    }
+
     submitting.value = true;
     errors.value = {};
     submitResult.value = null;
+
     try {
         const payload = {
             pairs: pickedPairs.value,
@@ -207,50 +262,69 @@ const submit = async () => {
             start_date: form.start_date,
             end_date: form.end_date === '' ? null : form.end_date,
         };
-        const { data } = await axios.post<{ created_count: number; skipped_count: number }>(
-            '/api/bulk-assignments',
-            payload,
-            { headers: defaultHeaders() },
-        );
-        submitResult.value = { created: data.created_count, skipped: data.skipped_count };
+        const { data } = await axios.post<{
+            created_count: number;
+            skipped_count: number;
+        }>('/api/bulk-assignments', payload, { headers: defaultHeaders() });
+        submitResult.value = {
+            created: data.created_count,
+            skipped: data.skipped_count,
+        };
+
         // Re-fetch the preview so the matrix reflects the newly-locked cells.
         if (selectedTagId.value) {
-            const refreshed = await axios.get<PreviewResponse>('/api/bulk-assignments/preview', {
-                params: { tag_id: selectedTagId.value },
-                headers: defaultHeaders(),
-            });
+            const refreshed = await axios.get<PreviewResponse>(
+                '/api/bulk-assignments/preview',
+                {
+                    params: { tag_id: selectedTagId.value },
+                    headers: defaultHeaders(),
+                },
+            );
             preview.value = refreshed.data;
             // Reset selection for the still-unassigned pairs only.
             Object.keys(selection).forEach((k) => delete selection[k]);
             const existing = new Set(
-                refreshed.data.existing_pairs.map((p) => `${p.user_id}|${p.requirement_id}`),
+                refreshed.data.existing_pairs.map(
+                    (p) => `${p.user_id}|${p.requirement_id}`,
+                ),
             );
             refreshed.data.users.forEach((u) => {
                 selection[u.id] = {};
                 refreshed.data.requirements.forEach((r) => {
                     const key = `${u.id}|${r.id}`;
-                    if (!existing.has(key)) selection[u.id][r.id] = false;
+
+                    if (!existing.has(key)) {
+                        selection[u.id][r.id] = false;
+                    }
                 });
             });
         }
     } catch (e: unknown) {
-        const err = e as { response?: { data?: { errors?: Record<string, string[]>; message?: string } } };
+        const err = e as {
+            response?: {
+                data?: { errors?: Record<string, string[]>; message?: string };
+            };
+        };
         const errs = err.response?.data?.errors;
+
         if (errs) {
             errors.value = Object.fromEntries(
                 Object.entries(errs).map(([k, v]) => [k, v[0] ?? '']),
             );
         }
-        previewError.value = err.response?.data?.message ?? (e as Error).message;
+
+        previewError.value =
+            err.response?.data?.message ?? (e as Error).message;
     } finally {
         submitting.value = false;
     }
 };
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -295,11 +369,7 @@ function defaultHeaders(): Record<string, string> {
                         </SelectContent>
                     </Select>
                 </div>
-                <TagPill
-                    v-if="preview"
-                    :tag="preview.tag"
-                    size="md"
-                />
+                <TagPill v-if="preview" :tag="preview.tag" size="md" />
             </div>
 
             <p
@@ -317,36 +387,57 @@ function defaultHeaders(): Record<string, string> {
                 {{ submitResult.skipped }} skipped (already existed).
             </p>
 
-            <p v-if="loadingPreview" class="text-sm text-muted-foreground">Loading…</p>
+            <p v-if="loadingPreview" class="text-sm text-muted-foreground">
+                Loading…
+            </p>
 
             <template v-if="preview && !loadingPreview">
                 <p
                     v-if="!hasPreview"
                     class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
                 >
-                    No users or requirements share this tag yet. Attach the tag on the
-                    Users / Requirements pages, then come back.
+                    No users or requirements share this tag yet. Attach the tag
+                    on the Users / Requirements pages, then come back.
                 </p>
 
                 <template v-else>
                     <div class="flex items-center gap-2 text-sm">
                         <span class="text-muted-foreground">
-                            {{ totalCells }} cell{{ totalCells === 1 ? '' : 's' }}
-                            ({{ preview.existing_pairs.length }} already assigned)
+                            {{ totalCells }} cell{{
+                                totalCells === 1 ? '' : 's'
+                            }}
+                            ({{ preview.existing_pairs.length }} already
+                            assigned)
                         </span>
-                        <Button type="button" variant="outline" size="sm" @click="selectAll">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            @click="selectAll"
+                        >
                             Select all available
                         </Button>
-                        <Button type="button" variant="outline" size="sm" @click="selectNone">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            @click="selectNone"
+                        >
                             Clear selection
                         </Button>
                     </div>
 
-                    <div class="overflow-x-auto rounded-md border border-border">
-                        <table class="min-w-full divide-y divide-border text-sm">
+                    <div
+                        class="overflow-x-auto rounded-md border border-border"
+                    >
+                        <table
+                            class="min-w-full divide-y divide-border text-sm"
+                        >
                             <thead class="bg-muted/40">
                                 <tr>
-                                    <th class="sticky left-0 z-10 bg-muted/40 px-4 py-2 text-left font-medium">
+                                    <th
+                                        class="sticky left-0 z-10 bg-muted/40 px-4 py-2 text-left font-medium"
+                                    >
                                         User \ Requirement
                                     </th>
                                     <th
@@ -361,7 +452,9 @@ function defaultHeaders(): Record<string, string> {
                             </thead>
                             <tbody class="divide-y divide-border">
                                 <tr v-for="u in preview.users" :key="u.id">
-                                    <td class="sticky left-0 z-10 bg-background px-4 py-2 font-medium">
+                                    <td
+                                        class="sticky left-0 z-10 bg-background px-4 py-2 font-medium"
+                                    >
                                         {{ fullName(u) }}
                                         <div
                                             v-if="u.email"
@@ -376,7 +469,11 @@ function defaultHeaders(): Record<string, string> {
                                         class="px-3 py-2 text-center"
                                     >
                                         <span
-                                            v-if="existingKeys.has(`${u.id}|${r.id}`)"
+                                            v-if="
+                                                existingKeys.has(
+                                                    `${u.id}|${r.id}`,
+                                                )
+                                            "
                                             class="inline-block rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                                             title="Already assigned"
                                         >
@@ -393,7 +490,9 @@ function defaultHeaders(): Record<string, string> {
                     </div>
 
                     <div class="grid gap-4 rounded-md border border-border p-4">
-                        <p class="text-sm font-medium">Timing — applied to every new assignment</p>
+                        <p class="text-sm font-medium">
+                            Timing — applied to every new assignment
+                        </p>
 
                         <div class="flex flex-wrap gap-4 text-sm">
                             <label class="flex items-center gap-2">
@@ -412,11 +511,13 @@ function defaultHeaders(): Record<string, string> {
                         <InputError :message="errors.initial_only" />
                         <InputError :message="errors.repeating" />
 
-                        <div v-if="form.repeating" class="grid gap-2 max-w-xs">
+                        <div v-if="form.repeating" class="grid max-w-xs gap-2">
                             <Label for="freq">Frequency</Label>
                             <Select v-model="form.std_freq_id">
                                 <SelectTrigger id="freq">
-                                    <SelectValue placeholder="Pick a frequency…" />
+                                    <SelectValue
+                                        placeholder="Pick a frequency…"
+                                    />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem
@@ -424,22 +525,34 @@ function defaultHeaders(): Record<string, string> {
                                         :key="f.id"
                                         :value="f.id"
                                     >
-                                        {{ f.name }} ({{ f.repeat_days }} day{{ f.repeat_days === 1 ? '' : 's' }})
+                                        {{ f.name }} ({{ f.repeat_days }} day{{
+                                            f.repeat_days === 1 ? '' : 's'
+                                        }})
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
                             <InputError :message="errors.std_freq_id" />
                         </div>
 
-                        <div class="grid grid-cols-2 gap-3 max-w-md">
+                        <div class="grid max-w-md grid-cols-2 gap-3">
                             <div class="grid gap-2">
                                 <Label for="start_date">Start date</Label>
-                                <Input id="start_date" type="date" v-model="form.start_date" />
+                                <Input
+                                    id="start_date"
+                                    type="date"
+                                    v-model="form.start_date"
+                                />
                                 <InputError :message="errors.start_date" />
                             </div>
                             <div class="grid gap-2">
-                                <Label for="end_date">End date (optional)</Label>
-                                <Input id="end_date" type="date" v-model="form.end_date" />
+                                <Label for="end_date"
+                                    >End date (optional)</Label
+                                >
+                                <Input
+                                    id="end_date"
+                                    type="date"
+                                    v-model="form.end_date"
+                                />
                                 <InputError :message="errors.end_date" />
                             </div>
                         </div>
@@ -454,7 +567,11 @@ function defaultHeaders(): Record<string, string> {
                             :disabled="submitting || pickedPairs.length === 0"
                             @click="submit"
                         >
-                            {{ submitting ? 'Assigning…' : `Create ${pickedPairs.length} assignment(s)` }}
+                            {{
+                                submitting
+                                    ? 'Assigning…'
+                                    : `Create ${pickedPairs.length} assignment(s)`
+                            }}
                         </Button>
                     </div>
                 </template>

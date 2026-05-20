@@ -118,7 +118,7 @@ class BulkAssignmentsApiTest extends TestCase
     public function test_store_creates_the_picked_cross_product(): void
     {
         Event::fake([AssignmentCreated::class]);
-        [$org, $manager, ] = $this->scaffoldOrg();
+        [$org, $manager] = $this->scaffoldOrg();
 
         $userA = User::factory()->for($org, 'organization')->create();
         $userB = User::factory()->for($org, 'organization')->create();
@@ -149,7 +149,7 @@ class BulkAssignmentsApiTest extends TestCase
     public function test_store_creates_with_initial_only_timing(): void
     {
         Event::fake([AssignmentCreated::class]);
-        [$org, $manager, ] = $this->scaffoldOrg();
+        [$org, $manager] = $this->scaffoldOrg();
         $userA = User::factory()->for($org, 'organization')->create();
         $userB = User::factory()->for($org, 'organization')->create();
         $reqA = Requirement::factory()->for($org, 'organization')->create();
@@ -182,7 +182,7 @@ class BulkAssignmentsApiTest extends TestCase
     public function test_store_skips_existing_pairs(): void
     {
         Event::fake([AssignmentCreated::class]);
-        [$org, $manager, ] = $this->scaffoldOrg();
+        [$org, $manager] = $this->scaffoldOrg();
         $userA = User::factory()->for($org, 'organization')->create();
         $userB = User::factory()->for($org, 'organization')->create();
         $reqA = Requirement::factory()->for($org, 'organization')->create();
@@ -215,7 +215,7 @@ class BulkAssignmentsApiTest extends TestCase
     public function test_store_dedupes_duplicate_pairs_in_request(): void
     {
         Event::fake([AssignmentCreated::class]);
-        [$org, $manager, ] = $this->scaffoldOrg();
+        [$org, $manager] = $this->scaffoldOrg();
         $userA = User::factory()->for($org, 'organization')->create();
         $reqA = Requirement::factory()->for($org, 'organization')->create();
 
@@ -238,7 +238,7 @@ class BulkAssignmentsApiTest extends TestCase
 
     public function test_store_copies_requirement_name_into_assignment(): void
     {
-        [$org, $manager, ] = $this->scaffoldOrg();
+        [$org, $manager] = $this->scaffoldOrg();
         $userA = User::factory()->for($org, 'organization')->create();
         $reqA = Requirement::factory()
             ->for($org, 'organization')

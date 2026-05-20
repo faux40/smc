@@ -18,8 +18,7 @@ class AssignmentDeleted implements ShouldBroadcast
         public readonly string $userId,
         public readonly string $requirementId,
         public readonly string $orgId,
-    ) {
-    }
+    ) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

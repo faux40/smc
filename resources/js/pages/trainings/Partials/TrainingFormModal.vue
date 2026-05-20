@@ -24,7 +24,8 @@ import {
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import { useErrorStore } from '@/stores/errors';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
-import { useTrainingsStore, type TrainingRow } from '@/stores/trainings';
+import { useTrainingsStore } from '@/stores/trainings';
+import type { TrainingRow } from '@/stores/trainings';
 
 const FORM_CTX = 'form:training';
 
@@ -79,8 +80,12 @@ onMounted(async () => {
 watch(
     () => props.open,
     (open) => {
-        if (!open) return;
+        if (!open) {
+            return;
+        }
+
         errorStore.clear(FORM_CTX);
+
         if (isEdit.value && props.target) {
             const t = props.target;
             form.name = t.name;
@@ -104,17 +109,21 @@ watch(
 watch(
     () => form.repeating,
     (next) => {
-        if (!next) form.std_freq_id = null;
+        if (!next) {
+            form.std_freq_id = null;
+        }
     },
 );
 
 const submit = async () => {
     submitting.value = true;
     errorStore.clear(FORM_CTX);
+
     try {
         const payload = {
             name: form.name,
-            description: form.description.trim() === '' ? null : form.description,
+            description:
+                form.description.trim() === '' ? null : form.description,
             initial_only: form.initial_only,
             repeating: form.repeating,
             std_freq_id: form.repeating ? form.std_freq_id : null,
@@ -126,9 +135,12 @@ const submit = async () => {
         } else {
             await trainings.create(payload);
         }
+
         emit('update:open', false);
     } catch (e) {
-        errorStore.reportFromAxios(e, FORM_CTX, { fallback: 'Failed to save training' });
+        errorStore.reportFromAxios(e, FORM_CTX, {
+            fallback: 'Failed to save training',
+        });
     } finally {
         submitting.value = false;
     }
@@ -143,8 +155,8 @@ const submit = async () => {
                     <DialogTitle>{{ title }}</DialogTitle>
                     <DialogDescription>
                         Template for a training. The three timing flags get
-                        copied into rqmt_elements when this training is added
-                        to a Requirement.
+                        copied into rqmt_elements when this training is added to
+                        a Requirement.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -181,12 +193,14 @@ const submit = async () => {
                         <Checkbox v-model="form.as_needed" />
                         As-needed (no schedule; just available to record)
                     </label>
-                    <InputError :message="fieldErrors.message('initial_only')" />
+                    <InputError
+                        :message="fieldErrors.message('initial_only')"
+                    />
                     <InputError :message="fieldErrors.message('repeating')" />
                     <InputError :message="fieldErrors.message('as_needed')" />
                     <p class="text-xs text-muted-foreground">
-                        At least one must be set. Initial-only and repeating
-                        are mutually exclusive.
+                        At least one must be set. Initial-only and repeating are
+                        mutually exclusive.
                     </p>
                 </div>
 

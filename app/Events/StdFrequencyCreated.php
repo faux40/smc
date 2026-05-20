@@ -14,9 +14,7 @@ class StdFrequencyCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly StdFrequency $frequency)
-    {
-    }
+    public function __construct(public readonly StdFrequency $frequency) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

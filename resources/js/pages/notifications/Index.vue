@@ -13,9 +13,10 @@ import { computed, onMounted, ref } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useNotificationsStore, type NotificationRow } from '@/stores/notifications';
-import { show as userShow } from '@/routes/users';
 import { page as notificationsPage } from '@/routes/notifications';
+import { show as userShow } from '@/routes/users';
+import { useNotificationsStore } from '@/stores/notifications';
+import type { NotificationRow } from '@/stores/notifications';
 
 defineOptions({
     layout: {
@@ -29,11 +30,15 @@ const error = ref<string | null>(null);
 
 const authUserId = computed(() => {
     const u = page.props.auth.user as unknown as { id?: string } | null;
+
     return u?.id ?? null;
 });
 
 onMounted(async () => {
-    if (authUserId.value) store.subscribe(authUserId.value);
+    if (authUserId.value) {
+        store.subscribe(authUserId.value);
+    }
+
     try {
         await store.load();
     } catch (e) {
@@ -48,31 +53,42 @@ const LABELS: Record<string, string> = {
 
 const labelFor = (row: NotificationRow): string => {
     const kind = (row.data?.kind as string) ?? '';
+
     return LABELS[kind] ?? row.type.split('\\').pop() ?? 'Notification';
 };
 
 const summaryFor = (row: NotificationRow): string => {
     const kind = (row.data?.kind as string) ?? '';
+
     if (kind === 'assignment_created') {
         return (row.data?.name as string) ?? 'an assignment';
     }
+
     if (kind === 'completion_recorded') {
         const date = (row.data?.completion_date as string) ?? '';
         const count = Array.isArray(row.data?.rqmt_element_ids)
             ? (row.data.rqmt_element_ids as string[]).length
             : 0;
+
         return `${count} element(s) credited${date ? ` on ${date}` : ''}`;
     }
+
     return '';
 };
 
 const formatTs = (ts: string | null): string => {
-    if (!ts) return '';
+    if (!ts) {
+        return '';
+    }
+
     return new Date(ts).toLocaleString();
 };
 
 const handleClick = async (row: NotificationRow): Promise<void> => {
-    if (row.read_at !== null) return;
+    if (row.read_at !== null) {
+        return;
+    }
+
     try {
         await store.markRead(row.id);
     } catch (e) {
@@ -92,6 +108,7 @@ const markAllRead = async (): Promise<void> => {
 // future cases). When present, show a quick link back to that user.
 const userLinkFor = (row: NotificationRow): string | null => {
     const uid = (row.data?.user_id as string) ?? null;
+
     return uid ? userShow(uid).url : null;
 };
 </script>
@@ -129,7 +146,10 @@ const userLinkFor = (row: NotificationRow): string | null => {
             No notifications yet.
         </div>
 
-        <ul v-else class="divide-y divide-border rounded-md border border-border">
+        <ul
+            v-else
+            class="divide-y divide-border rounded-md border border-border"
+        >
             <li
                 v-for="row in store.library"
                 :key="row.id"
@@ -138,13 +158,17 @@ const userLinkFor = (row: NotificationRow): string | null => {
             >
                 <span
                     class="mt-1 inline-block size-2 shrink-0 rounded-full"
-                    :class="row.read_at === null ? 'bg-primary' : 'bg-transparent'"
+                    :class="
+                        row.read_at === null ? 'bg-primary' : 'bg-transparent'
+                    "
                     :aria-label="row.read_at === null ? 'unread' : 'read'"
                 />
 
                 <div class="min-w-0 flex-1">
                     <div class="flex items-baseline gap-2">
-                        <span class="text-sm font-medium">{{ labelFor(row) }}</span>
+                        <span class="text-sm font-medium">{{
+                            labelFor(row)
+                        }}</span>
                         <Badge
                             v-if="row.read_at === null"
                             variant="secondary"

@@ -17,12 +17,15 @@ import { useErrorStore } from '@/stores/errors';
  * to avoid duplicating field text under each input.
  */
 
-const props = withDefaults(defineProps<{
-    context: string;
-    title?: string;
-}>(), {
-    title: 'Something went wrong',
-});
+const props = withDefaults(
+    defineProps<{
+        context: string;
+        title?: string;
+    }>(),
+    {
+        title: 'Something went wrong',
+    },
+);
 
 const errorStore = useErrorStore();
 const banner = computed(() => errorStore.getBanner(props.context));

@@ -6,10 +6,11 @@
  *
  * Routes uploads + deletes through useAttachmentsStore.
  */
-import { computed, onMounted, ref } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import { computed, onMounted, ref } from 'vue';
 import { Button } from '@/components/ui/button';
-import { useAttachmentsStore, type AttachmentRow } from '@/stores/attachments';
+import { useAttachmentsStore } from '@/stores/attachments';
+import type { AttachmentRow } from '@/stores/attachments';
 
 const props = defineProps<{
     morphableType: string;
@@ -24,7 +25,9 @@ const morphable = computed(() => ({
     id: String(props.morphableId),
 }));
 
-const attachments = computed<AttachmentRow[]>(() => store.listFor(morphable.value));
+const attachments = computed<AttachmentRow[]>(() =>
+    store.listFor(morphable.value),
+);
 
 const fileInput = ref<HTMLInputElement | null>(null);
 const submitting = ref(false);
@@ -32,7 +35,11 @@ const error = ref<string | null>(null);
 
 onMounted(async () => {
     const orgId = (page.props.auth.user as { org_id?: string } | null)?.org_id;
-    if (orgId) store.subscribe(orgId);
+
+    if (orgId) {
+        store.subscribe(orgId);
+    }
+
     try {
         await store.load(morphable.value);
     } catch (e) {
@@ -47,9 +54,14 @@ const triggerPicker = () => {
 const onPicked = async (event: Event) => {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0];
-    if (!file) return;
+
+    if (!file) {
+        return;
+    }
+
     submitting.value = true;
     error.value = null;
+
     try {
         await store.upload(morphable.value, file);
         target.value = '';
@@ -61,8 +73,12 @@ const onPicked = async (event: Event) => {
 };
 
 const remove = async (a: AttachmentRow) => {
-    if (!window.confirm(`Delete ${a.filename}?`)) return;
+    if (!window.confirm(`Delete ${a.filename}?`)) {
+        return;
+    }
+
     error.value = null;
+
     try {
         await store.destroy(a.id);
     } catch (e) {
@@ -71,9 +87,18 @@ const remove = async (a: AttachmentRow) => {
 };
 
 const formatSize = (bytes: number | null): string => {
-    if (bytes === null) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes === null) {
+        return '';
+    }
+
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 };
 </script>
@@ -120,7 +145,9 @@ const formatSize = (bytes: number | null): string => {
                     </a>
                     <div class="text-xs text-muted-foreground">
                         <span v-if="a.mime">{{ a.mime }}</span>
-                        <span v-if="a.size !== null"> · {{ formatSize(a.size) }}</span>
+                        <span v-if="a.size !== null">
+                            · {{ formatSize(a.size) }}</span
+                        >
                         <span v-if="a.uploaded_by_name">
                             · uploaded by {{ a.uploaded_by_name }}
                         </span>

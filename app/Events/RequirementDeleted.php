@@ -16,8 +16,7 @@ class RequirementDeleted implements ShouldBroadcast
     public function __construct(
         public readonly string $requirementId,
         public readonly string $orgId,
-    ) {
-    }
+    ) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

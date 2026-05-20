@@ -24,15 +24,22 @@ interface RealtimeHandle {
     leave: () => void;
 }
 
-export function useRealtime(channelName: string, mode: ChannelMode = 'private'): RealtimeHandle {
+export function useRealtime(
+    channelName: string,
+    mode: ChannelMode = 'private',
+): RealtimeHandle {
     const echo = window.Echo;
+
     if (!echo) {
         // Echo isn't initialized (e.g., SSR or test) — return a no-op handle so
         // callers don't have to null-check.
         return { bind: () => undefined, leave: () => undefined };
     }
 
-    const channel = mode === 'public' ? echo.channel(channelName) : echo.private(channelName);
+    const channel =
+        mode === 'public'
+            ? echo.channel(channelName)
+            : echo.private(channelName);
     const ownTab = realtimeTabId();
     const boundEvents: string[] = [];
 
@@ -40,15 +47,18 @@ export function useRealtime(channelName: string, mode: ChannelMode = 'private'):
         boundEvents.push(eventName);
         channel.listen(eventName, (payload: any) => {
             debugRealtimeEvent(channelName, eventName, payload);
+
             if (payload?.origin_tab && payload.origin_tab === ownTab) {
                 return; // self-echo — skip
             }
+
             handler(payload);
         });
     };
 
     const leave = (): void => {
         boundEvents.forEach((evt) => channel.stopListening(evt));
+
         if (mode === 'public') {
             echo.leaveChannel(channelName);
         } else {

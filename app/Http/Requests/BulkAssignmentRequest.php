@@ -3,8 +3,6 @@
 namespace App\Http\Requests;
 
 use App\Models\Assignment;
-use App\Models\Requirement;
-use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;

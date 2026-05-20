@@ -10,8 +10,8 @@
 import axios from 'axios';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { realtimeTabId } from '@/echo';
 import { useRealtime } from '@/composables/useRealtime';
+import { realtimeTabId } from '@/echo';
 
 export interface TrainingRow {
     id: string;
@@ -36,9 +36,10 @@ export interface TrainingFormPayload {
 }
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -53,7 +54,10 @@ export const useTrainingsStore = defineStore('trainings', () => {
     const subscribedOrgId = ref<string | null>(null);
 
     async function load(): Promise<void> {
-        if (loaded.value) return;
+        if (loaded.value) {
+            return;
+        }
+
         const { data } = await axios.get<TrainingRow[]>('/api/trainings', {
             headers: defaultHeaders(),
         });
@@ -69,27 +73,43 @@ export const useTrainingsStore = defineStore('trainings', () => {
         );
         library.value = [
             ...library.value,
-            { ...data, std_freq_name: null, can_edit: true, can_delete: true } as TrainingRow,
+            {
+                ...data,
+                std_freq_name: null,
+                can_edit: true,
+                can_delete: true,
+            } as TrainingRow,
         ];
         // Re-fetch to pick up std_freq_name + accurate can_* from the server.
         loaded.value = false;
         await load();
+
         return data;
     }
 
-    async function update(id: string, payload: TrainingFormPayload): Promise<void> {
-        await axios.patch(`/api/trainings/${id}`, payload, { headers: defaultHeaders() });
+    async function update(
+        id: string,
+        payload: TrainingFormPayload,
+    ): Promise<void> {
+        await axios.patch(`/api/trainings/${id}`, payload, {
+            headers: defaultHeaders(),
+        });
         loaded.value = false;
         await load();
     }
 
     async function destroy(id: string): Promise<void> {
-        await axios.delete(`/api/trainings/${id}`, { headers: defaultHeaders() });
+        await axios.delete(`/api/trainings/${id}`, {
+            headers: defaultHeaders(),
+        });
         library.value = library.value.filter((t) => t.id !== id);
     }
 
     function subscribe(orgId: string): void {
-        if (subscribedOrgId.value === orgId) return;
+        if (subscribedOrgId.value === orgId) {
+            return;
+        }
+
         subscribedOrgId.value = orgId;
 
         const { bind } = useRealtime(`org.${orgId}`);

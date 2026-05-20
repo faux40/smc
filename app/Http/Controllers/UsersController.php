@@ -13,6 +13,7 @@ use App\Services\UserComplianceCalculator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
@@ -57,7 +58,7 @@ class UsersController extends Controller
                 // Explicit `CAST(users.id AS text)` works on both
                 // sqlite (tests) and pgsql (dev/prod).
                 $tagSubquery = function ($sub, array $ids) {
-                    $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                    $sub->select(DB::raw(1))
                         ->from('taggables')
                         ->join('tags', 'tags.id', '=', 'taggables.tag_id')
                         ->whereRaw('taggables.taggable_id = CAST(users.id AS text)')

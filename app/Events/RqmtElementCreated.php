@@ -14,9 +14,7 @@ class RqmtElementCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly RqmtElement $element)
-    {
-    }
+    public function __construct(public readonly RqmtElement $element) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

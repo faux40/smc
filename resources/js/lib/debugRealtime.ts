@@ -10,7 +10,11 @@ import { useErrorStore } from '@/stores/errors';
 function payloadPreview(payload: unknown): string {
     try {
         const json = JSON.stringify(payload);
-        if (!json) return '';
+
+        if (!json) {
+            return '';
+        }
+
         return json.length > 140 ? json.slice(0, 140) + '…' : json;
     } catch {
         return String(payload);

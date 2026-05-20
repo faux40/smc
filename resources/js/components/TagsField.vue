@@ -14,10 +14,11 @@
  * mutates directly. The store subscribes to peer broadcasts on first
  * mount so this tab + every other tab stay in sync.
  */
-import { computed, onMounted, ref, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import { computed, onMounted, ref, watch } from 'vue';
 import TagPill from '@/components/TagPill.vue';
-import { useTagsStore, type TagRow } from '@/stores/tags';
+import { useTagsStore } from '@/stores/tags';
+import type { TagRow } from '@/stores/tags';
 
 type Mode = 'left' | 'right';
 type Size = 'sm' | 'md';
@@ -49,7 +50,9 @@ const morphable = computed(() => ({
     id: String(props.morphableId),
 }));
 
-const attached = computed<TagRow[]>(() => store.attachedTagsFor(morphable.value));
+const attached = computed<TagRow[]>(() =>
+    store.attachedTagsFor(morphable.value),
+);
 const attachedIds = computed(() => new Set(attached.value.map((t) => t.id)));
 
 const query = ref('');
@@ -60,7 +63,11 @@ const submitting = ref(false);
 onMounted(async () => {
     store.setAttached(morphable.value, props.initialTagIds);
     const orgId = (page.props.auth.user as { org_id?: string } | null)?.org_id;
-    if (orgId) store.subscribe(orgId);
+
+    if (orgId) {
+        store.subscribe(orgId);
+    }
+
     if (!props.readonly) {
         try {
             await store.loadLibrary();
@@ -77,6 +84,7 @@ watch(
 
 const filteredLibrary = computed(() => {
     const q = query.value.trim().toLowerCase();
+
     return store.library
         .filter((t) => !attachedIds.value.has(t.id))
         .filter((t) => (q ? t.name.toLowerCase().includes(q) : true));
@@ -84,12 +92,19 @@ const filteredLibrary = computed(() => {
 
 const exactMatch = computed(() => {
     const q = query.value.trim().toLowerCase();
-    if (!q) return false;
+
+    if (!q) {
+        return false;
+    }
+
     return store.library.some((t) => t.name.toLowerCase() === q);
 });
 
 const showCreateRow = computed(
-    () => props.canManageLibrary && query.value.trim().length > 0 && !exactMatch.value,
+    () =>
+        props.canManageLibrary &&
+        query.value.trim().length > 0 &&
+        !exactMatch.value,
 );
 
 const rowAlignClass = computed(() =>
@@ -99,6 +114,7 @@ const rowAlignClass = computed(() =>
 const attach = async (tag: TagRow) => {
     error.value = null;
     submitting.value = true;
+
     try {
         await store.attach(morphable.value, tag.id);
         query.value = '';
@@ -112,6 +128,7 @@ const attach = async (tag: TagRow) => {
 
 const detach = async (tag: TagRow) => {
     error.value = null;
+
     try {
         await store.detach(morphable.value, tag.id);
     } catch (e) {
@@ -121,9 +138,14 @@ const detach = async (tag: TagRow) => {
 
 const createAndAttach = async () => {
     const name = query.value.trim();
-    if (!name) return;
+
+    if (!name) {
+        return;
+    }
+
     error.value = null;
     submitting.value = true;
+
     try {
         const tag = await store.create(name);
         await store.attach(morphable.value, tag.id);
@@ -240,7 +262,7 @@ const closePicker = () => {
             </ul>
             <button
                 type="button"
-                class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+                class="absolute top-1/2 right-2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
                 :disabled="submitting"
                 @click="closePicker"
             >

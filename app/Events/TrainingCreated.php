@@ -14,9 +14,7 @@ class TrainingCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Training $training)
-    {
-    }
+    public function __construct(public readonly Training $training) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

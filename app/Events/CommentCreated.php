@@ -14,9 +14,7 @@ class CommentCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Comment $comment)
-    {
-    }
+    public function __construct(public readonly Comment $comment) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

@@ -16,8 +16,7 @@ class CommentDeleted implements ShouldBroadcast
     public function __construct(
         public readonly string $commentId,
         public readonly string $orgId,
-    ) {
-    }
+    ) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

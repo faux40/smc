@@ -18,6 +18,7 @@ use App\Models\User;
 class AssignmentPolicy
 {
     private const WRITE_ROLES = ['Owner', 'SuperAdmin', 'Admin'];
+
     private const READ_AND_CREATE_ROLES = ['Owner', 'SuperAdmin', 'Admin', 'Manager'];
 
     public function viewAny(User $actor): bool

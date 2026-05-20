@@ -39,7 +39,7 @@ class DashboardApiTest extends TestCase
 
     public function test_summary_returns_expected_envelope(): void
     {
-        [$org, $manager, ] = $this->scaffoldOrg();
+        [$org, $manager] = $this->scaffoldOrg();
 
         $response = $this->actingAs($manager)
             ->getJson('/api/dashboard/summary')
@@ -57,8 +57,8 @@ class DashboardApiTest extends TestCase
 
     public function test_summary_is_org_scoped(): void
     {
-        [$orgA, $managerA, ] = $this->scaffoldOrg();
-        [$orgB, , ] = $this->scaffoldOrg();
+        [$orgA, $managerA] = $this->scaffoldOrg();
+        [$orgB] = $this->scaffoldOrg();
         // Build a user in orgB with no assignments — should NOT be counted
         // in orgA's summary.
         User::factory()->for($orgB, 'organization')->create();
@@ -131,7 +131,7 @@ class DashboardApiTest extends TestCase
 
     public function test_overdue_users_does_not_leak_cross_org(): void
     {
-        [, $managerA, ] = $this->scaffoldOrg();
+        [, $managerA] = $this->scaffoldOrg();
         [$orgB, , $trainingB] = $this->scaffoldOrg();
 
         // An overdue user in orgB — must not appear in orgA's dashboard.
@@ -212,7 +212,7 @@ class DashboardApiTest extends TestCase
 
     public function test_recent_completions_is_org_scoped(): void
     {
-        [, $managerA, ] = $this->scaffoldOrg();
+        [, $managerA] = $this->scaffoldOrg();
         [$orgB, , $trainingB] = $this->scaffoldOrg();
         $userB = User::factory()->for($orgB, 'organization')->create();
         Completion::factory()

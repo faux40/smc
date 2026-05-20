@@ -8,8 +8,8 @@
 import axios from 'axios';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { realtimeTabId } from '@/echo';
 import { useRealtime } from '@/composables/useRealtime';
+import { realtimeTabId } from '@/echo';
 
 export interface AttachmentRow {
     id: string;
@@ -34,9 +34,10 @@ function keyOf(m: MorphableKey): string {
 }
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -59,7 +60,10 @@ export const useAttachmentsStore = defineStore('attachments', () => {
     }
 
     async function load(morphable: MorphableKey): Promise<void> {
-        if (loaded.value[keyOf(morphable)]) return;
+        if (loaded.value[keyOf(morphable)]) {
+            return;
+        }
+
         const { data } = await axios.get<AttachmentRow[]>('/api/attachments', {
             headers: defaultHeaders(),
             params: {
@@ -83,11 +87,15 @@ export const useAttachmentsStore = defineStore('attachments', () => {
     }
 
     async function destroy(id: string): Promise<void> {
-        await axios.delete(`/api/attachments/${id}`, { headers: defaultHeaders() });
+        await axios.delete(`/api/attachments/${id}`, {
+            headers: defaultHeaders(),
+        });
         const next: Record<string, AttachmentRow[]> = {};
+
         for (const [key, rows] of Object.entries(lists.value)) {
             next[key] = rows.filter((a) => a.id !== id);
         }
+
         lists.value = next;
     }
 
@@ -96,49 +104,64 @@ export const useAttachmentsStore = defineStore('attachments', () => {
     }
 
     function subscribe(orgId: string): void {
-        if (subscribedOrgId.value === orgId) return;
+        if (subscribedOrgId.value === orgId) {
+            return;
+        }
+
         subscribedOrgId.value = orgId;
 
         const { bind } = useRealtime(`org.${orgId}`);
 
-        bind('AttachmentCreated', (p: {
-            id: string;
-            attachable_type: string;
-            attachable_id: string;
-            filename: string;
-            mime: string | null;
-            size: number | null;
-            uploaded_by_user_id: string;
-        }) => {
-            const key = `${p.attachable_type}::${p.attachable_id}`;
-            const cur = lists.value[key];
-            if (!cur) return;
-            if (cur.some((a) => a.id === p.id)) return;
-            lists.value = {
-                ...lists.value,
-                [key]: [
-                    {
-                        id: p.id,
-                        attachable_type: p.attachable_type,
-                        attachable_id: p.attachable_id,
-                        filename: p.filename,
-                        mime: p.mime,
-                        size: p.size,
-                        uploaded_by_user_id: p.uploaded_by_user_id,
-                        uploaded_by_name: null,
-                        created_at: null,
-                        can_delete: false,
-                    },
-                    ...cur,
-                ],
-            };
-        });
+        bind(
+            'AttachmentCreated',
+            (p: {
+                id: string;
+                attachable_type: string;
+                attachable_id: string;
+                filename: string;
+                mime: string | null;
+                size: number | null;
+                uploaded_by_user_id: string;
+            }) => {
+                const key = `${p.attachable_type}::${p.attachable_id}`;
+                const cur = lists.value[key];
+
+                if (!cur) {
+                    return;
+                }
+
+                if (cur.some((a) => a.id === p.id)) {
+                    return;
+                }
+
+                lists.value = {
+                    ...lists.value,
+                    [key]: [
+                        {
+                            id: p.id,
+                            attachable_type: p.attachable_type,
+                            attachable_id: p.attachable_id,
+                            filename: p.filename,
+                            mime: p.mime,
+                            size: p.size,
+                            uploaded_by_user_id: p.uploaded_by_user_id,
+                            uploaded_by_name: null,
+                            created_at: null,
+                            can_delete: false,
+                        },
+                        ...cur,
+                    ],
+                };
+            },
+        );
 
         bind('AttachmentDeleted', (p: { id: string }) => {
             const next: Record<string, AttachmentRow[]> = {};
+
             for (const [key, rows] of Object.entries(lists.value)) {
                 next[key] = rows.filter((a) => a.id !== p.id);
             }
+
             lists.value = next;
         });
     }

@@ -14,8 +14,8 @@
 import axios from 'axios';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { realtimeTabId } from '@/echo';
 import { useRealtime } from '@/composables/useRealtime';
+import { realtimeTabId } from '@/echo';
 
 export interface CompletionRow {
     id: string;
@@ -44,16 +44,20 @@ export interface CompletionCreatePayload {
     rqmt_element_ids: string[];
 }
 
-export type CompletionUpdatePayload = Omit<CompletionCreatePayload, 'user_id' | 'module_type' | 'module_id'>;
+export type CompletionUpdatePayload = Omit<
+    CompletionCreatePayload,
+    'user_id' | 'module_type' | 'module_id'
+>;
 
 export interface CompletionFilter {
     user_id?: string;
 }
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -71,15 +75,18 @@ export const useCompletionsStore = defineStore('completions', () => {
     const loadedFilters = ref<Set<string>>(new Set());
     const subscribedOrgId = ref<string | null>(null);
 
-    const forUser = computed(() => (userId: string) =>
-        rows.value.filter((c) => c.user_id === userId),
+    const forUser = computed(
+        () => (userId: string) =>
+            rows.value.filter((c) => c.user_id === userId),
     );
-    const forElement = computed(() => (elementId: string) =>
-        rows.value.filter((c) => c.rqmt_element_ids.includes(elementId)),
+    const forElement = computed(
+        () => (elementId: string) =>
+            rows.value.filter((c) => c.rqmt_element_ids.includes(elementId)),
     );
 
     function upsert(row: CompletionRow): void {
         const idx = rows.value.findIndex((c) => c.id === row.id);
+
         if (idx === -1) {
             rows.value = [...rows.value, row];
         } else {
@@ -91,9 +98,17 @@ export const useCompletionsStore = defineStore('completions', () => {
 
     async function loadFor(filter: CompletionFilter = {}): Promise<void> {
         const key = filterKey(filter);
-        if (loadedFilters.value.has(key)) return;
+
+        if (loadedFilters.value.has(key)) {
+            return;
+        }
+
         const params: Record<string, string> = {};
-        if (filter.user_id) params.user_id = filter.user_id;
+
+        if (filter.user_id) {
+            params.user_id = filter.user_id;
+        }
+
         const { data } = await axios.get<CompletionRow[]>('/api/completions', {
             headers: defaultHeaders(),
             params,
@@ -102,17 +117,23 @@ export const useCompletionsStore = defineStore('completions', () => {
         loadedFilters.value = new Set([...loadedFilters.value, key]);
     }
 
-    async function create(payload: CompletionCreatePayload): Promise<CompletionRow> {
+    async function create(
+        payload: CompletionCreatePayload,
+    ): Promise<CompletionRow> {
         const { data } = await axios.post<CompletionRow>(
             '/api/completions',
             payload,
             { headers: defaultHeaders() },
         );
         upsert(data);
+
         return data;
     }
 
-    async function update(id: string, payload: CompletionUpdatePayload): Promise<void> {
+    async function update(
+        id: string,
+        payload: CompletionUpdatePayload,
+    ): Promise<void> {
         const { data } = await axios.patch<CompletionRow>(
             `/api/completions/${id}`,
             payload,
@@ -122,12 +143,17 @@ export const useCompletionsStore = defineStore('completions', () => {
     }
 
     async function destroy(id: string): Promise<void> {
-        await axios.delete(`/api/completions/${id}`, { headers: defaultHeaders() });
+        await axios.delete(`/api/completions/${id}`, {
+            headers: defaultHeaders(),
+        });
         rows.value = rows.value.filter((c) => c.id !== id);
     }
 
     function subscribe(orgId: string): void {
-        if (subscribedOrgId.value === orgId) return;
+        if (subscribedOrgId.value === orgId) {
+            return;
+        }
+
         subscribedOrgId.value = orgId;
 
         const { bind } = useRealtime(`org.${orgId}`);
@@ -137,7 +163,11 @@ export const useCompletionsStore = defineStore('completions', () => {
         });
         bind('CompletionUpdated', (p: CompletionRow) => {
             const existing = rows.value.find((c) => c.id === p.id);
-            if (!existing) return;
+
+            if (!existing) {
+                return;
+            }
+
             upsert({ ...existing, ...p });
         });
         bind('CompletionDeleted', (p: { id: string }) => {

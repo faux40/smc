@@ -5,8 +5,6 @@ import OrganizationController from '@/actions/App/Http/Controllers/Settings/Orga
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
     Dialog,
     DialogContent,
@@ -16,6 +14,8 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/organization';
 
 type Props = {
@@ -81,7 +81,7 @@ const submitDelete = () => {
                 <select
                     id="timezone"
                     name="timezone"
-                    class="border-input bg-background mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                    class="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
                     required
                 >
                     <option
@@ -94,8 +94,8 @@ const submitDelete = () => {
                     </option>
                 </select>
                 <p class="text-xs text-muted-foreground">
-                    Used to schedule the weekly compliance digest at 8am
-                    local time on Mondays.
+                    Used to schedule the weekly compliance digest at 8am local
+                    time on Mondays.
                 </p>
                 <InputError class="mt-2" :message="errors.timezone" />
             </div>
@@ -112,9 +112,7 @@ const submitDelete = () => {
             />
             <Dialog v-model:open="deleteOpen">
                 <DialogTrigger as-child>
-                    <Button variant="destructive">
-                        Delete organization
-                    </Button>
+                    <Button variant="destructive"> Delete organization </Button>
                 </DialogTrigger>
                 <DialogContent>
                     <form @submit.prevent="submitDelete" class="space-y-4">

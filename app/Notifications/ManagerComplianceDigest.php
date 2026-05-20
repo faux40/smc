@@ -40,8 +40,7 @@ class ManagerComplianceDigest extends Notification implements ShouldBroadcast, S
         public readonly array $summary,
         public readonly array $topOverdue,
         public readonly array $topDueSoon,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string, mixed>

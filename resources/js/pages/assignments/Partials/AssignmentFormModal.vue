@@ -40,7 +40,8 @@ import {
 } from '@/components/ui/select';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import { realtimeTabId } from '@/echo';
-import { useAssignmentsStore, type AssignmentRow } from '@/stores/assignments';
+import { useAssignmentsStore } from '@/stores/assignments';
+import type { AssignmentRow } from '@/stores/assignments';
 import { useErrorStore } from '@/stores/errors';
 import { useRequirementsStore } from '@/stores/requirements';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
@@ -90,7 +91,9 @@ const errorStore = useErrorStore();
 const fieldErrors = useFieldErrors(FORM_CTX);
 
 const isEdit = computed(() => props.mode === 'edit');
-const title = computed(() => (isEdit.value ? 'Edit assignment' : 'New assignment'));
+const title = computed(() =>
+    isEdit.value ? 'Edit assignment' : 'New assignment',
+);
 
 const sortedUsers = computed(() => [...userPicker.value]);
 const sortedRequirements = computed(() =>
@@ -98,6 +101,7 @@ const sortedRequirements = computed(() =>
 );
 const userName = (id: string) => {
     const u = userPicker.value.find((x) => x.id === id);
+
     return u ? [u.f_name, u.l_name].filter(Boolean).join(' ') : '—';
 };
 const requirementName = (id: string) =>
@@ -108,10 +112,15 @@ onMounted(async () => {
 });
 
 async function loadPickers(): Promise<void> {
-    if (pickersLoaded.value) return;
+    if (pickersLoaded.value) {
+        return;
+    }
+
     try {
         const [u] = await Promise.all([
-            axios.get<UserPickerRow[]>('/api/users', { headers: defaultHeaders() }),
+            axios.get<UserPickerRow[]>('/api/users', {
+                headers: defaultHeaders(),
+            }),
             requirements.load(),
             frequencies.load(),
         ]);
@@ -125,7 +134,10 @@ async function loadPickers(): Promise<void> {
 watch(
     () => props.open,
     async (open) => {
-        if (!open) return;
+        if (!open) {
+            return;
+        }
+
         errorStore.clear(FORM_CTX);
         loadError.value = null;
         await loadPickers();
@@ -139,7 +151,9 @@ watch(
             form.repeating = props.target.repeating;
             form.std_freq_id = props.target.std_freq_id;
             form.as_needed = props.target.as_needed;
-            form.start_date = props.target.start_date ?? new Date().toISOString().slice(0, 10);
+            form.start_date =
+                props.target.start_date ??
+                new Date().toISOString().slice(0, 10);
             form.end_date = props.target.end_date ?? '';
         } else {
             form.user_id = '';
@@ -161,24 +175,41 @@ watch(
 watch(
     () => form.requirement_id,
     (id) => {
-        if (isEdit.value) return;
-        if (!id) return;
+        if (isEdit.value) {
+            return;
+        }
+
+        if (!id) {
+            return;
+        }
+
         const r = requirements.library.find((x) => x.id === id);
-        if (!r) return;
-        if (form.name.trim() === '') form.name = r.name;
-        if (form.description.trim() === '') form.description = r.description ?? '';
+
+        if (!r) {
+            return;
+        }
+
+        if (form.name.trim() === '') {
+            form.name = r.name;
+        }
+
+        if (form.description.trim() === '') {
+            form.description = r.description ?? '';
+        }
     },
 );
 
 const submit = async () => {
     submitting.value = true;
     errorStore.clear(FORM_CTX);
+
     try {
         const payload = {
             user_id: form.user_id,
             requirement_id: form.requirement_id,
             name: form.name,
-            description: form.description.trim() === '' ? null : form.description,
+            description:
+                form.description.trim() === '' ? null : form.description,
             initial_only: form.initial_only,
             repeating: form.repeating,
             std_freq_id: form.repeating ? form.std_freq_id : null,
@@ -186,24 +217,29 @@ const submit = async () => {
             start_date: form.start_date,
             end_date: form.end_date === '' ? null : form.end_date,
         };
+
         if (isEdit.value && props.target) {
             const { user_id: _u, requirement_id: _r, ...editPayload } = payload;
             await store.update(props.target.id, editPayload);
         } else {
             await store.create(payload);
         }
+
         emit('update:open', false);
     } catch (e) {
-        errorStore.reportFromAxios(e, FORM_CTX, { fallback: 'Failed to save assignment' });
+        errorStore.reportFromAxios(e, FORM_CTX, {
+            fallback: 'Failed to save assignment',
+        });
     } finally {
         submitting.value = false;
     }
 };
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -220,8 +256,8 @@ function defaultHeaders(): Record<string, string> {
                 <DialogHeader>
                     <DialogTitle>{{ title }}</DialogTitle>
                     <DialogDescription>
-                        Per-(user, requirement) timing record. Bulk-creating across many
-                        users? Use Bulk assign in the nav.
+                        Per-(user, requirement) timing record. Bulk-creating
+                        across many users? Use Bulk assign in the nav.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -243,14 +279,30 @@ function defaultHeaders(): Record<string, string> {
                             </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem v-for="u in sortedUsers" :key="u.id" :value="u.id">
-                                {{ [u.f_name, u.l_name].filter(Boolean).join(' ') || u.email || u.id }}
-                                <span v-if="u.email" class="text-xs text-muted-foreground"> · {{ u.email }}</span>
+                            <SelectItem
+                                v-for="u in sortedUsers"
+                                :key="u.id"
+                                :value="u.id"
+                            >
+                                {{
+                                    [u.f_name, u.l_name]
+                                        .filter(Boolean)
+                                        .join(' ') ||
+                                    u.email ||
+                                    u.id
+                                }}
+                                <span
+                                    v-if="u.email"
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    · {{ u.email }}</span
+                                >
                             </SelectItem>
                         </SelectContent>
                     </Select>
                     <p v-if="isEdit" class="text-xs text-muted-foreground">
-                        User can't change after creation — delete + recreate to re-target.
+                        User can't change after creation — delete + recreate to
+                        re-target.
                     </p>
                     <InputError :message="fieldErrors.message('user_id')" />
                 </div>
@@ -260,16 +312,26 @@ function defaultHeaders(): Record<string, string> {
                     <Select v-model="form.requirement_id" :disabled="isEdit">
                         <SelectTrigger id="a_req">
                             <SelectValue placeholder="Pick a requirement…">
-                                {{ form.requirement_id ? requirementName(form.requirement_id) : '' }}
+                                {{
+                                    form.requirement_id
+                                        ? requirementName(form.requirement_id)
+                                        : ''
+                                }}
                             </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem v-for="r in sortedRequirements" :key="r.id" :value="r.id">
+                            <SelectItem
+                                v-for="r in sortedRequirements"
+                                :key="r.id"
+                                :value="r.id"
+                            >
                                 {{ r.name }}
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <InputError :message="fieldErrors.message('requirement_id')" />
+                    <InputError
+                        :message="fieldErrors.message('requirement_id')"
+                    />
                 </div>
 
                 <div class="grid gap-2">
@@ -303,7 +365,9 @@ function defaultHeaders(): Record<string, string> {
                         <Checkbox v-model="form.as_needed" />
                         As-needed
                     </label>
-                    <InputError :message="fieldErrors.message('initial_only')" />
+                    <InputError
+                        :message="fieldErrors.message('initial_only')"
+                    />
                     <InputError :message="fieldErrors.message('repeating')" />
                     <InputError :message="fieldErrors.message('as_needed')" />
                 </div>
@@ -320,7 +384,9 @@ function defaultHeaders(): Record<string, string> {
                                 :key="f.id"
                                 :value="f.id"
                             >
-                                {{ f.name }} ({{ f.repeat_days }} day{{ f.repeat_days === 1 ? '' : 's' }})
+                                {{ f.name }} ({{ f.repeat_days }} day{{
+                                    f.repeat_days === 1 ? '' : 's'
+                                }})
                             </SelectItem>
                         </SelectContent>
                     </Select>
@@ -330,18 +396,31 @@ function defaultHeaders(): Record<string, string> {
                 <div class="grid grid-cols-2 gap-3">
                     <div class="grid gap-2">
                         <Label for="a_start">Start date</Label>
-                        <Input id="a_start" type="date" v-model="form.start_date" required />
-                        <InputError :message="fieldErrors.message('start_date')" />
+                        <Input
+                            id="a_start"
+                            type="date"
+                            v-model="form.start_date"
+                            required
+                        />
+                        <InputError
+                            :message="fieldErrors.message('start_date')"
+                        />
                     </div>
                     <div class="grid gap-2">
                         <Label for="a_end">End date (optional)</Label>
                         <Input id="a_end" type="date" v-model="form.end_date" />
-                        <InputError :message="fieldErrors.message('end_date')" />
+                        <InputError
+                            :message="fieldErrors.message('end_date')"
+                        />
                     </div>
                 </div>
 
                 <DialogFooter>
-                    <Button type="button" variant="outline" @click="emit('update:open', false)">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        @click="emit('update:open', false)"
+                    >
                         Cancel
                     </Button>
                     <Button type="submit" :disabled="submitting">

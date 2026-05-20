@@ -24,9 +24,7 @@ class CompletionRecordedForYou extends Notification implements ShouldBroadcast, 
     /** Preference key — see NotificationPreference::TYPES. */
     public const TYPE = 'completion_recorded';
 
-    public function __construct(public readonly Completion $completion)
-    {
-    }
+    public function __construct(public readonly Completion $completion) {}
 
     /**
      * @return array<string, mixed>

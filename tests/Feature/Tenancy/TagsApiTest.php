@@ -7,6 +7,7 @@ use App\Events\TagCreated;
 use App\Events\TagDetached;
 use App\Models\Organization;
 use App\Models\Tag;
+use App\Models\Training;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -55,7 +56,7 @@ class TagsApiTest extends TestCase
         $owner = $this->ownerOf($org);
         $userA = User::factory()->for($org, 'organization')->create();
         $userB = User::factory()->for($org, 'organization')->create();
-        $training = \App\Models\Training::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create();
         $tagUsed = Tag::factory()->for($org, 'organization')->create(['name' => 'safety']);
         $tagOrphan = Tag::factory()->for($org, 'organization')->create(['name' => 'unused']);
 

@@ -18,7 +18,8 @@ import { Label } from '@/components/ui/label';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import { edit } from '@/routes/frequencies';
 import { useErrorStore } from '@/stores/errors';
-import { useStdFrequenciesStore, type StdFrequencyRow } from '@/stores/stdFrequencies';
+import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
+import type { StdFrequencyRow } from '@/stores/stdFrequencies';
 
 const PAGE_CTX = 'page:frequencies';
 const FORM_CTX = 'form:frequency';
@@ -33,15 +34,20 @@ const store = useStdFrequenciesStore();
 const page = usePage();
 
 const authUser = computed(
-    () => page.props.auth.user as {
-        org_id?: string;
-        isOwner?: boolean;
-        isSuperAdmin?: boolean;
-        isAdmin?: boolean;
-    } | null,
+    () =>
+        page.props.auth.user as {
+            org_id?: string;
+            isOwner?: boolean;
+            isSuperAdmin?: boolean;
+            isAdmin?: boolean;
+        } | null,
 );
-const canManage = computed(
-    () => Boolean(authUser.value?.isOwner || authUser.value?.isSuperAdmin || authUser.value?.isAdmin),
+const canManage = computed(() =>
+    Boolean(
+        authUser.value?.isOwner ||
+        authUser.value?.isSuperAdmin ||
+        authUser.value?.isAdmin,
+    ),
 );
 
 interface FormState {
@@ -57,14 +63,21 @@ const submitting = ref(false);
 const errorStore = useErrorStore();
 const fieldErrors = useFieldErrors(FORM_CTX);
 
-const title = computed(() => (editingId.value ? 'Edit frequency' : 'New frequency'));
+const title = computed(() =>
+    editingId.value ? 'Edit frequency' : 'New frequency',
+);
 
 onMounted(async () => {
-    if (authUser.value?.org_id) store.subscribe(authUser.value.org_id);
+    if (authUser.value?.org_id) {
+        store.subscribe(authUser.value.org_id);
+    }
+
     try {
         await store.load();
     } catch (e) {
-        errorStore.reportFromAxios(e, PAGE_CTX, { fallback: 'Failed to load frequencies' });
+        errorStore.reportFromAxios(e, PAGE_CTX, {
+            fallback: 'Failed to load frequencies',
+        });
     }
 });
 
@@ -87,27 +100,40 @@ const openEdit = (row: StdFrequencyRow) => {
 const submit = async () => {
     submitting.value = true;
     errorStore.clear(FORM_CTX);
+
     try {
-        const days = typeof form.repeat_days === 'number' ? form.repeat_days : Number(form.repeat_days);
+        const days =
+            typeof form.repeat_days === 'number'
+                ? form.repeat_days
+                : Number(form.repeat_days);
+
         if (editingId.value) {
             await store.update(editingId.value, form.name, days);
         } else {
             await store.create(form.name, days);
         }
+
         dialogOpen.value = false;
     } catch (e) {
-        errorStore.reportFromAxios(e, FORM_CTX, { fallback: 'Failed to save frequency' });
+        errorStore.reportFromAxios(e, FORM_CTX, {
+            fallback: 'Failed to save frequency',
+        });
     } finally {
         submitting.value = false;
     }
 };
 
 const remove = async (row: StdFrequencyRow) => {
-    if (!window.confirm(`Delete "${row.name}"?`)) return;
+    if (!window.confirm(`Delete "${row.name}"?`)) {
+        return;
+    }
+
     try {
         await store.destroy(row.id);
     } catch (e) {
-        errorStore.reportFromAxios(e, PAGE_CTX, { fallback: 'Failed to delete frequency' });
+        errorStore.reportFromAxios(e, PAGE_CTX, {
+            fallback: 'Failed to delete frequency',
+        });
     }
 };
 </script>
@@ -124,7 +150,9 @@ const remove = async (row: StdFrequencyRow) => {
                 title="Standard frequencies"
                 description="Per-org timing presets used by Trainings, Requirements, and Assignments."
             />
-            <Button v-if="canManage" @click="openCreate">+ Add frequency</Button>
+            <Button v-if="canManage" @click="openCreate"
+                >+ Add frequency</Button
+            >
         </div>
 
         <ErrorBanner :context="PAGE_CTX" />
@@ -144,7 +172,9 @@ const remove = async (row: StdFrequencyRow) => {
             <thead class="bg-muted/40">
                 <tr>
                     <th class="px-4 py-2 text-left font-medium">Name</th>
-                    <th class="px-4 py-2 text-left font-medium">Repeat every</th>
+                    <th class="px-4 py-2 text-left font-medium">
+                        Repeat every
+                    </th>
                     <th class="px-4 py-2"></th>
                 </tr>
             </thead>
@@ -152,7 +182,9 @@ const remove = async (row: StdFrequencyRow) => {
                 <tr v-for="row in store.library" :key="row.id">
                     <td class="px-4 py-2">{{ row.name }}</td>
                     <td class="px-4 py-2">
-                        {{ row.repeat_days }} day{{ row.repeat_days === 1 ? '' : 's' }}
+                        {{ row.repeat_days }} day{{
+                            row.repeat_days === 1 ? '' : 's'
+                        }}
                     </td>
                     <td class="space-x-3 px-4 py-2 text-right text-xs">
                         <button
@@ -182,9 +214,9 @@ const remove = async (row: StdFrequencyRow) => {
                     <DialogHeader>
                         <DialogTitle>{{ title }}</DialogTitle>
                         <DialogDescription>
-                            A name + the number of days between recurrences.
-                            Use whole days; RRULE-style scheduling is deferred
-                            to a later phase.
+                            A name + the number of days between recurrences. Use
+                            whole days; RRULE-style scheduling is deferred to a
+                            later phase.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -192,7 +224,12 @@ const remove = async (row: StdFrequencyRow) => {
 
                     <div class="grid gap-2">
                         <Label for="freq_name">Name</Label>
-                        <Input id="freq_name" v-model="form.name" required autofocus />
+                        <Input
+                            id="freq_name"
+                            v-model="form.name"
+                            required
+                            autofocus
+                        />
                         <InputError :message="fieldErrors.message('name')" />
                     </div>
 
@@ -205,7 +242,9 @@ const remove = async (row: StdFrequencyRow) => {
                             min="1"
                             required
                         />
-                        <InputError :message="fieldErrors.message('repeat_days')" />
+                        <InputError
+                            :message="fieldErrors.message('repeat_days')"
+                        />
                     </div>
 
                     <DialogFooter>

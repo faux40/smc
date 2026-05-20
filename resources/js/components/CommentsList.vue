@@ -6,10 +6,11 @@
  *
  * Owns no fetch / axios calls — talks only to useCommentsStore.
  */
-import { computed, onMounted, ref } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import { computed, onMounted, ref } from 'vue';
 import { Button } from '@/components/ui/button';
-import { useCommentsStore, type CommentRow } from '@/stores/comments';
+import { useCommentsStore } from '@/stores/comments';
+import type { CommentRow } from '@/stores/comments';
 
 const props = defineProps<{
     morphableType: string;
@@ -35,7 +36,11 @@ const editingBody = ref('');
 
 onMounted(async () => {
     const orgId = (page.props.auth.user as { org_id?: string } | null)?.org_id;
-    if (orgId) store.subscribe(orgId);
+
+    if (orgId) {
+        store.subscribe(orgId);
+    }
+
     try {
         await store.load(morphable.value);
     } catch (e) {
@@ -44,9 +49,13 @@ onMounted(async () => {
 });
 
 const submit = async () => {
-    if (!newBody.value.trim()) return;
+    if (!newBody.value.trim()) {
+        return;
+    }
+
     submitting.value = true;
     error.value = null;
+
     try {
         await store.create(morphable.value, newBody.value.trim());
         newBody.value = '';
@@ -68,8 +77,12 @@ const cancelEdit = () => {
 };
 
 const saveEdit = async (id: string) => {
-    if (!editingBody.value.trim()) return;
+    if (!editingBody.value.trim()) {
+        return;
+    }
+
     error.value = null;
+
     try {
         await store.update(id, editingBody.value.trim());
         cancelEdit();
@@ -79,7 +92,10 @@ const saveEdit = async (id: string) => {
 };
 
 const remove = async (c: CommentRow) => {
-    if (!window.confirm('Delete this comment?')) return;
+    if (!window.confirm('Delete this comment?')) {
+        return;
+    }
+
     try {
         await store.destroy(c.id);
     } catch (e) {
@@ -97,10 +113,7 @@ const remove = async (c: CommentRow) => {
             {{ error }}
         </p>
 
-        <div
-            v-if="comments.length === 0"
-            class="text-sm text-muted-foreground"
-        >
+        <div v-if="comments.length === 0" class="text-sm text-muted-foreground">
             No comments yet.
         </div>
         <ul v-else class="space-y-2">

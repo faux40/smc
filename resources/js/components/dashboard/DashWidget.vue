@@ -26,7 +26,9 @@ defineProps<{
         :data-widget-id="widgetId"
         class="flex flex-col rounded-xl border border-border bg-card text-card-foreground shadow-sm"
     >
-        <header class="flex items-baseline justify-between gap-2 border-b border-border px-4 py-3">
+        <header
+            class="flex items-baseline justify-between gap-2 border-b border-border px-4 py-3"
+        >
             <div>
                 <h3 class="text-sm font-semibold">{{ title }}</h3>
                 <p v-if="description" class="text-xs text-muted-foreground">

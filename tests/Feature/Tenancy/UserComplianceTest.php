@@ -30,10 +30,15 @@ class UserComplianceTest extends TestCase
     use RefreshDatabase;
 
     private CarbonImmutable $now;
+
     private Organization $org;
+
     private User $user;
+
     private StdFrequency $annual;
+
     private StdFrequency $monthly;
+
     private Training $training;
 
     protected function setUp(): void

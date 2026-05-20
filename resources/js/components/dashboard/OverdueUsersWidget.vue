@@ -37,9 +37,10 @@ onMounted(async () => {
 });
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -65,7 +66,11 @@ function defaultHeaders(): Record<string, string> {
         </div>
 
         <ul v-else class="divide-y divide-border">
-            <li v-for="row in rows" :key="row.user_id" class="flex items-center justify-between gap-3 py-2">
+            <li
+                v-for="row in rows"
+                :key="row.user_id"
+                class="flex items-center justify-between gap-3 py-2"
+            >
                 <div class="min-w-0">
                     <Link
                         :href="userShow(row.user_id)"
@@ -73,7 +78,10 @@ function defaultHeaders(): Record<string, string> {
                     >
                         {{ row.name ?? row.email ?? row.user_id }}
                     </Link>
-                    <p v-if="row.email" class="truncate text-xs text-muted-foreground">
+                    <p
+                        v-if="row.email"
+                        class="truncate text-xs text-muted-foreground"
+                    >
                         {{ row.email }}
                     </p>
                 </div>

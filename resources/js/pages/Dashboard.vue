@@ -33,20 +33,21 @@ const authUser = computed(
     // app stores users with UUID strings. Existing pages (users/Index.vue)
     // use the same `as unknown as { ... }` shim — replace when the shared
     // type is widened.
-    () => page.props.auth.user as unknown as {
-        id?: string;
-        isOwner?: boolean;
-        isSuperAdmin?: boolean;
-        isAdmin?: boolean;
-        isManager?: boolean;
-    } | null,
+    () =>
+        page.props.auth.user as unknown as {
+            id?: string;
+            isOwner?: boolean;
+            isSuperAdmin?: boolean;
+            isAdmin?: boolean;
+            isManager?: boolean;
+        } | null,
 );
-const canSeeWidgets = computed(
-    () => Boolean(
-        authUser.value?.isOwner
-        || authUser.value?.isSuperAdmin
-        || authUser.value?.isAdmin
-        || authUser.value?.isManager,
+const canSeeWidgets = computed(() =>
+    Boolean(
+        authUser.value?.isOwner ||
+        authUser.value?.isSuperAdmin ||
+        authUser.value?.isAdmin ||
+        authUser.value?.isManager,
     ),
 );
 </script>
@@ -70,13 +71,13 @@ const canSeeWidgets = computed(
             <p
                 class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
             >
-                The org dashboard is for Manager-or-higher roles.
-                Head to your
+                The org dashboard is for Manager-or-higher roles. Head to your
                 <a
                     v-if="authUser?.id"
                     :href="userShow(authUser.id).url"
                     class="font-medium text-primary hover:underline"
-                >user detail page</a>
+                    >user detail page</a
+                >
                 for your own compliance posture.
             </p>
         </template>

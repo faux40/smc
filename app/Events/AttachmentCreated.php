@@ -14,9 +14,7 @@ class AttachmentCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Attachment $attachment)
-    {
-    }
+    public function __construct(public readonly Attachment $attachment) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

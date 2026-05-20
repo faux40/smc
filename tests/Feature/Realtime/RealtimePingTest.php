@@ -4,6 +4,8 @@ namespace Tests\Feature\Realtime;
 
 use App\Events\RealtimePing;
 use Illuminate\Broadcasting\Channel;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 /**
@@ -20,7 +22,7 @@ class RealtimePingTest extends TestCase
     {
         $event = new RealtimePing(message: 'hello', originTab: 'tab-uuid-abc');
 
-        $this->assertInstanceOf(\Illuminate\Contracts\Broadcasting\ShouldBroadcast::class, $event);
+        $this->assertInstanceOf(ShouldBroadcast::class, $event);
 
         $channels = $event->broadcastOn();
         $this->assertCount(1, $channels);
@@ -49,14 +51,14 @@ class RealtimePingTest extends TestCase
 
     public function test_ping_endpoint_dispatches_event_with_origin_tab_from_header(): void
     {
-        \Illuminate\Support\Facades\Event::fake([RealtimePing::class]);
+        Event::fake([RealtimePing::class]);
 
         $response = $this->withHeaders(['X-Origin-Tab' => 'http-tab-uuid'])
             ->postJson('/realtime/ping', ['message' => 'hi from test']);
 
         $response->assertOk()->assertJson(['ok' => true]);
 
-        \Illuminate\Support\Facades\Event::assertDispatched(
+        Event::assertDispatched(
             RealtimePing::class,
             fn (RealtimePing $event) => $event->message === 'hi from test'
                 && $event->broadcastWith()['origin_tab'] === 'http-tab-uuid'
@@ -65,11 +67,11 @@ class RealtimePingTest extends TestCase
 
     public function test_ping_endpoint_works_without_origin_tab_header(): void
     {
-        \Illuminate\Support\Facades\Event::fake([RealtimePing::class]);
+        Event::fake([RealtimePing::class]);
 
         $this->postJson('/realtime/ping', ['message' => 'no-tab'])->assertOk();
 
-        \Illuminate\Support\Facades\Event::assertDispatched(
+        Event::assertDispatched(
             RealtimePing::class,
             fn (RealtimePing $event) => $event->broadcastWith()['origin_tab'] === null
         );

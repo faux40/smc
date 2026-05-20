@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
-import TrainingFormModal from '@/pages/trainings/Partials/TrainingFormModal.vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useTrainingsStore, type TrainingRow } from '@/stores/trainings';
+import TrainingFormModal from '@/pages/trainings/Partials/TrainingFormModal.vue';
 import { page as trainingsPage } from '@/routes/trainings';
+import { useTrainingsStore } from '@/stores/trainings';
+import type { TrainingRow } from '@/stores/trainings';
 
 defineOptions({
     layout: {
@@ -17,15 +18,20 @@ defineOptions({
 const store = useTrainingsStore();
 const page = usePage();
 const authUser = computed(
-    () => page.props.auth.user as {
-        org_id?: string;
-        isOwner?: boolean;
-        isSuperAdmin?: boolean;
-        isAdmin?: boolean;
-    } | null,
+    () =>
+        page.props.auth.user as {
+            org_id?: string;
+            isOwner?: boolean;
+            isSuperAdmin?: boolean;
+            isAdmin?: boolean;
+        } | null,
 );
-const canCreate = computed(
-    () => Boolean(authUser.value?.isOwner || authUser.value?.isSuperAdmin || authUser.value?.isAdmin),
+const canCreate = computed(() =>
+    Boolean(
+        authUser.value?.isOwner ||
+        authUser.value?.isSuperAdmin ||
+        authUser.value?.isAdmin,
+    ),
 );
 
 const modalOpen = ref(false);
@@ -34,7 +40,10 @@ const editing = ref<TrainingRow | null>(null);
 const error = ref<string | null>(null);
 
 onMounted(async () => {
-    if (authUser.value?.org_id) store.subscribe(authUser.value.org_id);
+    if (authUser.value?.org_id) {
+        store.subscribe(authUser.value.org_id);
+    }
+
     try {
         await store.load();
     } catch (e) {
@@ -55,8 +64,12 @@ const openEdit = (row: TrainingRow) => {
 };
 
 const remove = async (row: TrainingRow) => {
-    if (!window.confirm(`Delete training "${row.name}"?`)) return;
+    if (!window.confirm(`Delete training "${row.name}"?`)) {
+        return;
+    }
+
     error.value = null;
+
     try {
         await store.destroy(row.id);
     } catch (e) {
@@ -66,11 +79,23 @@ const remove = async (row: TrainingRow) => {
 
 const timingSummary = (row: TrainingRow): string => {
     const parts: string[] = [];
-    if (row.initial_only) parts.push('initial-only');
-    if (row.repeating) {
-        parts.push(row.std_freq_name ? `repeating (${row.std_freq_name})` : 'repeating');
+
+    if (row.initial_only) {
+        parts.push('initial-only');
     }
-    if (row.as_needed) parts.push('as-needed');
+
+    if (row.repeating) {
+        parts.push(
+            row.std_freq_name
+                ? `repeating (${row.std_freq_name})`
+                : 'repeating',
+        );
+    }
+
+    if (row.as_needed) {
+        parts.push('as-needed');
+    }
+
     return parts.join(' · ');
 };
 </script>
@@ -102,10 +127,7 @@ const timingSummary = (row: TrainingRow): string => {
             <span v-if="canCreate">Click "+ New training" to add one.</span>
         </div>
 
-        <div
-            v-else
-            class="overflow-hidden rounded-md border border-border"
-        >
+        <div v-else class="overflow-hidden rounded-md border border-border">
             <table class="min-w-full divide-y divide-border text-sm">
                 <thead class="bg-muted/40">
                     <tr>
@@ -126,7 +148,9 @@ const timingSummary = (row: TrainingRow): string => {
                             </div>
                         </td>
                         <td class="px-4 py-2">
-                            <Badge variant="secondary">{{ timingSummary(row) }}</Badge>
+                            <Badge variant="secondary">{{
+                                timingSummary(row)
+                            }}</Badge>
                         </td>
                         <td class="space-x-3 px-4 py-2 text-right text-xs">
                             <button

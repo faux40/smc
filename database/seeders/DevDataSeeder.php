@@ -10,6 +10,7 @@ use App\Models\StdFrequency;
 use App\Models\Training;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
@@ -33,6 +34,7 @@ use Illuminate\Support\Facades\Hash;
 class DevDataSeeder extends Seeder
 {
     private const ORG_NAME = 'BG';
+
     private const DEFAULT_PASSWORD = 'Admin1234!';
 
     /**
@@ -137,9 +139,9 @@ class DevDataSeeder extends Seeder
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, User>
+     * @return Collection<int, User>
      */
-    private function seedUsers(Organization $org): \Illuminate\Support\Collection
+    private function seedUsers(Organization $org): Collection
     {
         $users = collect();
 
@@ -170,10 +172,10 @@ class DevDataSeeder extends Seeder
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<string, StdFrequency>  $freqByName
-     * @return \Illuminate\Support\Collection<string, Training>
+     * @param  Collection<string, StdFrequency>  $freqByName
+     * @return Collection<string, Training>
      */
-    private function seedTrainings(Organization $org, \Illuminate\Support\Collection $freqByName): \Illuminate\Support\Collection
+    private function seedTrainings(Organization $org, Collection $freqByName): Collection
     {
         $trainings = collect();
 
@@ -194,10 +196,10 @@ class DevDataSeeder extends Seeder
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<string, Training>  $trainings
-     * @return \Illuminate\Support\Collection<int, Requirement>
+     * @param  Collection<string, Training>  $trainings
+     * @return Collection<int, Requirement>
      */
-    private function seedRequirements(Organization $org, \Illuminate\Support\Collection $trainings): \Illuminate\Support\Collection
+    private function seedRequirements(Organization $org, Collection $trainings): Collection
     {
         $requirements = collect();
 
@@ -241,15 +243,15 @@ class DevDataSeeder extends Seeder
      * cleanly; per-(user, requirement) timing tweaks are an admin-UX
      * concern, not a seeder concern.
      *
-     * @param  \Illuminate\Support\Collection<int, User>  $users
-     * @param  \Illuminate\Support\Collection<int, Requirement>  $requirements
-     * @param  \Illuminate\Support\Collection<string, StdFrequency>  $freqByName
+     * @param  Collection<int, User>  $users
+     * @param  Collection<int, Requirement>  $requirements
+     * @param  Collection<string, StdFrequency>  $freqByName
      */
     private function seedAssignments(
         Organization $org,
-        \Illuminate\Support\Collection $users,
-        \Illuminate\Support\Collection $requirements,
-        \Illuminate\Support\Collection $freqByName,
+        Collection $users,
+        Collection $requirements,
+        Collection $freqByName,
     ): void {
         $annualId = $freqByName['Annual']->id;
         $shuffled = $users->shuffle();

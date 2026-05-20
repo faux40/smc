@@ -41,7 +41,8 @@ import {
 } from '@/components/ui/select';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import { realtimeTabId } from '@/echo';
-import { useCompletionsStore, type CompletionRow } from '@/stores/completions';
+import { useCompletionsStore } from '@/stores/completions';
+import type { CompletionRow } from '@/stores/completions';
 import { useErrorStore } from '@/stores/errors';
 import { useTrainingsStore } from '@/stores/trainings';
 
@@ -103,7 +104,9 @@ const errorStore = useErrorStore();
 const fieldErrors = useFieldErrors(FORM_CTX);
 
 const isEdit = computed(() => props.mode === 'edit');
-const title = computed(() => (isEdit.value ? 'Edit completion' : 'New completion'));
+const title = computed(() =>
+    isEdit.value ? 'Edit completion' : 'New completion',
+);
 
 const sortedUsers = computed(() => [...userPicker.value]);
 const sortedTrainings = computed(() =>
@@ -112,6 +115,7 @@ const sortedTrainings = computed(() =>
 
 const userName = (id: string) => {
     const u = userPicker.value.find((x) => x.id === id);
+
     return u ? [u.f_name, u.l_name].filter(Boolean).join(' ') : '—';
 };
 const trainingName = (id: string) =>
@@ -119,7 +123,9 @@ const trainingName = (id: string) =>
 
 async function loadPickers(): Promise<void> {
     try {
-        const u = await axios.get<UserPickerRow[]>('/api/users', { headers: defaultHeaders() });
+        const u = await axios.get<UserPickerRow[]>('/api/users', {
+            headers: defaultHeaders(),
+        });
         userPicker.value = u.data;
         await trainings.load();
     } catch (e) {
@@ -129,13 +135,24 @@ async function loadPickers(): Promise<void> {
 
 async function loadCandidates(): Promise<void> {
     candidates.value = [];
-    if (!form.module_type || !form.module_id) return;
+
+    if (!form.module_type || !form.module_id) {
+        return;
+    }
+
     loadingCandidates.value = true;
+
     try {
-        const { data } = await axios.get<CandidateElement[]>('/api/rqmt-elements/candidates', {
-            params: { module_type: form.module_type, module_id: form.module_id },
-            headers: defaultHeaders(),
-        });
+        const { data } = await axios.get<CandidateElement[]>(
+            '/api/rqmt-elements/candidates',
+            {
+                params: {
+                    module_type: form.module_type,
+                    module_id: form.module_id,
+                },
+                headers: defaultHeaders(),
+            },
+        );
         candidates.value = data;
     } catch (e) {
         loadError.value = (e as Error).message;
@@ -149,7 +166,10 @@ onMounted(loadPickers);
 watch(
     () => props.open,
     async (open) => {
-        if (!open) return;
+        if (!open) {
+            return;
+        }
+
         errorStore.clear(FORM_CTX);
         loadError.value = null;
 
@@ -158,7 +178,9 @@ watch(
             form.module_type = props.target.module_type;
             form.module_id = props.target.module_id;
             form.rqmt_element_ids = [...props.target.rqmt_element_ids];
-            form.completion_date = props.target.completion_date ?? new Date().toISOString().slice(0, 10);
+            form.completion_date =
+                props.target.completion_date ??
+                new Date().toISOString().slice(0, 10);
             form.certification_date = props.target.certification_date ?? '';
             form.expire_date = props.target.expire_date ?? '';
             form.cert_ident = props.target.cert_ident ?? '';
@@ -183,8 +205,14 @@ watch(
 watch(
     () => [form.module_type, form.module_id] as [string, string],
     async ([t, id], [oldT, oldId]) => {
-        if (isEdit.value) return;
-        if (t === oldT && id === oldId) return;
+        if (isEdit.value) {
+            return;
+        }
+
+        if (t === oldT && id === oldId) {
+            return;
+        }
+
         // Reset the multi-select when the module changes.
         form.rqmt_element_ids = [];
         await loadCandidates();
@@ -193,13 +221,18 @@ watch(
 
 const toggleElement = (id: string) => {
     const i = form.rqmt_element_ids.indexOf(id);
-    if (i === -1) form.rqmt_element_ids = [...form.rqmt_element_ids, id];
-    else form.rqmt_element_ids = form.rqmt_element_ids.filter((x) => x !== id);
+
+    if (i === -1) {
+        form.rqmt_element_ids = [...form.rqmt_element_ids, id];
+    } else {
+        form.rqmt_element_ids = form.rqmt_element_ids.filter((x) => x !== id);
+    }
 };
 
 const submit = async () => {
     submitting.value = true;
     errorStore.clear(FORM_CTX);
+
     try {
         const payload = {
             user_id: form.user_id,
@@ -207,29 +240,40 @@ const submit = async () => {
             module_id: form.module_id,
             rqmt_element_ids: form.rqmt_element_ids,
             completion_date: form.completion_date,
-            certification_date: form.certification_date === '' ? null : form.certification_date,
+            certification_date:
+                form.certification_date === '' ? null : form.certification_date,
             expire_date: form.expire_date === '' ? null : form.expire_date,
             cert_ident: form.cert_ident.trim() === '' ? null : form.cert_ident,
             notes: form.notes.trim() === '' ? null : form.notes,
         };
+
         if (isEdit.value && props.target) {
-            const { user_id: _u, module_type: _t, module_id: _m, ...editPayload } = payload;
+            const {
+                user_id: _u,
+                module_type: _t,
+                module_id: _m,
+                ...editPayload
+            } = payload;
             await store.update(props.target.id, editPayload);
         } else {
             await store.create(payload);
         }
+
         emit('update:open', false);
     } catch (e) {
-        errorStore.reportFromAxios(e, FORM_CTX, { fallback: 'Failed to save completion' });
+        errorStore.reportFromAxios(e, FORM_CTX, {
+            fallback: 'Failed to save completion',
+        });
     } finally {
         submitting.value = false;
     }
 };
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -246,9 +290,9 @@ function defaultHeaders(): Record<string, string> {
                 <DialogHeader>
                     <DialogTitle>{{ title }}</DialogTitle>
                     <DialogDescription>
-                        Record that a user completed a module. Pick which Requirements
-                        the completion credits — every element you check must point at
-                        the same module.
+                        Record that a user completed a module. Pick which
+                        Requirements the completion credits — every element you
+                        check must point at the same module.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -270,8 +314,18 @@ function defaultHeaders(): Record<string, string> {
                             </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem v-for="u in sortedUsers" :key="u.id" :value="u.id">
-                                {{ [u.f_name, u.l_name].filter(Boolean).join(' ') || u.email || u.id }}
+                            <SelectItem
+                                v-for="u in sortedUsers"
+                                :key="u.id"
+                                :value="u.id"
+                            >
+                                {{
+                                    [u.f_name, u.l_name]
+                                        .filter(Boolean)
+                                        .join(' ') ||
+                                    u.email ||
+                                    u.id
+                                }}
                             </SelectItem>
                         </SelectContent>
                     </Select>
@@ -288,7 +342,11 @@ function defaultHeaders(): Record<string, string> {
                             <SelectValue placeholder="Pick a module type…" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem v-for="t in ALLOWED_MODULE_TYPES" :key="t.value" :value="t.value">
+                            <SelectItem
+                                v-for="t in ALLOWED_MODULE_TYPES"
+                                :key="t.value"
+                                :value="t.value"
+                            >
                                 {{ t.label }}
                             </SelectItem>
                         </SelectContent>
@@ -301,11 +359,19 @@ function defaultHeaders(): Record<string, string> {
                     <Select v-model="form.module_id" :disabled="isEdit">
                         <SelectTrigger id="c_mid">
                             <SelectValue placeholder="Pick a training…">
-                                {{ form.module_id ? trainingName(form.module_id) : '' }}
+                                {{
+                                    form.module_id
+                                        ? trainingName(form.module_id)
+                                        : ''
+                                }}
                             </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem v-for="t in sortedTrainings" :key="t.id" :value="t.id">
+                            <SelectItem
+                                v-for="t in sortedTrainings"
+                                :key="t.id"
+                                :value="t.id"
+                            >
                                 {{ t.name }}
                             </SelectItem>
                         </SelectContent>
@@ -315,15 +381,18 @@ function defaultHeaders(): Record<string, string> {
 
                 <div class="grid gap-2">
                     <Label>Credit toward these elements</Label>
-                    <p v-if="loadingCandidates" class="text-xs text-muted-foreground">
+                    <p
+                        v-if="loadingCandidates"
+                        class="text-xs text-muted-foreground"
+                    >
                         Loading candidate elements…
                     </p>
                     <p
                         v-else-if="candidates.length === 0 && form.module_id"
                         class="rounded border border-dashed border-border p-3 text-xs text-muted-foreground"
                     >
-                        No rqmt_elements in this org point at the selected module yet. Add an
-                        element on a Requirement first.
+                        No rqmt_elements in this org point at the selected
+                        module yet. Add an element on a Requirement first.
                     </p>
                     <div
                         v-else-if="candidates.length > 0"
@@ -335,7 +404,9 @@ function defaultHeaders(): Record<string, string> {
                             class="flex items-start gap-2 border-b border-border px-3 py-2 last:border-b-0 hover:bg-muted/30"
                         >
                             <Checkbox
-                                :model-value="form.rqmt_element_ids.includes(c.id)"
+                                :model-value="
+                                    form.rqmt_element_ids.includes(c.id)
+                                "
                                 @update:model-value="toggleElement(c.id)"
                             />
                             <span class="text-sm">
@@ -346,32 +417,59 @@ function defaultHeaders(): Record<string, string> {
                             </span>
                         </label>
                     </div>
-                    <InputError :message="fieldErrors.message('rqmt_element_ids')" />
+                    <InputError
+                        :message="fieldErrors.message('rqmt_element_ids')"
+                    />
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
                     <div class="grid gap-2">
                         <Label for="c_compdate">Completion date</Label>
-                        <Input id="c_compdate" type="date" v-model="form.completion_date" required />
-                        <InputError :message="fieldErrors.message('completion_date')" />
+                        <Input
+                            id="c_compdate"
+                            type="date"
+                            v-model="form.completion_date"
+                            required
+                        />
+                        <InputError
+                            :message="fieldErrors.message('completion_date')"
+                        />
                     </div>
                     <div class="grid gap-2">
                         <Label for="c_certdate">Certification date</Label>
-                        <Input id="c_certdate" type="date" v-model="form.certification_date" />
-                        <InputError :message="fieldErrors.message('certification_date')" />
+                        <Input
+                            id="c_certdate"
+                            type="date"
+                            v-model="form.certification_date"
+                        />
+                        <InputError
+                            :message="fieldErrors.message('certification_date')"
+                        />
                     </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
                     <div class="grid gap-2">
                         <Label for="c_expire">Expire date</Label>
-                        <Input id="c_expire" type="date" v-model="form.expire_date" />
-                        <InputError :message="fieldErrors.message('expire_date')" />
+                        <Input
+                            id="c_expire"
+                            type="date"
+                            v-model="form.expire_date"
+                        />
+                        <InputError
+                            :message="fieldErrors.message('expire_date')"
+                        />
                     </div>
                     <div class="grid gap-2">
                         <Label for="c_ident">Cert identifier</Label>
-                        <Input id="c_ident" v-model="form.cert_ident" placeholder="e.g. cert #" />
-                        <InputError :message="fieldErrors.message('cert_ident')" />
+                        <Input
+                            id="c_ident"
+                            v-model="form.cert_ident"
+                            placeholder="e.g. cert #"
+                        />
+                        <InputError
+                            :message="fieldErrors.message('cert_ident')"
+                        />
                     </div>
                 </div>
 
@@ -387,7 +485,11 @@ function defaultHeaders(): Record<string, string> {
                 </div>
 
                 <DialogFooter>
-                    <Button type="button" variant="outline" @click="emit('update:open', false)">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        @click="emit('update:open', false)"
+                    >
                         Cancel
                     </Button>
                     <Button type="submit" :disabled="submitting">

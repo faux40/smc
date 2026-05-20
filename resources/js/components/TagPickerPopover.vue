@@ -10,10 +10,14 @@
  * management (create/edit/delete tags lives only on /tags).
  */
 
-import { computed, ref } from 'vue';
 import { PlusCircle } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
 import TagPill from '@/components/TagPill.vue';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import type { TagRow } from '@/stores/tags';
 
 const props = withDefaults(
@@ -40,7 +44,10 @@ const sorted = computed<TagRow[]>(() =>
 
 function onSelect(tag: TagRow): void {
     emit('select', tag.id);
-    if (!props.alwaysOpen) open.value = false;
+
+    if (!props.alwaysOpen) {
+        open.value = false;
+    }
 }
 </script>
 
@@ -53,7 +60,10 @@ function onSelect(tag: TagRow): void {
                 class="inline-flex cursor-pointer items-center border-none bg-transparent p-0 leading-none focus:outline-none"
                 aria-label="Add tag"
             >
-                <PlusCircle class="size-4 text-lime-700 hover:text-lime-500" :stroke-width="3" />
+                <PlusCircle
+                    class="size-4 text-lime-700 hover:text-lime-500"
+                    :stroke-width="3"
+                />
             </button>
         </PopoverTrigger>
 
@@ -63,7 +73,10 @@ function onSelect(tag: TagRow): void {
             :side-offset="6"
             class="max-h-[calc(100vh-8rem)] w-auto max-w-[min(90vw,40rem)] overflow-auto p-1"
         >
-            <div v-if="sorted.length === 0" class="px-3 py-2 text-xs italic text-muted-foreground">
+            <div
+                v-if="sorted.length === 0"
+                class="px-3 py-2 text-xs text-muted-foreground italic"
+            >
                 No tags available.
             </div>
             <div v-else class="grid grid-cols-2 gap-x-1 gap-y-0.5">

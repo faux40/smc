@@ -2,8 +2,6 @@
 
 namespace Tests\Feature\Tenancy;
 
-use App\Models\Assignment;
-use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\RqmtElement;

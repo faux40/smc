@@ -15,7 +15,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useTagsStore, type TagRow } from '@/stores/tags';
+import { useTagsStore } from '@/stores/tags';
+import type { TagRow } from '@/stores/tags';
 
 type Mode = 'create' | 'edit';
 
@@ -58,8 +59,12 @@ const previewTag = computed<TagRow>(() => ({
 watch(
     () => props.open,
     (open) => {
-        if (!open) return;
+        if (!open) {
+            return;
+        }
+
         errors.value = {};
+
         if (isEdit.value && props.target) {
             form.name = props.target.name;
             form.hasColor = props.target.color !== null;
@@ -79,18 +84,24 @@ watch(
 const submit = async () => {
     submitting.value = true;
     errors.value = {};
+
     try {
         const color = form.hasColor ? form.color : null;
         const fontColor = form.hasFontColor ? form.fontColor : null;
+
         if (isEdit.value && props.target) {
             await store.rename(props.target.id, form.name, color, fontColor);
         } else {
             await store.create(form.name, color, fontColor);
         }
+
         emit('update:open', false);
     } catch (e: unknown) {
-        const err = e as { response?: { data?: { errors?: Record<string, string[]> } } };
+        const err = e as {
+            response?: { data?: { errors?: Record<string, string[]> } };
+        };
         const errs = err.response?.data?.errors;
+
         if (errs) {
             errors.value = Object.fromEntries(
                 Object.entries(errs).map(([k, v]) => [k, v[0] ?? '']),
@@ -109,8 +120,9 @@ const submit = async () => {
                 <DialogHeader>
                     <DialogTitle>{{ title }}</DialogTitle>
                     <DialogDescription>
-                        Tags are org-scoped and attach to users, trainings, and requirements.
-                        Soft-deleted tags also drop their attachments.
+                        Tags are org-scoped and attach to users, trainings, and
+                        requirements. Soft-deleted tags also drop their
+                        attachments.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -132,7 +144,11 @@ const submit = async () => {
                             aria-label="Tag color"
                         />
                         <span class="text-xs text-muted-foreground">
-                            {{ form.hasColor ? form.color : 'No color (neutral)' }}
+                            {{
+                                form.hasColor
+                                    ? form.color
+                                    : 'No color (neutral)'
+                            }}
                         </span>
                     </div>
                     <InputError :message="errors.color" />
@@ -150,7 +166,11 @@ const submit = async () => {
                             aria-label="Tag font color"
                         />
                         <span class="text-xs text-muted-foreground">
-                            {{ form.hasFontColor ? form.fontColor : 'Derived from color' }}
+                            {{
+                                form.hasFontColor
+                                    ? form.fontColor
+                                    : 'Derived from color'
+                            }}
                         </span>
                     </div>
                     <InputError :message="errors.font_color" />
@@ -164,7 +184,11 @@ const submit = async () => {
                 </div>
 
                 <DialogFooter>
-                    <Button type="button" variant="outline" @click="emit('update:open', false)">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        @click="emit('update:open', false)"
+                    >
                         Cancel
                     </Button>
                     <Button type="submit" :disabled="submitting">

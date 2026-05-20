@@ -18,8 +18,7 @@ class TagDetached implements ShouldBroadcast
         public readonly string $tagId,
         public readonly string $taggableType,
         public readonly string $taggableId,
-    ) {
-    }
+    ) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

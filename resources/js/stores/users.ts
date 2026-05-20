@@ -71,19 +71,29 @@ export const useUsersStore = defineStore('users', () => {
      * originated by this tab.
      */
     function subscribe(orgId: string) {
-        if (subscribedOrgId.value === orgId) return;
+        if (subscribedOrgId.value === orgId) {
+            return;
+        }
+
         subscribedOrgId.value = orgId;
 
         const { bind } = useRealtime(`org.${orgId}`);
 
         bind('UserRegistered', (payload: BroadcastUser) => applyAdded(payload));
         bind('UserUpdated', (payload: BroadcastUser) => applyUpdated(payload));
-        bind('UserStatusChanged', (payload: BroadcastUser) => applyUpdated(payload));
-        bind('UserSoftDeleted', (payload: BroadcastUser) => applySoftDeleted(payload.id));
+        bind('UserStatusChanged', (payload: BroadcastUser) =>
+            applyUpdated(payload),
+        );
+        bind('UserSoftDeleted', (payload: BroadcastUser) =>
+            applySoftDeleted(payload.id),
+        );
     }
 
     function applyAdded(payload: BroadcastUser) {
-        if (users.value.some((u) => u.id === payload.id)) return;
+        if (users.value.some((u) => u.id === payload.id)) {
+            return;
+        }
+
         users.value = [
             ...users.value,
             {
@@ -115,11 +125,21 @@ export const useUsersStore = defineStore('users', () => {
                       ...u,
                       name: payload.name ?? u.name,
                       f_name: payload.f_name ?? u.f_name,
-                      m_name: payload.m_name !== undefined ? payload.m_name : u.m_name,
+                      m_name:
+                          payload.m_name !== undefined
+                              ? payload.m_name
+                              : u.m_name,
                       l_name: payload.l_name ?? u.l_name,
-                      prefix_name: payload.prefix_name !== undefined ? payload.prefix_name : u.prefix_name,
-                      suffix_name: payload.suffix_name !== undefined ? payload.suffix_name : u.suffix_name,
-                      email: payload.email !== undefined ? payload.email : u.email,
+                      prefix_name:
+                          payload.prefix_name !== undefined
+                              ? payload.prefix_name
+                              : u.prefix_name,
+                      suffix_name:
+                          payload.suffix_name !== undefined
+                              ? payload.suffix_name
+                              : u.suffix_name,
+                      email:
+                          payload.email !== undefined ? payload.email : u.email,
                       status: payload.status ?? u.status,
                   }
                 : u,
@@ -149,39 +169,67 @@ export const useUsersStore = defineStore('users', () => {
 
     function create(
         form: NamePayload & { email: string | null },
-        opts: { onSuccess?: () => void; onError?: (errors: Record<string, string>) => void } = {},
+        opts: {
+            onSuccess?: () => void;
+            onError?: (errors: Record<string, string>) => void;
+        } = {},
     ): void {
-        router.post(usersStore().url, form as unknown as Record<string, string>, {
-            preserveScroll: true,
-            onSuccess: () => opts.onSuccess?.(),
-            onError: (errors) => opts.onError?.(errors as Record<string, string>),
-        });
+        router.post(
+            usersStore().url,
+            form as unknown as Record<string, string>,
+            {
+                preserveScroll: true,
+                onSuccess: () => opts.onSuccess?.(),
+                onError: (errors) =>
+                    opts.onError?.(errors as Record<string, string>),
+            },
+        );
     }
 
     function update(
         id: string,
-        form: NamePayload & { email: string | null; role?: string; status: 'active' | 'disabled' },
-        opts: { onSuccess?: () => void; onError?: (errors: Record<string, string>) => void } = {},
+        form: NamePayload & {
+            email: string | null;
+            role?: string;
+            status: 'active' | 'disabled';
+        },
+        opts: {
+            onSuccess?: () => void;
+            onError?: (errors: Record<string, string>) => void;
+        } = {},
     ): void {
-        router.patch(usersUpdate(id).url, form as unknown as Record<string, string>, {
-            preserveScroll: true,
-            onSuccess: () => opts.onSuccess?.(),
-            onError: (errors) => opts.onError?.(errors as Record<string, string>),
-        });
+        router.patch(
+            usersUpdate(id).url,
+            form as unknown as Record<string, string>,
+            {
+                preserveScroll: true,
+                onSuccess: () => opts.onSuccess?.(),
+                onError: (errors) =>
+                    opts.onError?.(errors as Record<string, string>),
+            },
+        );
     }
 
     function disable(id: string, opts: { onSuccess?: () => void } = {}): void {
-        router.post(usersDisable(id).url, {}, {
-            preserveScroll: true,
-            onSuccess: () => opts.onSuccess?.(),
-        });
+        router.post(
+            usersDisable(id).url,
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => opts.onSuccess?.(),
+            },
+        );
     }
 
     function enable(id: string, opts: { onSuccess?: () => void } = {}): void {
-        router.post(usersEnable(id).url, {}, {
-            preserveScroll: true,
-            onSuccess: () => opts.onSuccess?.(),
-        });
+        router.post(
+            usersEnable(id).url,
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => opts.onSuccess?.(),
+            },
+        );
     }
 
     function destroy(id: string, opts: { onSuccess?: () => void } = {}): void {

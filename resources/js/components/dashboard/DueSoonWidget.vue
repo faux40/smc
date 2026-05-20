@@ -39,15 +39,22 @@ onMounted(async () => {
 });
 
 const dueLabel = (row: DueSoonRow): string => {
-    if (row.days_until_due === null) return row.next_due_date ?? '—';
-    if (row.days_until_due === 0) return `${row.next_due_date} (today)`;
+    if (row.days_until_due === null) {
+        return row.next_due_date ?? '—';
+    }
+
+    if (row.days_until_due === 0) {
+        return `${row.next_due_date} (today)`;
+    }
+
     return `${row.next_due_date} (in ${row.days_until_due}d)`;
 };
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -89,7 +96,7 @@ function defaultHeaders(): Record<string, string> {
                         {{ row.requirement_name }}
                     </p>
                 </div>
-                <span class="text-xs tabular-nums text-muted-foreground">
+                <span class="text-xs text-muted-foreground tabular-nums">
                     {{ dueLabel(row) }}
                 </span>
             </li>

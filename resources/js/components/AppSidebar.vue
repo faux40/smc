@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, FolderGit2, GraduationCap, LayoutGrid, Users } from 'lucide-vue-next';
+import {
+    BookOpen,
+    FolderGit2,
+    GraduationCap,
+    LayoutGrid,
+    Users,
+} from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -21,7 +27,14 @@ import { index as usersIndex } from '@/routes/users';
 import type { NavItem } from '@/types';
 
 const page = usePage();
-const authUser = computed(() => page.props.auth.user as { isOwner?: boolean; isSuperAdmin?: boolean; isAdmin?: boolean } | null);
+const authUser = computed(
+    () =>
+        page.props.auth.user as {
+            isOwner?: boolean;
+            isSuperAdmin?: boolean;
+            isAdmin?: boolean;
+        } | null,
+);
 
 const mainNavItems = computed<NavItem[]>(() => {
     const items: NavItem[] = [
@@ -33,6 +46,7 @@ const mainNavItems = computed<NavItem[]>(() => {
     ];
 
     const u = authUser.value;
+
     if (u && (u.isOwner || u.isSuperAdmin || u.isAdmin)) {
         items.push({
             title: 'Users',

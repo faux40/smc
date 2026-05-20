@@ -22,7 +22,8 @@ import {
 } from '@/components/ui/select';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import { useErrorStore } from '@/stores/errors';
-import { useUsersStore, type UserRow } from '@/stores/users';
+import { useUsersStore } from '@/stores/users';
+import type { UserRow } from '@/stores/users';
 
 const FORM_CTX = 'form:user';
 
@@ -49,7 +50,14 @@ interface FormState {
     status: 'active' | 'disabled';
 }
 
-const ASSIGNABLE_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'SelfEdit', 'SelfView', 'None'];
+const ASSIGNABLE_ROLES = [
+    'SuperAdmin',
+    'Admin',
+    'Manager',
+    'SelfEdit',
+    'SelfView',
+    'None',
+];
 
 const form = reactive<FormState>({
     f_name: '',
@@ -66,15 +74,21 @@ const errorStore = useErrorStore();
 const fieldErrors = useFieldErrors(FORM_CTX);
 
 const isEdit = computed(() => props.mode === 'edit');
-const isOwnerTarget = computed(() => isEdit.value && props.target?.role === 'Owner');
+const isOwnerTarget = computed(
+    () => isEdit.value && props.target?.role === 'Owner',
+);
 const title = computed(() => (isEdit.value ? 'Edit user' : 'Add user'));
 const submitLabel = computed(() => (isEdit.value ? 'Save' : 'Add user'));
 
 watch(
     () => props.open,
     (open) => {
-        if (!open) return;
+        if (!open) {
+            return;
+        }
+
         errorStore.clear(FORM_CTX);
+
         if (isEdit.value && props.target) {
             const t = props.target as UserRow & {
                 f_name?: string;
@@ -160,24 +174,21 @@ const submit = () => {
 </script>
 
 <template>
-    <Dialog
-        :open="open"
-        @update:open="(v) => emit('update:open', v)"
-    >
+    <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
         <DialogContent>
             <form @submit.prevent="submit" class="space-y-4">
                 <DialogHeader>
                     <DialogTitle>{{ title }}</DialogTitle>
                     <DialogDescription>
                         <template v-if="isEdit">
-                            Update this user's profile, role, and status.
-                            Owner role is reserved for the ownership-transfer
-                            flow (coming later).
+                            Update this user's profile, role, and status. Owner
+                            role is reserved for the ownership-transfer flow
+                            (coming later).
                         </template>
                         <template v-else>
-                            Adds a new member to your organization. Default
-                            role is None until you assign one. Leave email
-                            blank for a no-login user.
+                            Adds a new member to your organization. Default role
+                            is None until you assign one. Leave email blank for
+                            a no-login user.
                         </template>
                     </DialogDescription>
                 </DialogHeader>
@@ -216,7 +227,9 @@ const submit = () => {
                             v-model="form.prefix_name"
                             placeholder="Dr."
                         />
-                        <InputError :message="fieldErrors.message('prefix_name')" />
+                        <InputError
+                            :message="fieldErrors.message('prefix_name')"
+                        />
                     </div>
                     <div class="grid gap-2">
                         <Label for="user_m_name">Middle</Label>
@@ -234,7 +247,9 @@ const submit = () => {
                             v-model="form.suffix_name"
                             placeholder="Jr."
                         />
-                        <InputError :message="fieldErrors.message('suffix_name')" />
+                        <InputError
+                            :message="fieldErrors.message('suffix_name')"
+                        />
                     </div>
                 </div>
 
@@ -259,7 +274,8 @@ const submit = () => {
                             >
                                 <span class="font-medium">Owner</span>
                                 <span class="text-xs text-muted-foreground">
-                                    Reassigned via the ownership-transfer flow (coming later).
+                                    Reassigned via the ownership-transfer flow
+                                    (coming later).
                                 </span>
                             </div>
                         </template>
@@ -278,7 +294,9 @@ const submit = () => {
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
-                            <InputError :message="fieldErrors.message('role')" />
+                            <InputError
+                                :message="fieldErrors.message('role')"
+                            />
                         </template>
                     </div>
 
@@ -290,7 +308,9 @@ const submit = () => {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="active">active</SelectItem>
-                                <SelectItem value="disabled">disabled</SelectItem>
+                                <SelectItem value="disabled"
+                                    >disabled</SelectItem
+                                >
                             </SelectContent>
                         </Select>
                         <InputError :message="fieldErrors.message('status')" />

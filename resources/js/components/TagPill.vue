@@ -30,7 +30,8 @@ const props = withDefaults(
     },
 );
 
-const baseClasses = 'inline-flex items-center gap-1 rounded-full font-medium ring-1 ring-inset';
+const baseClasses =
+    'inline-flex items-center gap-1 rounded-full font-medium ring-1 ring-inset';
 const sizeClasses = computed(() =>
     props.size === 'md' ? 'px-2.5 py-1 text-sm' : 'px-2 py-0.5 text-xs',
 );

@@ -14,9 +14,7 @@ class TagCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Tag $tag)
-    {
-    }
+    public function __construct(public readonly Tag $tag) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

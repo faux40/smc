@@ -20,7 +20,8 @@
 import { computed } from 'vue';
 import TagPickerPopover from '@/components/TagPickerPopover.vue';
 import TagPill from '@/components/TagPill.vue';
-import { useTagsStore, type TagRow } from '@/stores/tags';
+import { useTagsStore } from '@/stores/tags';
+import type { TagRow } from '@/stores/tags';
 
 export type TagFilterMode = 'and' | 'or' | 'not';
 
@@ -45,6 +46,7 @@ const store = useTagsStore();
 // them as a "select me" option that would no-op.
 const availableTags = computed<TagRow[]>(() => {
     const selected = new Set(props.tagIds);
+
     return store.library.filter((t) => !selected.has(t.id));
 });
 
@@ -55,27 +57,33 @@ const selectedTags = computed<TagRow[]>(() =>
 );
 
 function onSelect(tagId: string): void {
-    if (props.tagIds.includes(tagId)) return;
+    if (props.tagIds.includes(tagId)) {
+        return;
+    }
+
     emit('update:tagIds', [...props.tagIds, tagId]);
 }
 
 function onRemove(tagId: string): void {
-    emit('update:tagIds', props.tagIds.filter((id) => id !== tagId));
+    emit(
+        'update:tagIds',
+        props.tagIds.filter((id) => id !== tagId),
+    );
 }
 
 const MODE_GLYPH: Record<TagFilterMode, string> = {
     and: '&',
-    or:  '||',
+    or: '||',
     not: '!',
 };
 const MODE_TITLE: Record<TagFilterMode, string> = {
     and: 'AND — must have every selected tag',
-    or:  'OR — must have any selected tag',
+    or: 'OR — must have any selected tag',
     not: 'NONE — must have none of the selected tags',
 };
 const NEXT_MODE: Record<TagFilterMode, TagFilterMode> = {
     and: 'or',
-    or:  'not',
+    or: 'not',
     not: 'and',
 };
 
@@ -88,7 +96,10 @@ function cycleMode(): void {
     <div class="inline-flex flex-wrap items-center gap-1.5 align-middle">
         <TagPickerPopover :available-tags="availableTags" @select="onSelect" />
 
-        <span v-if="tagIds.length === 0" class="text-xs italic text-muted-foreground">
+        <span
+            v-if="tagIds.length === 0"
+            class="text-xs text-muted-foreground italic"
+        >
             {{ placeholder }}
         </span>
 
@@ -106,9 +117,11 @@ function cycleMode(): void {
         <button
             v-if="tagIds.length > 0"
             type="button"
-            class="ml-1 inline-flex h-5 min-w-5 cursor-pointer items-center justify-center rounded px-1.5 font-mono text-xs font-bold leading-none text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            class="ml-1 inline-flex h-5 min-w-5 cursor-pointer items-center justify-center rounded px-1.5 font-mono text-xs leading-none font-bold text-muted-foreground hover:bg-muted/50 hover:text-foreground"
             :title="MODE_TITLE[mode]"
             @click="cycleMode"
-        >{{ MODE_GLYPH[mode] }}</button>
+        >
+            {{ MODE_GLYPH[mode] }}
+        </button>
     </div>
 </template>

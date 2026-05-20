@@ -45,11 +45,34 @@ const CARDS: Array<{
     label: string;
     classes: string;
 }> = [
-    { key: 'overdue', label: 'Overdue', classes: 'bg-red-50 text-red-900 ring-red-200 dark:bg-red-900/30 dark:text-red-100 dark:ring-red-800' },
-    { key: 'due_soon', label: 'Due soon', classes: 'bg-amber-50 text-amber-900 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:ring-amber-800' },
-    { key: 'current', label: 'Current', classes: 'bg-emerald-50 text-emerald-900 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-100 dark:ring-emerald-800' },
-    { key: 'never_started', label: 'Not started', classes: 'bg-muted text-muted-foreground ring-border' },
-    { key: 'inactive', label: 'Inactive', classes: 'bg-muted text-muted-foreground ring-border' },
+    {
+        key: 'overdue',
+        label: 'Overdue',
+        classes:
+            'bg-red-50 text-red-900 ring-red-200 dark:bg-red-900/30 dark:text-red-100 dark:ring-red-800',
+    },
+    {
+        key: 'due_soon',
+        label: 'Due soon',
+        classes:
+            'bg-amber-50 text-amber-900 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:ring-amber-800',
+    },
+    {
+        key: 'current',
+        label: 'Current',
+        classes:
+            'bg-emerald-50 text-emerald-900 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-100 dark:ring-emerald-800',
+    },
+    {
+        key: 'never_started',
+        label: 'Not started',
+        classes: 'bg-muted text-muted-foreground ring-border',
+    },
+    {
+        key: 'inactive',
+        label: 'Inactive',
+        classes: 'bg-muted text-muted-foreground ring-border',
+    },
 ];
 
 const footer = computed(() =>
@@ -59,9 +82,10 @@ const footer = computed(() =>
 );
 
 function defaultHeaders(): Record<string, string> {
-    const csrf = document
-        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-        ?.content;
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
     return {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -86,7 +110,9 @@ function defaultHeaders(): Record<string, string> {
                 class="flex flex-col items-start gap-1 rounded-lg p-3 ring-1 ring-inset"
                 :class="card.classes"
             >
-                <span class="text-xs font-medium uppercase tracking-wide">{{ card.label }}</span>
+                <span class="text-xs font-medium tracking-wide uppercase">{{
+                    card.label
+                }}</span>
                 <span class="text-2xl font-semibold tabular-nums">
                     {{ data.counts[card.key] }}
                 </span>

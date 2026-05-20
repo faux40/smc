@@ -7,6 +7,7 @@ use App\Models\User;
 class UserPolicy
 {
     private const ADMIN_ROLES = ['Owner', 'SuperAdmin', 'Admin'];
+
     private const STAFF_VIEW_ROLES = ['Owner', 'SuperAdmin', 'Admin', 'Manager'];
 
     public function viewAny(User $actor): bool

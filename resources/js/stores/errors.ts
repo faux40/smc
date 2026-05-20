@@ -68,14 +68,17 @@ export interface ReportFromAxiosOpts {
 }
 
 export const useErrorStore = defineStore('errors', () => {
-    const bannerByContext      = ref<Record<string, BannerError>>({});
-    const fieldErrorsByContext = ref<Record<string, Record<string, string[]>>>({});
+    const bannerByContext = ref<Record<string, BannerError>>({});
+    const fieldErrorsByContext = ref<Record<string, Record<string, string[]>>>(
+        {},
+    );
 
     function report(opts: ReportOpts): void {
         const surface = opts.surface ?? 'banner';
 
         if (surface === 'toast') {
             toast.error(opts.message);
+
             return;
         }
 
@@ -103,13 +106,15 @@ export const useErrorStore = defineStore('errors', () => {
 
     function clear(context?: string): void {
         if (context === undefined) {
-            bannerByContext.value      = {};
+            bannerByContext.value = {};
             fieldErrorsByContext.value = {};
+
             return;
         }
-        const { [context]: _b,  ...restB } = bannerByContext.value;
+
+        const { [context]: _b, ...restB } = bannerByContext.value;
         const { [context]: _fe, ...restF } = fieldErrorsByContext.value;
-        bannerByContext.value      = restB;
+        bannerByContext.value = restB;
         fieldErrorsByContext.value = restF;
     }
 
@@ -123,6 +128,7 @@ export const useErrorStore = defineStore('errors', () => {
 
     function getFieldError(context: string, field: string): string | undefined {
         const list = fieldErrorsByContext.value[context]?.[field];
+
         return list && list.length > 0 ? list[0] : undefined;
     }
 
@@ -136,15 +142,23 @@ export const useErrorStore = defineStore('errors', () => {
      *
      * Callers can override `surface` and supply a `fallback` message.
      */
-    function reportFromAxios(error: any, context: string, opts: ReportFromAxiosOpts = {}): void {
-        const status  = error?.response?.status as number | undefined;
-        const body    = error?.response?.data    as { message?: string; errors?: Record<string, string[]> } | undefined;
-        const message = body?.message ?? opts.fallback ?? error?.message ?? 'Something went wrong';
+    function reportFromAxios(
+        error: any,
+        context: string,
+        opts: ReportFromAxiosOpts = {},
+    ): void {
+        const status = error?.response?.status as number | undefined;
+        const body = error?.response?.data as
+            | { message?: string; errors?: Record<string, string[]> }
+            | undefined;
+        const message =
+            body?.message ??
+            opts.fallback ??
+            error?.message ??
+            'Something went wrong';
 
         const defaultSurface: ErrorSurface =
-            status === undefined ? 'toast' :
-            status >= 500        ? 'toast' :
-            'banner';
+            status === undefined ? 'toast' : status >= 500 ? 'toast' : 'banner';
         const surface = opts.surface ?? defaultSurface;
 
         report({
@@ -156,7 +170,13 @@ export const useErrorStore = defineStore('errors', () => {
     }
 
     return {
-        bannerByContext, fieldErrorsByContext,
-        report, clear, getBanner, getFieldErrors, getFieldError, reportFromAxios,
+        bannerByContext,
+        fieldErrorsByContext,
+        report,
+        clear,
+        getBanner,
+        getFieldErrors,
+        getFieldError,
+        reportFromAxios,
     };
 });

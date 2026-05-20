@@ -19,7 +19,9 @@ use Illuminate\Support\Facades\Hash;
 class DevSeeder extends Seeder
 {
     private const ORG_NAME = 'BG';
+
     private const USER_EMAIL = 'john@barrittgroup.com';
+
     private const USER_PASSWORD = 'Admin1234!';
 
     /**
