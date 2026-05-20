@@ -16,6 +16,7 @@ use App\Http\Controllers\TrainingsController;
 use App\Http\Controllers\UsersController;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -184,7 +185,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 // Public on purpose so a dev can manually verify Echo end-to-end via
 // the browser console without needing auth setup.
 Route::post('/realtime/ping', function (Request $request) {
+    Log::info('DIAG realtime.ping route entered', [
+        'broadcast_conn' => config('broadcasting.default'),
+        'queue_conn' => config('queue.default'),
+    ]);
     event(new RealtimePing(message: (string) $request->input('message', 'ping')));
+    Log::info('DIAG realtime.ping event() returned');
 
     return response()->json(['ok' => true]);
 })->name('realtime.ping');

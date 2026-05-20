@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { CheckCircle2, ClipboardList, ClipboardCheck, GraduationCap, LayoutGrid, Menu, Search, Tags as TagsIcon, Users as UsersIcon, Workflow } from 'lucide-vue-next';
-import { computed } from 'vue';
+import axios from 'axios';
+import { Bug, CheckCircle2, ClipboardList, ClipboardCheck, GraduationCap, LayoutGrid, Menu, Search, Tags as TagsIcon, Users as UsersIcon, Workflow } from 'lucide-vue-next';
+import { computed, onMounted } from 'vue';
+import { useRealtime } from '@/composables/useRealtime';
+import { useErrorStore } from '@/stores/errors';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
@@ -99,6 +102,28 @@ const mainNavItems = computed<NavItem[]>(() => {
 });
 
 const rightNavItems: NavItem[] = [];
+
+// TEMP DIAGNOSTIC — Bug button fires the existing `/realtime/ping`
+// smoke route (RealtimePing → public `realtime-ping` channel). On
+// mount we subscribe to that channel so the realtime monitor toast
+// fires when the broadcast comes back. Remove this block + the Bug
+// button + the realtime monitor when Reverb is no longer monitored.
+const errorStore = useErrorStore();
+onMounted(() => {
+    const { bind } = useRealtime('realtime-ping', 'public');
+    bind('RealtimePing', () => {
+        // Handler is intentionally empty — the monitor toast inside
+        // useRealtime.bind() fires before this and is what we observe.
+    });
+});
+
+async function triggerRealtimePing(): Promise<void> {
+    try {
+        await axios.post('/realtime/ping', { message: 'header ping' });
+    } catch (e) {
+        errorStore.reportFromAxios(e, 'temp:realtime-ping', { fallback: 'Realtime ping failed' });
+    }
+}
 </script>
 
 <template>
@@ -222,6 +247,19 @@ const rightNavItems: NavItem[] = [];
                 <div class="ml-auto flex items-center space-x-2">
                     <div class="relative flex items-center space-x-1">
                         <NotificationBell />
+
+                        <!-- TEMP DIAGNOSTIC: trigger /realtime/ping smoke event -->
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            class="group h-9 w-9 cursor-pointer"
+                            title="Trigger Reverb ping"
+                            @click="triggerRealtimePing"
+                        >
+                            <Bug
+                                class="size-5 opacity-80 group-hover:opacity-100"
+                            />
+                        </Button>
 
                         <Button
                             variant="ghost"

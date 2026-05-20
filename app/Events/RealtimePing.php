@@ -8,6 +8,7 @@ use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Permanent smoke event for the realtime substrate.
@@ -39,6 +40,10 @@ class RealtimePing implements ShouldBroadcast
      */
     public function broadcastWith(): array
     {
+        Log::info('DIAG RealtimePing::broadcastWith called', [
+            'message' => $this->message,
+        ]);
+
         return [
             'message' => $this->message,
             'origin_tab' => $this->originTab ?? RealtimeOrigin::tab(),
