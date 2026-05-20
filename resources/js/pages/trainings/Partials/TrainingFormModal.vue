@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import ErrorBanner from '@/components/ErrorBanner.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,8 +21,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useFieldErrors } from '@/composables/useFieldErrors';
+import { useErrorStore } from '@/stores/errors';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
 import { useTrainingsStore, type TrainingRow } from '@/stores/trainings';
+
+const FORM_CTX = 'form:training';
 
 type Mode = 'create' | 'edit';
 
@@ -54,8 +59,9 @@ const form = reactive<FormState>({
     as_needed: false,
 });
 
-const errors = ref<Record<string, string>>({});
 const submitting = ref(false);
+const errorStore = useErrorStore();
+const fieldErrors = useFieldErrors(FORM_CTX);
 
 const isEdit = computed(() => props.mode === 'edit');
 const title = computed(() => (isEdit.value ? 'Edit training' : 'New training'));
@@ -74,7 +80,7 @@ watch(
     () => props.open,
     (open) => {
         if (!open) return;
-        errors.value = {};
+        errorStore.clear(FORM_CTX);
         if (isEdit.value && props.target) {
             const t = props.target;
             form.name = t.name;
@@ -104,7 +110,7 @@ watch(
 
 const submit = async () => {
     submitting.value = true;
-    errors.value = {};
+    errorStore.clear(FORM_CTX);
     try {
         const payload = {
             name: form.name,
@@ -121,14 +127,8 @@ const submit = async () => {
             await trainings.create(payload);
         }
         emit('update:open', false);
-    } catch (e: unknown) {
-        const err = e as { response?: { data?: { errors?: Record<string, string[]> } } };
-        const errs = err.response?.data?.errors;
-        if (errs) {
-            errors.value = Object.fromEntries(
-                Object.entries(errs).map(([k, v]) => [k, v[0] ?? '']),
-            );
-        }
+    } catch (e) {
+        errorStore.reportFromAxios(e, FORM_CTX, { fallback: 'Failed to save training' });
     } finally {
         submitting.value = false;
     }
@@ -148,10 +148,12 @@ const submit = async () => {
                     </DialogDescription>
                 </DialogHeader>
 
+                <ErrorBanner :context="FORM_CTX" />
+
                 <div class="grid gap-2">
                     <Label for="t_name">Name</Label>
                     <Input id="t_name" v-model="form.name" required autofocus />
-                    <InputError :message="errors.name" />
+                    <InputError :message="fieldErrors.message('name')" />
                 </div>
 
                 <div class="grid gap-2">
@@ -162,7 +164,7 @@ const submit = async () => {
                         rows="3"
                         class="w-full rounded border border-input bg-background p-2 text-sm"
                     ></textarea>
-                    <InputError :message="errors.description" />
+                    <InputError :message="fieldErrors.message('description')" />
                 </div>
 
                 <div class="space-y-2">
@@ -179,9 +181,9 @@ const submit = async () => {
                         <Checkbox v-model="form.as_needed" />
                         As-needed (no schedule; just available to record)
                     </label>
-                    <InputError :message="errors.initial_only" />
-                    <InputError :message="errors.repeating" />
-                    <InputError :message="errors.as_needed" />
+                    <InputError :message="fieldErrors.message('initial_only')" />
+                    <InputError :message="fieldErrors.message('repeating')" />
+                    <InputError :message="fieldErrors.message('as_needed')" />
                     <p class="text-xs text-muted-foreground">
                         At least one must be set. Initial-only and repeating
                         are mutually exclusive.
@@ -206,7 +208,7 @@ const submit = async () => {
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <InputError :message="errors.std_freq_id" />
+                    <InputError :message="fieldErrors.message('std_freq_id')" />
                 </div>
 
                 <DialogFooter>

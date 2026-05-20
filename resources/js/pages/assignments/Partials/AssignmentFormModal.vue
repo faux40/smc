@@ -17,6 +17,7 @@
  */
 import axios from 'axios';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import ErrorBanner from '@/components/ErrorBanner.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -37,10 +38,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useFieldErrors } from '@/composables/useFieldErrors';
 import { realtimeTabId } from '@/echo';
 import { useAssignmentsStore, type AssignmentRow } from '@/stores/assignments';
+import { useErrorStore } from '@/stores/errors';
 import { useRequirementsStore } from '@/stores/requirements';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
+
+const FORM_CTX = 'form:assignment';
 
 type Mode = 'create' | 'edit';
 
@@ -80,8 +85,9 @@ const form = reactive({
     start_date: new Date().toISOString().slice(0, 10),
     end_date: '' as string,
 });
-const errors = ref<Record<string, string>>({});
 const submitting = ref(false);
+const errorStore = useErrorStore();
+const fieldErrors = useFieldErrors(FORM_CTX);
 
 const isEdit = computed(() => props.mode === 'edit');
 const title = computed(() => (isEdit.value ? 'Edit assignment' : 'New assignment'));
@@ -120,7 +126,7 @@ watch(
     () => props.open,
     async (open) => {
         if (!open) return;
-        errors.value = {};
+        errorStore.clear(FORM_CTX);
         loadError.value = null;
         await loadPickers();
 
@@ -166,7 +172,7 @@ watch(
 
 const submit = async () => {
     submitting.value = true;
-    errors.value = {};
+    errorStore.clear(FORM_CTX);
     try {
         const payload = {
             user_id: form.user_id,
@@ -187,14 +193,8 @@ const submit = async () => {
             await store.create(payload);
         }
         emit('update:open', false);
-    } catch (e: unknown) {
-        const err = e as { response?: { data?: { errors?: Record<string, string[]> } } };
-        const errs = err.response?.data?.errors;
-        if (errs) {
-            errors.value = Object.fromEntries(
-                Object.entries(errs).map(([k, v]) => [k, v[0] ?? '']),
-            );
-        }
+    } catch (e) {
+        errorStore.reportFromAxios(e, FORM_CTX, { fallback: 'Failed to save assignment' });
     } finally {
         submitting.value = false;
     }
@@ -225,6 +225,8 @@ function defaultHeaders(): Record<string, string> {
                     </DialogDescription>
                 </DialogHeader>
 
+                <ErrorBanner :context="FORM_CTX" />
+
                 <p
                     v-if="loadError"
                     class="rounded bg-red-50 p-2 text-xs text-red-800 dark:bg-red-900/30 dark:text-red-200"
@@ -250,7 +252,7 @@ function defaultHeaders(): Record<string, string> {
                     <p v-if="isEdit" class="text-xs text-muted-foreground">
                         User can't change after creation — delete + recreate to re-target.
                     </p>
-                    <InputError :message="errors.user_id" />
+                    <InputError :message="fieldErrors.message('user_id')" />
                 </div>
 
                 <div class="grid gap-2">
@@ -267,13 +269,13 @@ function defaultHeaders(): Record<string, string> {
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <InputError :message="errors.requirement_id" />
+                    <InputError :message="fieldErrors.message('requirement_id')" />
                 </div>
 
                 <div class="grid gap-2">
                     <Label for="a_name">Name</Label>
                     <Input id="a_name" v-model="form.name" required />
-                    <InputError :message="errors.name" />
+                    <InputError :message="fieldErrors.message('name')" />
                 </div>
 
                 <div class="grid gap-2">
@@ -284,7 +286,7 @@ function defaultHeaders(): Record<string, string> {
                         rows="2"
                         class="w-full rounded border border-input bg-background p-2 text-sm"
                     ></textarea>
-                    <InputError :message="errors.description" />
+                    <InputError :message="fieldErrors.message('description')" />
                 </div>
 
                 <div class="space-y-2">
@@ -301,9 +303,9 @@ function defaultHeaders(): Record<string, string> {
                         <Checkbox v-model="form.as_needed" />
                         As-needed
                     </label>
-                    <InputError :message="errors.initial_only" />
-                    <InputError :message="errors.repeating" />
-                    <InputError :message="errors.as_needed" />
+                    <InputError :message="fieldErrors.message('initial_only')" />
+                    <InputError :message="fieldErrors.message('repeating')" />
+                    <InputError :message="fieldErrors.message('as_needed')" />
                 </div>
 
                 <div v-if="form.repeating" class="grid gap-2">
@@ -322,19 +324,19 @@ function defaultHeaders(): Record<string, string> {
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <InputError :message="errors.std_freq_id" />
+                    <InputError :message="fieldErrors.message('std_freq_id')" />
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
                     <div class="grid gap-2">
                         <Label for="a_start">Start date</Label>
                         <Input id="a_start" type="date" v-model="form.start_date" required />
-                        <InputError :message="errors.start_date" />
+                        <InputError :message="fieldErrors.message('start_date')" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="a_end">End date (optional)</Label>
                         <Input id="a_end" type="date" v-model="form.end_date" />
-                        <InputError :message="errors.end_date" />
+                        <InputError :message="fieldErrors.message('end_date')" />
                     </div>
                 </div>
 

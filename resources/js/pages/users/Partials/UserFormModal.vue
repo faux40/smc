@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
+import ErrorBanner from '@/components/ErrorBanner.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,7 +20,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useFieldErrors } from '@/composables/useFieldErrors';
+import { useErrorStore } from '@/stores/errors';
 import { useUsersStore, type UserRow } from '@/stores/users';
+
+const FORM_CTX = 'form:user';
 
 type Mode = 'create' | 'edit';
 
@@ -56,8 +61,9 @@ const form = reactive<FormState>({
     role: 'None',
     status: 'active',
 });
-const errors = ref<Record<string, string>>({});
 const submitting = ref(false);
+const errorStore = useErrorStore();
+const fieldErrors = useFieldErrors(FORM_CTX);
 
 const isEdit = computed(() => props.mode === 'edit');
 const isOwnerTarget = computed(() => isEdit.value && props.target?.role === 'Owner');
@@ -68,7 +74,7 @@ watch(
     () => props.open,
     (open) => {
         if (!open) return;
-        errors.value = {};
+        errorStore.clear(FORM_CTX);
         if (isEdit.value && props.target) {
             const t = props.target as UserRow & {
                 f_name?: string;
@@ -100,7 +106,7 @@ watch(
 
 const submit = () => {
     submitting.value = true;
-    errors.value = {};
+    errorStore.clear(FORM_CTX);
 
     const opts = {
         onSuccess: () => {
@@ -108,8 +114,19 @@ const submit = () => {
             emit('update:open', false);
         },
         onError: (e: Record<string, string>) => {
+            // Inertia router hands us a flat `field -> message` map for
+            // 422 validation. Lift it into the cross-cutting error
+            // store as field errors (no banner — the per-input
+            // InputError below the field surfaces each entry).
             submitting.value = false;
-            errors.value = e;
+            errorStore.report({
+                context: FORM_CTX,
+                message: 'Validation failed',
+                fieldErrors: Object.fromEntries(
+                    Object.entries(e).map(([k, v]) => [k, [v]]),
+                ),
+                surface: 'field',
+            });
         },
     };
 
@@ -165,6 +182,8 @@ const submit = () => {
                     </DialogDescription>
                 </DialogHeader>
 
+                <ErrorBanner :context="FORM_CTX" />
+
                 <div class="grid grid-cols-2 gap-3">
                     <div class="grid gap-2">
                         <Label for="user_f_name">First name</Label>
@@ -175,7 +194,7 @@ const submit = () => {
                             autofocus
                             autocomplete="given-name"
                         />
-                        <InputError :message="errors.f_name" />
+                        <InputError :message="fieldErrors.message('f_name')" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="user_l_name">Last name</Label>
@@ -185,7 +204,7 @@ const submit = () => {
                             required
                             autocomplete="family-name"
                         />
-                        <InputError :message="errors.l_name" />
+                        <InputError :message="fieldErrors.message('l_name')" />
                     </div>
                 </div>
 
@@ -197,7 +216,7 @@ const submit = () => {
                             v-model="form.prefix_name"
                             placeholder="Dr."
                         />
-                        <InputError :message="errors.prefix_name" />
+                        <InputError :message="fieldErrors.message('prefix_name')" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="user_m_name">Middle</Label>
@@ -206,7 +225,7 @@ const submit = () => {
                             v-model="form.m_name"
                             autocomplete="additional-name"
                         />
-                        <InputError :message="errors.m_name" />
+                        <InputError :message="fieldErrors.message('m_name')" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="user_suffix_name">Suffix</Label>
@@ -215,7 +234,7 @@ const submit = () => {
                             v-model="form.suffix_name"
                             placeholder="Jr."
                         />
-                        <InputError :message="errors.suffix_name" />
+                        <InputError :message="fieldErrors.message('suffix_name')" />
                     </div>
                 </div>
 
@@ -227,7 +246,7 @@ const submit = () => {
                         v-model="form.email"
                         placeholder="leave blank for no-login user"
                     />
-                    <InputError :message="errors.email" />
+                    <InputError :message="fieldErrors.message('email')" />
                 </div>
 
                 <template v-if="isEdit">
@@ -259,7 +278,7 @@ const submit = () => {
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
-                            <InputError :message="errors.role" />
+                            <InputError :message="fieldErrors.message('role')" />
                         </template>
                     </div>
 
@@ -274,7 +293,7 @@ const submit = () => {
                                 <SelectItem value="disabled">disabled</SelectItem>
                             </SelectContent>
                         </Select>
-                        <InputError :message="errors.status" />
+                        <InputError :message="fieldErrors.message('status')" />
                     </div>
                 </template>
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import ErrorBanner from '@/components/ErrorBanner.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,9 +21,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useFieldErrors } from '@/composables/useFieldErrors';
+import { useErrorStore } from '@/stores/errors';
+import { useRqmtElementsStore, type RqmtElementRow } from '@/stores/rqmtElements';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
 import { useTrainingsStore, type TrainingRow } from '@/stores/trainings';
-import { useRqmtElementsStore, type RqmtElementRow } from '@/stores/rqmtElements';
+
+const FORM_CTX = 'form:rqmt-element';
 
 type Mode = 'create' | 'edit';
 
@@ -63,8 +68,9 @@ const form = reactive<FormState>({
     as_needed: false,
 });
 
-const errors = ref<Record<string, string>>({});
 const submitting = ref(false);
+const errorStore = useErrorStore();
+const fieldErrors = useFieldErrors(FORM_CTX);
 
 const isEdit = computed(() => props.mode === 'edit');
 const title = computed(() => (isEdit.value ? 'Edit element' : 'Add element'));
@@ -86,7 +92,7 @@ watch(
     () => props.open,
     (open) => {
         if (!open) return;
-        errors.value = {};
+        errorStore.clear(FORM_CTX);
         if (isEdit.value && props.target) {
             const t = props.target;
             form.module_type = t.module_type;
@@ -138,7 +144,7 @@ watch(
 
 const submit = async () => {
     submitting.value = true;
-    errors.value = {};
+    errorStore.clear(FORM_CTX);
     try {
         const payload = {
             name: form.name,
@@ -153,7 +159,14 @@ const submit = async () => {
             await elements.update(props.target.id, props.requirementId, payload);
         } else {
             if (!form.module_id) {
-                errors.value = { module_id: 'Pick a module.' };
+                // Client-side check; surface as a field error only
+                // (no banner) so the inline `module_id` slot shows it.
+                errorStore.report({
+                    context: FORM_CTX,
+                    message: 'Pick a module.',
+                    fieldErrors: { module_id: ['Pick a module.'] },
+                    surface: 'field',
+                });
                 return;
             }
             await elements.create(props.requirementId, {
@@ -163,14 +176,8 @@ const submit = async () => {
             });
         }
         emit('update:open', false);
-    } catch (e: unknown) {
-        const err = e as { response?: { data?: { errors?: Record<string, string[]> } } };
-        const errs = err.response?.data?.errors;
-        if (errs) {
-            errors.value = Object.fromEntries(
-                Object.entries(errs).map(([k, v]) => [k, v[0] ?? '']),
-            );
-        }
+    } catch (e) {
+        errorStore.reportFromAxios(e, FORM_CTX, { fallback: 'Failed to save element' });
     } finally {
         submitting.value = false;
     }
@@ -191,6 +198,8 @@ const submit = async () => {
                     </DialogDescription>
                 </DialogHeader>
 
+                <ErrorBanner :context="FORM_CTX" />
+
                 <div v-if="!isEdit" class="grid gap-2">
                     <Label for="e_module">Module (Training)</Label>
                     <Select v-model="form.module_id">
@@ -207,13 +216,13 @@ const submit = async () => {
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <InputError :message="errors.module_id" />
+                    <InputError :message="fieldErrors.message('module_id')" />
                 </div>
 
                 <div class="grid gap-2">
                     <Label for="e_name">Name</Label>
                     <Input id="e_name" v-model="form.name" required />
-                    <InputError :message="errors.name" />
+                    <InputError :message="fieldErrors.message('name')" />
                 </div>
 
                 <div class="grid gap-2">
@@ -224,7 +233,7 @@ const submit = async () => {
                         rows="3"
                         class="w-full rounded border border-input bg-background p-2 text-sm"
                     ></textarea>
-                    <InputError :message="errors.description" />
+                    <InputError :message="fieldErrors.message('description')" />
                 </div>
 
                 <div class="space-y-2">
@@ -241,9 +250,9 @@ const submit = async () => {
                         <Checkbox v-model="form.as_needed" />
                         As-needed
                     </label>
-                    <InputError :message="errors.initial_only" />
-                    <InputError :message="errors.repeating" />
-                    <InputError :message="errors.as_needed" />
+                    <InputError :message="fieldErrors.message('initial_only')" />
+                    <InputError :message="fieldErrors.message('repeating')" />
+                    <InputError :message="fieldErrors.message('as_needed')" />
                 </div>
 
                 <div v-if="form.repeating" class="grid gap-2">
@@ -264,7 +273,7 @@ const submit = async () => {
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <InputError :message="errors.std_freq_id" />
+                    <InputError :message="fieldErrors.message('std_freq_id')" />
                 </div>
 
                 <DialogFooter>

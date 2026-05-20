@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
+import ErrorBanner from '@/components/ErrorBanner.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,7 +13,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useFieldErrors } from '@/composables/useFieldErrors';
+import { useErrorStore } from '@/stores/errors';
 import { useRequirementsStore, type RequirementRow } from '@/stores/requirements';
+
+const FORM_CTX = 'form:requirement';
 
 type Mode = 'create' | 'edit';
 
@@ -27,8 +32,9 @@ const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
 const store = useRequirementsStore();
 
 const form = reactive({ name: '', description: '' });
-const errors = ref<Record<string, string>>({});
 const submitting = ref(false);
+const errorStore = useErrorStore();
+const fieldErrors = useFieldErrors(FORM_CTX);
 
 const isEdit = computed(() => props.mode === 'edit');
 const title = computed(() => (isEdit.value ? 'Edit requirement' : 'New requirement'));
@@ -37,7 +43,7 @@ watch(
     () => props.open,
     (open) => {
         if (!open) return;
-        errors.value = {};
+        errorStore.clear(FORM_CTX);
         if (isEdit.value && props.target) {
             form.name = props.target.name;
             form.description = props.target.description ?? '';
@@ -50,7 +56,7 @@ watch(
 
 const submit = async () => {
     submitting.value = true;
-    errors.value = {};
+    errorStore.clear(FORM_CTX);
     try {
         const payload = {
             name: form.name,
@@ -62,14 +68,8 @@ const submit = async () => {
             await store.create(payload);
         }
         emit('update:open', false);
-    } catch (e: unknown) {
-        const err = e as { response?: { data?: { errors?: Record<string, string[]> } } };
-        const errs = err.response?.data?.errors;
-        if (errs) {
-            errors.value = Object.fromEntries(
-                Object.entries(errs).map(([k, v]) => [k, v[0] ?? '']),
-            );
-        }
+    } catch (e) {
+        errorStore.reportFromAxios(e, FORM_CTX, { fallback: 'Failed to save requirement' });
     } finally {
         submitting.value = false;
     }
@@ -89,10 +89,12 @@ const submit = async () => {
                     </DialogDescription>
                 </DialogHeader>
 
+                <ErrorBanner :context="FORM_CTX" />
+
                 <div class="grid gap-2">
                     <Label for="r_name">Name</Label>
                     <Input id="r_name" v-model="form.name" required autofocus />
-                    <InputError :message="errors.name" />
+                    <InputError :message="fieldErrors.message('name')" />
                 </div>
 
                 <div class="grid gap-2">
@@ -103,7 +105,7 @@ const submit = async () => {
                         rows="3"
                         class="w-full rounded border border-input bg-background p-2 text-sm"
                     ></textarea>
-                    <InputError :message="errors.description" />
+                    <InputError :message="fieldErrors.message('description')" />
                 </div>
 
                 <DialogFooter>

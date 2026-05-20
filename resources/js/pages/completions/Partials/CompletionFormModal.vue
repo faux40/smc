@@ -18,6 +18,7 @@
  */
 import axios from 'axios';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import ErrorBanner from '@/components/ErrorBanner.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -38,9 +39,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useFieldErrors } from '@/composables/useFieldErrors';
 import { realtimeTabId } from '@/echo';
 import { useCompletionsStore, type CompletionRow } from '@/stores/completions';
+import { useErrorStore } from '@/stores/errors';
 import { useTrainingsStore } from '@/stores/trainings';
+
+const FORM_CTX = 'form:completion';
 
 type Mode = 'create' | 'edit';
 
@@ -93,8 +98,9 @@ const form = reactive({
     cert_ident: '' as string,
     notes: '' as string,
 });
-const errors = ref<Record<string, string>>({});
 const submitting = ref(false);
+const errorStore = useErrorStore();
+const fieldErrors = useFieldErrors(FORM_CTX);
 
 const isEdit = computed(() => props.mode === 'edit');
 const title = computed(() => (isEdit.value ? 'Edit completion' : 'New completion'));
@@ -144,7 +150,7 @@ watch(
     () => props.open,
     async (open) => {
         if (!open) return;
-        errors.value = {};
+        errorStore.clear(FORM_CTX);
         loadError.value = null;
 
         if (isEdit.value && props.target) {
@@ -193,7 +199,7 @@ const toggleElement = (id: string) => {
 
 const submit = async () => {
     submitting.value = true;
-    errors.value = {};
+    errorStore.clear(FORM_CTX);
     try {
         const payload = {
             user_id: form.user_id,
@@ -213,14 +219,8 @@ const submit = async () => {
             await store.create(payload);
         }
         emit('update:open', false);
-    } catch (e: unknown) {
-        const err = e as { response?: { data?: { errors?: Record<string, string[]> } } };
-        const errs = err.response?.data?.errors;
-        if (errs) {
-            errors.value = Object.fromEntries(
-                Object.entries(errs).map(([k, v]) => [k, v[0] ?? '']),
-            );
-        }
+    } catch (e) {
+        errorStore.reportFromAxios(e, FORM_CTX, { fallback: 'Failed to save completion' });
     } finally {
         submitting.value = false;
     }
@@ -252,6 +252,8 @@ function defaultHeaders(): Record<string, string> {
                     </DialogDescription>
                 </DialogHeader>
 
+                <ErrorBanner :context="FORM_CTX" />
+
                 <p
                     v-if="loadError"
                     class="rounded bg-red-50 p-2 text-xs text-red-800 dark:bg-red-900/30 dark:text-red-200"
@@ -276,7 +278,7 @@ function defaultHeaders(): Record<string, string> {
                     <p v-if="isEdit" class="text-xs text-muted-foreground">
                         User and module are locked after creation.
                     </p>
-                    <InputError :message="errors.user_id" />
+                    <InputError :message="fieldErrors.message('user_id')" />
                 </div>
 
                 <div class="grid gap-2">
@@ -291,7 +293,7 @@ function defaultHeaders(): Record<string, string> {
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <InputError :message="errors.module_type" />
+                    <InputError :message="fieldErrors.message('module_type')" />
                 </div>
 
                 <div class="grid gap-2">
@@ -308,7 +310,7 @@ function defaultHeaders(): Record<string, string> {
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <InputError :message="errors.module_id" />
+                    <InputError :message="fieldErrors.message('module_id')" />
                 </div>
 
                 <div class="grid gap-2">
@@ -344,19 +346,19 @@ function defaultHeaders(): Record<string, string> {
                             </span>
                         </label>
                     </div>
-                    <InputError :message="errors.rqmt_element_ids" />
+                    <InputError :message="fieldErrors.message('rqmt_element_ids')" />
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
                     <div class="grid gap-2">
                         <Label for="c_compdate">Completion date</Label>
                         <Input id="c_compdate" type="date" v-model="form.completion_date" required />
-                        <InputError :message="errors.completion_date" />
+                        <InputError :message="fieldErrors.message('completion_date')" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="c_certdate">Certification date</Label>
                         <Input id="c_certdate" type="date" v-model="form.certification_date" />
-                        <InputError :message="errors.certification_date" />
+                        <InputError :message="fieldErrors.message('certification_date')" />
                     </div>
                 </div>
 
@@ -364,12 +366,12 @@ function defaultHeaders(): Record<string, string> {
                     <div class="grid gap-2">
                         <Label for="c_expire">Expire date</Label>
                         <Input id="c_expire" type="date" v-model="form.expire_date" />
-                        <InputError :message="errors.expire_date" />
+                        <InputError :message="fieldErrors.message('expire_date')" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="c_ident">Cert identifier</Label>
                         <Input id="c_ident" v-model="form.cert_ident" placeholder="e.g. cert #" />
-                        <InputError :message="errors.cert_ident" />
+                        <InputError :message="fieldErrors.message('cert_ident')" />
                     </div>
                 </div>
 
@@ -381,7 +383,7 @@ function defaultHeaders(): Record<string, string> {
                         rows="2"
                         class="w-full rounded border border-input bg-background p-2 text-sm"
                     ></textarea>
-                    <InputError :message="errors.notes" />
+                    <InputError :message="fieldErrors.message('notes')" />
                 </div>
 
                 <DialogFooter>
