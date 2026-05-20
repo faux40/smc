@@ -26,7 +26,11 @@ class UsersPickerApiTest extends TestCase
     public function test_manager_can_list_picker_users(): void
     {
         $org = Organization::factory()->create();
-        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        // All three names are explicit: the manager's surname is otherwise a
+        // random faker value, which intermittently sorts before 'Adams' and
+        // breaks the ordering assertion below.
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')
+            ->create(['f_name' => 'Zoe', 'l_name' => 'Zimmer']);
         User::factory()->for($org, 'organization')->create(['f_name' => 'Alice', 'l_name' => 'Adams']);
         User::factory()->for($org, 'organization')->create(['f_name' => 'Bob', 'l_name' => 'Baker']);
 
@@ -35,9 +39,14 @@ class UsersPickerApiTest extends TestCase
             ->assertOk()
             ->json();
 
-        // Expect manager + the two seeded users — three total.
+        // Expect manager + the two seeded users — three total, ordered by
+        // l_name then f_name.
         $this->assertCount(3, $rows);
-        $this->assertSame('Adams', $rows[0]['l_name'], 'List should be ordered by l_name then f_name.');
+        $this->assertSame(
+            ['Adams', 'Baker', 'Zimmer'],
+            array_column($rows, 'l_name'),
+            'List should be ordered by l_name then f_name.'
+        );
     }
 
     public function test_disabled_users_are_excluded(): void
