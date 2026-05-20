@@ -19,7 +19,10 @@ import Pusher from 'pusher-js';
 declare global {
     interface Window {
         Pusher: typeof Pusher;
-        Echo: Echo<'reverb'>;
+        // Optional: if Echo fails to initialize (bad config, blocked socket),
+        // it stays undefined and the app runs without realtime. Consumers
+        // (useRealtime, notifications store) already guard on its absence.
+        Echo?: Echo<'reverb'>;
     }
 }
 
@@ -60,15 +63,49 @@ export function realtimeTabId(): string {
 if (typeof window !== 'undefined') {
     window.Pusher = Pusher;
 
-    window.Echo = new Echo({
-        broadcaster: 'reverb',
-        key: import.meta.env.VITE_REVERB_APP_KEY,
-        wsHost: import.meta.env.VITE_REVERB_HOST,
-        wsPort: Number(import.meta.env.VITE_REVERB_PORT ?? 80),
-        wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? 443),
-        forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
-        enabledTransports: ['ws', 'wss'],
-    });
+    // Realtime is an enhancement, not a dependency. If Echo can't initialize
+    // (misconfigured key/host, CSP-blocked socket, missing env), swallow it and
+    // leave window.Echo undefined — the app degrades to "no realtime", not a
+    // blank page. pusher-js handles reconnection on its own once connected; we
+    // just log transitions so connection loss is visible rather than silent.
+    try {
+        const echo = new Echo<'reverb'>({
+            broadcaster: 'reverb',
+            key: import.meta.env.VITE_REVERB_APP_KEY,
+            wsHost: import.meta.env.VITE_REVERB_HOST,
+            wsPort: Number(import.meta.env.VITE_REVERB_PORT ?? 80),
+            wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? 443),
+            forceTLS:
+                (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
+            enabledTransports: ['ws', 'wss'],
+        });
+
+        echo.connector.pusher.connection.bind(
+            'state_change',
+            (states: { previous: string; current: string }) => {
+                if (states.current === 'unavailable') {
+                    console.warn(
+                        '[realtime] connection unavailable — retrying; UI continues without live updates',
+                    );
+                } else if (
+                    states.current === 'connected' &&
+                    states.previous !== 'initialized'
+                ) {
+                    console.info('[realtime] reconnected');
+                }
+            },
+        );
+        echo.connector.pusher.connection.bind('error', (err: unknown) => {
+            console.warn('[realtime] socket error', err);
+        });
+
+        window.Echo = echo;
+    } catch (e) {
+        console.warn(
+            '[realtime] Echo failed to initialize — continuing without realtime',
+            e,
+        );
+    }
 
     // Prime the tab UUID on module load so it's available immediately.
     ensureTabId();

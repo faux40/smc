@@ -77,11 +77,20 @@ class AttachmentsController extends Controller
         // Generate a UUID-keyed path so original filenames don't collide.
         // We preserve the original filename in the DB row for display.
         $path = 'attachments/'.Str::uuid().'-'.$file->getClientOriginalName();
-        Storage::disk(self::STORAGE_DISK)->putFileAs(
+        $stored = Storage::disk(self::STORAGE_DISK)->putFileAs(
             dirname($path),
             $file,
             basename($path),
         );
+
+        // The linode disk is configured throw=false, so a storage outage
+        // returns false rather than raising. Bail before the insert so we
+        // never persist a row pointing at a blob that was never written.
+        if ($stored === false) {
+            return response()->json([
+                'message' => 'File storage is temporarily unavailable. Please try again.',
+            ], 503);
+        }
 
         $attachment = Attachment::create([
             'org_id' => Auth::user()->org_id,
@@ -127,10 +136,17 @@ class AttachmentsController extends Controller
     {
         Gate::authorize('view', $attachment);
 
-        $url = Storage::disk($attachment->disk)->temporaryUrl(
-            $attachment->path,
-            now()->addMinutes(5),
-        );
+        // A signed-URL failure (object store unreachable) shouldn't surface as
+        // a 500 — degrade to a clean "try again" the UI can show.
+        try {
+            $url = Storage::disk($attachment->disk)->temporaryUrl(
+                $attachment->path,
+                now()->addMinutes(5),
+            );
+        } catch (\Throwable $e) {
+            report($e);
+            abort(503, 'File storage is temporarily unavailable. Please try again.');
+        }
 
         return redirect()->away($url);
     }
