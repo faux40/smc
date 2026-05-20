@@ -1,3 +1,5 @@
+/// <reference types="vitest/config" />
+import { fileURLToPath } from 'node:url';
 import inertia from '@inertiajs/vite';
 import { wayfinder } from '@laravel/vite-plugin-wayfinder';
 import tailwindcss from '@tailwindcss/vite';
@@ -7,6 +9,23 @@ import { bunny } from 'laravel-vite-plugin/fonts';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+    resolve: {
+        // The app imports via `@/…` everywhere; make the alias explicit so
+        // both the build and Vitest resolve it the same way.
+        alias: {
+            '@': fileURLToPath(new URL('./resources/js', import.meta.url)),
+        },
+    },
+    test: {
+        // happy-dom over jsdom: faster, lighter, enough DOM for component
+        // mounts. `globals` so specs read like Pest (describe/it/expect with
+        // no imports). Specs live beside source as *.spec.ts / *.test.ts.
+        globals: true,
+        environment: 'happy-dom',
+        include: ['resources/js/**/*.{test,spec}.ts'],
+        setupFiles: ['resources/js/__tests__/setup.ts'],
+        css: false,
+    },
     server: {
         // Vite is started with `--host 0.0.0.0` inside Docker so the
         // container is reachable from the host. But we want the URLs
