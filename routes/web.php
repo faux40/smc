@@ -25,7 +25,10 @@ Route::inertia('/', 'Welcome', [
     'canRegister' => Features::enabled(Features::registration()),
 ])->name('home');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+// throttle:240,1 — a generous per-user/IP ceiling (4 req/s sustained) that
+// reins in runaway clients/abuse without affecting normal SPA use. Login has
+// its own stricter Fortify throttle. Tune as real usage data arrives (16.6).
+Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
 
     // Phase 15.2 in-app inbox. Index returns the actor's last 100
