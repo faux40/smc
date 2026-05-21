@@ -112,7 +112,7 @@ class RequirementsApiTest extends TestCase
 
         $this->actingAs($adminA)
             ->patchJson("/api/requirements/{$reqB->id}", ['name' => 'hacked'])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_admin_can_delete(): void

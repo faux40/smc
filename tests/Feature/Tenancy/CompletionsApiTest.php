@@ -410,7 +410,7 @@ class CompletionsApiTest extends TestCase
                 'completion_date' => '2026-05-11',
                 'rqmt_element_ids' => [$elementB->id],
             ])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_admin_can_soft_delete(): void

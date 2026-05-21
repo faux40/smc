@@ -11,12 +11,10 @@ use Tests\TestCase;
 /**
  * Phase 16.4 — cross-org IDOR lock-in.
  *
- * Note on the mechanism: route-model binding runs in SubstituteBindings,
- * which is *before* SetCurrentOrgId binds `currentOrgId` — so the org global
- * scope no-ops during binding and a cross-org id actually resolves. The
- * per-resource policy (which checks same-org) is what denies it → 403. These
- * tests pin that every bound endpoint enforces the policy, since the global
- * scope can't be relied on at the binding layer.
+ * BelongsToOrganization::resolveRouteBindingQuery constrains route-model
+ * binding to the authenticated user's org, so a cross-org id never resolves —
+ * it 404s before any controller/policy logic. (The per-resource policy is a
+ * second line of defense behind this.) These pin the 404 against regressions.
  */
 class CrossOrgIdorTest extends TestCase
 {
@@ -36,7 +34,7 @@ class CrossOrgIdorTest extends TestCase
         $adminA->assignRole('Admin');
         $targetB = User::factory()->for($orgB, 'organization')->create();
 
-        $this->actingAs($adminA)->get("/users/{$targetB->id}")->assertForbidden();
+        $this->actingAs($adminA)->get("/users/{$targetB->id}")->assertNotFound();
     }
 
     public function test_cannot_fetch_another_orgs_user_compliance(): void
@@ -49,7 +47,7 @@ class CrossOrgIdorTest extends TestCase
 
         $this->actingAs($adminA)
             ->getJson("/api/users/{$targetB->id}/compliance")
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_cannot_download_another_orgs_attachment(): void
@@ -70,6 +68,6 @@ class CrossOrgIdorTest extends TestCase
 
         $this->actingAs($userA)
             ->getJson("/api/attachments/{$attachmentB->id}/download")
-            ->assertForbidden();
+            ->assertNotFound();
     }
 }

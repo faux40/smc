@@ -228,7 +228,7 @@ class AttachmentsApiTest extends TestCase
 
         $this->actingAs($userA)
             ->get("/api/attachments/{$att->id}/download")
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_create_delete_broadcast(): void

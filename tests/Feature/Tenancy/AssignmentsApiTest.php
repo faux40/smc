@@ -392,7 +392,7 @@ class AssignmentsApiTest extends TestCase
                 'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_admin_can_soft_delete(): void

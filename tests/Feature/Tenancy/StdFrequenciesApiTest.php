@@ -113,7 +113,7 @@ class StdFrequenciesApiTest extends TestCase
 
         $this->actingAs($adminA)
             ->patchJson("/api/std-frequencies/{$freqB->id}", ['name' => 'hacked', 'repeat_days' => 1])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_admin_can_delete(): void

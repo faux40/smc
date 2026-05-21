@@ -93,7 +93,7 @@ class UserDetailPageTest extends TestCase
 
         $this->actingAs($adminA)
             ->get(route('users.show', $userB))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_compliance_endpoint_returns_expected_shape(): void

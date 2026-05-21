@@ -123,7 +123,7 @@ class RqmtElementsApiTest extends TestCase
 
         $this->actingAs($userA)
             ->getJson("/api/requirements/{$reqB->id}/elements")
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_admin_can_create_element_with_training_module(): void
@@ -347,7 +347,7 @@ class RqmtElementsApiTest extends TestCase
                 'repeating' => false,
                 'as_needed' => false,
             ])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_create_update_delete_broadcast(): void

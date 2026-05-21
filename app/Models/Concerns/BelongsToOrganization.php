@@ -42,4 +42,30 @@ trait BelongsToOrganization
     {
         return $this->belongsTo(Organization::class, 'org_id');
     }
+
+    /**
+     * Org-scope route-model binding. `SetCurrentOrgId` binds `currentOrgId`
+     * only after `SubstituteBindings` runs, so the global scope above no-ops
+     * during binding and a cross-org id would otherwise resolve (caught later
+     * by the policy as a 403). Rejecting a resolved model whose org doesn't
+     * match the authenticated user makes a cross-org id 404 outright — defense
+     * in depth that doesn't depend on every endpoint having a policy.
+     *
+     * We override the higher-level resolveRouteBinding (not ...Query) to avoid
+     * a trait collision with HasUuids — and to keep its UUID-format validation
+     * via the parent call. Recursion-safe: binding runs after `Authenticate`
+     * (middleware priority over `SubstituteBindings`), so `auth()->user()` is
+     * already resolved and cached.
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        $model = parent::resolveRouteBinding($value, $field);
+
+        $orgId = auth()->user()?->org_id;
+        if ($model !== null && $orgId !== null && $model->org_id !== $orgId) {
+            return null;
+        }
+
+        return $model;
+    }
 }

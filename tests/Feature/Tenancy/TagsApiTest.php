@@ -254,7 +254,7 @@ class TagsApiTest extends TestCase
 
         $this->actingAs($adminA)
             ->patchJson("/api/tags/{$tagB->id}", ['name' => 'hacked'])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_admin_can_delete_tag(): void

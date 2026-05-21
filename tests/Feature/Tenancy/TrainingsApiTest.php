@@ -222,7 +222,7 @@ class TrainingsApiTest extends TestCase
                 'repeating' => false,
                 'as_needed' => false,
             ])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_admin_can_delete(): void

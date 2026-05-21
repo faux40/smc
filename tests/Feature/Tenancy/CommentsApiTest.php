@@ -215,7 +215,7 @@ class CommentsApiTest extends TestCase
 
         $this->actingAs($userA)
             ->patchJson("/api/comments/{$commentB->id}", ['body' => 'hacked'])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_list_excludes_soft_deleted(): void
