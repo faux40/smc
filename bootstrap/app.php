@@ -10,6 +10,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
+use Sentry\Laravel\Integration;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -30,6 +31,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Report unhandled exceptions to Sentry (no-op when SENTRY_LARAVEL_DSN
+        // is unset, i.e. dev/test).
+        Integration::handles($exceptions);
+
         // A unique-constraint violation that slips past form validation (e.g.
         // a double-submit race) is user-correctable, not a server fault. For
         // JSON/API callers, surface it as a 422 the UI can show instead of a

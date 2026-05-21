@@ -1,4 +1,5 @@
 import { createInertiaApp, router } from '@inertiajs/vue3';
+import * as Sentry from '@sentry/vue';
 import { createPinia } from 'pinia';
 import { createApp, h } from 'vue';
 import type { DefineComponent } from 'vue';
@@ -36,13 +37,27 @@ createInertiaApp({
             );
         }
 
-        createApp({
+        const vueApp = createApp({
             render: () =>
                 h(ErrorBoundary, () => h(App as DefineComponent, props)),
         })
             .use(plugin)
-            .use(createPinia())
-            .mount(el);
+            .use(createPinia());
+
+        // Frontend error tracking. Only initialize when a DSN is configured
+        // (prod) — empty in dev/test means Sentry stays inert and nothing is
+        // sent. VITE_* is build-time, so the DSN is baked at `npm run build`.
+        const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+
+        if (sentryDsn) {
+            Sentry.init({
+                app: vueApp,
+                dsn: sentryDsn,
+                environment: import.meta.env.MODE,
+            });
+        }
+
+        vueApp.mount(el);
     },
 });
 
