@@ -22,14 +22,13 @@ the corresponding feature silently fails. All are templated in `.env.example`.
   `database`). Broadcasts and queued notifications need a worker (below).
 - **Mail** — set a real `MAIL_MAILER` and `MAIL_NOTIFICATIONS_ENABLED=true`
   to turn on the email notification channel (off by default).
-- **Sentry** (optional but recommended) — set `SENTRY_LARAVEL_DSN` (backend) and
-  `VITE_SENTRY_DSN` (frontend; build-time, so rebuild after changing). Empty =
-  Sentry stays inert.
 
 ## Observability
 
-- **Error tracking** — Sentry captures backend exceptions and frontend Vue
-  errors once the DSNs above are set. Inert without them.
+- **Error tracking** — native: unhandled exceptions are reported to the log
+  channel by Laravel's handler. No external SaaS — error data stays in your
+  infra. (See the logging config below; a self-hosted dashboard like Laravel
+  Pulse can layer on top later.)
 - **Logging** — production should run `LOG_CHANNEL=daily` (rotating) at
   `LOG_LEVEL=info` or `warning`. `debug` is noisy and can leak request detail.
 - **Liveness** — `/up` only confirms the app boots. `/health/detailed` (public,
