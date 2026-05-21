@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, reactive, ref } from 'vue';
+import AsyncState from '@/components/AsyncState.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
@@ -62,6 +63,7 @@ const submitting = ref(false);
 
 const errorStore = useErrorStore();
 const fieldErrors = useFieldErrors(FORM_CTX);
+const loading = ref(true);
 
 const title = computed(() =>
     editingId.value ? 'Edit frequency' : 'New frequency',
@@ -78,6 +80,8 @@ onMounted(async () => {
         errorStore.reportFromAxios(e, PAGE_CTX, {
             fallback: 'Failed to load frequencies',
         });
+    } finally {
+        loading.value = false;
     }
 });
 
@@ -157,56 +161,60 @@ const remove = async (row: StdFrequencyRow) => {
 
         <ErrorBanner :context="PAGE_CTX" />
 
-        <div
-            v-if="store.library.length === 0"
-            class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
-        >
-            No frequencies yet.
-            <span v-if="canManage">Click "+ Add frequency" to create one.</span>
-        </div>
+        <AsyncState :loading="loading" :empty="store.library.length === 0">
+            <template #empty>
+                <div
+                    class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
+                >
+                    No frequencies yet.
+                    <span v-if="canManage"
+                        >Click "+ Add frequency" to create one.</span
+                    >
+                </div>
+            </template>
 
-        <table
-            v-else
-            class="min-w-full divide-y divide-border overflow-hidden rounded-md border border-border text-sm"
-        >
-            <thead class="bg-muted/40">
-                <tr>
-                    <th class="px-4 py-2 text-left font-medium">Name</th>
-                    <th class="px-4 py-2 text-left font-medium">
-                        Repeat every
-                    </th>
-                    <th class="px-4 py-2"></th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-border">
-                <tr v-for="row in store.library" :key="row.id">
-                    <td class="px-4 py-2">{{ row.name }}</td>
-                    <td class="px-4 py-2">
-                        {{ row.repeat_days }} day{{
-                            row.repeat_days === 1 ? '' : 's'
-                        }}
-                    </td>
-                    <td class="space-x-3 px-4 py-2 text-right text-xs">
-                        <button
-                            v-if="row.can_edit"
-                            type="button"
-                            class="text-primary hover:underline"
-                            @click="openEdit(row)"
-                        >
-                            Edit
-                        </button>
-                        <button
-                            v-if="row.can_delete"
-                            type="button"
-                            class="text-destructive hover:underline"
-                            @click="remove(row)"
-                        >
-                            Delete
-                        </button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+            <table
+                class="min-w-full divide-y divide-border overflow-hidden rounded-md border border-border text-sm"
+            >
+                <thead class="bg-muted/40">
+                    <tr>
+                        <th class="px-4 py-2 text-left font-medium">Name</th>
+                        <th class="px-4 py-2 text-left font-medium">
+                            Repeat every
+                        </th>
+                        <th class="px-4 py-2"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                    <tr v-for="row in store.library" :key="row.id">
+                        <td class="px-4 py-2">{{ row.name }}</td>
+                        <td class="px-4 py-2">
+                            {{ row.repeat_days }} day{{
+                                row.repeat_days === 1 ? '' : 's'
+                            }}
+                        </td>
+                        <td class="space-x-3 px-4 py-2 text-right text-xs">
+                            <button
+                                v-if="row.can_edit"
+                                type="button"
+                                class="text-primary hover:underline"
+                                @click="openEdit(row)"
+                            >
+                                Edit
+                            </button>
+                            <button
+                                v-if="row.can_delete"
+                                type="button"
+                                class="text-destructive hover:underline"
+                                @click="remove(row)"
+                            >
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </AsyncState>
 
         <Dialog v-model:open="dialogOpen">
             <DialogContent>

@@ -9,6 +9,7 @@
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
+import AsyncState from '@/components/AsyncState.vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -63,6 +64,7 @@ const modalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
 const editing = ref<CompletionRow | null>(null);
 const error = ref<string | null>(null);
+const loading = ref(true);
 
 onMounted(async () => {
     if (authUser.value?.org_id) {
@@ -73,6 +75,8 @@ onMounted(async () => {
         await Promise.all([store.loadFor({}), trainings.load(), loadUsers()]);
     } catch (e) {
         error.value = (e as Error).message;
+    } finally {
+        loading.value = false;
     }
 });
 
@@ -170,13 +174,6 @@ function defaultHeaders(): Record<string, string> {
             >
         </div>
 
-        <p
-            v-if="error"
-            class="rounded bg-red-50 p-2 text-sm text-red-800 dark:bg-red-900/30 dark:text-red-200"
-        >
-            {{ error }}
-        </p>
-
         <div class="flex flex-wrap items-end gap-3">
             <div class="grid gap-1">
                 <Label for="filter_user" class="text-xs">Filter by user</Label>
@@ -200,86 +197,105 @@ function defaultHeaders(): Record<string, string> {
             </span>
         </div>
 
-        <div
-            v-if="filteredRows.length === 0"
-            class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
+        <AsyncState
+            :loading="loading"
+            :error="error"
+            :empty="filteredRows.length === 0"
         >
-            No completions match the current filter.
-            <span v-if="canCreate && store.rows.length === 0">
-                Click "+ New completion" to record one.
-            </span>
-        </div>
+            <template #empty>
+                <div
+                    class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
+                >
+                    No completions match the current filter.
+                    <span v-if="canCreate && store.rows.length === 0">
+                        Click "+ New completion" to record one.
+                    </span>
+                </div>
+            </template>
 
-        <div v-else class="overflow-hidden rounded-md border border-border">
-            <table class="min-w-full divide-y divide-border text-sm">
-                <thead class="bg-muted/40">
-                    <tr>
-                        <th class="px-4 py-2 text-left font-medium">User</th>
-                        <th class="px-4 py-2 text-left font-medium">Module</th>
-                        <th class="px-4 py-2 text-left font-medium">Date</th>
-                        <th class="px-4 py-2 text-left font-medium">Expires</th>
-                        <th class="px-4 py-2 text-left font-medium">Credits</th>
-                        <th class="px-4 py-2"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-border">
-                    <tr v-for="row in filteredRows" :key="row.id">
-                        <td class="px-4 py-2">
-                            <template v-if="userById(row.user_id)">
-                                {{
-                                    [
-                                        userById(row.user_id)?.f_name,
-                                        userById(row.user_id)?.l_name,
-                                    ]
-                                        .filter(Boolean)
-                                        .join(' ')
-                                }}
-                                <div
-                                    v-if="userById(row.user_id)?.email"
-                                    class="text-xs text-muted-foreground"
+            <div class="overflow-hidden rounded-md border border-border">
+                <table class="min-w-full divide-y divide-border text-sm">
+                    <thead class="bg-muted/40">
+                        <tr>
+                            <th class="px-4 py-2 text-left font-medium">
+                                User
+                            </th>
+                            <th class="px-4 py-2 text-left font-medium">
+                                Module
+                            </th>
+                            <th class="px-4 py-2 text-left font-medium">
+                                Date
+                            </th>
+                            <th class="px-4 py-2 text-left font-medium">
+                                Expires
+                            </th>
+                            <th class="px-4 py-2 text-left font-medium">
+                                Credits
+                            </th>
+                            <th class="px-4 py-2"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border">
+                        <tr v-for="row in filteredRows" :key="row.id">
+                            <td class="px-4 py-2">
+                                <template v-if="userById(row.user_id)">
+                                    {{
+                                        [
+                                            userById(row.user_id)?.f_name,
+                                            userById(row.user_id)?.l_name,
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' ')
+                                    }}
+                                    <div
+                                        v-if="userById(row.user_id)?.email"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        {{ userById(row.user_id)?.email }}
+                                    </div>
+                                </template>
+                                <span v-else class="text-muted-foreground"
+                                    >—</span
                                 >
-                                    {{ userById(row.user_id)?.email }}
-                                </div>
-                            </template>
-                            <span v-else class="text-muted-foreground">—</span>
-                        </td>
-                        <td class="px-4 py-2">{{ moduleLabel(row) }}</td>
-                        <td class="px-4 py-2 text-xs">
-                            {{ row.completion_date ?? '—' }}
-                        </td>
-                        <td class="px-4 py-2 text-xs">
-                            {{ row.expire_date ?? '—' }}
-                        </td>
-                        <td class="px-4 py-2">
-                            <Badge variant="secondary"
-                                >{{
-                                    row.rqmt_element_ids.length
-                                }}
-                                element(s)</Badge
-                            >
-                        </td>
-                        <td class="space-x-3 px-4 py-2 text-right text-xs">
-                            <button
-                                v-if="row.can_edit"
-                                type="button"
-                                class="text-primary hover:underline"
-                                @click="openEdit(row)"
-                            >
-                                Edit
-                            </button>
-                            <button
-                                v-if="row.can_delete"
-                                type="button"
-                                class="text-destructive hover:underline"
-                                @click="remove(row)"
-                            >
-                                Delete
-                            </button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+                            </td>
+                            <td class="px-4 py-2">{{ moduleLabel(row) }}</td>
+                            <td class="px-4 py-2 text-xs">
+                                {{ row.completion_date ?? '—' }}
+                            </td>
+                            <td class="px-4 py-2 text-xs">
+                                {{ row.expire_date ?? '—' }}
+                            </td>
+                            <td class="px-4 py-2">
+                                <Badge variant="secondary"
+                                    >{{
+                                        row.rqmt_element_ids.length
+                                    }}
+                                    element(s)</Badge
+                                >
+                            </td>
+                            <td class="space-x-3 px-4 py-2 text-right text-xs">
+                                <button
+                                    v-if="row.can_edit"
+                                    type="button"
+                                    class="text-primary hover:underline"
+                                    @click="openEdit(row)"
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    v-if="row.can_delete"
+                                    type="button"
+                                    class="text-destructive hover:underline"
+                                    @click="remove(row)"
+                                >
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </AsyncState>
 
         <CompletionFormModal
             v-model:open="modalOpen"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
+import AsyncState from '@/components/AsyncState.vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ const modalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
 const editing = ref<TrainingRow | null>(null);
 const error = ref<string | null>(null);
+const loading = ref(true);
 
 onMounted(async () => {
     if (authUser.value?.org_id) {
@@ -48,6 +50,8 @@ onMounted(async () => {
         await store.load();
     } catch (e) {
         error.value = (e as Error).message;
+    } finally {
+        loading.value = false;
     }
 });
 
@@ -112,68 +116,74 @@ const timingSummary = (row: TrainingRow): string => {
             <Button v-if="canCreate" @click="openCreate">+ New training</Button>
         </div>
 
-        <p
-            v-if="error"
-            class="rounded bg-red-50 p-2 text-sm text-red-800 dark:bg-red-900/30 dark:text-red-200"
+        <AsyncState
+            :loading="loading"
+            :error="error"
+            :empty="store.library.length === 0"
         >
-            {{ error }}
-        </p>
+            <template #empty>
+                <div
+                    class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
+                >
+                    No trainings yet.
+                    <span v-if="canCreate"
+                        >Click "+ New training" to add one.</span
+                    >
+                </div>
+            </template>
 
-        <div
-            v-if="store.library.length === 0"
-            class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
-        >
-            No trainings yet.
-            <span v-if="canCreate">Click "+ New training" to add one.</span>
-        </div>
-
-        <div v-else class="overflow-hidden rounded-md border border-border">
-            <table class="min-w-full divide-y divide-border text-sm">
-                <thead class="bg-muted/40">
-                    <tr>
-                        <th class="px-4 py-2 text-left font-medium">Name</th>
-                        <th class="px-4 py-2 text-left font-medium">Timing</th>
-                        <th class="px-4 py-2"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-border">
-                    <tr v-for="row in store.library" :key="row.id">
-                        <td class="px-4 py-2">
-                            <div class="font-medium">{{ row.name }}</div>
-                            <div
-                                v-if="row.description"
-                                class="text-xs text-muted-foreground"
-                            >
-                                {{ row.description }}
-                            </div>
-                        </td>
-                        <td class="px-4 py-2">
-                            <Badge variant="secondary">{{
-                                timingSummary(row)
-                            }}</Badge>
-                        </td>
-                        <td class="space-x-3 px-4 py-2 text-right text-xs">
-                            <button
-                                v-if="row.can_edit"
-                                type="button"
-                                class="text-primary hover:underline"
-                                @click="openEdit(row)"
-                            >
-                                Edit
-                            </button>
-                            <button
-                                v-if="row.can_delete"
-                                type="button"
-                                class="text-destructive hover:underline"
-                                @click="remove(row)"
-                            >
-                                Delete
-                            </button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+            <div class="overflow-hidden rounded-md border border-border">
+                <table class="min-w-full divide-y divide-border text-sm">
+                    <thead class="bg-muted/40">
+                        <tr>
+                            <th class="px-4 py-2 text-left font-medium">
+                                Name
+                            </th>
+                            <th class="px-4 py-2 text-left font-medium">
+                                Timing
+                            </th>
+                            <th class="px-4 py-2"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border">
+                        <tr v-for="row in store.library" :key="row.id">
+                            <td class="px-4 py-2">
+                                <div class="font-medium">{{ row.name }}</div>
+                                <div
+                                    v-if="row.description"
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    {{ row.description }}
+                                </div>
+                            </td>
+                            <td class="px-4 py-2">
+                                <Badge variant="secondary">{{
+                                    timingSummary(row)
+                                }}</Badge>
+                            </td>
+                            <td class="space-x-3 px-4 py-2 text-right text-xs">
+                                <button
+                                    v-if="row.can_edit"
+                                    type="button"
+                                    class="text-primary hover:underline"
+                                    @click="openEdit(row)"
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    v-if="row.can_delete"
+                                    type="button"
+                                    class="text-destructive hover:underline"
+                                    @click="remove(row)"
+                                >
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </AsyncState>
 
         <TrainingFormModal
             v-model:open="modalOpen"

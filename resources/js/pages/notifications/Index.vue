@@ -10,6 +10,7 @@
  */
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
+import AsyncState from '@/components/AsyncState.vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,7 @@ defineOptions({
 const store = useNotificationsStore();
 const page = usePage();
 const error = ref<string | null>(null);
+const loading = ref(true);
 
 const authUserId = computed(() => {
     const u = page.props.auth.user as unknown as { id?: string } | null;
@@ -43,6 +45,8 @@ onMounted(async () => {
         await store.load();
     } catch (e) {
         error.value = (e as Error).message;
+    } finally {
+        loading.value = false;
     }
 });
 
@@ -132,75 +136,67 @@ const userLinkFor = (row: NotificationRow): string | null => {
             </Button>
         </div>
 
-        <p
-            v-if="error"
-            class="rounded bg-red-50 p-2 text-sm text-red-800 dark:bg-red-900/30 dark:text-red-200"
+        <AsyncState
+            :loading="loading"
+            :error="error"
+            :empty="store.library.length === 0"
+            empty-text="No notifications yet."
         >
-            {{ error }}
-        </p>
-
-        <div
-            v-if="store.library.length === 0"
-            class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
-        >
-            No notifications yet.
-        </div>
-
-        <ul
-            v-else
-            class="divide-y divide-border rounded-md border border-border"
-        >
-            <li
-                v-for="row in store.library"
-                :key="row.id"
-                class="flex items-start gap-3 px-4 py-3 hover:bg-muted/40"
-                :class="row.read_at === null ? 'bg-muted/20' : ''"
-            >
-                <span
-                    class="mt-1 inline-block size-2 shrink-0 rounded-full"
-                    :class="
-                        row.read_at === null ? 'bg-primary' : 'bg-transparent'
-                    "
-                    :aria-label="row.read_at === null ? 'unread' : 'read'"
-                />
-
-                <div class="min-w-0 flex-1">
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-sm font-medium">{{
-                            labelFor(row)
-                        }}</span>
-                        <Badge
-                            v-if="row.read_at === null"
-                            variant="secondary"
-                            class="text-[10px]"
-                        >
-                            new
-                        </Badge>
-                        <span class="text-xs text-muted-foreground">
-                            {{ formatTs(row.created_at) }}
-                        </span>
-                    </div>
-                    <p class="text-sm text-muted-foreground">
-                        {{ summaryFor(row) }}
-                    </p>
-                    <Link
-                        v-if="userLinkFor(row)"
-                        :href="userLinkFor(row)!"
-                        class="text-xs text-primary hover:underline"
-                    >
-                        View user
-                    </Link>
-                </div>
-
-                <button
-                    v-if="row.read_at === null"
-                    type="button"
-                    class="text-xs text-primary hover:underline"
-                    @click="handleClick(row)"
+            <ul class="divide-y divide-border rounded-md border border-border">
+                <li
+                    v-for="row in store.library"
+                    :key="row.id"
+                    class="flex items-start gap-3 px-4 py-3 hover:bg-muted/40"
+                    :class="row.read_at === null ? 'bg-muted/20' : ''"
                 >
-                    Mark read
-                </button>
-            </li>
-        </ul>
+                    <span
+                        class="mt-1 inline-block size-2 shrink-0 rounded-full"
+                        :class="
+                            row.read_at === null
+                                ? 'bg-primary'
+                                : 'bg-transparent'
+                        "
+                        :aria-label="row.read_at === null ? 'unread' : 'read'"
+                    />
+
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-sm font-medium">{{
+                                labelFor(row)
+                            }}</span>
+                            <Badge
+                                v-if="row.read_at === null"
+                                variant="secondary"
+                                class="text-[10px]"
+                            >
+                                new
+                            </Badge>
+                            <span class="text-xs text-muted-foreground">
+                                {{ formatTs(row.created_at) }}
+                            </span>
+                        </div>
+                        <p class="text-sm text-muted-foreground">
+                            {{ summaryFor(row) }}
+                        </p>
+                        <Link
+                            v-if="userLinkFor(row)"
+                            :href="userLinkFor(row)!"
+                            class="text-xs text-primary hover:underline"
+                        >
+                            View user
+                        </Link>
+                    </div>
+
+                    <button
+                        v-if="row.read_at === null"
+                        type="button"
+                        class="text-xs text-primary hover:underline"
+                        @click="handleClick(row)"
+                    >
+                        Mark read
+                    </button>
+                </li>
+            </ul>
+        </AsyncState>
     </div>
 </template>

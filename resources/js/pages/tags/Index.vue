@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
+import AsyncState from '@/components/AsyncState.vue';
 import Heading from '@/components/Heading.vue';
 import TagPill from '@/components/TagPill.vue';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ const modalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
 const editing = ref<TagRow | null>(null);
 const error = ref<string | null>(null);
+const loading = ref(true);
 
 onMounted(async () => {
     if (authUser.value?.org_id) {
@@ -49,6 +51,8 @@ onMounted(async () => {
         await store.loadLibrary();
     } catch (e) {
         error.value = (e as Error).message;
+    } finally {
+        loading.value = false;
     }
 });
 
@@ -100,60 +104,62 @@ const remove = async (tag: TagRow) => {
             <Button v-if="canManage" @click="openCreate">+ New tag</Button>
         </div>
 
-        <p
-            v-if="error"
-            class="rounded bg-red-50 p-2 text-sm text-red-800 dark:bg-red-900/30 dark:text-red-200"
+        <AsyncState
+            :loading="loading"
+            :error="error"
+            :empty="sortedLibrary.length === 0"
         >
-            {{ error }}
-        </p>
+            <template #empty>
+                <div
+                    class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
+                >
+                    No tags yet.
+                    <span v-if="canManage"
+                        >Click "+ New tag" to create one.</span
+                    >
+                </div>
+            </template>
 
-        <div
-            v-if="sortedLibrary.length === 0"
-            class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
-        >
-            No tags yet.
-            <span v-if="canManage">Click "+ New tag" to create one.</span>
-        </div>
-
-        <div v-else class="overflow-hidden rounded-md border border-border">
-            <table class="min-w-full divide-y divide-border text-sm">
-                <thead class="bg-muted/40">
-                    <tr>
-                        <th class="px-4 py-2 text-left font-medium">Tag</th>
-                        <th class="px-4 py-2"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-border">
-                    <tr v-for="tag in sortedLibrary" :key="tag.id">
-                        <td class="px-4 py-2">
-                            <TagPill
-                                :tag="tag"
-                                size="md"
-                                :count="tag.attached_count"
-                            />
-                        </td>
-                        <td class="space-x-3 px-4 py-2 text-right text-xs">
-                            <button
-                                v-if="canManage"
-                                type="button"
-                                class="text-primary hover:underline"
-                                @click="openEdit(tag)"
-                            >
-                                Edit
-                            </button>
-                            <button
-                                v-if="canManage"
-                                type="button"
-                                class="text-destructive hover:underline"
-                                @click="remove(tag)"
-                            >
-                                Delete
-                            </button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+            <div class="overflow-hidden rounded-md border border-border">
+                <table class="min-w-full divide-y divide-border text-sm">
+                    <thead class="bg-muted/40">
+                        <tr>
+                            <th class="px-4 py-2 text-left font-medium">Tag</th>
+                            <th class="px-4 py-2"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border">
+                        <tr v-for="tag in sortedLibrary" :key="tag.id">
+                            <td class="px-4 py-2">
+                                <TagPill
+                                    :tag="tag"
+                                    size="md"
+                                    :count="tag.attached_count"
+                                />
+                            </td>
+                            <td class="space-x-3 px-4 py-2 text-right text-xs">
+                                <button
+                                    v-if="canManage"
+                                    type="button"
+                                    class="text-primary hover:underline"
+                                    @click="openEdit(tag)"
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    v-if="canManage"
+                                    type="button"
+                                    class="text-destructive hover:underline"
+                                    @click="remove(tag)"
+                                >
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </AsyncState>
 
         <TagFormModal
             v-model:open="modalOpen"
