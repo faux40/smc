@@ -7,6 +7,7 @@ use App\Http\Controllers\BulkAssignmentsController;
 use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\CompletionsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\NotificationsController;
 use App\Http\Controllers\RequirementsController;
 use App\Http\Controllers\RqmtElementsController;
@@ -24,6 +25,10 @@ use Laravel\Fortify\Features;
 Route::inertia('/', 'Welcome', [
     'canRegister' => Features::enabled(Features::registration()),
 ])->name('home');
+
+// Phase 16.5 — detailed liveness for uptime monitors. Public + minimal;
+// complements the framework's boots-only `/up`.
+Route::get('health/detailed', [HealthController::class, 'detailed'])->name('health.detailed');
 
 // throttle:240,1 — a generous per-user/IP ceiling (4 req/s sustained) that
 // reins in runaway clients/abuse without affecting normal SPA use. Login has
