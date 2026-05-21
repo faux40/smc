@@ -74,7 +74,7 @@ class UserComplianceCalculator
      *     completions: array<int, array<string, mixed>>
      * }
      */
-    public function compute(User $user, ?CarbonImmutable $now = null): array
+    public function compute(User $user, ?CarbonImmutable $now = null, ?Collection $freqs = null): array
     {
         $now = $now ?? CarbonImmutable::now();
 
@@ -93,12 +93,10 @@ class UserComplianceCalculator
             ->get();
 
         // Std-frequency repeat_days lookup keyed by id; absent rows
-        // (deleted frequency) fall back to "treat as not yet due".
-        $freqs = StdFrequency::query()
-            ->where('org_id', $user->org_id)
-            ->withTrashed()
-            ->get()
-            ->keyBy('id');
+        // (deleted frequency) fall back to "treat as not yet due". This is
+        // org-level data, so the org rollups pass it in once rather than
+        // making compute() re-query it for every user in the loop.
+        $freqs = $freqs ?? $this->loadFrequencies($user->org_id);
 
         // Pre-index completions by element id for O(1) lookup inside the
         // per-element loop. Each element id maps to the user's completions
@@ -132,15 +130,32 @@ class UserComplianceCalculator
     }
 
     /**
+     * Org-level std-frequency lookup keyed by id (incl. soft-deleted, which
+     * fall back to "not yet due"). Hoisted so the per-user rollup loops load
+     * it once instead of re-querying it for every user.
+     */
+    private function loadFrequencies(string $orgId): Collection
+    {
+        return StdFrequency::query()
+            ->where('org_id', $orgId)
+            ->withTrashed()
+            ->get()
+            ->keyBy('id');
+    }
+
+    /**
      * Org-wide rollup driving Phase 14 dashboard widgets. Sums every
      * user's per-assignment status (computed by compute()) into a single
      * counts map plus headline totals.
      *
-     * Iterates users — fine for orgs in the hundreds (DevDataSeeder ships
-     * 21 in BG). When orgs grow past a few thousand users this should
-     * move to a query-based aggregation; for now the per-user math is
-     * the single source of truth so the dashboard can't drift from the
-     * detail page.
+     * Iterates users — O(users), fine for orgs in the hundreds (DevDataSeeder
+     * ships 21 in BG). Each user costs a small fixed number of queries
+     * (compute() is eager-loaded + org-level std_frequencies is loaded once
+     * here and passed in, not re-queried per user). CompliancePerformanceTest
+     * pins both properties + a linear query budget. CEILING: past a few
+     * thousand users this should move to a single query-based aggregation;
+     * deferred until a real org approaches it so the per-user math stays the
+     * single source of truth (dashboard can't drift from the detail page).
      *
      * @return array{
      *     counts: array{overdue:int, due_soon:int, current:int, never_started:int, inactive:int},
@@ -165,9 +180,10 @@ class UserComplianceCalculator
         $usersWithOverdue = 0;
 
         $users = $this->orgUsers($org);
+        $freqs = $this->loadFrequencies($org->id);
 
         foreach ($users as $user) {
-            $result = $this->compute($user, $now);
+            $result = $this->compute($user, $now, $freqs);
             $hasOverdue = false;
 
             foreach ($result['groups'] as $status => $rows) {
@@ -204,8 +220,9 @@ class UserComplianceCalculator
         $now = $now ?? CarbonImmutable::now();
 
         $rows = [];
+        $freqs = $this->loadFrequencies($org->id);
         foreach ($this->orgUsers($org) as $user) {
-            $result = $this->compute($user, $now);
+            $result = $this->compute($user, $now, $freqs);
             $overdueCount = count($result['groups'][self::STATUS_OVERDUE]);
             if ($overdueCount === 0) {
                 continue;
@@ -235,8 +252,9 @@ class UserComplianceCalculator
         $now = $now ?? CarbonImmutable::now();
 
         $items = [];
+        $freqs = $this->loadFrequencies($org->id);
         foreach ($this->orgUsers($org) as $user) {
-            $result = $this->compute($user, $now);
+            $result = $this->compute($user, $now, $freqs);
             foreach ($result['groups'][self::STATUS_DUE_SOON] as $row) {
                 $items[] = array_merge($row, [
                     'user_id' => $user->id,
