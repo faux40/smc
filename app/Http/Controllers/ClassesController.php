@@ -6,10 +6,13 @@ use App\Events\ClassChanged;
 use App\Http\Requests\ClassRequest;
 use App\Models\ClassEnrollment;
 use App\Models\ClassTraining;
+use App\Models\Completion;
 use App\Models\Training;
 use App\Models\TrainingClass;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -70,6 +73,7 @@ class ClassesController extends Controller
     public function update(ClassRequest $request, TrainingClass $class): JsonResponse
     {
         Gate::authorize('update', $class);
+        $this->assertEditable($class);
 
         $class->update($request->validated());
         event(new ClassChanged($class->id, $class->org_id, 'updated'));
@@ -93,6 +97,7 @@ class ClassesController extends Controller
     public function attachTraining(Request $request, TrainingClass $class): JsonResponse
     {
         Gate::authorize('update', $class);
+        $this->assertEditable($class);
 
         $data = $request->validate([
             'training_id' => [
@@ -124,6 +129,7 @@ class ClassesController extends Controller
     public function detachTraining(TrainingClass $class, ClassTraining $classTraining): JsonResponse
     {
         Gate::authorize('update', $class);
+        $this->assertEditable($class);
         abort_unless($classTraining->class_id === $class->id, 404);
 
         $classTraining->delete();
@@ -135,6 +141,7 @@ class ClassesController extends Controller
     public function enroll(Request $request, TrainingClass $class): JsonResponse
     {
         Gate::authorize('update', $class);
+        $this->assertEditable($class);
 
         $data = $request->validate([
             'user_id' => [
@@ -153,12 +160,110 @@ class ClassesController extends Controller
     public function unenroll(TrainingClass $class, ClassEnrollment $enrollment): JsonResponse
     {
         Gate::authorize('update', $class);
+        $this->assertEditable($class);
         abort_unless($enrollment->class_id === $class->id, 404);
 
         $enrollment->delete();
         event(new ClassChanged($class->id, $class->org_id, 'updated'));
 
         return response()->json($this->detail($class->fresh()));
+    }
+
+    /**
+     * Close out a class: mark each enrollee passed/incomplete (+ notes), then
+     * generate a completion for every PASSED enrollee × associated training
+     * (standalone — credited by module identity), set class-level dates, and
+     * lock the class to view-only. Idempotent: a completed class can't be
+     * re-closed.
+     */
+    public function complete(Request $request, TrainingClass $class): JsonResponse
+    {
+        Gate::authorize('update', $class);
+        abort_if($class->status === 'completed', 422, 'This class is already completed.');
+
+        $data = $request->validate([
+            'completion_date' => ['required', 'date'],
+            'enrollments' => ['array'],
+            'enrollments.*.id' => [
+                'required', 'string',
+                Rule::exists('class_enrollments', 'id')->where('class_id', $class->id),
+            ],
+            'enrollments.*.status' => ['required', Rule::in(['passed', 'incomplete'])],
+            'enrollments.*.notes' => ['nullable', 'string'],
+            'trainings' => ['array'],
+            'trainings.*.id' => [
+                'required', 'string',
+                Rule::exists('class_training', 'id')->where('class_id', $class->id),
+            ],
+            'trainings.*.expire_date' => ['nullable', 'date'],
+        ]);
+
+        $completionDate = CarbonImmutable::parse($data['completion_date']);
+        $expireOverrides = collect($data['trainings'] ?? [])->pluck('expire_date', 'id');
+        $marks = collect($data['enrollments'] ?? [])->keyBy('id');
+
+        DB::transaction(function () use ($class, $marks, $completionDate, $expireOverrides) {
+            $class->load(['enrollments', 'classTrainings']);
+
+            foreach ($class->enrollments as $enrollment) {
+                $mark = $marks->get($enrollment->id);
+
+                if ($mark) {
+                    $enrollment->update([
+                        'status' => $mark['status'],
+                        'notes' => $mark['notes'] ?? $enrollment->notes,
+                    ]);
+                }
+            }
+
+            // Per-training expiry: instructor override, else computed from the
+            // snapshot freq (class date + repeat_days; none for initial/as-needed).
+            $expiryFor = [];
+
+            foreach ($class->classTrainings as $ct) {
+                $expire = $expireOverrides->has($ct->id)
+                    ? $expireOverrides->get($ct->id)
+                    : ($ct->repeating && $ct->repeat_days
+                        ? $completionDate->addDays($ct->repeat_days)->toDateString()
+                        : null);
+                $ct->update(['expire_date' => $expire]);
+                $expiryFor[$ct->id] = $expire;
+            }
+
+            // Completions for passed enrollees × associated trainings.
+            foreach ($class->enrollments->where('status', 'passed') as $enrollment) {
+                foreach ($class->classTrainings as $ct) {
+                    if ($ct->training_id === null) {
+                        continue; // snapshot-only (training deleted) — nothing to credit.
+                    }
+
+                    Completion::create([
+                        'org_id' => $class->org_id,
+                        'user_id' => $enrollment->user_id,
+                        'module_type' => Training::class,
+                        'module_id' => $ct->training_id,
+                        'completion_date' => $completionDate->toDateString(),
+                        'expire_date' => $expiryFor[$ct->id],
+                    ]);
+                }
+            }
+
+            $class->update([
+                'status' => 'completed',
+                'completion_date' => $completionDate->toDateString(),
+                'completed_at' => now(),
+            ]);
+        });
+
+        event(new ClassChanged($class->id, $class->org_id, 'completed'));
+
+        return response()->json($this->detail($class->fresh()));
+    }
+
+    /** A completed class is view-only — block roster/training/detail edits. */
+    private function assertEditable(TrainingClass $class): void
+    {
+        abort_if($class->status === 'completed', 422, 'This class is completed and read-only.');
     }
 
     /** @return array<string, mixed> */
