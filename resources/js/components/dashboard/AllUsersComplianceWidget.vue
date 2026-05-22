@@ -286,6 +286,7 @@ function defaultHeaders(): Record<string, string> {
                                 <ComplianceStatusBadge
                                     v-if="row.overall_status !== 'none'"
                                     :status="row.overall_status"
+                                    :count="row.counts[row.overall_status]"
                                 />
                                 <span
                                     v-else

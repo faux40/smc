@@ -123,6 +123,16 @@ describe('AllUsersComplianceWidget', () => {
         expect(first).toContain('Alice');
     });
 
+    it('shows the bucket count inside the status pill', async () => {
+        mockGet();
+        const wrapper = await mountWidget();
+
+        // Alice (overdue, count 3) sorts first; status cell is the 2nd column.
+        const statusCell = wrapper.find('tbody tr').findAll('td')[1];
+        expect(statusCell.text()).toContain('Overdue');
+        expect(statusCell.text()).toContain('3');
+    });
+
     it('filters by the search box', async () => {
         mockGet();
         const wrapper = await mountWidget();

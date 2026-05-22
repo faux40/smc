@@ -13,7 +13,9 @@ export type ComplianceStatus =
     | 'never_started'
     | 'inactive';
 
-const props = defineProps<{ status: ComplianceStatus }>();
+// Optional count rendered inside the pill (e.g. "Overdue · 3") — used by the
+// dashboard list; omitted elsewhere.
+const props = defineProps<{ status: ComplianceStatus; count?: number }>();
 
 const presentation = computed(() => {
     switch (props.status) {
@@ -61,6 +63,9 @@ const presentation = computed(() => {
         class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
         :class="presentation.classes"
     >
-        {{ presentation.label }}
+        {{ presentation.label
+        }}<span v-if="count != null" class="ml-1 font-semibold"
+            >·&nbsp;{{ count }}</span
+        >
     </span>
 </template>
