@@ -199,6 +199,12 @@ class UsersController extends Controller
             'suffix_name' => $request->validated('suffix_name'),
             'email' => $request->validated('email'),
             'password' => null,
+            'department' => $request->validated('department'),
+            'location' => $request->validated('location'),
+            'job_title' => $request->validated('job_title'),
+            'supervisor_id' => $request->validated('supervisor_id'),
+            'start_date' => $request->validated('start_date'),
+            'end_date' => $request->validated('end_date'),
         ]);
 
         $user->assignRole('None');
@@ -220,6 +226,12 @@ class UsersController extends Controller
             'suffix_name' => $data['suffix_name'] ?? null,
             'email' => $data['email'] ?? null,
             'status' => $data['status'],
+            'department' => $data['department'] ?? null,
+            'location' => $data['location'] ?? null,
+            'job_title' => $data['job_title'] ?? null,
+            'supervisor_id' => $data['supervisor_id'] ?? null,
+            'start_date' => $data['start_date'] ?? null,
+            'end_date' => $data['end_date'] ?? null,
         ]);
 
         // role is absent from $data for Owner targets (the request

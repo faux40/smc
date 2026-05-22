@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -29,6 +31,12 @@ use Spatie\Permission\Traits\HasRoles;
     'email',
     'password',
     'status',
+    'department',
+    'location',
+    'job_title',
+    'supervisor_id',
+    'start_date',
+    'end_date',
 ])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
@@ -53,7 +61,29 @@ class User extends Authenticatable implements MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'start_date' => 'date',
+            'end_date' => 'date',
         ];
+    }
+
+    /**
+     * This user's supervisor (another user in the same org), if set.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function supervisor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'supervisor_id');
+    }
+
+    /**
+     * Users who report to this one. Drives future grouping/searching.
+     *
+     * @return HasMany<User, $this>
+     */
+    public function reports(): HasMany
+    {
+        return $this->hasMany(User::class, 'supervisor_id');
     }
 
     /**

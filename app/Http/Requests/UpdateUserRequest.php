@@ -55,6 +55,22 @@ class UpdateUserRequest extends FormRequest
             ],
             'role' => $roleRule,
             'status' => ['required', Rule::in(['active', 'disabled'])],
+
+            // Optional profile fields. Supervisor must be another (non-self)
+            // user in the same org; end_date can't precede start_date.
+            'department' => ['nullable', 'string', 'max:255'],
+            'location' => ['nullable', 'string', 'max:255'],
+            'job_title' => ['nullable', 'string', 'max:255'],
+            'supervisor_id' => [
+                'nullable',
+                'string',
+                Rule::notIn([$target->id]),
+                Rule::exists('users', 'id')
+                    ->where('org_id', $target->org_id)
+                    ->whereNull('deleted_at'),
+            ],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
         ];
     }
 }

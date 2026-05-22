@@ -35,6 +35,21 @@ class CreateUserRequest extends FormRequest
                 'max:255',
                 Rule::unique('users', 'email')->whereNull('deleted_at'),
             ],
+
+            // Optional profile fields. The supervisor must be an existing user
+            // in the creating admin's org (the new user lands in that org).
+            'department' => ['nullable', 'string', 'max:255'],
+            'location' => ['nullable', 'string', 'max:255'],
+            'job_title' => ['nullable', 'string', 'max:255'],
+            'supervisor_id' => [
+                'nullable',
+                'string',
+                Rule::exists('users', 'id')
+                    ->where('org_id', $this->user()->org_id)
+                    ->whereNull('deleted_at'),
+            ],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
         ];
     }
 }

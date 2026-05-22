@@ -69,6 +69,86 @@ class UsersUpdateTest extends TestCase
         $this->assertFalse($target->fresh()->hasRole('None'));
     }
 
+    /** @return array<string, mixed> */
+    private function basePayload(User $target): array
+    {
+        return [
+            'f_name' => $target->f_name,
+            'l_name' => $target->l_name,
+            'role' => 'None',
+            'status' => 'active',
+        ];
+    }
+
+    public function test_admin_can_update_profile_fields(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->forOrganization($org)->withRole('Admin')->create();
+        $supervisor = User::factory()->forOrganization($org)->withRole('Manager')->create();
+        $target = User::factory()->forOrganization($org)->withRole('None')->create();
+
+        $this->actingAs($admin)
+            ->patch(route('users.update', $target), array_merge($this->basePayload($target), [
+                'department' => 'Field Ops',
+                'location' => 'Yard 3',
+                'job_title' => 'Operator',
+                'supervisor_id' => $supervisor->id,
+                'start_date' => '2026-01-15',
+                'end_date' => null,
+            ]))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('users.index'));
+
+        $target->refresh();
+        $this->assertSame('Field Ops', $target->department);
+        $this->assertSame('Yard 3', $target->location);
+        $this->assertSame('Operator', $target->job_title);
+        $this->assertSame($supervisor->id, $target->supervisor_id);
+        $this->assertSame('2026-01-15', $target->start_date->toDateString());
+    }
+
+    public function test_supervisor_must_be_in_the_same_org(): void
+    {
+        $org = Organization::factory()->create();
+        $otherOrg = Organization::factory()->create();
+        $admin = User::factory()->forOrganization($org)->withRole('Admin')->create();
+        $target = User::factory()->forOrganization($org)->withRole('None')->create();
+        $foreign = User::factory()->forOrganization($otherOrg)->create();
+
+        $this->actingAs($admin)
+            ->patch(route('users.update', $target), array_merge($this->basePayload($target), [
+                'supervisor_id' => $foreign->id,
+            ]))
+            ->assertSessionHasErrors('supervisor_id');
+    }
+
+    public function test_user_cannot_be_their_own_supervisor(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->forOrganization($org)->withRole('Admin')->create();
+        $target = User::factory()->forOrganization($org)->withRole('None')->create();
+
+        $this->actingAs($admin)
+            ->patch(route('users.update', $target), array_merge($this->basePayload($target), [
+                'supervisor_id' => $target->id,
+            ]))
+            ->assertSessionHasErrors('supervisor_id');
+    }
+
+    public function test_end_date_cannot_precede_start_date(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->forOrganization($org)->withRole('Admin')->create();
+        $target = User::factory()->forOrganization($org)->withRole('None')->create();
+
+        $this->actingAs($admin)
+            ->patch(route('users.update', $target), array_merge($this->basePayload($target), [
+                'start_date' => '2026-06-01',
+                'end_date' => '2026-01-01',
+            ]))
+            ->assertSessionHasErrors('end_date');
+    }
+
     public function test_admin_cannot_update_owner(): void
     {
         $org = Organization::factory()->create();
