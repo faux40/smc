@@ -29,6 +29,12 @@ interface Subject {
     email: string | null;
     status: 'active' | 'disabled';
     role: string | null;
+    department: string | null;
+    location: string | null;
+    job_title: string | null;
+    supervisor_name: string | null;
+    start_date: string | null;
+    end_date: string | null;
 }
 
 interface CompliancePayload {
@@ -219,6 +225,43 @@ function defaultHeaders(): Record<string, string> {
                 {{ subject.status === 'active' ? 'Active' : 'Disabled' }}
             </Badge>
         </div>
+
+        <dl
+            v-if="
+                subject.job_title ||
+                subject.department ||
+                subject.location ||
+                subject.supervisor_name ||
+                subject.start_date ||
+                subject.end_date
+            "
+            class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3"
+        >
+            <div v-if="subject.job_title">
+                <dt class="text-xs text-muted-foreground">Job title</dt>
+                <dd>{{ subject.job_title }}</dd>
+            </div>
+            <div v-if="subject.department">
+                <dt class="text-xs text-muted-foreground">Department</dt>
+                <dd>{{ subject.department }}</dd>
+            </div>
+            <div v-if="subject.location">
+                <dt class="text-xs text-muted-foreground">Location</dt>
+                <dd>{{ subject.location }}</dd>
+            </div>
+            <div v-if="subject.supervisor_name">
+                <dt class="text-xs text-muted-foreground">Supervisor</dt>
+                <dd>{{ subject.supervisor_name }}</dd>
+            </div>
+            <div v-if="subject.start_date">
+                <dt class="text-xs text-muted-foreground">Start date</dt>
+                <dd>{{ subject.start_date }}</dd>
+            </div>
+            <div v-if="subject.end_date">
+                <dt class="text-xs text-muted-foreground">End date</dt>
+                <dd>{{ subject.end_date }}</dd>
+            </div>
+        </dl>
 
         <div class="space-y-2">
             <h2 class="text-sm font-semibold">Tags</h2>

@@ -50,6 +50,27 @@ class UserDetailPageTest extends TestCase
             );
     }
 
+    public function test_detail_page_carries_profile_fields_and_supervisor_name(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $supervisor = User::factory()->for($org, 'organization')->create(['f_name' => 'Sue', 'l_name' => 'Boss']);
+        $target = User::factory()->for($org, 'organization')->create([
+            'department' => 'Field Ops',
+            'job_title' => 'Operator',
+            'supervisor_id' => $supervisor->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('users.show', $target))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('subject.department', 'Field Ops')
+                ->where('subject.job_title', 'Operator')
+                ->where('subject.supervisor_name', 'Sue Boss')
+            );
+    }
+
     public function test_manager_can_view_any_org_user_detail_page(): void
     {
         $org = Organization::factory()->create();

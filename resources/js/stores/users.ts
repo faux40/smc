@@ -34,6 +34,12 @@ export interface UserRow {
     email: string | null;
     status: 'active' | 'disabled';
     role: string | null;
+    department: string | null;
+    location: string | null;
+    job_title: string | null;
+    supervisor_id: string | null;
+    start_date: string | null;
+    end_date: string | null;
     created_at: string | null;
     // Tag IDs attached to this user. Used to hydrate the tagsStore
     // `attached` map on first paint so TagsListCell renders without a
@@ -107,6 +113,12 @@ export const useUsersStore = defineStore('users', () => {
                 email: payload.email ?? null,
                 status: payload.status ?? 'active',
                 role: null,
+                department: null,
+                location: null,
+                job_title: null,
+                supervisor_id: null,
+                start_date: null,
+                end_date: null,
                 created_at: null,
                 // Realtime-created rows arrive without tag attachments; the
                 // tagsStore reconciles via TagAttached broadcasts.
@@ -167,8 +179,18 @@ export const useUsersStore = defineStore('users', () => {
         suffix_name: string | null;
     }
 
+    // Optional profile fields shared by create + update.
+    interface ProfilePayload {
+        department?: string | null;
+        location?: string | null;
+        job_title?: string | null;
+        supervisor_id?: string | null;
+        start_date?: string | null;
+        end_date?: string | null;
+    }
+
     function create(
-        form: NamePayload & { email: string | null },
+        form: NamePayload & ProfilePayload & { email: string | null },
         opts: {
             onSuccess?: () => void;
             onError?: (errors: Record<string, string>) => void;
@@ -188,11 +210,12 @@ export const useUsersStore = defineStore('users', () => {
 
     function update(
         id: string,
-        form: NamePayload & {
-            email: string | null;
-            role?: string;
-            status: 'active' | 'disabled';
-        },
+        form: NamePayload &
+            ProfilePayload & {
+                email: string | null;
+                role?: string;
+                status: 'active' | 'disabled';
+            },
         opts: {
             onSuccess?: () => void;
             onError?: (errors: Record<string, string>) => void;

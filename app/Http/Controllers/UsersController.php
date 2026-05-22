@@ -79,7 +79,7 @@ class UsersController extends Controller
             })
             ->orderBy('l_name')
             ->orderBy('f_name')
-            ->get(['id', 'org_id', 'f_name', 'm_name', 'l_name', 'prefix_name', 'suffix_name', 'email', 'status', 'created_at'])
+            ->get(['id', 'org_id', 'f_name', 'm_name', 'l_name', 'prefix_name', 'suffix_name', 'email', 'status', 'department', 'location', 'job_title', 'supervisor_id', 'start_date', 'end_date', 'created_at'])
             ->when($roleFilter !== '', fn ($collection) => $collection->filter(
                 fn (User $u) => $u->roles->contains('name', $roleFilter),
             )->values())
@@ -94,6 +94,12 @@ class UsersController extends Controller
                 'email' => $u->email,
                 'status' => $u->status,
                 'role' => $u->roles->first()?->name,
+                'department' => $u->department,
+                'location' => $u->location,
+                'job_title' => $u->job_title,
+                'supervisor_id' => $u->supervisor_id,
+                'start_date' => $u->start_date?->toDateString(),
+                'end_date' => $u->end_date?->toDateString(),
                 'created_at' => $u->created_at?->toDateTimeString(),
                 // TagsListCell hydrates the tags store with these so the
                 // first paint already shows attached pills without a
@@ -166,6 +172,12 @@ class UsersController extends Controller
                 'email' => $user->email,
                 'status' => $user->status,
                 'role' => $user->roles->first()?->name,
+                'department' => $user->department,
+                'location' => $user->location,
+                'job_title' => $user->job_title,
+                'supervisor_name' => $user->supervisor?->name,
+                'start_date' => $user->start_date?->toDateString(),
+                'end_date' => $user->end_date?->toDateString(),
             ],
             // TagsField is mounted on the page; hydrate it with the
             // current attachments so it doesn't need a follow-up fetch.

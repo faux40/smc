@@ -48,7 +48,17 @@ interface FormState {
     email: string;
     role: string;
     status: 'active' | 'disabled';
+    department: string;
+    location: string;
+    job_title: string;
+    supervisor_id: string; // '' = none
+    start_date: string;
+    end_date: string;
 }
+
+// Sentinel for the "no supervisor" Select option (reka-ui rejects empty-string
+// item values); mapped back to '' in the form.
+const NO_SUPERVISOR = '__none';
 
 const ASSIGNABLE_ROLES = [
     'SuperAdmin',
@@ -68,6 +78,26 @@ const form = reactive<FormState>({
     email: '',
     role: 'None',
     status: 'active',
+    department: '',
+    location: '',
+    job_title: '',
+    supervisor_id: '',
+    start_date: '',
+    end_date: '',
+});
+
+// Same-org users eligible as a supervisor — exclude the user being edited so
+// nobody can supervise themselves (the backend also rejects it).
+const supervisorOptions = computed(() =>
+    store.users.filter((u) => u.id !== props.target?.id),
+);
+
+// reka-ui Select can't bind the empty string, so proxy '' ↔ the sentinel.
+const supervisorModel = computed({
+    get: () => (form.supervisor_id === '' ? NO_SUPERVISOR : form.supervisor_id),
+    set: (v: string) => {
+        form.supervisor_id = v === NO_SUPERVISOR ? '' : v;
+    },
 });
 const submitting = ref(false);
 const errorStore = useErrorStore();
@@ -105,6 +135,12 @@ watch(
             form.email = t.email ?? '';
             form.role = t.role ?? 'None';
             form.status = t.status;
+            form.department = t.department ?? '';
+            form.location = t.location ?? '';
+            form.job_title = t.job_title ?? '';
+            form.supervisor_id = t.supervisor_id ?? '';
+            form.start_date = t.start_date ?? '';
+            form.end_date = t.end_date ?? '';
         } else {
             form.f_name = '';
             form.m_name = '';
@@ -114,6 +150,12 @@ watch(
             form.email = '';
             form.role = 'None';
             form.status = 'active';
+            form.department = '';
+            form.location = '';
+            form.job_title = '';
+            form.supervisor_id = '';
+            form.start_date = '';
+            form.end_date = '';
         }
     },
 );
@@ -153,6 +195,16 @@ const submit = () => {
     };
     const email = form.email.trim() === '' ? null : form.email;
 
+    const blank = (v: string) => (v.trim() === '' ? null : v);
+    const profilePayload = {
+        department: blank(form.department),
+        location: blank(form.location),
+        job_title: blank(form.job_title),
+        supervisor_id: form.supervisor_id === '' ? null : form.supervisor_id,
+        start_date: blank(form.start_date),
+        end_date: blank(form.end_date),
+    };
+
     if (isEdit.value && props.target) {
         // Owner role is managed by the (planned) ownership-transfer
         // flow, not this form. Omit `role` entirely so the backend
@@ -161,6 +213,7 @@ const submit = () => {
             props.target.id,
             {
                 ...namePayload,
+                ...profilePayload,
                 email,
                 status: form.status,
                 ...(isOwnerTarget.value ? {} : { role: form.role }),
@@ -168,7 +221,7 @@ const submit = () => {
             opts,
         );
     } else {
-        store.create({ ...namePayload, email }, opts);
+        store.create({ ...namePayload, ...profilePayload, email }, opts);
     }
 };
 </script>
@@ -262,6 +315,78 @@ const submit = () => {
                         placeholder="leave blank for no-login user"
                     />
                     <InputError :message="fieldErrors.message('email')" />
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="grid gap-2">
+                        <Label for="user_department">Department</Label>
+                        <Input id="user_department" v-model="form.department" />
+                        <InputError
+                            :message="fieldErrors.message('department')"
+                        />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="user_location">Location</Label>
+                        <Input id="user_location" v-model="form.location" />
+                        <InputError
+                            :message="fieldErrors.message('location')"
+                        />
+                    </div>
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="user_job_title">Job title</Label>
+                    <Input id="user_job_title" v-model="form.job_title" />
+                    <InputError :message="fieldErrors.message('job_title')" />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="user_supervisor">Supervisor (optional)</Label>
+                    <Select v-model="supervisorModel">
+                        <SelectTrigger id="user_supervisor">
+                            <SelectValue placeholder="No supervisor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem :value="NO_SUPERVISOR"
+                                >No supervisor</SelectItem
+                            >
+                            <SelectItem
+                                v-for="u in supervisorOptions"
+                                :key="u.id"
+                                :value="u.id"
+                            >
+                                {{ u.name }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <InputError
+                        :message="fieldErrors.message('supervisor_id')"
+                    />
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="grid gap-2">
+                        <Label for="user_start_date">Start date</Label>
+                        <Input
+                            id="user_start_date"
+                            type="date"
+                            v-model="form.start_date"
+                        />
+                        <InputError
+                            :message="fieldErrors.message('start_date')"
+                        />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="user_end_date">End date</Label>
+                        <Input
+                            id="user_end_date"
+                            type="date"
+                            v-model="form.end_date"
+                        />
+                        <InputError
+                            :message="fieldErrors.message('end_date')"
+                        />
+                    </div>
                 </div>
 
                 <template v-if="isEdit">
