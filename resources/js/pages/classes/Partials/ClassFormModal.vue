@@ -77,9 +77,46 @@ watch(
     },
 );
 
+/**
+ * Client-side guard for the two required fields. We drive validation in JS
+ * (the form is `novalidate`) rather than relying on the browser's native
+ * `required` popups — those silently block submission with no network call
+ * and no feedback when a field can't be focused (e.g. Safari's date input),
+ * which reads to the user as "nothing happens".
+ */
+function validate(): boolean {
+    const fieldErrors: Record<string, string[]> = {};
+
+    if (form.name.trim() === '') {
+        fieldErrors.name = ['Please enter a class name.'];
+    }
+
+    if (form.scheduled_date.trim() === '') {
+        fieldErrors.scheduled_date = ['Please choose a scheduled date.'];
+    }
+
+    if (Object.keys(fieldErrors).length > 0) {
+        errorStore.report({
+            context: FORM_CTX,
+            message: 'Please complete the required fields.',
+            fieldErrors,
+            surface: 'banner',
+        });
+
+        return false;
+    }
+
+    return true;
+}
+
 async function submit(): Promise<void> {
-    submitting.value = true;
     errorStore.clear(FORM_CTX);
+
+    if (!validate()) {
+        return;
+    }
+
+    submitting.value = true;
 
     const blank = (v: string) => (v.trim() === '' ? null : v);
     const payload = {
@@ -114,8 +151,8 @@ async function submit(): Promise<void> {
 
 <template>
     <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
-        <DialogContent>
-            <form @submit.prevent="submit" class="space-y-4">
+        <DialogContent class="sm:max-w-2xl">
+            <form @submit.prevent="submit" novalidate class="space-y-4">
                 <DialogHeader>
                     <DialogTitle>{{ title }}</DialogTitle>
                     <DialogDescription>
@@ -127,12 +164,16 @@ async function submit(): Promise<void> {
                 <ErrorBanner :context="FORM_CTX" />
 
                 <div class="grid gap-2">
-                    <Label for="class_name">Name</Label>
+                    <Label for="class_name">Class name</Label>
                     <Input
                         id="class_name"
+                        name="class_name"
                         v-model="form.name"
-                        required
                         autofocus
+                        autocomplete="off"
+                        data-1p-ignore
+                        data-lpignore="true"
+                        placeholder="e.g. Fall Protection — Spring"
                     />
                     <InputError :message="fieldErrors.message('name')" />
                 </div>
@@ -144,7 +185,6 @@ async function submit(): Promise<void> {
                             id="class_date"
                             type="date"
                             v-model="form.scheduled_date"
-                            required
                         />
                         <InputError
                             :message="fieldErrors.message('scheduled_date')"
