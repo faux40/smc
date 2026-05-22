@@ -134,6 +134,6 @@ onMounted(async () => {
             </div>
         </AsyncState>
 
-        <ClassFormModal v-model:open="modalOpen" mode="create" />
+        <ClassFormModal v-model:open="modalOpen" />
     </div>
 </template>

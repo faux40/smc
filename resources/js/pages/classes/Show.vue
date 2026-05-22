@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
+import ClassFieldset from '@/components/ClassFieldset.vue';
+import ErrorBanner from '@/components/ErrorBanner.vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,12 +17,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useClassForm } from '@/composables/useClassForm';
 import { realtimeTabId } from '@/echo';
 import { optionalNumber } from '@/lib/forms';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
-import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import { page as classesPage } from '@/routes/classes';
 import { useClassesStore } from '@/stores/classes';
+import { useErrorStore } from '@/stores/errors';
 import { useTrainingsStore } from '@/stores/trainings';
 
 const props = defineProps<{ classId: string }>();
@@ -38,8 +41,11 @@ interface PickerUser {
     email: string | null;
 }
 
+const FORM_CTX = 'form:class';
+
 const store = useClassesStore();
 const trainings = useTrainingsStore();
+const errorStore = useErrorStore();
 const page = usePage();
 const orgId = computed(
     () => (page.props.auth.user as { org_id?: string } | null)?.org_id ?? null,
@@ -50,12 +56,67 @@ const error = ref<string | null>(null);
 const detail = computed(() => store.detail[props.classId] ?? null);
 
 const userPicker = ref<PickerUser[]>([]);
-const editOpen = ref(false);
 const completeOpen = ref(false);
 const attachTrainingId = ref('');
 const attachHours = ref('');
 const enrollUserId = ref('');
 const actionError = ref<string | null>(null);
+
+// Inline edit of the class's core fields (scheduled, editable classes).
+const { form, setFrom, validate, payload } = useClassForm(FORM_CTX);
+const saving = ref(false);
+
+const canEditDetails = computed(
+    () => detail.value?.can_edit === true && detail.value?.status === 'scheduled',
+);
+
+const isDirty = computed(() => {
+    const d = detail.value;
+
+    if (!d) {
+        return false;
+    }
+
+    const f = form.value;
+    const text = (v: string | null | undefined) => (v ?? '').toString().trim();
+
+    return (
+        text(f.name) !== text(d.name) ||
+        text(f.scheduled_date) !== text(d.scheduled_date) ||
+        text(f.location) !== text(d.location) ||
+        text(f.instructor) !== text(d.instructor) ||
+        optionalNumber(f.total_hours) !== optionalNumber(d.total_hours) ||
+        text(f.notes) !== text(d.notes)
+    );
+});
+
+// Keep the form in sync with the server copy unless the user has unsaved
+// edits in flight (so a realtime update doesn't clobber typing).
+watch(detail, (d) => {
+    if (d && !isDirty.value) {
+        setFrom(d);
+    }
+});
+
+async function saveDetails(): Promise<void> {
+    errorStore.clear(FORM_CTX);
+
+    if (!validate()) {
+        return;
+    }
+
+    saving.value = true;
+
+    try {
+        await store.update(props.classId, payload());
+    } catch (e) {
+        errorStore.reportFromAxios(e, FORM_CTX, {
+            fallback: 'Failed to save the class.',
+        });
+    } finally {
+        saving.value = false;
+    }
+}
 
 function headers(): Record<string, string> {
     const csrf = document.querySelector<HTMLMetaElement>(
@@ -81,6 +142,7 @@ onMounted(async () => {
             trainings.load(),
             loadUsers(),
         ]);
+        setFrom(detail.value);
     } catch (e) {
         error.value = (e as Error).message;
     } finally {
@@ -151,7 +213,11 @@ const enroll = () =>
                 <div class="flex items-start justify-between gap-4">
                     <Heading
                         :title="detail.name"
-                        :description="`${detail.scheduled_date ?? ''}${detail.location ? ' · ' + detail.location : ''}${detail.instructor ? ' · ' + detail.instructor : ''}`"
+                        :description="
+                            detail.status === 'completed'
+                                ? 'Completed — view only'
+                                : 'Scheduled class'
+                        "
                     />
                     <div class="flex items-center gap-2">
                         <Badge
@@ -165,15 +231,6 @@ const enroll = () =>
                         </Badge>
                         <Button
                             v-if="
-                                detail.can_edit && detail.status === 'scheduled'
-                            "
-                            variant="outline"
-                            @click="editOpen = true"
-                        >
-                            Edit
-                        </Button>
-                        <Button
-                            v-if="
                                 detail.can_edit &&
                                 detail.status === 'scheduled' &&
                                 detail.enrollments.length > 0 &&
@@ -185,6 +242,67 @@ const enroll = () =>
                         </Button>
                     </div>
                 </div>
+
+                <!-- Class details: always-editable inline form (scheduled) -->
+                <section
+                    v-if="canEditDetails"
+                    class="rounded-md border border-border p-4"
+                >
+                    <h2 class="mb-3 text-sm font-semibold">Details</h2>
+                    <ErrorBanner :context="FORM_CTX" />
+                    <form @submit.prevent="saveDetails" novalidate>
+                        <ClassFieldset
+                            v-model="form"
+                            :context="FORM_CTX"
+                            id-prefix="edit"
+                        />
+                        <div class="mt-4 flex justify-end">
+                            <Button
+                                type="submit"
+                                :disabled="!isDirty || saving"
+                            >
+                                Save changes
+                            </Button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- Read-only details for completed (locked) classes -->
+                <dl
+                    v-else
+                    class="grid grid-cols-2 gap-x-6 gap-y-2 rounded-md border border-border p-4 text-sm sm:grid-cols-3"
+                >
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Scheduled date
+                        </dt>
+                        <dd>{{ detail.scheduled_date || '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Completed
+                        </dt>
+                        <dd>{{ detail.completion_date || '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Location</dt>
+                        <dd>{{ detail.location || '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Instructor</dt>
+                        <dd>{{ detail.instructor || '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Total hours
+                        </dt>
+                        <dd>{{ detail.total_hours ?? '—' }}</dd>
+                    </div>
+                    <div v-if="detail.notes" class="col-span-2 sm:col-span-3">
+                        <dt class="text-xs text-muted-foreground">Notes</dt>
+                        <dd class="whitespace-pre-line">{{ detail.notes }}</dd>
+                    </div>
+                </dl>
 
                 <p
                     v-if="actionError"
@@ -350,11 +468,6 @@ const enroll = () =>
                     </ul>
                 </section>
 
-                <ClassFormModal
-                    v-model:open="editOpen"
-                    mode="edit"
-                    :target="detail"
-                />
                 <ClassCompleteModal
                     v-model:open="completeOpen"
                     :target="detail"

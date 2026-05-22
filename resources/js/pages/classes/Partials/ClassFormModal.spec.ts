@@ -25,7 +25,7 @@ describe('ClassFormModal create validation', () => {
 
     async function openCreate() {
         const wrapper = mount(ClassFormModal, {
-            props: { open: false, mode: 'create' },
+            props: { open: false },
             attachTo: document.body,
         });
         await wrapper.setProps({ open: true });
