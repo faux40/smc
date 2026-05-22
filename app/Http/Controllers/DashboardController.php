@@ -39,6 +39,15 @@ class DashboardController extends Controller
         return response()->json($summary);
     }
 
+    public function usersCompliance(Request $request): JsonResponse
+    {
+        $this->authorize($request);
+
+        return response()->json(
+            $this->calculator->usersComplianceSummary($this->orgFor($request)),
+        );
+    }
+
     public function overdueUsers(Request $request): JsonResponse
     {
         $this->authorize($request);

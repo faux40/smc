@@ -54,6 +54,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/dashboard/overdue-users', [DashboardController::class, 'overdueUsers'])->name('dashboard.overdue-users');
     Route::get('api/dashboard/due-soon', [DashboardController::class, 'dueSoon'])->name('dashboard.due-soon');
     Route::get('api/dashboard/recent-completions', [DashboardController::class, 'recentCompletions'])->name('dashboard.recent-completions');
+    Route::get('api/dashboard/users-compliance', [DashboardController::class, 'usersCompliance'])->name('dashboard.users-compliance');
 
     Route::get('users', [UsersController::class, 'index'])->name('users.index');
     Route::post('users', [UsersController::class, 'store'])->name('users.store');

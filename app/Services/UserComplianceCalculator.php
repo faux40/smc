@@ -272,6 +272,65 @@ class UserComplianceCalculator
     }
 
     /**
+     * Per-user compliance summary for the dashboard's full-width all-users
+     * list — one row each with per-status counts, an overall status, and the
+     * user's attached tag ids. Loops users (the same O(users) ceiling as the
+     * other rollups); std_frequencies + tags are loaded once up front so
+     * there's no per-user N+1.
+     *
+     * @return array<int, array{
+     *     user_id: string, name: string, email: ?string,
+     *     counts: array<string,int>, overall_status: string, tag_ids: array<int,string>
+     * }>
+     */
+    public function usersComplianceSummary(Organization $org, ?CarbonImmutable $now = null): array
+    {
+        $now = $now ?? CarbonImmutable::now();
+        $freqs = $this->loadFrequencies($org->id);
+        $users = $this->orgUsers($org)->load('tags:id');
+
+        $rows = [];
+
+        foreach ($users as $user) {
+            $result = $this->compute($user, $now, $freqs);
+
+            $counts = [];
+
+            foreach (self::STATUS_RANK as $status) {
+                $counts[$status] = count($result['groups'][$status]);
+            }
+
+            $rows[] = [
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'counts' => $counts,
+                'overall_status' => $this->overallStatus($counts),
+                'tag_ids' => $user->tags->pluck('id')->all(),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Worst non-empty status by STATUS_RANK precedence (overdue first); 'none'
+     * when the user has no assignments at all.
+     *
+     * @param  array<string,int>  $counts
+     */
+    private function overallStatus(array $counts): string
+    {
+        foreach (self::STATUS_RANK as $status) {
+            if (($counts[$status] ?? 0) > 0) {
+                return $status;
+            }
+        }
+
+        return 'none';
+    }
+
+    /**
      * Every user in the org. Soft-deleted users are excluded by the
      * model's global scope; the org global scope is a no-op here since
      * we filter on `org_id` explicitly.

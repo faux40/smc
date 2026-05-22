@@ -87,6 +87,25 @@ class CompliancePerformanceTest extends TestCase
         );
     }
 
+    public function test_users_compliance_summary_loads_freqs_and_tags_once_not_per_user(): void
+    {
+        $org = Organization::factory()->create();
+        User::factory()->for($org, 'organization')->count(6)->create();
+
+        $calc = app(UserComplianceCalculator::class);
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $calc->usersComplianceSummary($org);
+        $log = collect(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $freq = $log->filter(fn ($q) => str_contains($q['query'], 'std_frequencies'))->count();
+        $tags = $log->filter(fn ($q) => str_contains($q['query'], 'taggables'))->count();
+
+        $this->assertLessThanOrEqual(1, $freq, "std_frequencies queried {$freq}× — should be once.");
+        $this->assertLessThanOrEqual(1, $tags, "tags eager-load queried {$tags}× — should be once for all users.");
+    }
+
     public function test_summarize_org_stays_within_a_linear_query_budget(): void
     {
         // Soak guard documenting the O(users) ceiling. ~5 per-user queries +
