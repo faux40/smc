@@ -8,18 +8,15 @@ import laravel from 'laravel-vite-plugin';
 import { bunny } from 'laravel-vite-plugin/fonts';
 import { defineConfig } from 'vite';
 
+const inDocker = !!process.env.VITE_DOCKER;
+
 export default defineConfig({
     resolve: {
-        // The app imports via `@/…` everywhere; make the alias explicit so
-        // both the build and Vitest resolve it the same way.
         alias: {
             '@': fileURLToPath(new URL('./resources/js', import.meta.url)),
         },
     },
     test: {
-        // happy-dom over jsdom: faster, lighter, enough DOM for component
-        // mounts. `globals` so specs read like Pest (describe/it/expect with
-        // no imports). Specs live beside source as *.spec.ts / *.test.ts.
         globals: true,
         environment: 'happy-dom',
         include: ['resources/js/**/*.{test,spec}.ts'],
@@ -27,21 +24,17 @@ export default defineConfig({
         css: false,
     },
     server: {
-        // Vite is started with `--host 0.0.0.0` inside Docker so the
-        // container is reachable from the host. But we want the URLs
-        // Vite writes into the page (assets, HMR client) to use
-        // `localhost`, since that's what the browser can actually
-        // reach. Harmless when running outside Docker — the browser
-        // sees `localhost` either way.
-        origin: 'http://localhost:5173',
-        // Vite 6+ blocks cross-origin asset requests by default. The
-        // Laravel app and Vite are on different ports in dev (8000 vs
-        // 5173). `true` sends Access-Control-Allow-Origin: * — fine
-        // for a local dev server.
+        origin: inDocker
+            ? (process.env.VITE_DEV_SERVER_ORIGIN ?? 'http://localhost:5173')
+            : 'http://localhost:5173',
         cors: true,
         hmr: {
             host: 'localhost',
+            clientPort: inDocker
+                ? parseInt(process.env.VITE_HMR_PORT ?? '5173')
+                : 5173,
         },
+        ...(inDocker ? { host: '0.0.0.0' } : {}),
     },
     plugins: [
         laravel({
