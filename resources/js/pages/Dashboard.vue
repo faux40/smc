@@ -14,8 +14,8 @@
  */
 import { Head, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import AllUsersComplianceWidget from '@/components/dashboard/AllUsersComplianceWidget.vue';
 import DueSoonWidget from '@/components/dashboard/DueSoonWidget.vue';
-import OverdueUsersWidget from '@/components/dashboard/OverdueUsersWidget.vue';
 import RecentCompletionsWidget from '@/components/dashboard/RecentCompletionsWidget.vue';
 import SummaryStatsWidget from '@/components/dashboard/SummaryStatsWidget.vue';
 import { dashboard } from '@/routes';
@@ -59,12 +59,12 @@ const canSeeWidgets = computed(() =>
         <template v-if="canSeeWidgets">
             <SummaryStatsWidget />
 
-            <div class="grid gap-4 md:grid-cols-2">
-                <OverdueUsersWidget />
-                <DueSoonWidget />
-            </div>
+            <AllUsersComplianceWidget />
 
-            <RecentCompletionsWidget />
+            <div class="grid gap-4 md:grid-cols-2">
+                <DueSoonWidget />
+                <RecentCompletionsWidget />
+            </div>
         </template>
 
         <template v-else>
