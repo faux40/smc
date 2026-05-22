@@ -69,4 +69,23 @@ describe('useClassesStore', () => {
         expect(store.library.find((c) => c.id === 'c1')).toBeUndefined();
         expect(store.detail.c1).toBeUndefined();
     });
+
+    it('complete() posts the close-out and caches the returned detail', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({ data: { ...detailA, status: 'completed' } });
+        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
+        const store = useClassesStore();
+
+        await store.complete('c1', {
+            completion_date: '2026-06-01',
+            enrollments: [{ id: 'e1', status: 'passed', notes: null }],
+        });
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/classes/c1/complete',
+            expect.objectContaining({ completion_date: '2026-06-01' }),
+            expect.anything(),
+        );
+        expect(store.detail.c1.status).toBe('completed');
+    });
 });

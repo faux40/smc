@@ -16,6 +16,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { realtimeTabId } from '@/echo';
+import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import { page as classesPage } from '@/routes/classes';
 import { useClassesStore } from '@/stores/classes';
@@ -49,6 +50,7 @@ const detail = computed(() => store.detail[props.classId] ?? null);
 
 const userPicker = ref<PickerUser[]>([]);
 const editOpen = ref(false);
+const completeOpen = ref(false);
 const attachTrainingId = ref('');
 const attachHours = ref('');
 const enrollUserId = ref('');
@@ -171,6 +173,17 @@ const enroll = () =>
                             @click="editOpen = true"
                         >
                             Edit
+                        </Button>
+                        <Button
+                            v-if="
+                                detail.can_edit &&
+                                detail.status === 'scheduled' &&
+                                detail.enrollments.length > 0 &&
+                                detail.trainings.length > 0
+                            "
+                            @click="completeOpen = true"
+                        >
+                            Complete class
                         </Button>
                     </div>
                 </div>
@@ -342,6 +355,10 @@ const enroll = () =>
                 <ClassFormModal
                     v-model:open="editOpen"
                     mode="edit"
+                    :target="detail"
+                />
+                <ClassCompleteModal
+                    v-model:open="completeOpen"
                     :target="detail"
                 />
             </template>

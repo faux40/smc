@@ -196,6 +196,27 @@ export const useClassesStore = defineStore('classes', () => {
         return cache(data);
     }
 
+    async function complete(
+        id: string,
+        payload: {
+            completion_date: string;
+            enrollments: {
+                id: string;
+                status: 'passed' | 'incomplete';
+                notes: string | null;
+            }[];
+        },
+    ): Promise<ClassDetail> {
+        const { data } = await axios.post<ClassDetail>(
+            `/api/classes/${id}/complete`,
+            payload,
+            { headers: defaultHeaders() },
+        );
+        await load(true);
+
+        return cache(data);
+    }
+
     function subscribe(orgId: string): void {
         if (subscribedOrgId.value === orgId) {
             return;
@@ -233,6 +254,7 @@ export const useClassesStore = defineStore('classes', () => {
         detachTraining,
         enroll,
         unenroll,
+        complete,
         subscribe,
     };
 });
