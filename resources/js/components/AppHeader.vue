@@ -3,6 +3,7 @@ import { Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import {
     Bug,
+    CalendarDays,
     CheckCircle2,
     ClipboardList,
     ClipboardCheck,
@@ -52,6 +53,7 @@ import { useRealtime } from '@/composables/useRealtime';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { page as assignmentsPage } from '@/routes/assignments';
+import { page as classesPage } from '@/routes/classes';
 import { page as completionsPage } from '@/routes/completions';
 import { page as requirementsPage } from '@/routes/requirements';
 import { page as tagsPage } from '@/routes/tags';
@@ -129,6 +131,11 @@ const mainNavItems = computed<NavItem[]>(() => {
             title: 'Bulk assign',
             href: bulkAssignmentPage(),
             icon: Workflow,
+        });
+        items.push({
+            title: 'Classes',
+            href: classesPage(),
+            icon: CalendarDays,
         });
     }
 

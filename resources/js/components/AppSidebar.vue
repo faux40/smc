@@ -2,6 +2,7 @@
 import { Link, usePage } from '@inertiajs/vue3';
 import {
     BookOpen,
+    CalendarDays,
     FolderGit2,
     GraduationCap,
     LayoutGrid,
@@ -22,6 +23,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { page as classesPage } from '@/routes/classes';
 import { page as trainingsPage } from '@/routes/trainings';
 import { index as usersIndex } from '@/routes/users';
 import type { NavItem } from '@/types';
@@ -33,6 +35,7 @@ const authUser = computed(
             isOwner?: boolean;
             isSuperAdmin?: boolean;
             isAdmin?: boolean;
+            isManager?: boolean;
         } | null,
 );
 
@@ -57,6 +60,16 @@ const mainNavItems = computed<NavItem[]>(() => {
             title: 'Trainings',
             href: trainingsPage(),
             icon: GraduationCap,
+        });
+    }
+
+    // Classes are a Manager+ scheduling tool (wider than the Admin-only
+    // library management above).
+    if (u && (u.isOwner || u.isSuperAdmin || u.isAdmin || u.isManager)) {
+        items.push({
+            title: 'Classes',
+            href: classesPage(),
+            icon: CalendarDays,
         });
     }
 
