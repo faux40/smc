@@ -70,6 +70,30 @@ describe('useClassesStore', () => {
         expect(store.detail.c1).toBeUndefined();
     });
 
+    it('create() posts the payload (incl. training_ids) and caches the detail', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({ data: detailA });
+        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
+        const store = useClassesStore();
+
+        await store.create({
+            name: 'Class A',
+            scheduled_date: '2026-06-01',
+            location: null,
+            instructor: null,
+            total_hours: null,
+            notes: null,
+            training_ids: ['t1', 't2'],
+        });
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/classes',
+            expect.objectContaining({ training_ids: ['t1', 't2'] }),
+            expect.anything(),
+        );
+        expect(store.detail.c1.name).toBe('Class A');
+    });
+
     it('complete() posts the close-out and caches the returned detail', async () => {
         const post = axios.post as ReturnType<typeof vi.fn>;
         post.mockResolvedValue({ data: { ...detailA, status: 'completed' } });

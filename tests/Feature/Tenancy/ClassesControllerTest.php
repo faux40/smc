@@ -46,6 +46,45 @@ class ClassesControllerTest extends TestCase
         $this->assertDatabaseHas('classes', ['org_id' => $org->id, 'name' => 'Fall Protection — Spring']);
     }
 
+    public function test_create_with_training_ids_snapshots_each_training(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $a = Training::factory()->for($org, 'organization')->create(['name' => 'Fall Protection']);
+        $b = Training::factory()->for($org, 'organization')->create(['name' => 'First Aid']);
+
+        $this->actingAs($manager)
+            ->postJson('/api/classes', [
+                'name' => 'Combined Class',
+                'scheduled_date' => '2026-06-01',
+                'training_ids' => [$a->id, $b->id],
+            ])
+            ->assertCreated()
+            ->assertJsonCount(2, 'trainings');
+
+        $class = TrainingClass::where('org_id', $org->id)->firstOrFail();
+        $names = ClassTraining::where('class_id', $class->id)->pluck('training_name')->all();
+        $this->assertEqualsCanonicalizing(['Fall Protection', 'First Aid'], $names);
+    }
+
+    public function test_create_rejects_a_cross_org_training_id(): void
+    {
+        $org = Organization::factory()->create();
+        $otherOrg = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $foreign = Training::factory()->for($otherOrg, 'organization')->create();
+
+        $this->actingAs($manager)
+            ->postJson('/api/classes', [
+                'name' => 'x',
+                'scheduled_date' => '2026-06-01',
+                'training_ids' => [$foreign->id],
+            ])
+            ->assertStatus(422);
+
+        $this->assertDatabaseMissing('classes', ['name' => 'x']);
+    }
+
     public function test_non_manager_cannot_create_a_class(): void
     {
         $org = Organization::factory()->create();

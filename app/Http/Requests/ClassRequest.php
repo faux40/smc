@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Create + update validation for a class. Per-action policy authz happens in
@@ -29,6 +30,14 @@ class ClassRequest extends FormRequest
             'instructor' => ['nullable', 'string', 'max:255'],
             'total_hours' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
+            // Optional at-create-time training picker (snapshotted on store).
+            'training_ids' => ['nullable', 'array'],
+            'training_ids.*' => [
+                'string',
+                Rule::exists('trainings', 'id')
+                    ->where('org_id', $this->user()->org_id)
+                    ->whereNull('deleted_at'),
+            ],
         ];
     }
 }

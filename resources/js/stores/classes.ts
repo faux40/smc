@@ -66,6 +66,8 @@ export interface ClassFormPayload {
     instructor: string | null;
     total_hours: number | null;
     notes: string | null;
+    // Create-only: snapshot these trainings onto the new class.
+    training_ids?: string[];
 }
 
 function defaultHeaders(): Record<string, string> {

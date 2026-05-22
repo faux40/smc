@@ -14,9 +14,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFieldErrors } from '@/composables/useFieldErrors';
+import TrainingMultiSelect from '@/pages/classes/Partials/TrainingMultiSelect.vue';
 import { useClassesStore } from '@/stores/classes';
 import type { ClassDetail } from '@/stores/classes';
 import { useErrorStore } from '@/stores/errors';
+import { useTrainingsStore } from '@/stores/trainings';
 
 const FORM_CTX = 'form:class';
 
@@ -32,6 +34,7 @@ const emit = defineEmits<{
 }>();
 
 const store = useClassesStore();
+const trainings = useTrainingsStore();
 const errorStore = useErrorStore();
 const fieldErrors = useFieldErrors(FORM_CTX);
 const submitting = ref(false);
@@ -47,6 +50,8 @@ const form = reactive({
     total_hours: '',
     notes: '',
 });
+// Create-only: which existing trainings to snapshot onto the new class.
+const selectedTrainingIds = ref<string[]>([]);
 
 watch(
     () => props.open,
@@ -63,6 +68,12 @@ watch(
         form.instructor = t?.instructor ?? '';
         form.total_hours = t?.total_hours ?? '';
         form.notes = t?.notes ?? '';
+        selectedTrainingIds.value = [];
+
+        // The trainings picker only exists in create mode.
+        if (!isEdit.value) {
+            void trainings.load();
+        }
     },
 );
 
@@ -85,7 +96,10 @@ async function submit(): Promise<void> {
         const detail =
             isEdit.value && props.target
                 ? await store.update(props.target.id, payload)
-                : await store.create(payload);
+                : await store.create({
+                      ...payload,
+                      training_ids: selectedTrainingIds.value,
+                  });
         emit('saved', detail);
         emit('update:open', false);
     } catch (e) {
@@ -181,6 +195,12 @@ async function submit(): Promise<void> {
                     />
                     <InputError :message="fieldErrors.message('notes')" />
                 </div>
+
+                <TrainingMultiSelect
+                    v-if="!isEdit"
+                    v-model="selectedTrainingIds"
+                    :trainings="trainings.library"
+                />
 
                 <DialogFooter>
                     <Button

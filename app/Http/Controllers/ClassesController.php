@@ -59,11 +59,30 @@ class ClassesController extends Controller
     {
         Gate::authorize('create', TrainingClass::class);
 
-        $class = TrainingClass::create([
-            'org_id' => $request->user()->org_id,
-            'status' => 'scheduled',
-            ...$request->validated(),
-        ]);
+        $data = $request->validated();
+        $trainingIds = $data['training_ids'] ?? [];
+        unset($data['training_ids']);
+
+        $class = DB::transaction(function () use ($request, $data, $trainingIds) {
+            $class = TrainingClass::create([
+                'org_id' => $request->user()->org_id,
+                'status' => 'scheduled',
+                ...$data,
+            ]);
+
+            if ($trainingIds !== []) {
+                $trainings = Training::query()
+                    ->with('stdFrequency:id,name,repeat_days')
+                    ->whereIn('id', $trainingIds)
+                    ->get();
+
+                foreach ($trainings as $training) {
+                    $this->snapshotTraining($class, $training, null);
+                }
+            }
+
+            return $class;
+        });
 
         event(new ClassChanged($class->id, $class->org_id, 'created'));
 
@@ -107,19 +126,8 @@ class ClassesController extends Controller
             'hours' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        // Snapshot the training's fields so later edits don't rewrite history.
         $training = Training::query()->with('stdFrequency:id,name,repeat_days')->findOrFail($data['training_id']);
-
-        $class->classTrainings()->create([
-            'training_id' => $training->id,
-            'training_name' => $training->name,
-            'initial_only' => $training->initial_only,
-            'repeating' => $training->repeating,
-            'as_needed' => $training->as_needed,
-            'repeat_days' => $training->stdFrequency?->repeat_days,
-            'std_freq_name' => $training->stdFrequency?->name,
-            'hours' => $data['hours'] ?? null,
-        ]);
+        $this->snapshotTraining($class, $training, $data['hours'] ?? null);
 
         event(new ClassChanged($class->id, $class->org_id, 'updated'));
 
@@ -258,6 +266,25 @@ class ClassesController extends Controller
         event(new ClassChanged($class->id, $class->org_id, 'completed'));
 
         return response()->json($this->detail($class->fresh()));
+    }
+
+    /**
+     * Snapshot a training's template fields onto the class so later edits to
+     * the training don't rewrite class history. Shared by store() (the at-
+     * create picker) and attachTraining() (the detail-page picker).
+     */
+    private function snapshotTraining(TrainingClass $class, Training $training, ?float $hours): void
+    {
+        $class->classTrainings()->create([
+            'training_id' => $training->id,
+            'training_name' => $training->name,
+            'initial_only' => $training->initial_only,
+            'repeating' => $training->repeating,
+            'as_needed' => $training->as_needed,
+            'repeat_days' => $training->stdFrequency?->repeat_days,
+            'std_freq_name' => $training->stdFrequency?->name,
+            'hours' => $hours,
+        ]);
     }
 
     /** A completed class is view-only — block roster/training/detail edits. */
