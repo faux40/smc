@@ -4,6 +4,11 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
+        {{-- CSRF token for the SPA: Pinia stores read this to set the
+             X-CSRF-TOKEN header on state-mutating requests. Without it,
+             every store-driven POST/PATCH/DELETE 419s. --}}
+        <meta name="csrf-token" content="{{ csrf_token() }}">
+
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>
             (function() {
