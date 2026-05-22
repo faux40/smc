@@ -16,6 +16,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { realtimeTabId } from '@/echo';
+import { optionalNumber } from '@/lib/forms';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import { page as classesPage } from '@/routes/classes';
@@ -124,10 +125,7 @@ const attachTraining = () =>
 
         await store.attachTraining(props.classId, {
             training_id: attachTrainingId.value,
-            hours:
-                attachHours.value.trim() === ''
-                    ? null
-                    : Number(attachHours.value),
+            hours: optionalNumber(attachHours.value),
         });
         attachTrainingId.value = '';
         attachHours.value = '';

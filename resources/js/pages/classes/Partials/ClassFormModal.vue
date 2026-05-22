@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFieldErrors } from '@/composables/useFieldErrors';
+import { optionalNumber } from '@/lib/forms';
 import TrainingMultiSelect from '@/pages/classes/Partials/TrainingMultiSelect.vue';
 import { useClassesStore } from '@/stores/classes';
 import type { ClassDetail } from '@/stores/classes';
@@ -124,8 +125,7 @@ async function submit(): Promise<void> {
         scheduled_date: form.scheduled_date,
         location: blank(form.location),
         instructor: blank(form.instructor),
-        total_hours:
-            form.total_hours.trim() === '' ? null : Number(form.total_hours),
+        total_hours: optionalNumber(form.total_hours),
         notes: blank(form.notes),
     };
 
