@@ -101,7 +101,7 @@ class UserComplianceCalculator
         // Pre-index completions by element id for O(1) lookup inside the
         // per-element loop. Each element id maps to the user's completions
         // that credit it, already sorted newest-first.
-        $completionsByElement = $this->indexCompletionsByElement($completions);
+        $completionsByElement = $this->indexCompletionsByElement($completions, $assignments);
 
         $groups = [
             self::STATUS_OVERDUE => [],
@@ -345,16 +345,45 @@ class UserComplianceCalculator
     }
 
     /**
+     * Map each of the user's requirement-elements to the completions that
+     * credit it. A completion credits an element when EITHER it's explicitly
+     * linked via the completion_elements pivot OR it shares the element's
+     * module identity (module_type + module_id). The latter (option b) means a
+     * standalone training-completion counts wherever that training is required
+     * — assigned or not — which is how class-generated completions earn credit.
+     *
+     * @param  Collection<int, Completion>  $completions
+     * @param  Collection<int, Assignment>  $assignments
      * @return array<string, Collection<int, Completion>>
      */
-    private function indexCompletionsByElement(Collection $completions): array
+    private function indexCompletionsByElement(Collection $completions, Collection $assignments): array
     {
-        $index = [];
+        // Explicit pivot links: element_id => completions.
+        $byPivot = [];
         foreach ($completions as $completion) {
             foreach ($completion->rqmtElements as $element) {
-                $index[$element->id] = $index[$element->id] ?? collect();
-                $index[$element->id]->push($completion);
+                $byPivot[$element->id] = ($byPivot[$element->id] ?? collect())->push($completion);
             }
+        }
+
+        // Module identity: "type::id" => completions.
+        $byModule = [];
+        foreach ($completions as $completion) {
+            $key = $completion->module_type.'::'.$completion->module_id;
+            $byModule[$key] = ($byModule[$key] ?? collect())->push($completion);
+        }
+
+        // For every element across the user's assignments, union the pivot and
+        // module-identity matches (deduped by completion id).
+        $index = [];
+        $elements = $assignments->flatMap(fn (Assignment $a) => $a->requirement?->elements ?? collect());
+        foreach ($elements as $element) {
+            $moduleKey = $element->module_type.'::'.$element->module_id;
+            $index[$element->id] = collect()
+                ->concat($byPivot[$element->id] ?? collect())
+                ->concat($byModule[$moduleKey] ?? collect())
+                ->unique('id')
+                ->values();
         }
 
         return $index;

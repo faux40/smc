@@ -172,6 +172,57 @@ class UserComplianceTest extends TestCase
         );
     }
 
+    public function test_completion_credits_matching_element_by_module_identity_without_pivot(): void
+    {
+        // Option (b): a completion poly→Training X credits any of the user's
+        // Training-X elements even when it isn't explicitly linked via the
+        // completion_elements pivot (the "credit whether assigned or not"
+        // promise; how class-generated completions earn credit).
+        [, $element] = $this->requirementWithElement([
+            'initial_only' => true,
+            'repeating' => false,
+            'as_needed' => false,
+        ]);
+
+        // Standalone completion for the SAME module — NO rqmtElements sync.
+        Completion::factory()->for($this->org, 'organization')->for($this->user, 'user')->state([
+            'module_type' => Training::class,
+            'module_id' => $this->training->id,
+            'completion_date' => $this->now->subDays(10)->toDateString(),
+            'expire_date' => null,
+        ])->create();
+
+        $result = $this->calc()->compute($this->user, $this->now);
+
+        $this->assertCount(0, $result['groups']['overdue']);
+        $this->assertCount(1, $result['groups']['current']);
+        $this->assertNotNull($element->fresh());
+    }
+
+    public function test_completion_for_a_different_module_does_not_credit_the_element(): void
+    {
+        // A completion against a different training must NOT credit this one.
+        [, $element] = $this->requirementWithElement([
+            'initial_only' => true,
+            'repeating' => false,
+            'as_needed' => false,
+        ]);
+        $otherTraining = Training::factory()->for($this->org, 'organization')->create();
+
+        Completion::factory()->for($this->org, 'organization')->for($this->user, 'user')->state([
+            'module_type' => Training::class,
+            'module_id' => $otherTraining->id,
+            'completion_date' => $this->now->subDays(10)->toDateString(),
+            'expire_date' => null,
+        ])->create();
+
+        $result = $this->calc()->compute($this->user, $this->now);
+
+        // Unmatched module → element stays overdue.
+        $this->assertCount(1, $result['groups']['overdue']);
+        $this->assertNotNull($element->fresh());
+    }
+
     public function test_repeating_with_recent_completion_is_current(): void
     {
         [, $element] = $this->requirementWithElement([
@@ -320,10 +371,11 @@ class UserComplianceTest extends TestCase
         $this->assertCount(0, $result['groups']['current']);
     }
 
-    public function test_completion_crediting_one_element_does_not_satisfy_a_second_element(): void
+    public function test_completion_credits_all_same_module_elements_across_requirements(): void
     {
-        // Two requirements; one completion credits requirement A's element
-        // only — requirement B's element stays overdue.
+        // Option (b): one completion for Training X credits EVERY Training-X
+        // element the user has — across separate requirements — even though
+        // the pivot links only requirement A's element. Both roll up current.
         $reqA = Requirement::factory()->for($this->org, 'organization')->create();
         $reqB = Requirement::factory()->for($this->org, 'organization')->create();
         $elementA = RqmtElement::factory()
@@ -360,9 +412,9 @@ class UserComplianceTest extends TestCase
 
         $result = $this->calc()->compute($this->user, $this->now);
 
-        // ReqA → current; ReqB → overdue.
-        $this->assertCount(1, $result['groups']['current']);
-        $this->assertCount(1, $result['groups']['overdue']);
+        // Both requirements credited by the single same-module completion.
+        $this->assertCount(2, $result['groups']['current']);
+        $this->assertCount(0, $result['groups']['overdue']);
     }
 
     public function test_completions_section_includes_every_user_completion(): void
