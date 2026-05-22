@@ -4,6 +4,7 @@ use App\Events\RealtimePing;
 use App\Http\Controllers\AssignmentsController;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\BulkAssignmentsController;
+use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\CompletionsController;
 use App\Http\Controllers\DashboardController;
@@ -130,6 +131,21 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::delete('api/trainings/{training}', [TrainingsController::class, 'destroy'])->name('trainings.destroy');
 
     Route::inertia('trainings', 'trainings/Index')->name('trainings.page');
+
+    // Training System (v16) — classes. Manager+ scheduling tool. JSON API
+    // backs the Pinia store; Inertia pages are thin shells.
+    Route::get('api/classes', [ClassesController::class, 'index'])->name('classes.index');
+    Route::post('api/classes', [ClassesController::class, 'store'])->name('classes.store');
+    Route::get('api/classes/{class}', [ClassesController::class, 'show'])->name('classes.show');
+    Route::patch('api/classes/{class}', [ClassesController::class, 'update'])->name('classes.update');
+    Route::delete('api/classes/{class}', [ClassesController::class, 'destroy'])->name('classes.destroy');
+    Route::post('api/classes/{class}/trainings', [ClassesController::class, 'attachTraining'])->name('classes.trainings.attach');
+    Route::delete('api/classes/{class}/trainings/{classTraining}', [ClassesController::class, 'detachTraining'])->name('classes.trainings.detach');
+    Route::post('api/classes/{class}/enrollments', [ClassesController::class, 'enroll'])->name('classes.enrollments.store');
+    Route::delete('api/classes/{class}/enrollments/{enrollment}', [ClassesController::class, 'unenroll'])->name('classes.enrollments.destroy');
+
+    Route::inertia('classes', 'classes/Index')->name('classes.page');
+    Route::get('classes/{class}', [ClassesController::class, 'showPage'])->name('classes.show-page');
 
     // Requirements library — named groups of rqmt_elements (9.2 adds the
     // nested element API). Anyone can list; CRUD is Owner/SA/Admin.
