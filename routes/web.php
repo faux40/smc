@@ -149,6 +149,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::post('api/classes/{class}/enrollments', [ClassesController::class, 'enroll'])->name('classes.enrollments.store');
     Route::delete('api/classes/{class}/enrollments/{enrollment}', [ClassesController::class, 'unenroll'])->name('classes.enrollments.destroy');
     Route::post('api/classes/{class}/complete', [ClassesController::class, 'complete'])->name('classes.complete');
+    Route::post('api/classes/{class}/reopen', [ClassesController::class, 'reopen'])->name('classes.reopen');
 
     Route::inertia('classes', 'classes/Index')->name('classes.page');
     Route::get('classes/{class}', [ClassesController::class, 'showPage'])->name('classes.show-page');

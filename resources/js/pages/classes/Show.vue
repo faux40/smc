@@ -7,6 +7,14 @@ import ClassFieldset from '@/components/ClassFieldset.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { useClassForm } from '@/composables/useClassForm';
 import { realtimeTabId } from '@/echo';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
@@ -44,6 +52,8 @@ const userPicker = ref<PickerUser[]>([]);
 const completeOpen = ref(false);
 const topicsOpen = ref(false);
 const rosterOpen = ref(false);
+const reopenOpen = ref(false);
+const reopening = ref(false);
 
 // Inline edit of the class's core fields (scheduled, editable classes).
 const { form, setFrom, validate, payload } = useClassForm(FORM_CTX);
@@ -59,6 +69,26 @@ const canComplete = computed(
         (detail.value?.enrollments.length ?? 0) > 0 &&
         (detail.value?.trainings.length ?? 0) > 0,
 );
+
+const canReopen = computed(
+    () => detail.value?.can_edit === true && detail.value?.status === 'completed',
+);
+
+async function reopen(): Promise<void> {
+    reopening.value = true;
+    errorStore.clear(FORM_CTX);
+
+    try {
+        await store.reopen(props.classId);
+        reopenOpen.value = false;
+    } catch (e) {
+        errorStore.reportFromAxios(e, FORM_CTX, {
+            fallback: 'Failed to re-open the class.',
+        });
+    } finally {
+        reopening.value = false;
+    }
+}
 
 const isDirty = computed(() => {
     const d = detail.value;
@@ -174,6 +204,13 @@ const totalHoursLabel = computed(
                     </Badge>
                     <Button v-if="canComplete" @click="completeOpen = true">
                         Complete class
+                    </Button>
+                    <Button
+                        v-if="canReopen"
+                        variant="outline"
+                        @click="reopenOpen = true"
+                    >
+                        Re-open
                     </Button>
                 </div>
 
@@ -420,6 +457,33 @@ const totalHoursLabel = computed(
                     v-model:open="completeOpen"
                     :target="detail"
                 />
+
+                <Dialog v-model:open="reopenOpen">
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Re-open this class?</DialogTitle>
+                            <DialogDescription>
+                                This unlocks the class for editing and
+                                <strong>de-issues the certificates</strong> it
+                                generated. You can fix the roster and trainings,
+                                then complete it again to re-issue corrected
+                                credit.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                :disabled="reopening"
+                                @click="reopenOpen = false"
+                            >
+                                Cancel
+                            </Button>
+                            <Button :disabled="reopening" @click="reopen">
+                                Re-open & de-issue
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </template>
         </AsyncState>
     </div>

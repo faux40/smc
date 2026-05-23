@@ -140,4 +140,20 @@ describe('useClassesStore', () => {
         );
         expect(store.detail.c1.status).toBe('completed');
     });
+
+    it('reopen() posts and caches the unlocked (scheduled) detail', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({ data: { ...detailA, status: 'scheduled' } });
+        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
+        const store = useClassesStore();
+
+        await store.reopen('c1');
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/classes/c1/reopen',
+            {},
+            expect.anything(),
+        );
+        expect(store.detail.c1.status).toBe('scheduled');
+    });
 });

@@ -241,6 +241,21 @@ export const useClassesStore = defineStore('classes', () => {
         return cache(data);
     }
 
+    /**
+     * Re-open a completed class for editing. De-issues the certs it generated
+     * (server-side) and unlocks the class back to `scheduled`.
+     */
+    async function reopen(id: string): Promise<ClassDetail> {
+        const { data } = await axios.post<ClassDetail>(
+            `/api/classes/${id}/reopen`,
+            {},
+            { headers: defaultHeaders() },
+        );
+        await load(true);
+
+        return cache(data);
+    }
+
     function subscribe(orgId: string): void {
         if (subscribedOrgId.value === orgId) {
             return;
@@ -280,6 +295,7 @@ export const useClassesStore = defineStore('classes', () => {
         enroll,
         unenroll,
         complete,
+        reopen,
         subscribe,
     };
 });

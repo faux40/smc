@@ -318,6 +318,41 @@ class ClassesController extends Controller
         return response()->json($this->detail($class->fresh()));
     }
 
+    /**
+     * Re-open a completed class for editing: de-issue the certificates it
+     * generated (soft-delete the completions, so the credit/history is
+     * auditable but no longer counts or prints), clear the snapshots' computed
+     * expiries, reset the roster to enrolled, and unlock the class. After this
+     * the normal edit endpoints work again and re-closing re-issues corrected
+     * credit.
+     */
+    public function reopen(TrainingClass $class): JsonResponse
+    {
+        Gate::authorize('update', $class);
+        abort_unless($class->status === 'completed', 422, 'Only a completed class can be re-opened.');
+
+        DB::transaction(function () use ($class) {
+            $ctIds = $class->classTrainings()->pluck('id');
+
+            // De-issue: drop the completions this class generated.
+            Completion::query()->whereIn('class_training_id', $ctIds)->delete();
+
+            // Clear the computed expiry on each snapshot + reset the roster.
+            $class->classTrainings()->update(['expire_date' => null]);
+            $class->enrollments()->update(['status' => 'enrolled']);
+
+            $class->update([
+                'status' => 'scheduled',
+                'completion_date' => null,
+                'completed_at' => null,
+            ]);
+        });
+
+        event(new ClassChanged($class->id, $class->org_id, 'reopened'));
+
+        return response()->json($this->detail($class->fresh()));
+    }
+
     /** Roll an enrollee's per-topic pass count up to a single status. */
     private function rollUpStatus(int $passedCount, int $totalTopics): string
     {
