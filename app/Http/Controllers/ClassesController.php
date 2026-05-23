@@ -254,12 +254,27 @@ class ClassesController extends Controller
                 $expiryFor[$ct->id] = $expire;
             }
 
-            // Completions for passed enrollees × associated trainings.
+            // Completions for passed enrollees × associated trainings, each
+            // with a sequential-per-class certificate id
+            // (`{cert_code}{YYYYMMDD}-{NNN}`) and a link back to the snapshot.
+            $certSeq = 0;
+
             foreach ($class->enrollments->where('status', 'passed') as $enrollment) {
                 foreach ($class->classTrainings as $ct) {
                     if ($ct->training_id === null) {
                         continue; // snapshot-only (training deleted) — nothing to credit.
                     }
+
+                    $certSeq++;
+                    $code = $ct->cert_code !== null && $ct->cert_code !== ''
+                        ? $ct->cert_code
+                        : 'CERT';
+                    $certId = sprintf(
+                        '%s%s-%03d',
+                        $code,
+                        $completionDate->format('Ymd'),
+                        $certSeq,
+                    );
 
                     Completion::create([
                         'org_id' => $class->org_id,
@@ -268,6 +283,8 @@ class ClassesController extends Controller
                         'module_id' => $ct->training_id,
                         'completion_date' => $completionDate->toDateString(),
                         'expire_date' => $expiryFor[$ct->id],
+                        'cert_id' => $certId,
+                        'class_training_id' => $ct->id,
                     ]);
                 }
             }

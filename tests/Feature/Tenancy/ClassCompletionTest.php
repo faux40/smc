@@ -81,6 +81,50 @@ class ClassCompletionTest extends TestCase
         $this->assertSame('failed the test', $eF->fresh()->notes);
     }
 
+    public function test_completing_generates_cert_ids_per_passed_student_and_topic(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $training->id,
+            'cert_code' => 'FPAP',
+        ]);
+        $a = User::factory()->for($org, 'organization')->create();
+        $b = User::factory()->for($org, 'organization')->create();
+        $eA = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $a->id]);
+        $eB = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $b->id]);
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/complete", [
+                'completion_date' => '2026-06-01',
+                'enrollments' => [
+                    ['id' => $eA->id, 'status' => 'passed'],
+                    ['id' => $eB->id, 'status' => 'passed'],
+                ],
+            ])
+            ->assertOk();
+
+        $certs = Completion::query()
+            ->whereIn('user_id', [$a->id, $b->id])
+            ->pluck('cert_id')
+            ->sort()
+            ->values();
+
+        // One sequential, snapshot-coded cert id per passed student × topic.
+        $this->assertEqualsCanonicalizing(
+            ['FPAP20260601-001', 'FPAP20260601-002'],
+            $certs->all(),
+        );
+
+        // Each completion links back to the class_training snapshot.
+        $this->assertSame(
+            2,
+            Completion::where('class_training_id', $ct->id)->count(),
+        );
+    }
+
     public function test_initial_only_training_yields_a_completion_with_no_expiry(): void
     {
         $org = Organization::factory()->create();
