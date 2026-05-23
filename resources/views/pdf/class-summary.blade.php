@@ -3,9 +3,14 @@
 <head>
     <meta charset="utf-8">
     <style>
-        @page { margin: 0.75in; }
+        /* @page margins are unreliable in this DomPDF build, so the 0.75in
+           "margin" is body padding (the page is 8.5x11 via setPaper). */
+        @page { margin: 0; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Helvetica', Arial, sans-serif; color: #111827; font-size: 13px; }
+        body {
+            font-family: 'Helvetica', Arial, sans-serif; color: #111827;
+            font-size: 13px; padding: 0.75in;
+        }
 
         .org { text-align: right; font-size: 16px; font-weight: bold; color: #374151; }
         h1 { text-align: center; font-size: 22px; margin: 8px 0 16px; }
@@ -23,7 +28,7 @@
         table.certs thead th { border-bottom: 1.5px solid #9ca3af; color: #374151; font-size: 12px; }
         .num { width: 26px; color: #6b7280; }
 
-        .foot { position: fixed; bottom: 0; left: 0; right: 0; font-size: 9px; color: #6b7280; }
+        .foot { position: fixed; bottom: 0.4in; left: 0.75in; right: 0.75in; font-size: 9px; color: #6b7280; }
         .foot .r { float: right; }
     </style>
 </head>

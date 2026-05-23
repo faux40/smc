@@ -3,9 +3,14 @@
 <head>
     <meta charset="utf-8">
     <style>
-        @page { margin: 0.75in; }
+        /* @page margins are unreliable in this DomPDF build, so the 0.75in
+           "margin" is body padding (the page is 8.5x11 via setPaper). */
+        @page { margin: 0; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Helvetica', Arial, sans-serif; color: #111827; font-size: 13px; }
+        body {
+            font-family: 'Helvetica', Arial, sans-serif; color: #111827;
+            font-size: 13px; padding: 0.75in;
+        }
 
         .head { width: 100%; margin-bottom: 8px; }
         .head td { vertical-align: top; }
@@ -31,7 +36,7 @@
         .roster .name-val { font-weight: normal; }
 
         .foot {
-            position: fixed; bottom: 0; left: 0; right: 0;
+            position: fixed; bottom: 0.4in; left: 0.75in; right: 0.75in;
             font-size: 9px; color: #6b7280;
         }
         .foot .l { float: left; }

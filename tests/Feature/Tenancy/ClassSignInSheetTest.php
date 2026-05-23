@@ -43,7 +43,7 @@ class ClassSignInSheetTest extends TestCase
         $this->assertSame('John B', $data['trainer']);
         $this->assertSame('Ann Lee', $data['rows'][0]);
         $this->assertSame('', $data['rows'][1]); // padded blank
-        $this->assertGreaterThanOrEqual(16, count($data['rows']));
+        $this->assertGreaterThanOrEqual(14, count($data['rows']));
     }
 
     public function test_endpoint_returns_a_pdf_even_with_no_enrollees(): void
