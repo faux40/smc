@@ -7,6 +7,7 @@ function deps(over: Partial<ReverbProbeDeps> = {}) {
         post: vi.fn().mockResolvedValue(undefined),
         isConnected: vi.fn().mockReturnValue(true),
         info: vi.fn(),
+        success: vi.fn(),
         error: vi.fn(),
         timeoutMs: 5000,
         ...over,
@@ -46,7 +47,7 @@ describe('createReverbProbe', () => {
         );
     });
 
-    it('does not error when the round-trip arrives before the budget', async () => {
+    it('success-toasts (not error) when the round-trip arrives in time', async () => {
         const d = deps();
         const probe = createReverbProbe(d);
 
@@ -55,6 +56,7 @@ describe('createReverbProbe', () => {
         probe.onRoundTrip();
         vi.advanceTimersByTime(5000);
 
+        expect(d.success).toHaveBeenCalledWith(expect.stringContaining('OK'));
         expect(d.error).not.toHaveBeenCalled();
     });
 

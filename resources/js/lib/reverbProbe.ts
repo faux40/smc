@@ -19,8 +19,10 @@ export interface ReverbProbeDeps {
     post: (message: string) => Promise<unknown>;
     /** Is the websocket actually connected right now? */
     isConnected: () => boolean;
-    /** Neutral/info toast. */
+    /** Neutral/in-progress toast. */
     info: (message: string) => void;
+    /** Success toast (green). */
+    success: (message: string) => void;
     /** Error toast (red). */
     error: (message: string) => void;
     /** Round-trip budget before declaring failure (ms). */
@@ -85,6 +87,7 @@ export function createReverbProbe(deps: ReverbProbeDeps): ReverbProbe {
     function onRoundTrip(): void {
         if (pending) {
             stop();
+            deps.success('Reverb round-trip OK — realtime is working.');
         }
     }
 

@@ -5,7 +5,7 @@
  * no longer being monitored.
  */
 
-import { useErrorStore } from '@/stores/errors';
+import { toast } from 'vue-sonner';
 
 function payloadPreview(payload: unknown): string {
     try {
@@ -26,10 +26,10 @@ export function debugRealtimeEvent(
     eventName: string,
     payload: unknown,
 ): void {
-    const store = useErrorStore();
-    store.report({
-        context: 'temp:realtime-monitor',
-        message: `${channel} · ${eventName} — ${payloadPreview(payload)}`,
-        surface: 'toast',
+    // Neutral/info toast — an inbound event is the substrate working, not an
+    // error. (Previously routed through the error store, so every live update
+    // flashed red.)
+    toast(`${channel} · ${eventName} — ${payloadPreview(payload)}`, {
+        description: 'realtime',
     });
 }

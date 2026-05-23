@@ -9,6 +9,10 @@ import { createReverbProbe } from '@/lib/reverbProbe';
  * the RealtimePing broadcast to round-trip back over Reverb, toasting clear
  * feedback either way. See lib/reverbProbe.ts for the (tested) logic.
  */
+// One reusable toast slot so the "sent → OK / failed" lifecycle replaces
+// itself in place rather than stacking on each click.
+const PROBE_TOAST = 'reverb-probe';
+
 export function useReverbProbe() {
     const probe = createReverbProbe({
         post: (message) => axios.post('/realtime/ping', { message }),
@@ -25,8 +29,9 @@ export function useReverbProbe() {
 
             return connection?.state === 'connected';
         },
-        info: (message) => toast(message),
-        error: (message) => toast.error(message),
+        info: (message) => toast.loading(message, { id: PROBE_TOAST }),
+        success: (message) => toast.success(message, { id: PROBE_TOAST }),
+        error: (message) => toast.error(message, { id: PROBE_TOAST }),
     });
 
     // The round-trip arrives on the public realtime-ping channel; useRealtime
