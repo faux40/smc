@@ -15,7 +15,12 @@ const PROBE_TOAST = 'reverb-probe';
 
 export function useReverbProbe() {
     const probe = createReverbProbe({
-        post: (message) => axios.post('/realtime/ping', { message }),
+        // Stamp each ping so the round-trip toast is identifiable (and you can
+        // see it's a fresh one, not a stale event).
+        post: () =>
+            axios.post('/realtime/ping', {
+                message: `the bug says ${new Date().toLocaleTimeString()}`,
+            }),
         isConnected: () => {
             const connection = (
                 window.Echo as

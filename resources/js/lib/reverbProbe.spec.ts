@@ -37,7 +37,7 @@ describe('createReverbProbe', () => {
 
         await probe.ping();
         expect(d.info).toHaveBeenCalledWith(expect.stringContaining('sent'));
-        expect(d.post).toHaveBeenCalledWith('header ping');
+        expect(d.post).toHaveBeenCalled();
         expect(d.error).not.toHaveBeenCalled();
 
         vi.advanceTimersByTime(5000);

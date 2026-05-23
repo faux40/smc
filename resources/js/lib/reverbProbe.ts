@@ -15,8 +15,8 @@
  */
 
 export interface ReverbProbeDeps {
-    /** POST the ping; resolves on a 2xx, rejects otherwise. */
-    post: (message: string) => Promise<unknown>;
+    /** POST the ping (caller builds the message); resolves on 2xx, rejects otherwise. */
+    post: () => Promise<unknown>;
     /** Is the websocket actually connected right now? */
     isConnected: () => boolean;
     /** Neutral/in-progress toast. */
@@ -38,7 +38,7 @@ export interface ReverbProbe {
     dispose: () => void;
 }
 
-const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_TIMEOUT_MS = 8000;
 
 export function createReverbProbe(deps: ReverbProbeDeps): ReverbProbe {
     const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
