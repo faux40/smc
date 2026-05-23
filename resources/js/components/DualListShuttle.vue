@@ -187,7 +187,7 @@ function onDrop(targetSide: Side): void {
             <div
                 v-for="side in sidesShown"
                 :key="side"
-                class="flex flex-col self-start rounded-md border border-border"
+                class="flex flex-col rounded-md border border-border"
                 @dragover.prevent
                 @drop.prevent="onDrop(side)"
             >
