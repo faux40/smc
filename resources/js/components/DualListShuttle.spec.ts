@@ -107,7 +107,7 @@ describe('DualListShuttle', () => {
         expect(w.findAll('table')).toHaveLength(1); // available can't be opened
     });
 
-    it('renders the extra slot on both lists with a side scope', async () => {
+    it('renders the extra slot on the assigned list only', async () => {
         const w = mount(DualListShuttle, {
             props: {
                 assigned,
@@ -118,14 +118,11 @@ describe('DualListShuttle', () => {
             },
             slots: {
                 'extra-header': 'Hrs',
-                extra: `<template #extra="{ side }"><span class="extra-cell">{{ side }}</span></template>`,
+                extra: '<span class="extra-cell">x</span>',
             },
         });
         await revealAvailable(w);
-        // extra cells render on both tables now
         expect(panel(w, 0).findAll('.extra-cell')).toHaveLength(2);
-        expect(panel(w, 1).findAll('.extra-cell')).toHaveLength(2);
-        expect(panel(w, 0).find('.extra-cell').text()).toBe('assigned');
-        expect(panel(w, 1).find('.extra-cell').text()).toBe('available');
+        expect(panel(w, 1).findAll('.extra-cell')).toHaveLength(0);
     });
 });

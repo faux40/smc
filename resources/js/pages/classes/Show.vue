@@ -166,7 +166,13 @@ async function run(fn: () => Promise<unknown>): Promise<void> {
 const topicColumns = [
     { key: 'name', label: 'Topic' },
     { key: 'freq', label: 'Frequency' },
+    { key: 'std_hours', label: 'std hrs', numeric: true },
 ];
+
+// The topic's standard (default) hours, keyed by training id.
+const trainingDefaults = computed(
+    () => new Map(trainings.library.map((t) => [t.id, t.default_hours])),
+);
 
 const freqLabel = (t: {
     std_freq_name: string | null;
@@ -179,6 +185,7 @@ interface TopicItem {
     id: string;
     name: string;
     freq: string;
+    std_hours: string | null;
     hours: string | null;
 }
 
@@ -187,6 +194,9 @@ const assignedTopics = computed<TopicItem[]>(() =>
         id: t.id, // class_training id (used to detach + edit hours)
         name: t.training_name,
         freq: freqLabel(t),
+        std_hours: t.training_id
+            ? (trainingDefaults.value.get(t.training_id) ?? null)
+            : null,
         hours: t.hours,
     })),
 );
@@ -202,6 +212,7 @@ const availableTopics = computed<TopicItem[]>(() => {
             id: t.id,
             name: t.name,
             freq: freqLabel(t),
+            std_hours: t.default_hours,
             hours: t.default_hours,
         }));
 });
@@ -382,9 +393,8 @@ const unassignStudent = (item: { id: string }) =>
                         @unassign="unassignTopic"
                     >
                         <template #extra-header>Hours</template>
-                        <template #extra="{ item, side }">
+                        <template #extra="{ item }">
                             <Input
-                                v-if="side === 'assigned'"
                                 type="number"
                                 step="0.25"
                                 min="0"
@@ -399,9 +409,6 @@ const unassignStudent = (item: { id: string }) =>
                                     )
                                 "
                             />
-                            <span v-else class="text-xs text-muted-foreground">
-                                {{ item.hours ?? '—' }}
-                            </span>
                         </template>
                     </DualListShuttle>
                 </section>

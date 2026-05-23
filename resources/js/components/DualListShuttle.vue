@@ -234,7 +234,7 @@ function onDrop(targetSide: Side): void {
                             </span>
                         </th>
                         <th
-                            v-if="$slots['extra-header']"
+                            v-if="side === 'assigned' && $slots['extra-header']"
                             class="px-3 py-1.5 text-left font-medium"
                         >
                             <slot name="extra-header" />
@@ -274,7 +274,10 @@ function onDrop(targetSide: Side): void {
                         >
                             {{ cell(item, col.key) || '—' }}
                         </td>
-                        <td v-if="$slots['extra']" class="px-3 py-1.5">
+                        <td
+                            v-if="side === 'assigned' && $slots['extra']"
+                            class="px-3 py-1.5"
+                        >
                             <slot name="extra" :item="item" :side="side" />
                         </td>
                         <td
@@ -294,7 +297,11 @@ function onDrop(targetSide: Side): void {
                     </tr>
                     <tr v-if="(side === 'assigned' ? assignedView : availableView).length === 0">
                         <td
-                            :colspan="columns.length + ($slots['extra'] ? 1 : 0) + 1"
+                            :colspan="
+                                columns.length +
+                                (side === 'assigned' && $slots['extra'] ? 1 : 0) +
+                                1
+                            "
                             class="px-3 py-4 text-center text-xs text-muted-foreground"
                         >
                             {{
