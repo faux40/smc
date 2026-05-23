@@ -65,9 +65,20 @@ function view(side: Side): Item[] {
     let rows = items;
 
     if (q !== '') {
-        rows = rows.filter((it) =>
-            props.columns.some((c) => cell(it, c.key).toLowerCase().includes(q)),
-        );
+        rows = rows.filter((it) => {
+            // Extra free-text an item can expose for search (e.g. tag names)
+            // that isn't shown as a plain column.
+            const extra = String(
+                (it as { searchText?: string }).searchText ?? '',
+            ).toLowerCase();
+
+            return (
+                extra.includes(q) ||
+                props.columns.some((c) =>
+                    cell(it, c.key).toLowerCase().includes(q),
+                )
+            );
+        });
     }
 
     if (sort.key) {
@@ -274,7 +285,9 @@ function onDrop(targetSide: Side): void {
                             :key="col.key"
                             class="px-3 py-1.5"
                         >
-                            {{ cell(item, col.key) || '—' }}
+                            <slot name="cell" :item="item" :column="col">
+                                {{ cell(item, col.key) || '—' }}
+                            </slot>
                         </td>
                         <td
                             v-if="side === 'assigned' && $slots['extra']"

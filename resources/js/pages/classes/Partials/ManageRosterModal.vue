@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import DualListShuttle from '@/components/DualListShuttle.vue';
+import TagPill from '@/components/TagPill.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -11,12 +12,15 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { useClassesStore } from '@/stores/classes';
+import type { TagRow } from '@/stores/tags';
+import { useTagsStore } from '@/stores/tags';
 
 export interface PickerUser {
     id: string;
     f_name: string;
     l_name: string;
     email: string | null;
+    tag_ids: string[];
 }
 
 const props = defineProps<{
@@ -27,6 +31,15 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
 
 const store = useClassesStore();
+const tagsStore = useTagsStore();
+
+onMounted(() => {
+    void tagsStore.loadLibrary();
+});
+
+const tagsById = computed(
+    () => new Map(tagsStore.library.map((t) => [t.id, t])),
+);
 
 const detail = computed(() => store.detail[props.classId] ?? null);
 const canEdit = computed(
@@ -58,19 +71,31 @@ const userLabel = (u: PickerUser) =>
 const columns = [
     { key: 'name', label: 'Name' },
     { key: 'email', label: 'Email' },
+    { key: 'tags', label: 'Tags' },
 ];
 
 interface StudentItem {
     id: string;
     name: string;
     email: string;
+    tags: TagRow[];
+    searchText: string;
 }
 
-const toItem = (u: PickerUser): StudentItem => ({
-    id: u.id,
-    name: userLabel(u),
-    email: u.email ?? '',
-});
+const toItem = (u: PickerUser): StudentItem => {
+    const tags = u.tag_ids
+        .map((id) => tagsById.value.get(id))
+        .filter((t): t is TagRow => t !== undefined);
+
+    return {
+        id: u.id,
+        name: userLabel(u),
+        email: u.email ?? '',
+        tags,
+        // Tag names are searchable even though they render as pills.
+        searchText: tags.map((t) => t.name).join(' '),
+    };
+};
 
 const assigned = computed<StudentItem[]>(() =>
     props.users.filter((u) => selected.value.has(u.id)).map(toItem),
@@ -140,7 +165,9 @@ function onOpenChange(value: boolean): void {
 
 <template>
     <Dialog :open="open" @update:open="onOpenChange">
-        <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+        <DialogContent
+            class="max-h-[90vh] w-[92vw] overflow-y-auto sm:max-w-6xl"
+        >
             <DialogHeader>
                 <DialogTitle>Roster</DialogTitle>
                 <DialogDescription>
@@ -166,7 +193,33 @@ function onOpenChange(value: boolean): void {
                 :disabled="!canEdit"
                 @assign="assign"
                 @unassign="unassign"
-            />
+            >
+                <template #cell="{ item, column }">
+                    <span
+                        v-if="column.key === 'tags'"
+                        class="flex flex-wrap gap-1"
+                    >
+                        <TagPill
+                            v-for="t in (item as StudentItem).tags"
+                            :key="t.id"
+                            :tag="t"
+                        />
+                        <span
+                            v-if="!(item as StudentItem).tags.length"
+                            class="text-muted-foreground"
+                        >
+                            —
+                        </span>
+                    </span>
+                    <template v-else>
+                        {{
+                            (item as unknown as Record<string, string>)[
+                                column.key
+                            ] || '—'
+                        }}
+                    </template>
+                </template>
+            </DualListShuttle>
 
             <DialogFooter>
                 <Button

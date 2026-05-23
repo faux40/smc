@@ -44,7 +44,7 @@ function mockGet() {
             return Promise.resolve({ data: detail });
         }
 
-        if (url === '/api/trainings') {
+        if (url === '/api/trainings' || url === '/api/tags') {
             return Promise.resolve({ data: [] });
         }
 
