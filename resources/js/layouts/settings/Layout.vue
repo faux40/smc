@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { toUrl } from '@/lib/utils';
-import { edit as editAppearance } from '@/routes/appearance';
 import { edit as editFrequencies } from '@/routes/frequencies';
 import { edit as editNotifications } from '@/routes/notification-preferences';
 import { edit as editOrganization } from '@/routes/organization';
@@ -29,7 +28,6 @@ const sidebarNavItems = computed<NavItem[]>(() => {
         { title: 'Profile', href: editProfile() },
         { title: 'Security', href: editSecurity() },
         { title: 'Notifications', href: editNotifications() },
-        { title: 'Appearance', href: editAppearance() },
     ];
 
     const u = authUser.value;

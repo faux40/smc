@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { useAppearance } from '@/composables/useAppearance';
 import { Toaster as SonnerPrimitive } from 'vue-sonner';
 import 'vue-sonner/style.css';
 
-const { appearance } = useAppearance();
+// Dark mode is disabled app-wide — toasts always render light.
 </script>
 
 <template>
     <SonnerPrimitive
-        :theme="appearance"
+        theme="light"
         class="toaster group"
         position="top-right"
         :offset="{ top: '4.5rem' }"
