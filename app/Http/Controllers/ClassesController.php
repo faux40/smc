@@ -199,11 +199,12 @@ class ClassesController extends Controller
     }
 
     /**
-     * Close out a class: mark each enrollee passed/incomplete (+ notes), then
-     * generate a completion for every PASSED enrollee × associated training
-     * (standalone — credited by module identity), set class-level dates, and
-     * lock the class to view-only. Idempotent: a completed class can't be
-     * re-closed.
+     * Close out a class: for each enrollee, record a per-training pass/fail
+     * result (+ notes), generate a completion for every PASSED enrollee ×
+     * training pair (standalone — credited by module identity), roll the
+     * enrollee status up to passed / partial / incomplete, set class-level
+     * dates, and lock the class to view-only. Idempotent: a completed class
+     * can't be re-closed.
      */
     public function complete(Request $request, TrainingClass $class): JsonResponse
     {
@@ -217,8 +218,13 @@ class ClassesController extends Controller
                 'required', 'string',
                 Rule::exists('class_enrollments', 'id')->where('class_id', $class->id),
             ],
-            'enrollments.*.status' => ['required', Rule::in(['passed', 'incomplete'])],
             'enrollments.*.notes' => ['nullable', 'string'],
+            'enrollments.*.results' => ['array'],
+            'enrollments.*.results.*.class_training_id' => [
+                'required', 'string',
+                Rule::exists('class_training', 'id')->where('class_id', $class->id),
+            ],
+            'enrollments.*.results.*.passed' => ['required', 'boolean'],
             'trainings' => ['array'],
             'trainings.*.id' => [
                 'required', 'string',
@@ -233,17 +239,7 @@ class ClassesController extends Controller
 
         DB::transaction(function () use ($class, $marks, $completionDate, $expireOverrides) {
             $class->load(['enrollments', 'classTrainings']);
-
-            foreach ($class->enrollments as $enrollment) {
-                $mark = $marks->get($enrollment->id);
-
-                if ($mark) {
-                    $enrollment->update([
-                        'status' => $mark['status'],
-                        'notes' => $mark['notes'] ?? $enrollment->notes,
-                    ]);
-                }
-            }
+            $totalTopics = $class->classTrainings->count();
 
             // Per-training expiry: instructor override, else computed from the
             // snapshot freq (class date + repeat_days; none for initial/as-needed).
@@ -259,15 +255,26 @@ class ClassesController extends Controller
                 $expiryFor[$ct->id] = $expire;
             }
 
-            // Completions for passed enrollees × associated trainings, each
-            // with a sequential-per-class certificate id
-            // (`{cert_code}{YYYYMMDD}-{NNN}`) and a link back to the snapshot.
+            // Completions for each passed enrollee × training pair, each with a
+            // sequential-per-class certificate id (`{cert_code}{YYYYMMDD}-{NNN}`)
+            // and a link back to the snapshot.
             $certSeq = 0;
 
-            foreach ($class->enrollments->where('status', 'passed') as $enrollment) {
+            foreach ($class->enrollments as $enrollment) {
+                $mark = $marks->get($enrollment->id);
+                $results = collect($mark['results'] ?? [])->pluck('passed', 'class_training_id');
+
+                $passedCount = 0;
+
                 foreach ($class->classTrainings as $ct) {
+                    if (! ($results->get($ct->id) === true)) {
+                        continue; // not marked passed for this topic.
+                    }
+
+                    $passedCount++;
+
                     if ($ct->training_id === null) {
-                        continue; // snapshot-only (training deleted) — nothing to credit.
+                        continue; // snapshot-only (training deleted) — count it, but nothing to credit.
                     }
 
                     $certSeq++;
@@ -292,6 +299,11 @@ class ClassesController extends Controller
                         'class_training_id' => $ct->id,
                     ]);
                 }
+
+                $enrollment->update([
+                    'status' => $this->rollUpStatus($passedCount, $totalTopics),
+                    'notes' => $mark['notes'] ?? $enrollment->notes,
+                ]);
             }
 
             $class->update([
@@ -304,6 +316,16 @@ class ClassesController extends Controller
         event(new ClassChanged($class->id, $class->org_id, 'completed'));
 
         return response()->json($this->detail($class->fresh()));
+    }
+
+    /** Roll an enrollee's per-topic pass count up to a single status. */
+    private function rollUpStatus(int $passedCount, int $totalTopics): string
+    {
+        return match (true) {
+            $totalTopics > 0 && $passedCount >= $totalTopics => 'passed',
+            $passedCount > 0 => 'partial',
+            default => 'incomplete',
+        };
     }
 
     /**

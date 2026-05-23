@@ -40,7 +40,7 @@ class ClassCompletionTest extends TestCase
         $manager = $this->manager($org);
         $training = Training::factory()->for($org, 'organization')->create();
         $class = TrainingClass::factory()->for($org, 'organization')->create();
-        ClassTraining::factory()->for($class, 'trainingClass')->create([
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
             'training_id' => $training->id,
             'repeating' => true,
             'initial_only' => false,
@@ -56,8 +56,8 @@ class ClassCompletionTest extends TestCase
             ->postJson("/api/classes/{$class->id}/complete", [
                 'completion_date' => '2026-06-01',
                 'enrollments' => [
-                    ['id' => $eP->id, 'status' => 'passed'],
-                    ['id' => $eF->id, 'status' => 'incomplete', 'notes' => 'failed the test'],
+                    ['id' => $eP->id, 'results' => [['class_training_id' => $ct->id, 'passed' => true]]],
+                    ['id' => $eF->id, 'notes' => 'failed the test', 'results' => [['class_training_id' => $ct->id, 'passed' => false]]],
                 ],
             ])
             ->assertOk()
@@ -75,10 +75,45 @@ class ClassCompletionTest extends TestCase
         // Failed enrollee → no completion.
         $this->assertSame(0, Completion::where('user_id', $failed->id)->count());
 
-        // Marks persisted.
+        // Roll-up status: passed all → passed; passed none → incomplete.
         $this->assertSame('passed', $eP->fresh()->status);
         $this->assertSame('incomplete', $eF->fresh()->status);
         $this->assertSame('failed the test', $eF->fresh()->notes);
+    }
+
+    public function test_partial_pass_issues_certs_only_for_the_passed_trainings(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $first = Training::factory()->for($org, 'organization')->create();
+        $fall = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ctFirst = ClassTraining::factory()->for($class, 'trainingClass')->create(['training_id' => $first->id]);
+        $ctFall = ClassTraining::factory()->for($class, 'trainingClass')->create(['training_id' => $fall->id]);
+        $john = User::factory()->for($org, 'organization')->create();
+        $eJohn = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $john->id]);
+
+        // John passes Fall Protection but is incomplete for First Aid.
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/complete", [
+                'completion_date' => '2026-06-01',
+                'enrollments' => [
+                    ['id' => $eJohn->id, 'results' => [
+                        ['class_training_id' => $ctFirst->id, 'passed' => false],
+                        ['class_training_id' => $ctFall->id, 'passed' => true],
+                    ]],
+                ],
+            ])
+            ->assertOk();
+
+        // Exactly one completion — for Fall Protection, not First Aid.
+        $comps = Completion::where('user_id', $john->id)->get();
+        $this->assertCount(1, $comps);
+        $this->assertSame($fall->id, $comps[0]->module_id);
+        $this->assertSame($ctFall->id, $comps[0]->class_training_id);
+
+        // Passed some-but-not-all → status rolls up to 'partial'.
+        $this->assertSame('partial', $eJohn->fresh()->status);
     }
 
     public function test_completing_generates_cert_ids_per_passed_student_and_topic(): void
@@ -100,8 +135,8 @@ class ClassCompletionTest extends TestCase
             ->postJson("/api/classes/{$class->id}/complete", [
                 'completion_date' => '2026-06-01',
                 'enrollments' => [
-                    ['id' => $eA->id, 'status' => 'passed'],
-                    ['id' => $eB->id, 'status' => 'passed'],
+                    ['id' => $eA->id, 'results' => [['class_training_id' => $ct->id, 'passed' => true]]],
+                    ['id' => $eB->id, 'results' => [['class_training_id' => $ct->id, 'passed' => true]]],
                 ],
             ])
             ->assertOk();
@@ -131,7 +166,7 @@ class ClassCompletionTest extends TestCase
         $manager = $this->manager($org);
         $training = Training::factory()->for($org, 'organization')->create();
         $class = TrainingClass::factory()->for($org, 'organization')->create();
-        ClassTraining::factory()->for($class, 'trainingClass')->create([
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
             'training_id' => $training->id,
             'repeating' => false,
             'initial_only' => true,
@@ -144,7 +179,7 @@ class ClassCompletionTest extends TestCase
         $this->actingAs($manager)
             ->postJson("/api/classes/{$class->id}/complete", [
                 'completion_date' => '2026-06-01',
-                'enrollments' => [['id' => $e->id, 'status' => 'passed']],
+                'enrollments' => [['id' => $e->id, 'results' => [['class_training_id' => $ct->id, 'passed' => true]]]],
             ])
             ->assertOk();
 

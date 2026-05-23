@@ -82,7 +82,7 @@ class ClassCertificateTest extends TestCase
         $manager = $this->manager($org);
         $training = Training::factory()->for($org, 'organization')->create();
         $class = TrainingClass::factory()->for($org, 'organization')->create();
-        ClassTraining::factory()->for($class, 'trainingClass')->create([
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
             'training_id' => $training->id,
             'cert_code' => 'FPAP',
         ]);
@@ -91,7 +91,7 @@ class ClassCertificateTest extends TestCase
 
         $this->actingAs($manager)->postJson("/api/classes/{$class->id}/complete", [
             'completion_date' => '2026-06-01',
-            'enrollments' => [['id' => $enrollment->id, 'status' => 'passed']],
+            'enrollments' => [['id' => $enrollment->id, 'results' => [['class_training_id' => $ct->id, 'passed' => true]]]],
         ])->assertOk();
 
         $response = $this->actingAs($manager)->get("/api/classes/{$class->id}/certificates");

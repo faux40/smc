@@ -29,8 +29,9 @@ const completionDate = ref('');
 interface Mark {
     id: string;
     user_name: string | null;
-    status: 'passed' | 'incomplete';
     notes: string;
+    // Per-topic pass/fail, keyed by class_training_id.
+    passed: Record<string, boolean>;
 }
 
 const marks = reactive<Mark[]>([]);
@@ -47,12 +48,14 @@ watch(
         marks.splice(
             0,
             marks.length,
-            // Default everyone to passed; the instructor flips failures.
+            // Default every topic to passed; the instructor flips failures.
             ...props.target.enrollments.map((e) => ({
                 id: e.id,
                 user_name: e.user_name,
-                status: 'passed' as const,
                 notes: e.notes ?? '',
+                passed: Object.fromEntries(
+                    props.target.trainings.map((t) => [t.id, true]),
+                ),
             })),
         );
     },
@@ -67,8 +70,11 @@ async function submit(): Promise<void> {
             completion_date: completionDate.value,
             enrollments: marks.map((m) => ({
                 id: m.id,
-                status: m.status,
                 notes: m.notes.trim() === '' ? null : m.notes,
+                results: props.target.trainings.map((t) => ({
+                    class_training_id: t.id,
+                    passed: m.passed[t.id] ?? false,
+                })),
             })),
         });
         emit('update:open', false);
@@ -84,14 +90,15 @@ async function submit(): Promise<void> {
 
 <template>
     <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
-        <DialogContent>
+        <DialogContent class="max-h-[90vh] w-[92vw] overflow-y-auto sm:max-w-3xl">
             <form @submit.prevent="submit" class="space-y-4">
                 <DialogHeader>
                     <DialogTitle>Complete class</DialogTitle>
                     <DialogDescription>
-                        Mark who passed. Passed attendees get a completion for
-                        each of this class's trainings (dated below); expiries
-                        are computed per training. This locks the class.
+                        Mark each attendee passed or failed per training. A
+                        certificate is issued for every passed pairing (dated
+                        below; expiries computed per training). This locks the
+                        class.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -115,45 +122,39 @@ async function submit(): Promise<void> {
                     Nobody is enrolled — nothing to complete.
                 </div>
 
-                <ul v-else class="space-y-2">
+                <ul v-else class="space-y-3">
                     <li
                         v-for="m in marks"
                         :key="m.id"
-                        class="flex flex-wrap items-center gap-2 border-b border-border pb-2 text-sm"
+                        class="space-y-1.5 border-b border-border pb-3 text-sm"
                     >
-                        <span class="min-w-32 flex-1 font-medium">{{
-                            m.user_name
-                        }}</span>
-                        <div class="flex gap-1">
+                        <span class="font-medium">{{ m.user_name }}</span>
+                        <div class="flex flex-wrap gap-1.5">
                             <button
+                                v-for="t in target.trainings"
+                                :key="t.id"
                                 type="button"
                                 class="rounded px-2 py-0.5 text-xs ring-1 ring-inset"
                                 :class="
-                                    m.status === 'passed'
-                                        ? 'bg-emerald-100 text-emerald-900 ring-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-100'
-                                        : 'text-muted-foreground ring-border'
+                                    m.passed[t.id]
+                                        ? 'bg-emerald-100 text-emerald-900 ring-emerald-300'
+                                        : 'bg-red-50 text-red-800 line-through ring-red-200'
                                 "
-                                @click="m.status = 'passed'"
-                            >
-                                Passed
-                            </button>
-                            <button
-                                type="button"
-                                class="rounded px-2 py-0.5 text-xs ring-1 ring-inset"
-                                :class="
-                                    m.status === 'incomplete'
-                                        ? 'bg-red-100 text-red-900 ring-red-300 dark:bg-red-900/40 dark:text-red-100'
-                                        : 'text-muted-foreground ring-border'
+                                :title="
+                                    m.passed[t.id]
+                                        ? 'Passed — click to fail'
+                                        : 'Failed — click to pass'
                                 "
-                                @click="m.status = 'incomplete'"
+                                @click="m.passed[t.id] = !m.passed[t.id]"
                             >
-                                Incomplete
+                                {{ m.passed[t.id] ? '✓' : '✗' }}
+                                {{ t.training_name }}
                             </button>
                         </div>
                         <Input
                             v-model="m.notes"
                             placeholder="notes (optional)"
-                            class="h-7 flex-1 text-xs"
+                            class="h-7 text-xs"
                         />
                     </li>
                 </ul>

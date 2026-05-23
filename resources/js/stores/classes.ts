@@ -41,7 +41,7 @@ export interface EnrollmentRow {
     user_id: string;
     user_name: string | null;
     user_email: string | null;
-    status: 'enrolled' | 'passed' | 'incomplete';
+    status: 'enrolled' | 'passed' | 'partial' | 'incomplete';
     notes: string | null;
 }
 
@@ -226,8 +226,8 @@ export const useClassesStore = defineStore('classes', () => {
             completion_date: string;
             enrollments: {
                 id: string;
-                status: 'passed' | 'incomplete';
                 notes: string | null;
+                results: { class_training_id: string; passed: boolean }[];
             }[];
         },
     ): Promise<ClassDetail> {

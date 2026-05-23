@@ -124,7 +124,13 @@ describe('useClassesStore', () => {
 
         await store.complete('c1', {
             completion_date: '2026-06-01',
-            enrollments: [{ id: 'e1', status: 'passed', notes: null }],
+            enrollments: [
+                {
+                    id: 'e1',
+                    notes: null,
+                    results: [{ class_training_id: 'ct1', passed: true }],
+                },
+            ],
         });
 
         expect(post).toHaveBeenCalledWith(
