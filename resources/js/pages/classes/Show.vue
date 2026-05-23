@@ -54,6 +54,10 @@ const topicsOpen = ref(false);
 const rosterOpen = ref(false);
 const reopenOpen = ref(false);
 const reopening = ref(false);
+// Dedicated context: the main form's ErrorBanner only renders while the class
+// is editable (scheduled), so a reopen failure on a completed class would have
+// nowhere to show — surface it inside the reopen dialog instead.
+const REOPEN_CTX = 'form:class-reopen';
 
 // Inline edit of the class's core fields (scheduled, editable classes).
 const { form, setFrom, validate, payload } = useClassForm(FORM_CTX);
@@ -76,13 +80,13 @@ const canReopen = computed(
 
 async function reopen(): Promise<void> {
     reopening.value = true;
-    errorStore.clear(FORM_CTX);
+    errorStore.clear(REOPEN_CTX);
 
     try {
         await store.reopen(props.classId);
         reopenOpen.value = false;
     } catch (e) {
-        errorStore.reportFromAxios(e, FORM_CTX, {
+        errorStore.reportFromAxios(e, REOPEN_CTX, {
             fallback: 'Failed to re-open the class.',
         });
     } finally {
@@ -470,6 +474,7 @@ const totalHoursLabel = computed(
                                 everyone else's is preserved.
                             </DialogDescription>
                         </DialogHeader>
+                        <ErrorBanner :context="REOPEN_CTX" />
                         <DialogFooter>
                             <Button
                                 variant="outline"

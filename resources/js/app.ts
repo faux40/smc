@@ -8,6 +8,7 @@ import { realtimeTabId } from '@/echo';
 import AppLayout from '@/layouts/AppLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
+import { installCsrfRetry } from '@/lib/csrf';
 import { initializeFlashToast } from '@/lib/flashToast';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
@@ -45,6 +46,10 @@ createInertiaApp({
             .mount(el);
     },
 });
+
+// Recover from a stale CSRF token (419) by refreshing it and retrying once,
+// so store mutations don't wedge after the page has been open a while.
+installCsrfRetry();
 
 // This will set light / dark mode on page load...
 initializeTheme();

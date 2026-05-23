@@ -32,6 +32,14 @@ Route::inertia('/', 'Welcome', [
 // complements the framework's boots-only `/up`.
 Route::get('health/detailed', [HealthController::class, 'detailed'])->name('health.detailed');
 
+// Current session CSRF token, for the SPA to refresh a stale one. The meta
+// token is rendered once at page load and goes stale if the page is left open
+// a while or the session token is regenerated (e.g. re-auth in another tab),
+// which would 419 every store mutation; the axios 419-retry interceptor reads
+// this to recover. GET, so it's not itself CSRF-checked; web group → session.
+Route::get('csrf-token', fn () => response()->json(['token' => csrf_token()]))
+    ->name('csrf-token');
+
 // throttle:240,1 — a generous per-user/IP ceiling (4 req/s sustained) that
 // reins in runaway clients/abuse without affecting normal SPA use. Login has
 // its own stricter Fortify throttle. Tune as real usage data arrives (16.6).
