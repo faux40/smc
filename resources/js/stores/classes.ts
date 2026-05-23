@@ -43,6 +43,10 @@ export interface EnrollmentRow {
     user_email: string | null;
     status: 'enrolled' | 'passed' | 'partial' | 'incomplete';
     notes: string | null;
+    // Class topics this user already holds a (live) completion for — drives
+    // the close-out modal's per-topic defaults so re-completing preserves
+    // existing credit.
+    credited_training_ids: string[];
 }
 
 export interface ClassDetail {

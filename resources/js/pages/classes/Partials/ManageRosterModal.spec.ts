@@ -32,6 +32,7 @@ const detail: ClassDetail = {
             user_email: 'dana@x.com',
             status: 'enrolled',
             notes: null,
+            credited_training_ids: [],
         },
     ],
 };

@@ -48,13 +48,21 @@ watch(
         marks.splice(
             0,
             marks.length,
-            // Default every topic to passed; the instructor flips failures.
             ...props.target.enrollments.map((e) => ({
                 id: e.id,
                 user_name: e.user_name,
                 notes: e.notes ?? '',
+                // A fresh enrollee (never graded) defaults to passed on every
+                // topic; a previously-graded one (re-opened class) keeps their
+                // existing per-topic credit so re-completing is a no-op unless
+                // changed.
                 passed: Object.fromEntries(
-                    props.target.trainings.map((t) => [t.id, true]),
+                    props.target.trainings.map((t) => [
+                        t.id,
+                        e.status === 'enrolled'
+                            ? true
+                            : e.credited_training_ids.includes(t.id),
+                    ]),
                 ),
             })),
         );

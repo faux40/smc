@@ -53,6 +53,7 @@ function detail(): ClassDetail {
                 user_email: null,
                 status: 'enrolled',
                 notes: null,
+                credited_training_ids: [],
             },
         ],
     };
@@ -86,13 +87,36 @@ describe('ClassCompleteModal', () => {
         document.body.innerHTML = '';
     });
 
-    it('renders a pass toggle per training, defaulting to passed', async () => {
+    it('renders a pass toggle per training, defaulting a fresh enrollee to passed', async () => {
         await openModal();
 
         const btns = topicButtons();
         expect(btns).toHaveLength(2);
-        // Default: every topic passed (✓).
+        // Fresh enrollee (status 'enrolled') → every topic passed (✓).
         expect(btns.every((b) => b.textContent?.includes('✓'))).toBe(true);
+    });
+
+    it('defaults a previously-graded enrollee to their existing credit', async () => {
+        const target = detail();
+        // Re-opened class: John passed First Aid (ct1) but not Fall Protection.
+        target.enrollments[0].status = 'partial';
+        target.enrollments[0].credited_training_ids = ['ct1'];
+
+        const wrapper = mount(ClassCompleteModal, {
+            props: { open: false, target },
+            attachTo: document.body,
+        });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        const firstAid = topicButtons().find((b) =>
+            b.textContent?.includes('First Aid'),
+        )!;
+        const fall = topicButtons().find((b) =>
+            b.textContent?.includes('Fall Protection'),
+        )!;
+        expect(firstAid.textContent).toContain('✓'); // credited → passed
+        expect(fall.textContent).toContain('✗'); // not credited → failed
     });
 
     it('submits a per-training result matrix; a flipped topic is failed', async () => {

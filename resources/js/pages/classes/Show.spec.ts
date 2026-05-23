@@ -36,6 +36,7 @@ const detail: ClassDetail = {
             user_email: 'dana.reed@demo.local',
             status: 'enrolled',
             notes: null,
+            credited_training_ids: [],
         },
     ],
 };

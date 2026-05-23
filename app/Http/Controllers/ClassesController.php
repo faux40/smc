@@ -12,6 +12,7 @@ use App\Models\TrainingClass;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -192,7 +193,17 @@ class ClassesController extends Controller
         $this->assertEditable($class);
         abort_unless($enrollment->class_id === $class->id, 404);
 
-        $enrollment->delete();
+        DB::transaction(function () use ($class, $enrollment) {
+            // De-issue only this person's certs from this class (relevant on a
+            // re-opened class; a no-op on one that was never completed).
+            Completion::query()
+                ->whereIn('class_training_id', $class->classTrainings()->pluck('id'))
+                ->where('user_id', $enrollment->user_id)
+                ->delete();
+
+            $enrollment->delete();
+        });
+
         event(new ClassChanged($class->id, $class->org_id, 'updated'));
 
         return response()->json($this->detail($class->fresh()));
@@ -255,10 +266,17 @@ class ClassesController extends Controller
                 $expiryFor[$ct->id] = $expire;
             }
 
-            // Completions for each passed enrollee × training pair, each with a
-            // sequential-per-class certificate id (`{cert_code}{YYYYMMDD}-{NNN}`)
-            // and a link back to the snapshot.
-            $certSeq = 0;
+            // Reconcile completions against the pass matrix, per enrollee ×
+            // training pair:
+            //   passed + already has a cert → keep it (original id/date stand);
+            //   passed + no cert            → issue a new one;
+            //   not passed + has a cert     → de-issue it.
+            // So re-closing a re-opened class preserves untouched attendees'
+            // certificates and only applies the deltas. New cert ids continue
+            // after the highest suffix already used on this date.
+            $ctIds = $class->classTrainings->pluck('id');
+            $dateStr = $completionDate->format('Ymd');
+            $certSeq = $this->maxCertSeqForDate($ctIds, $dateStr);
 
             foreach ($class->enrollments as $enrollment) {
                 $mark = $marks->get($enrollment->id);
@@ -267,26 +285,29 @@ class ClassesController extends Controller
                 $passedCount = 0;
 
                 foreach ($class->classTrainings as $ct) {
-                    if (! ($results->get($ct->id) === true)) {
-                        continue; // not marked passed for this topic.
+                    $passed = $results->get($ct->id) === true;
+                    $existing = Completion::query()
+                        ->where('class_training_id', $ct->id)
+                        ->where('user_id', $enrollment->user_id)
+                        ->first();
+
+                    if (! $passed) {
+                        $existing?->delete(); // de-issue if previously credited.
+
+                        continue;
                     }
 
                     $passedCount++;
 
-                    if ($ct->training_id === null) {
-                        continue; // snapshot-only (training deleted) — count it, but nothing to credit.
+                    if ($ct->training_id === null || $existing !== null) {
+                        continue; // snapshot-only (deleted training), or already credited — preserve.
                     }
 
                     $certSeq++;
                     $code = $ct->cert_code !== null && $ct->cert_code !== ''
                         ? $ct->cert_code
                         : 'CERT';
-                    $certId = sprintf(
-                        '%s%s-%03d',
-                        $code,
-                        $completionDate->format('Ymd'),
-                        $certSeq,
-                    );
+                    $certId = sprintf('%s%s-%03d', $code, $dateStr, $certSeq);
 
                     Completion::create([
                         'org_id' => $class->org_id,
@@ -319,34 +340,24 @@ class ClassesController extends Controller
     }
 
     /**
-     * Re-open a completed class for editing: de-issue the certificates it
-     * generated (soft-delete the completions, so the credit/history is
-     * auditable but no longer counts or prints), clear the snapshots' computed
-     * expiries, reset the roster to enrolled, and unlock the class. After this
-     * the normal edit endpoints work again and re-closing re-issues corrected
-     * credit.
+     * Re-open a completed class for editing — non-destructive: the issued
+     * certificates (completions), roster results, and expiries are all left
+     * intact; only the lock is released (status back to `scheduled`,
+     * `completed_at` cleared, the completion date kept as the default for
+     * re-closing). The common case is fixing a typo or adding/removing one
+     * person: editing fields touches no certs, removing a person de-issues
+     * only theirs (see unenroll), and re-completing reconciles — preserving
+     * everyone else's original certificate.
      */
     public function reopen(TrainingClass $class): JsonResponse
     {
         Gate::authorize('update', $class);
         abort_unless($class->status === 'completed', 422, 'Only a completed class can be re-opened.');
 
-        DB::transaction(function () use ($class) {
-            $ctIds = $class->classTrainings()->pluck('id');
-
-            // De-issue: drop the completions this class generated.
-            Completion::query()->whereIn('class_training_id', $ctIds)->delete();
-
-            // Clear the computed expiry on each snapshot + reset the roster.
-            $class->classTrainings()->update(['expire_date' => null]);
-            $class->enrollments()->update(['status' => 'enrolled']);
-
-            $class->update([
-                'status' => 'scheduled',
-                'completion_date' => null,
-                'completed_at' => null,
-            ]);
-        });
+        $class->update([
+            'status' => 'scheduled',
+            'completed_at' => null,
+        ]);
 
         event(new ClassChanged($class->id, $class->org_id, 'reopened'));
 
@@ -361,6 +372,33 @@ class ClassesController extends Controller
             $passedCount > 0 => 'partial',
             default => 'incomplete',
         };
+    }
+
+    /**
+     * Highest `-NNN` suffix already used on this date across the class's certs
+     * (incl. soft-deleted), so newly-issued ids on a re-close never collide
+     * with preserved or previously-issued ones. cert id = `{code}{YYYYMMDD}-{NNN}`.
+     *
+     * @param  Collection<int, string>  $ctIds
+     */
+    private function maxCertSeqForDate(Collection $ctIds, string $dateStr): int
+    {
+        $max = 0;
+        $needle = $dateStr.'-';
+
+        Completion::withTrashed()
+            ->whereIn('class_training_id', $ctIds)
+            ->whereNotNull('cert_id')
+            ->pluck('cert_id')
+            ->each(function (string $certId) use (&$max, $needle): void {
+                $pos = strpos($certId, $needle);
+
+                if ($pos !== false) {
+                    $max = max($max, (int) substr($certId, $pos + strlen($needle)));
+                }
+            });
+
+        return $max;
     }
 
     /**
@@ -459,6 +497,15 @@ class ClassesController extends Controller
             'enrollments.user:id,f_name,m_name,l_name,prefix_name,suffix_name,email',
         ]);
 
+        // Per-enrollee credit: which of this class's topics each user already
+        // holds a (live) completion for — drives the close-out modal's
+        // per-topic defaults so re-completing preserves existing credit.
+        $creditByUser = Completion::query()
+            ->whereIn('class_training_id', $c->classTrainings->pluck('id'))
+            ->get(['user_id', 'class_training_id'])
+            ->groupBy('user_id')
+            ->map(fn ($rows) => $rows->pluck('class_training_id')->all());
+
         return [
             'id' => $c->id,
             'name' => $c->name,
@@ -492,6 +539,7 @@ class ClassesController extends Controller
                 'user_email' => $e->user?->email,
                 'status' => $e->status,
                 'notes' => $e->notes,
+                'credited_training_ids' => $creditByUser->get($e->user_id, []),
             ])->all(),
         ];
     }

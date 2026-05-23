@@ -463,11 +463,11 @@ const totalHoursLabel = computed(
                         <DialogHeader>
                             <DialogTitle>Re-open this class?</DialogTitle>
                             <DialogDescription>
-                                This unlocks the class for editing and
-                                <strong>de-issues the certificates</strong> it
-                                generated. You can fix the roster and trainings,
-                                then complete it again to re-issue corrected
-                                credit.
+                                This unlocks the class for editing. Issued
+                                certificates are kept — fix a typo, or add or
+                                remove people, then complete it again. Removing
+                                a person de-issues only their certificate;
+                                everyone else's is preserved.
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
@@ -479,7 +479,7 @@ const totalHoursLabel = computed(
                                 Cancel
                             </Button>
                             <Button :disabled="reopening" @click="reopen">
-                                Re-open & de-issue
+                                Re-open
                             </Button>
                         </DialogFooter>
                     </DialogContent>
