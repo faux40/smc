@@ -3,25 +3,25 @@
 <head>
     <meta charset="utf-8">
     <style>
-        @page { margin: 0.6in 0.7in; }
+        @page { margin: 0.75in; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Helvetica', Arial, sans-serif; color: #111827; font-size: 11px; }
+        body { font-family: 'Helvetica', Arial, sans-serif; color: #111827; font-size: 13px; }
 
-        .org { text-align: right; font-size: 13px; font-weight: bold; color: #374151; }
-        h1 { text-align: center; font-size: 17px; margin: 6px 0 12px; }
+        .org { text-align: right; font-size: 16px; font-weight: bold; color: #374151; }
+        h1 { text-align: center; font-size: 22px; margin: 8px 0 16px; }
 
-        table.info { width: 100%; margin-bottom: 14px; }
-        table.info td { vertical-align: top; padding: 1px 0; line-height: 1.4; }
-        .label { color: #4b5563; width: 90px; }
-        .col-gap { width: 36px; }
+        table.info { width: 100%; margin-bottom: 18px; }
+        table.info td { vertical-align: top; padding: 2px 0; line-height: 1.6; font-size: 13px; }
+        .label { color: #4b5563; width: 115px; }
+        .col-gap { width: 40px; }
 
-        .section-title { font-size: 12px; font-weight: bold; margin-bottom: 4px; }
+        .section-title { font-size: 15px; font-weight: bold; margin-bottom: 6px; }
         table.certs { width: 100%; border-collapse: collapse; }
         table.certs th, table.certs td {
-            border-bottom: 1px solid #e5e7eb; text-align: left; padding: 5px 6px; font-size: 10px;
+            border-bottom: 1px solid #e5e7eb; text-align: left; padding: 7px 7px; font-size: 12px;
         }
-        table.certs thead th { border-bottom: 1.5px solid #9ca3af; color: #374151; }
-        .num { width: 22px; color: #6b7280; }
+        table.certs thead th { border-bottom: 1.5px solid #9ca3af; color: #374151; font-size: 12px; }
+        .num { width: 26px; color: #6b7280; }
 
         .foot { position: fixed; bottom: 0; left: 0; right: 0; font-size: 9px; color: #6b7280; }
         .foot .r { float: right; }

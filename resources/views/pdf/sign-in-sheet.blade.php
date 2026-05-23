@@ -3,31 +3,31 @@
 <head>
     <meta charset="utf-8">
     <style>
-        @page { margin: 0.6in 0.7in; }
+        @page { margin: 0.75in; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Helvetica', Arial, sans-serif; color: #111827; font-size: 11px; }
+        body { font-family: 'Helvetica', Arial, sans-serif; color: #111827; font-size: 13px; }
 
-        .head { width: 100%; margin-bottom: 6px; }
+        .head { width: 100%; margin-bottom: 8px; }
         .head td { vertical-align: top; }
-        .org { font-size: 16px; font-weight: bold; }
+        .org { font-size: 20px; font-weight: bold; }
         .head-right { text-align: right; }
-        .head-right .t { font-size: 13px; font-weight: bold; }
-        .head-right .d { color: #4b5563; }
+        .head-right .t { font-size: 16px; font-weight: bold; }
+        .head-right .d { font-size: 13px; color: #4b5563; }
 
-        h1 { text-align: center; font-size: 18px; margin: 10px 0 12px; text-decoration: underline; }
+        h1 { text-align: center; font-size: 24px; margin: 14px 0 16px; text-decoration: underline; }
 
-        .info { width: 100%; margin-bottom: 10px; }
-        .info td { vertical-align: top; width: 50%; line-height: 1.5; }
+        .info { width: 100%; margin-bottom: 14px; }
+        .info td { vertical-align: top; width: 50%; line-height: 1.6; font-size: 13px; }
         .info .label { color: #4b5563; }
 
         table.roster { width: 100%; border-collapse: collapse; }
         table.roster th, table.roster td { border: 1px solid #9ca3af; }
         table.roster thead th {
-            background: #f3f4f6; text-align: left; padding: 5px 8px; font-size: 11px;
+            background: #f3f4f6; text-align: left; padding: 7px 10px; font-size: 14px;
         }
-        .num { width: 26px; text-align: center; color: #6b7280; }
+        .num { width: 30px; text-align: center; color: #6b7280; }
         .name-col { width: 48%; }
-        .roster td { height: 30px; padding: 4px 8px; }
+        .roster td { height: 36px; padding: 5px 10px; font-size: 14px; }
         .roster .name-val { font-weight: normal; }
 
         .foot {

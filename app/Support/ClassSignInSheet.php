@@ -12,8 +12,9 @@ use App\Models\TrainingClass;
  */
 class ClassSignInSheet
 {
-    /** Minimum rows so the sheet looks full even with few/no students. */
-    private const MIN_ROWS = 18;
+    /** Minimum rows so the sheet looks full even with few/no students.
+     *  ~16 fills one Letter page at the current (larger) font + 0.75in margins. */
+    private const MIN_ROWS = 16;
 
     /**
      * @return array<string, mixed>
