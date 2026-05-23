@@ -266,37 +266,47 @@ class ClassesController extends Controller
                 $expiryFor[$ct->id] = $expire;
             }
 
-            // Reconcile completions against the pass matrix, per enrollee ×
-            // training pair:
-            //   passed + already has a cert → keep it (original id/date stand);
-            //   passed + no cert            → issue a new one;
-            //   not passed + has a cert     → de-issue it.
-            // So re-closing a re-opened class preserves untouched attendees'
-            // certificates and only applies the deltas. New cert ids continue
-            // after the highest suffix already used on this date.
+            // Reconcile completions against the per-topic decisions, per
+            // enrollee × training pair. Each topic is tri-state:
+            //   passed   + no cert → issue one;  passed + has cert → keep it;
+            //   failed   + has cert → de-issue it;
+            //   UNMARKED → leave as-is (preserve any existing cert).
+            // So a re-close only applies the topics actually marked, and the
+            // attendees you didn't touch keep their original certificates. New
+            // cert ids continue after the highest suffix used on this date.
             $ctIds = $class->classTrainings->pluck('id');
             $dateStr = $completionDate->format('Ymd');
             $certSeq = $this->maxCertSeqForDate($ctIds, $dateStr);
 
             foreach ($class->enrollments as $enrollment) {
-                $mark = $marks->get($enrollment->id);
-                $results = collect($mark['results'] ?? [])->pluck('passed', 'class_training_id');
+                $enrollMark = $marks->get($enrollment->id) ?? [];
+                $results = collect($enrollMark['results'] ?? [])->pluck('passed', 'class_training_id');
 
                 $passedCount = 0;
 
                 foreach ($class->classTrainings as $ct) {
-                    $passed = $results->get($ct->id) === true;
+                    $decision = $results->get($ct->id); // true | false | null (unmarked)
                     $existing = Completion::query()
                         ->where('class_training_id', $ct->id)
                         ->where('user_id', $enrollment->user_id)
                         ->first();
 
-                    if (! $passed) {
-                        $existing?->delete(); // de-issue if previously credited.
+                    if ($decision === false) {
+                        $existing?->delete(); // explicitly failed → de-issue.
 
                         continue;
                     }
 
+                    if ($decision === null) {
+                        // Unmarked → leave untouched; a preserved cert still counts.
+                        if ($existing !== null) {
+                            $passedCount++;
+                        }
+
+                        continue;
+                    }
+
+                    // Passed.
                     $passedCount++;
 
                     if ($ct->training_id === null || $existing !== null) {
@@ -323,7 +333,7 @@ class ClassesController extends Controller
 
                 $enrollment->update([
                     'status' => $this->rollUpStatus($passedCount, $totalTopics),
-                    'notes' => $mark['notes'] ?? $enrollment->notes,
+                    'notes' => $enrollMark['notes'] ?? $enrollment->notes,
                 ]);
             }
 

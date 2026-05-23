@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -18,6 +19,8 @@ import { useErrorStore } from '@/stores/errors';
 
 const FORM_CTX = 'form:class-complete';
 
+type Decision = 'pass' | 'fail';
+
 const props = defineProps<{ open: boolean; target: ClassDetail }>();
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
 
@@ -30,8 +33,12 @@ interface Mark {
     id: string;
     user_name: string | null;
     notes: string;
-    // Per-topic pass/fail, keyed by class_training_id.
-    passed: Record<string, boolean>;
+    // Freshly added on a re-opened class (never graded yet).
+    isNew: boolean;
+    // Topics this person already holds a certificate for (for context).
+    credited: Set<string>;
+    // Per-topic decision keyed by class_training_id; absent = unmarked.
+    result: Record<string, Decision>;
 }
 
 const marks = reactive<Mark[]>([]);
@@ -45,6 +52,13 @@ watch(
 
         errorStore.clear(FORM_CTX);
         completionDate.value = props.target.scheduled_date ?? '';
+
+        // Every topic starts UNMARKED — the instructor must choose pass/fail
+        // (or use "Mark all passed"). Nothing is pre-selected, so a freshly
+        // added attendee is never silently credited, and on a re-close an
+        // unmarked topic leaves the existing certificate untouched.
+        const previouslyCompleted = props.target.completion_date != null;
+
         marks.splice(
             0,
             marks.length,
@@ -52,22 +66,36 @@ watch(
                 id: e.id,
                 user_name: e.user_name,
                 notes: e.notes ?? '',
-                // A fresh enrollee (never graded) defaults to passed on every
-                // topic; a previously-graded one (re-opened class) keeps their
-                // existing per-topic credit so re-completing is a no-op unless
-                // changed.
-                passed: Object.fromEntries(
-                    props.target.trainings.map((t) => [
-                        t.id,
-                        e.status === 'enrolled'
-                            ? true
-                            : e.credited_training_ids.includes(t.id),
-                    ]),
-                ),
+                isNew: previouslyCompleted && e.status === 'enrolled',
+                credited: new Set(e.credited_training_ids),
+                result: {} as Record<string, Decision>,
             })),
         );
     },
 );
+
+/** Click a pass/fail chip: set it, or toggle back to unmarked if re-clicked. */
+function choose(m: Mark, trainingId: string, value: Decision): void {
+    if (m.result[trainingId] === value) {
+        delete m.result[trainingId];
+    } else {
+        m.result[trainingId] = value;
+    }
+}
+
+function markAll(value: Decision): void {
+    for (const m of marks) {
+        for (const t of props.target.trainings) {
+            m.result[t.id] = value;
+        }
+    }
+}
+
+function clearAll(): void {
+    for (const m of marks) {
+        m.result = {};
+    }
+}
 
 async function submit(): Promise<void> {
     submitting.value = true;
@@ -79,10 +107,13 @@ async function submit(): Promise<void> {
             enrollments: marks.map((m) => ({
                 id: m.id,
                 notes: m.notes.trim() === '' ? null : m.notes,
-                results: props.target.trainings.map((t) => ({
-                    class_training_id: t.id,
-                    passed: m.passed[t.id] ?? false,
-                })),
+                // Only marked topics are sent; unmarked ones are left as-is.
+                results: props.target.trainings
+                    .filter((t) => m.result[t.id] !== undefined)
+                    .map((t) => ({
+                        class_training_id: t.id,
+                        passed: m.result[t.id] === 'pass',
+                    })),
             })),
         });
         emit('update:open', false);
@@ -103,24 +134,44 @@ async function submit(): Promise<void> {
                 <DialogHeader>
                     <DialogTitle>Complete class</DialogTitle>
                     <DialogDescription>
-                        Mark each attendee passed or failed per training. A
-                        certificate is issued for every passed pairing (dated
-                        below; expiries computed per training). This locks the
+                        Mark each attendee passed or failed per training — a
+                        certificate is issued for every passed pairing.
+                        Unmarked topics are left unchanged. This locks the
                         class.
                     </DialogDescription>
                 </DialogHeader>
 
                 <ErrorBanner :context="FORM_CTX" />
 
-                <div class="grid gap-2">
-                    <Label for="complete_date">Completion date</Label>
-                    <Input
-                        id="complete_date"
-                        type="date"
-                        v-model="completionDate"
-                        required
-                        class="w-48"
-                    />
+                <div class="flex flex-wrap items-end justify-between gap-3">
+                    <div class="grid gap-2">
+                        <Label for="complete_date">Completion date</Label>
+                        <Input
+                            id="complete_date"
+                            type="date"
+                            v-model="completionDate"
+                            required
+                            class="w-48"
+                        />
+                    </div>
+                    <div v-if="marks.length" class="flex gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            @click="markAll('pass')"
+                        >
+                            Mark all passed
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            @click="clearAll"
+                        >
+                            Clear all
+                        </Button>
+                    </div>
                 </div>
 
                 <div
@@ -136,27 +187,56 @@ async function submit(): Promise<void> {
                         :key="m.id"
                         class="space-y-1.5 border-b border-border pb-3 text-sm"
                     >
-                        <span class="font-medium">{{ m.user_name }}</span>
-                        <div class="flex flex-wrap gap-1.5">
+                        <span class="flex items-center gap-2 font-medium">
+                            {{ m.user_name }}
+                            <Badge
+                                v-if="m.isNew"
+                                variant="secondary"
+                                class="text-[10px]"
+                            >
+                                new
+                            </Badge>
+                        </span>
+                        <div
+                            v-for="t in target.trainings"
+                            :key="t.id"
+                            class="flex items-center gap-2"
+                        >
+                            <span class="flex-1">
+                                {{ t.training_name }}
+                                <span
+                                    v-if="
+                                        m.credited.has(t.id) &&
+                                        m.result[t.id] === undefined
+                                    "
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    · certified
+                                </span>
+                            </span>
                             <button
-                                v-for="t in target.trainings"
-                                :key="t.id"
                                 type="button"
                                 class="rounded px-2 py-0.5 text-xs ring-1 ring-inset"
                                 :class="
-                                    m.passed[t.id]
+                                    m.result[t.id] === 'pass'
                                         ? 'bg-emerald-100 text-emerald-900 ring-emerald-300'
-                                        : 'bg-red-50 text-red-800 line-through ring-red-200'
+                                        : 'text-muted-foreground ring-border'
                                 "
-                                :title="
-                                    m.passed[t.id]
-                                        ? 'Passed — click to fail'
-                                        : 'Failed — click to pass'
-                                "
-                                @click="m.passed[t.id] = !m.passed[t.id]"
+                                @click="choose(m, t.id, 'pass')"
                             >
-                                {{ m.passed[t.id] ? '✓' : '✗' }}
-                                {{ t.training_name }}
+                                Pass
+                            </button>
+                            <button
+                                type="button"
+                                class="rounded px-2 py-0.5 text-xs ring-1 ring-inset"
+                                :class="
+                                    m.result[t.id] === 'fail'
+                                        ? 'bg-red-100 text-red-900 ring-red-300'
+                                        : 'text-muted-foreground ring-border'
+                                "
+                                @click="choose(m, t.id, 'fail')"
+                            >
+                                Fail
                             </button>
                         </div>
                         <Input
