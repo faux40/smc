@@ -302,7 +302,46 @@ class ClassesController extends Controller
             // Default the per-class hours to the topic's typical duration;
             // editable per class via updateTraining().
             'hours' => $hours ?? $training->default_hours,
+            // Snapshot the cert content so later edits to the training don't
+            // rewrite certs an already-completed class issued.
+            'cert_title' => $training->cert_title,
+            'cert_text_line_1' => $training->cert_text_line_1,
+            'cert_text_line_2' => $training->cert_text_line_2,
+            'cert_text_line_3' => $training->cert_text_line_3,
+            'cert_text_line_4' => $training->cert_text_line_4,
+            'lifespan_months' => $training->lifespan_months,
+            'cert_code' => $training->cert_code,
+            'show_signature_on_cert' => $training->show_signature_on_cert,
         ]);
+
+        $this->prefillClassVenue($class, $training);
+    }
+
+    /**
+     * Pre-fill the class's event-level fields (trainer = instructor, training
+     * location + address) from the training's defaults — but only fields the
+     * class hasn't set yet, so the first topic seeds them and later edits or
+     * topics never clobber a chosen value.
+     */
+    private function prefillClassVenue(TrainingClass $class, Training $training): void
+    {
+        $updates = [];
+
+        if (blank($class->instructor) && filled($training->default_trainer)) {
+            $updates['instructor'] = $training->default_trainer;
+        }
+
+        if (blank($class->training_location) && filled($training->default_training_location)) {
+            $updates['training_location'] = $training->default_training_location;
+        }
+
+        if (blank($class->training_address) && filled($training->default_training_address)) {
+            $updates['training_address'] = $training->default_training_address;
+        }
+
+        if ($updates !== []) {
+            $class->update($updates);
+        }
     }
 
     /** A completed class is view-only — block roster/training/detail edits. */
@@ -342,6 +381,8 @@ class ClassesController extends Controller
             'name' => $c->name,
             'scheduled_date' => $c->scheduled_date?->toDateString(),
             'location' => $c->location,
+            'training_location' => $c->training_location,
+            'training_address' => $c->training_address,
             'instructor' => $c->instructor,
             'total_hours' => $c->total_hours,
             'notes' => $c->notes,

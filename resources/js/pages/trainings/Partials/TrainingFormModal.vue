@@ -51,6 +51,47 @@ interface FormState {
     repeating: boolean;
     std_freq_id: string | null;
     as_needed: boolean;
+    // Certificate content defaults.
+    cert_title: string;
+    cert_text_line_1: string;
+    cert_text_line_2: string;
+    cert_text_line_3: string;
+    cert_text_line_4: string;
+    lifespan_months: string | number;
+    cert_code: string;
+    show_signature_on_cert: boolean;
+    default_trainer: string;
+    default_training_location: string;
+    default_training_address: string;
+}
+
+function blankCert(): Pick<
+    FormState,
+    | 'cert_title'
+    | 'cert_text_line_1'
+    | 'cert_text_line_2'
+    | 'cert_text_line_3'
+    | 'cert_text_line_4'
+    | 'lifespan_months'
+    | 'cert_code'
+    | 'show_signature_on_cert'
+    | 'default_trainer'
+    | 'default_training_location'
+    | 'default_training_address'
+> {
+    return {
+        cert_title: '',
+        cert_text_line_1: '',
+        cert_text_line_2: '',
+        cert_text_line_3: '',
+        cert_text_line_4: '',
+        lifespan_months: '',
+        cert_code: '',
+        show_signature_on_cert: false,
+        default_trainer: '',
+        default_training_location: '',
+        default_training_address: '',
+    };
 }
 
 const form = reactive<FormState>({
@@ -61,6 +102,7 @@ const form = reactive<FormState>({
     repeating: false,
     std_freq_id: null,
     as_needed: false,
+    ...blankCert(),
 });
 
 const submitting = ref(false);
@@ -98,6 +140,17 @@ watch(
             form.repeating = t.repeating;
             form.std_freq_id = t.std_freq_id;
             form.as_needed = t.as_needed;
+            form.cert_title = t.cert_title ?? '';
+            form.cert_text_line_1 = t.cert_text_line_1 ?? '';
+            form.cert_text_line_2 = t.cert_text_line_2 ?? '';
+            form.cert_text_line_3 = t.cert_text_line_3 ?? '';
+            form.cert_text_line_4 = t.cert_text_line_4 ?? '';
+            form.lifespan_months = t.lifespan_months ?? '';
+            form.cert_code = t.cert_code ?? '';
+            form.show_signature_on_cert = t.show_signature_on_cert;
+            form.default_trainer = t.default_trainer ?? '';
+            form.default_training_location = t.default_training_location ?? '';
+            form.default_training_address = t.default_training_address ?? '';
         } else {
             form.name = '';
             form.description = '';
@@ -106,6 +159,7 @@ watch(
             form.repeating = false;
             form.std_freq_id = null;
             form.as_needed = false;
+            Object.assign(form, blankCert());
         }
     },
 );
@@ -125,15 +179,26 @@ const submit = async () => {
     errorStore.clear(FORM_CTX);
 
     try {
+        const blank = (v: string) => (v.trim() === '' ? null : v);
         const payload = {
             name: form.name,
-            description:
-                form.description.trim() === '' ? null : form.description,
+            description: blank(form.description),
             default_hours: optionalNumber(form.default_hours),
             initial_only: form.initial_only,
             repeating: form.repeating,
             std_freq_id: form.repeating ? form.std_freq_id : null,
             as_needed: form.as_needed,
+            cert_title: blank(form.cert_title),
+            cert_text_line_1: blank(form.cert_text_line_1),
+            cert_text_line_2: blank(form.cert_text_line_2),
+            cert_text_line_3: blank(form.cert_text_line_3),
+            cert_text_line_4: blank(form.cert_text_line_4),
+            lifespan_months: optionalNumber(form.lifespan_months),
+            cert_code: blank(form.cert_code),
+            show_signature_on_cert: form.show_signature_on_cert,
+            default_trainer: blank(form.default_trainer),
+            default_training_location: blank(form.default_training_location),
+            default_training_address: blank(form.default_training_address),
         };
 
         if (isEdit.value && props.target) {
@@ -155,7 +220,7 @@ const submit = async () => {
 
 <template>
     <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
-        <DialogContent class="sm:max-w-lg">
+        <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
             <form @submit.prevent="submit" class="space-y-4">
                 <DialogHeader>
                     <DialogTitle>{{ title }}</DialogTitle>
@@ -246,6 +311,103 @@ const submit = async () => {
                         </SelectContent>
                     </Select>
                     <InputError :message="fieldErrors.message('std_freq_id')" />
+                </div>
+
+                <div class="space-y-3 border-t border-border pt-3">
+                    <p class="text-sm font-medium">Certificate</p>
+                    <p class="text-xs text-muted-foreground">
+                        Defaults copied onto a class when this topic is added,
+                        then printed on the certificate.
+                    </p>
+
+                    <div class="grid gap-2">
+                        <Label for="t_cert_title">Certificate title</Label>
+                        <Input
+                            id="t_cert_title"
+                            v-model="form.cert_title"
+                            placeholder="e.g. Fall Protection Authorized Person"
+                        />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label>Certificate text (up to 4 lines)</Label>
+                        <Input
+                            v-model="form.cert_text_line_1"
+                            placeholder="Line 1"
+                        />
+                        <Input
+                            v-model="form.cert_text_line_2"
+                            placeholder="Line 2"
+                        />
+                        <Input
+                            v-model="form.cert_text_line_3"
+                            placeholder="Line 3"
+                        />
+                        <Input
+                            v-model="form.cert_text_line_4"
+                            placeholder="Line 4"
+                        />
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="grid gap-2">
+                            <Label for="t_lifespan">Lifespan (months)</Label>
+                            <Input
+                                id="t_lifespan"
+                                type="number"
+                                min="0"
+                                step="1"
+                                v-model="form.lifespan_months"
+                                placeholder="e.g. 24"
+                            />
+                            <InputError
+                                :message="fieldErrors.message('lifespan_months')"
+                            />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label for="t_cert_code">Cert code</Label>
+                            <Input
+                                id="t_cert_code"
+                                v-model="form.cert_code"
+                                placeholder="e.g. FPAP"
+                            />
+                            <InputError
+                                :message="fieldErrors.message('cert_code')"
+                            />
+                        </div>
+                        <label
+                            class="mt-6 flex items-center gap-2 text-sm"
+                        >
+                            <Checkbox v-model="form.show_signature_on_cert" />
+                            Signature
+                        </label>
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="t_def_trainer">Default trainer</Label>
+                        <Input
+                            id="t_def_trainer"
+                            v-model="form.default_trainer"
+                        />
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="grid gap-2">
+                            <Label for="t_def_loc">Default training location</Label>
+                            <Input
+                                id="t_def_loc"
+                                v-model="form.default_training_location"
+                            />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label for="t_def_addr">Default training address</Label>
+                            <textarea
+                                id="t_def_addr"
+                                v-model="form.default_training_address"
+                                rows="2"
+                                class="rounded border border-input bg-background p-2 text-sm"
+                            ></textarea>
+                        </div>
+                    </div>
                 </div>
 
                 <DialogFooter>

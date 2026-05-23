@@ -27,6 +27,8 @@ class ClassRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'scheduled_date' => ['required', 'date'],
             'location' => ['nullable', 'string', 'max:255'],
+            'training_location' => ['nullable', 'string', 'max:255'],
+            'training_address' => ['nullable', 'string', 'max:1000'],
             'instructor' => ['nullable', 'string', 'max:255'],
             'total_hours' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],

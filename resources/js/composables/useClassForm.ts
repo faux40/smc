@@ -12,6 +12,8 @@ export interface ClassFormFields {
     name: string;
     scheduled_date: string;
     location: string;
+    training_location: string;
+    training_address: string;
     instructor: string;
     total_hours: string | number;
     notes: string;
@@ -22,6 +24,8 @@ function emptyFields(): ClassFormFields {
         name: '',
         scheduled_date: '',
         location: '',
+        training_location: '',
+        training_address: '',
         instructor: '',
         total_hours: '',
         notes: '',
@@ -44,6 +48,8 @@ export function useClassForm(context: string) {
             name: target?.name ?? '',
             scheduled_date: target?.scheduled_date ?? '',
             location: target?.location ?? '',
+            training_location: target?.training_location ?? '',
+            training_address: target?.training_address ?? '',
             instructor: target?.instructor ?? '',
             total_hours: target?.total_hours ?? '',
             notes: target?.notes ?? '',
@@ -88,6 +94,8 @@ export function useClassForm(context: string) {
             name: form.value.name,
             scheduled_date: form.value.scheduled_date,
             location: blank(form.value.location),
+            training_location: blank(form.value.training_location),
+            training_address: blank(form.value.training_address),
             instructor: blank(form.value.instructor),
             total_hours: optionalNumber(form.value.total_hours),
             notes: blank(form.value.notes),

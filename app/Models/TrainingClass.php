@@ -27,6 +27,8 @@ class TrainingClass extends Model
         'name',
         'scheduled_date',
         'location',
+        'training_location',
+        'training_address',
         'instructor',
         'total_hours',
         'notes',

@@ -100,6 +100,44 @@ class TrainingsApiTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_set_certificate_fields(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $freq = StdFrequency::factory()->for($org, 'organization')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/trainings', [
+                'name' => 'Fall Protection',
+                'initial_only' => false,
+                'repeating' => true,
+                'std_freq_id' => $freq->id,
+                'as_needed' => false,
+                'cert_title' => 'Fall Protection Authorized Person',
+                'cert_text_line_1' => 'Training satisfies Cal/OSHA requirements',
+                'lifespan_months' => 24,
+                'cert_code' => 'FPAP',
+                'show_signature_on_cert' => true,
+                'default_trainer' => 'John Balestrini',
+                'default_training_location' => 'VSFCD Training Room',
+                'default_training_address' => "450 Ryder St\nVallejo, CA 94590",
+            ])
+            ->assertCreated()
+            ->assertJsonPath('cert_title', 'Fall Protection Authorized Person')
+            ->assertJsonPath('lifespan_months', 24)
+            ->assertJsonPath('cert_code', 'FPAP')
+            ->assertJsonPath('show_signature_on_cert', true);
+
+        $this->assertDatabaseHas('trainings', [
+            'org_id' => $org->id,
+            'cert_title' => 'Fall Protection Authorized Person',
+            'lifespan_months' => 24,
+            'cert_code' => 'FPAP',
+            'show_signature_on_cert' => true,
+            'default_trainer' => 'John Balestrini',
+        ]);
+    }
+
     public function test_admin_can_create_initial_only_training(): void
     {
         $org = Organization::factory()->create();

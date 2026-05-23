@@ -41,6 +41,7 @@ class CreateUserRequest extends FormRequest
             'department' => ['nullable', 'string', 'max:255'],
             'location' => ['nullable', 'string', 'max:255'],
             'job_title' => ['nullable', 'string', 'max:255'],
+            'employee_number' => ['nullable', 'string', 'max:64'],
             'supervisor_id' => [
                 'nullable',
                 'string',

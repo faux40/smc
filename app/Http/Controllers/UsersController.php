@@ -79,7 +79,7 @@ class UsersController extends Controller
             })
             ->orderBy('l_name')
             ->orderBy('f_name')
-            ->get(['id', 'org_id', 'f_name', 'm_name', 'l_name', 'prefix_name', 'suffix_name', 'email', 'status', 'department', 'location', 'job_title', 'supervisor_id', 'start_date', 'end_date', 'created_at'])
+            ->get(['id', 'org_id', 'f_name', 'm_name', 'l_name', 'prefix_name', 'suffix_name', 'email', 'status', 'department', 'location', 'job_title', 'employee_number', 'supervisor_id', 'start_date', 'end_date', 'created_at'])
             ->when($roleFilter !== '', fn ($collection) => $collection->filter(
                 fn (User $u) => $u->roles->contains('name', $roleFilter),
             )->values())
@@ -97,6 +97,7 @@ class UsersController extends Controller
                 'department' => $u->department,
                 'location' => $u->location,
                 'job_title' => $u->job_title,
+                'employee_number' => $u->employee_number,
                 'supervisor_id' => $u->supervisor_id,
                 'start_date' => $u->start_date?->toDateString(),
                 'end_date' => $u->end_date?->toDateString(),
@@ -175,6 +176,7 @@ class UsersController extends Controller
                 'department' => $user->department,
                 'location' => $user->location,
                 'job_title' => $user->job_title,
+                'employee_number' => $user->employee_number,
                 'supervisor_name' => $user->supervisor?->name,
                 'start_date' => $user->start_date?->toDateString(),
                 'end_date' => $user->end_date?->toDateString(),
@@ -214,6 +216,7 @@ class UsersController extends Controller
             'department' => $request->validated('department'),
             'location' => $request->validated('location'),
             'job_title' => $request->validated('job_title'),
+            'employee_number' => $request->validated('employee_number'),
             'supervisor_id' => $request->validated('supervisor_id'),
             'start_date' => $request->validated('start_date'),
             'end_date' => $request->validated('end_date'),
@@ -241,6 +244,7 @@ class UsersController extends Controller
             'department' => $data['department'] ?? null,
             'location' => $data['location'] ?? null,
             'job_title' => $data['job_title'] ?? null,
+            'employee_number' => $data['employee_number'] ?? null,
             'supervisor_id' => $data['supervisor_id'] ?? null,
             'start_date' => $data['start_date'] ?? null,
             'end_date' => $data['end_date'] ?? null,

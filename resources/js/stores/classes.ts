@@ -50,6 +50,8 @@ export interface ClassDetail {
     name: string;
     scheduled_date: string | null;
     location: string | null;
+    training_location: string | null;
+    training_address: string | null;
     instructor: string | null;
     total_hours: string | null;
     notes: string | null;
@@ -64,6 +66,8 @@ export interface ClassFormPayload {
     name: string;
     scheduled_date: string;
     location: string | null;
+    training_location: string | null;
+    training_address: string | null;
     instructor: string | null;
     total_hours: number | null;
     notes: string | null;

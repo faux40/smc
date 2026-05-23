@@ -26,6 +26,8 @@ class Completion extends Model
         'certification_date',
         'expire_date',
         'cert_ident',
+        'cert_id',
+        'class_training_id',
         'notes',
     ];
 

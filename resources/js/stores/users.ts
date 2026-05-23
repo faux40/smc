@@ -37,6 +37,7 @@ export interface UserRow {
     department: string | null;
     location: string | null;
     job_title: string | null;
+    employee_number: string | null;
     supervisor_id: string | null;
     start_date: string | null;
     end_date: string | null;
@@ -116,6 +117,7 @@ export const useUsersStore = defineStore('users', () => {
                 department: null,
                 location: null,
                 job_title: null,
+                employee_number: null,
                 supervisor_id: null,
                 start_date: null,
                 end_date: null,

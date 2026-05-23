@@ -51,6 +51,7 @@ interface FormState {
     department: string;
     location: string;
     job_title: string;
+    employee_number: string;
     supervisor_id: string; // '' = none
     start_date: string;
     end_date: string;
@@ -81,6 +82,7 @@ const form = reactive<FormState>({
     department: '',
     location: '',
     job_title: '',
+    employee_number: '',
     supervisor_id: '',
     start_date: '',
     end_date: '',
@@ -138,6 +140,7 @@ watch(
             form.department = t.department ?? '';
             form.location = t.location ?? '';
             form.job_title = t.job_title ?? '';
+            form.employee_number = t.employee_number ?? '';
             form.supervisor_id = t.supervisor_id ?? '';
             form.start_date = t.start_date ?? '';
             form.end_date = t.end_date ?? '';
@@ -153,6 +156,7 @@ watch(
             form.department = '';
             form.location = '';
             form.job_title = '';
+            form.employee_number = '';
             form.supervisor_id = '';
             form.start_date = '';
             form.end_date = '';
@@ -200,6 +204,7 @@ const submit = () => {
         department: blank(form.department),
         location: blank(form.location),
         job_title: blank(form.job_title),
+        employee_number: blank(form.employee_number),
         supervisor_id: form.supervisor_id === '' ? null : form.supervisor_id,
         start_date: blank(form.start_date),
         end_date: blank(form.end_date),
@@ -334,10 +339,24 @@ const submit = () => {
                     </div>
                 </div>
 
-                <div class="grid gap-2">
-                    <Label for="user_job_title">Job title</Label>
-                    <Input id="user_job_title" v-model="form.job_title" />
-                    <InputError :message="fieldErrors.message('job_title')" />
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="grid gap-2">
+                        <Label for="user_job_title">Job title</Label>
+                        <Input id="user_job_title" v-model="form.job_title" />
+                        <InputError
+                            :message="fieldErrors.message('job_title')"
+                        />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="user_emp_num">Employee #</Label>
+                        <Input
+                            id="user_emp_num"
+                            v-model="form.employee_number"
+                        />
+                        <InputError
+                            :message="fieldErrors.message('employee_number')"
+                        />
+                    </div>
                 </div>
 
                 <div class="grid gap-2">

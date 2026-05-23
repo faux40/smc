@@ -155,6 +155,62 @@ class ClassesControllerTest extends TestCase
         $this->assertSame('5.25', (string) $ct->fresh()->hours);
     }
 
+    public function test_attaching_snapshots_cert_fields_and_prefills_class_venue(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create([
+            'instructor' => null,
+            'training_location' => null,
+            'training_address' => null,
+        ]);
+        $training = Training::factory()->for($org, 'organization')->create([
+            'cert_title' => 'FP Authorized',
+            'cert_text_line_1' => 'Satisfies Cal/OSHA',
+            'lifespan_months' => 24,
+            'cert_code' => 'FPAP',
+            'show_signature_on_cert' => true,
+            'default_trainer' => 'John B',
+            'default_training_location' => 'Room A',
+            'default_training_address' => '450 Ryder St',
+        ]);
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/trainings", ['training_id' => $training->id])
+            ->assertOk();
+
+        // Cert content is snapshotted onto the class_training row.
+        $snap = ClassTraining::where('class_id', $class->id)->firstOrFail();
+        $this->assertSame('FP Authorized', $snap->cert_title);
+        $this->assertSame('FPAP', $snap->cert_code);
+        $this->assertSame(24, $snap->lifespan_months);
+        $this->assertTrue((bool) $snap->show_signature_on_cert);
+
+        // Empty class venue fields are pre-filled from the training defaults.
+        $class->refresh();
+        $this->assertSame('John B', $class->instructor);
+        $this->assertSame('Room A', $class->training_location);
+        $this->assertSame('450 Ryder St', $class->training_address);
+    }
+
+    public function test_attaching_does_not_overwrite_existing_class_venue(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create([
+            'instructor' => 'Set Already',
+        ]);
+        $training = Training::factory()->for($org, 'organization')->create([
+            'default_trainer' => 'Default Trainer',
+        ]);
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/trainings", ['training_id' => $training->id])
+            ->assertOk();
+
+        $this->assertSame('Set Already', $class->refresh()->instructor);
+    }
+
     public function test_cannot_attach_a_cross_org_training(): void
     {
         $org = Organization::factory()->create();

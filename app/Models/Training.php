@@ -27,6 +27,17 @@ class Training extends Model
         'std_freq_id',
         'as_needed',
         'default_hours',
+        'cert_title',
+        'cert_text_line_1',
+        'cert_text_line_2',
+        'cert_text_line_3',
+        'cert_text_line_4',
+        'lifespan_months',
+        'cert_code',
+        'show_signature_on_cert',
+        'default_trainer',
+        'default_training_location',
+        'default_training_address',
     ];
 
     protected $casts = [
@@ -34,6 +45,8 @@ class Training extends Model
         'repeating' => 'boolean',
         'as_needed' => 'boolean',
         'default_hours' => 'decimal:2',
+        'lifespan_months' => 'integer',
+        'show_signature_on_cert' => 'boolean',
     ];
 
     public function stdFrequency(): BelongsTo

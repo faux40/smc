@@ -34,6 +34,7 @@ use Spatie\Permission\Traits\HasRoles;
     'department',
     'location',
     'job_title',
+    'employee_number',
     'supervisor_id',
     'start_date',
     'end_date',

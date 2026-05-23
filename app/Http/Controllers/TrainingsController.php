@@ -33,6 +33,7 @@ class TrainingsController extends Controller
             'std_freq_name' => $t->stdFrequency?->name,
             'as_needed' => $t->as_needed,
             'default_hours' => $t->default_hours,
+            ...$this->certOutput($t),
             'can_edit' => Gate::check('update', $t),
             'can_delete' => Gate::check('delete', $t),
         ]));
@@ -53,6 +54,7 @@ class TrainingsController extends Controller
             // Null when not repeating; the validator already required it when repeating=true.
             'std_freq_id' => ((bool) $data['repeating']) ? $data['std_freq_id'] : null,
             'as_needed' => (bool) $data['as_needed'],
+            ...$this->certPayload($data),
         ]);
 
         event(new TrainingCreated($training));
@@ -73,6 +75,7 @@ class TrainingsController extends Controller
             'repeating' => (bool) $data['repeating'],
             'std_freq_id' => ((bool) $data['repeating']) ? $data['std_freq_id'] : null,
             'as_needed' => (bool) $data['as_needed'],
+            ...$this->certPayload($data),
         ]);
 
         event(new TrainingUpdated($training->fresh()));
@@ -104,6 +107,48 @@ class TrainingsController extends Controller
             'std_freq_id' => $t->std_freq_id,
             'as_needed' => $t->as_needed,
             'default_hours' => $t->default_hours,
+            ...$this->certOutput($t),
+        ];
+    }
+
+    /**
+     * Map validated cert/default fields onto model attributes (store/update).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function certPayload(array $data): array
+    {
+        return [
+            'cert_title' => $data['cert_title'] ?? null,
+            'cert_text_line_1' => $data['cert_text_line_1'] ?? null,
+            'cert_text_line_2' => $data['cert_text_line_2'] ?? null,
+            'cert_text_line_3' => $data['cert_text_line_3'] ?? null,
+            'cert_text_line_4' => $data['cert_text_line_4'] ?? null,
+            'lifespan_months' => $data['lifespan_months'] ?? null,
+            'cert_code' => $data['cert_code'] ?? null,
+            'show_signature_on_cert' => (bool) ($data['show_signature_on_cert'] ?? false),
+            'default_trainer' => $data['default_trainer'] ?? null,
+            'default_training_location' => $data['default_training_location'] ?? null,
+            'default_training_address' => $data['default_training_address'] ?? null,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function certOutput(Training $t): array
+    {
+        return [
+            'cert_title' => $t->cert_title,
+            'cert_text_line_1' => $t->cert_text_line_1,
+            'cert_text_line_2' => $t->cert_text_line_2,
+            'cert_text_line_3' => $t->cert_text_line_3,
+            'cert_text_line_4' => $t->cert_text_line_4,
+            'lifespan_months' => $t->lifespan_months,
+            'cert_code' => $t->cert_code,
+            'show_signature_on_cert' => $t->show_signature_on_cert,
+            'default_trainer' => $t->default_trainer,
+            'default_training_location' => $t->default_training_location,
+            'default_training_address' => $t->default_training_address,
         ];
     }
 }

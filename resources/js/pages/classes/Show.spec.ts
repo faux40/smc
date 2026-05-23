@@ -17,6 +17,8 @@ const detail: ClassDetail = {
     name: 'Fall Protection',
     scheduled_date: '2026-06-01',
     location: 'Yard 3',
+    training_location: null,
+    training_address: null,
     instructor: 'J. Cole',
     total_hours: '4.00',
     notes: null,
