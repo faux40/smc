@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import InputError from '@/components/InputError.vue';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ClassFormFields } from '@/composables/useClassForm';
@@ -70,42 +71,58 @@ const classHoursLabel = computed(() =>
 
         <div class="grid grid-cols-2 gap-3">
             <div class="grid gap-2">
-                <Label :for="id('location')">Company location</Label>
-                <Input :id="id('location')" v-model="form.location" />
-                <InputError :message="fieldErrors.message('location')" />
+                <Label :for="id('start_time')">Start time</Label>
+                <Input
+                    :id="id('start_time')"
+                    type="time"
+                    v-model="form.start_time"
+                />
+                <InputError :message="fieldErrors.message('start_time')" />
             </div>
             <div class="grid gap-2">
-                <Label :for="id('instructor')">Trainer / instructor</Label>
-                <Input :id="id('instructor')" v-model="form.instructor" />
-                <InputError :message="fieldErrors.message('instructor')" />
+                <Label :for="id('end_time')">End time</Label>
+                <Input
+                    :id="id('end_time')"
+                    type="time"
+                    v-model="form.end_time"
+                />
+                <InputError :message="fieldErrors.message('end_time')" />
             </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
             <div class="grid gap-2">
-                <Label :for="id('training_location')">Training location</Label>
+                <Label :for="id('location')">Location</Label>
                 <Input
-                    :id="id('training_location')"
-                    v-model="form.training_location"
+                    :id="id('location')"
+                    v-model="form.location"
                     placeholder="e.g. VSFCD Training Room"
                 />
-                <InputError
-                    :message="fieldErrors.message('training_location')"
-                />
+                <InputError :message="fieldErrors.message('location')" />
             </div>
             <div class="grid gap-2">
-                <Label :for="id('training_address')">Training address</Label>
-                <textarea
-                    :id="id('training_address')"
-                    v-model="form.training_address"
-                    rows="2"
-                    class="rounded border border-input bg-background px-3 py-2 text-sm"
-                    placeholder="450 Ryder St&#10;Vallejo, CA 94590"
-                />
-                <InputError
-                    :message="fieldErrors.message('training_address')"
-                />
+                <Label :for="id('instructor')">Trainer / instructor</Label>
+                <Input :id="id('instructor')" v-model="form.instructor" />
+                <label
+                    class="flex items-center gap-2 text-sm text-muted-foreground"
+                >
+                    <Checkbox v-model="form.show_signature" />
+                    Show signature on certificate
+                </label>
+                <InputError :message="fieldErrors.message('instructor')" />
             </div>
+        </div>
+
+        <div class="grid gap-2">
+            <Label :for="id('address')">Address</Label>
+            <textarea
+                :id="id('address')"
+                v-model="form.address"
+                rows="2"
+                class="rounded border border-input bg-background px-3 py-2 text-sm"
+                placeholder="450 Ryder St&#10;Vallejo, CA 94590"
+            />
+            <InputError :message="fieldErrors.message('address')" />
         </div>
 
         <div class="grid gap-2">

@@ -26,10 +26,12 @@ class TrainingClass extends Model
         'org_id',
         'name',
         'scheduled_date',
+        'start_time',
+        'end_time',
         'location',
-        'training_location',
-        'training_address',
+        'address',
         'instructor',
+        'show_signature',
         'total_hours',
         'notes',
         'status',
@@ -42,6 +44,7 @@ class TrainingClass extends Model
         'completion_date' => 'date',
         'completed_at' => 'datetime',
         'total_hours' => 'decimal:2',
+        'show_signature' => 'boolean',
     ];
 
     /** @return HasMany<ClassTraining, $this> */

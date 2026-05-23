@@ -58,13 +58,13 @@ class ClassSummary
             'start_date' => $class->scheduled_date?->format('M j, Y'),
             'end_date' => $class->scheduled_date?->format('M j, Y'),
             'closed_date' => $class->completion_date?->format('M j, Y'),
+            'time' => ClassSignInSheet::timeRange($class->start_time, $class->end_time),
             'length' => $class->total_hours !== null
                 ? number_format((float) $class->total_hours, 2).' hrs'
                 : null,
             'trainer' => $class->instructor,
             'location' => $class->location,
-            'training_location' => $class->training_location,
-            'training_address' => $class->training_address,
+            'address' => $class->address,
             'notes' => $class->notes,
             'certificates' => count($rows),
             'rows' => $rows,

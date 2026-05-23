@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\ClassEnrollment;
 use App\Models\TrainingClass;
+use Illuminate\Support\Carbon;
 
 /**
  * View-model for a class sign-in sheet: header info plus the numbered roster
@@ -44,15 +45,33 @@ class ClassSignInSheet
             'org_name' => $class->organization?->name ?? '',
             'title' => $class->name,
             'date' => $class->scheduled_date?->format('M j, Y'),
+            'time' => self::timeRange($class->start_time, $class->end_time),
             'location' => $class->location,
+            'address' => $class->address,
             'length' => $class->total_hours !== null
                 ? number_format((float) $class->total_hours, 2).' hrs'
                 : null,
             'students' => $names->count(),
             'trainer' => $class->instructor,
-            'training_location' => $class->training_location,
-            'training_address' => $class->training_address,
             'rows' => $rows,
         ];
+    }
+
+    /** "8:00 AM – 12:00 PM" / "from 8:00 AM" / "" from optional HH:MM strings. */
+    public static function timeRange(?string $start, ?string $end): string
+    {
+        $fmt = fn (?string $t) => filled($t)
+            ? Carbon::createFromFormat('H:i', $t)->format('g:i A')
+            : null;
+
+        $s = $fmt($start);
+        $e = $fmt($end);
+
+        return match (true) {
+            $s !== null && $e !== null => "{$s} – {$e}",
+            $s !== null => "from {$s}",
+            $e !== null => "until {$e}",
+            default => '',
+        };
     }
 }

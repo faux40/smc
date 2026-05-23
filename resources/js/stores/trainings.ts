@@ -24,16 +24,12 @@ export interface TrainingRow {
     as_needed: boolean;
     default_hours: string | null;
     cert_title: string | null;
-    cert_text_line_1: string | null;
-    cert_text_line_2: string | null;
-    cert_text_line_3: string | null;
-    cert_text_line_4: string | null;
+    cert_text: string | null;
     lifespan_months: number | null;
     cert_code: string | null;
-    show_signature_on_cert: boolean;
     default_trainer: string | null;
-    default_training_location: string | null;
-    default_training_address: string | null;
+    default_location: string | null;
+    default_address: string | null;
     can_edit: boolean;
     can_delete: boolean;
 }
@@ -47,16 +43,12 @@ export interface TrainingFormPayload {
     std_freq_id: string | null;
     as_needed: boolean;
     cert_title: string | null;
-    cert_text_line_1: string | null;
-    cert_text_line_2: string | null;
-    cert_text_line_3: string | null;
-    cert_text_line_4: string | null;
+    cert_text: string | null;
     lifespan_months: number | null;
     cert_code: string | null;
-    show_signature_on_cert: boolean;
     default_trainer: string | null;
-    default_training_location: string | null;
-    default_training_address: string | null;
+    default_location: string | null;
+    default_address: string | null;
 }
 
 function defaultHeaders(): Record<string, string> {

@@ -38,30 +38,30 @@
 
     <table class="info">
         <tr>
-            <td class="label">Start Date</td><td>{{ $start_date ?: '—' }}</td>
+            <td class="label">Date</td><td>{{ $start_date ?: '—' }}</td>
             <td class="col-gap"></td>
             <td class="label">Trainer</td><td>{{ $trainer ?: '—' }}</td>
         </tr>
         <tr>
-            <td class="label">End Date</td><td>{{ $end_date ?: '—' }}</td>
+            <td class="label">Time</td><td>{{ $time ?: '—' }}</td>
             <td class="col-gap"></td>
-            <td class="label">Co. Location</td><td>{{ $location ?: '—' }}</td>
+            <td class="label">Location</td><td>{{ $location ?: '—' }}</td>
         </tr>
         <tr>
             <td class="label">Closed Date</td><td>{{ $closed_date ?: '—' }}</td>
             <td class="col-gap"></td>
-            <td class="label">Training Location</td><td>{{ $training_location ?: '—' }}</td>
+            <td class="label">Address</td>
+            <td style="white-space: pre-line;">{{ $address ?: '—' }}</td>
         </tr>
         <tr>
             <td class="label">Length</td><td>{{ $length ?: '—' }}</td>
             <td class="col-gap"></td>
-            <td class="label">Training Address</td>
-            <td style="white-space: pre-line;">{{ $training_address ?: '—' }}</td>
+            <td class="label">Notes</td><td>{{ $notes ?: '—' }}</td>
         </tr>
         <tr>
             <td class="label">Certificates</td><td>{{ $certificates }}</td>
             <td class="col-gap"></td>
-            <td class="label">Notes</td><td>{{ $notes ?: '—' }}</td>
+            <td></td><td></td>
         </tr>
     </table>
 

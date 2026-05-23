@@ -114,26 +114,25 @@ class TrainingsApiTest extends TestCase
                 'std_freq_id' => $freq->id,
                 'as_needed' => false,
                 'cert_title' => 'Fall Protection Authorized Person',
-                'cert_text_line_1' => 'Training satisfies Cal/OSHA requirements',
+                'cert_text' => "Training satisfies **Cal/OSHA** requirements\n\nSecond line",
                 'lifespan_months' => 24,
                 'cert_code' => 'FPAP',
-                'show_signature_on_cert' => true,
                 'default_trainer' => 'John Balestrini',
-                'default_training_location' => 'VSFCD Training Room',
-                'default_training_address' => "450 Ryder St\nVallejo, CA 94590",
+                'default_location' => 'VSFCD Training Room',
+                'default_address' => "450 Ryder St\nVallejo, CA 94590",
             ])
             ->assertCreated()
             ->assertJsonPath('cert_title', 'Fall Protection Authorized Person')
+            ->assertJsonPath('cert_text', "Training satisfies **Cal/OSHA** requirements\n\nSecond line")
             ->assertJsonPath('lifespan_months', 24)
             ->assertJsonPath('cert_code', 'FPAP')
-            ->assertJsonPath('show_signature_on_cert', true);
+            ->assertJsonPath('default_location', 'VSFCD Training Room');
 
         $this->assertDatabaseHas('trainings', [
             'org_id' => $org->id,
             'cert_title' => 'Fall Protection Authorized Person',
             'lifespan_months' => 24,
             'cert_code' => 'FPAP',
-            'show_signature_on_cert' => true,
             'default_trainer' => 'John Balestrini',
         ]);
     }

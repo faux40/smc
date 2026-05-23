@@ -49,7 +49,7 @@
             <td><span class="org">{{ $org_name }}</span></td>
             <td class="head-right">
                 <div class="t">{{ $title }}</div>
-                <div class="d">{{ $date }}</div>
+                <div class="d">{{ $date }}@if ($time) · {{ $time }}@endif</div>
             </td>
         </tr>
     </table>
@@ -60,15 +60,14 @@
         <tr>
             <td>
                 <div><span class="label">Location:</span> {{ $location ?: '—' }}</div>
-                <div><span class="label">Length:</span> {{ $length ?: '—' }}</div>
-                <div><span class="label">Students:</span> {{ $students }}</div>
+                @if ($address)
+                    <div style="white-space: pre-line; color:#374151;">{{ $address }}</div>
+                @endif
             </td>
             <td>
                 <div><span class="label">Trainer:</span> {{ $trainer ?: '—' }}</div>
-                <div><span class="label">Training location:</span> {{ $training_location ?: '—' }}</div>
-                @if ($training_address)
-                    <div style="white-space: pre-line; color:#374151;">{{ $training_address }}</div>
-                @endif
+                <div><span class="label">Length:</span> {{ $length ?: '—' }}</div>
+                <div><span class="label">Students:</span> {{ $students }}</div>
             </td>
         </tr>
     </table>

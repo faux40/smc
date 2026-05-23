@@ -35,15 +35,17 @@ class ClassCertificateTest extends TestCase
         app()->instance('currentOrgId', $org->id);
 
         $training = Training::factory()->for($org, 'organization')->create();
-        $class = TrainingClass::factory()->for($org, 'organization')->create(['instructor' => 'Jane Doe']);
+        $class = TrainingClass::factory()->for($org, 'organization')->create([
+            'instructor' => 'Jane Doe',
+            'show_signature' => true,
+        ]);
         $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
             'training_id' => $training->id,
             'training_name' => 'Fall Protection',
             'cert_title' => 'FP Authorized Person',
-            'cert_text_line_1' => 'Satisfies Cal/OSHA',
+            'cert_text' => "Satisfies **Cal/OSHA**\n\nSecond paragraph",
             'lifespan_months' => 24,
             'hours' => 4,
-            'show_signature_on_cert' => true,
         ]);
         $student = User::factory()->for($org, 'organization')->create(['f_name' => 'Greg', 'l_name' => 'Ange']);
 
@@ -68,8 +70,10 @@ class ClassCertificateTest extends TestCase
         $this->assertSame('June 1, 2028', $row['expires']); // issue + 24 months
         $this->assertSame('4.00', $row['hours']);
         $this->assertSame('Jane Doe', $row['trainer']);
-        $this->assertTrue($row['show_signature']);
-        $this->assertSame(['Satisfies Cal/OSHA'], $row['text_lines']);
+        $this->assertTrue($row['show_signature']); // class-level flag
+        // cert_text is rendered as Markdown → HTML (bold + paragraphs).
+        $this->assertStringContainsString('<strong>Cal/OSHA</strong>', $row['cert_html']);
+        $this->assertStringContainsString('Second paragraph', $row['cert_html']);
     }
 
     public function test_endpoint_returns_a_pdf_for_a_completed_class(): void

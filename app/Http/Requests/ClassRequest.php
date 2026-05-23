@@ -26,10 +26,12 @@ class ClassRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'scheduled_date' => ['required', 'date'],
+            'start_time' => ['nullable', 'date_format:H:i'],
+            'end_time' => ['nullable', 'date_format:H:i'],
             'location' => ['nullable', 'string', 'max:255'],
-            'training_location' => ['nullable', 'string', 'max:255'],
-            'training_address' => ['nullable', 'string', 'max:1000'],
+            'address' => ['nullable', 'string', 'max:1000'],
             'instructor' => ['nullable', 'string', 'max:255'],
+            'show_signature' => ['boolean'],
             'total_hours' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
             // Optional at-create-time training picker (snapshotted on store).

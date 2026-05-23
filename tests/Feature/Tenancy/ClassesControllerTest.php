@@ -46,6 +46,51 @@ class ClassesControllerTest extends TestCase
         $this->assertDatabaseHas('classes', ['org_id' => $org->id, 'name' => 'Fall Protection — Spring']);
     }
 
+    public function test_create_persists_times_address_and_signature_flag(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+
+        $this->actingAs($manager)
+            ->postJson('/api/classes', [
+                'name' => 'Confined Space',
+                'scheduled_date' => '2026-06-01',
+                'start_time' => '08:00',
+                'end_time' => '12:30',
+                'location' => 'Training Room A',
+                'address' => "450 Ryder St\nVallejo, CA",
+                'show_signature' => true,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('start_time', '08:00')
+            ->assertJsonPath('end_time', '12:30')
+            ->assertJsonPath('address', "450 Ryder St\nVallejo, CA")
+            ->assertJsonPath('show_signature', true);
+
+        $this->assertDatabaseHas('classes', [
+            'org_id' => $org->id,
+            'name' => 'Confined Space',
+            'start_time' => '08:00',
+            'end_time' => '12:30',
+            'show_signature' => true,
+        ]);
+    }
+
+    public function test_create_rejects_a_malformed_time(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+
+        $this->actingAs($manager)
+            ->postJson('/api/classes', [
+                'name' => 'Bad Time',
+                'scheduled_date' => '2026-06-01',
+                'start_time' => '8am',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('start_time');
+    }
+
     public function test_create_with_training_ids_snapshots_each_training(): void
     {
         $org = Organization::factory()->create();
@@ -192,18 +237,17 @@ class ClassesControllerTest extends TestCase
         $manager = $this->manager($org);
         $class = TrainingClass::factory()->for($org, 'organization')->create([
             'instructor' => null,
-            'training_location' => null,
-            'training_address' => null,
+            'location' => null,
+            'address' => null,
         ]);
         $training = Training::factory()->for($org, 'organization')->create([
             'cert_title' => 'FP Authorized',
-            'cert_text_line_1' => 'Satisfies Cal/OSHA',
+            'cert_text' => 'Satisfies **Cal/OSHA**',
             'lifespan_months' => 24,
             'cert_code' => 'FPAP',
-            'show_signature_on_cert' => true,
             'default_trainer' => 'John B',
-            'default_training_location' => 'Room A',
-            'default_training_address' => '450 Ryder St',
+            'default_location' => 'Room A',
+            'default_address' => '450 Ryder St',
         ]);
 
         $this->actingAs($manager)
@@ -213,15 +257,15 @@ class ClassesControllerTest extends TestCase
         // Cert content is snapshotted onto the class_training row.
         $snap = ClassTraining::where('class_id', $class->id)->firstOrFail();
         $this->assertSame('FP Authorized', $snap->cert_title);
+        $this->assertSame('Satisfies **Cal/OSHA**', $snap->cert_text);
         $this->assertSame('FPAP', $snap->cert_code);
         $this->assertSame(24, $snap->lifespan_months);
-        $this->assertTrue((bool) $snap->show_signature_on_cert);
 
         // Empty class venue fields are pre-filled from the training defaults.
         $class->refresh();
         $this->assertSame('John B', $class->instructor);
-        $this->assertSame('Room A', $class->training_location);
-        $this->assertSame('450 Ryder St', $class->training_address);
+        $this->assertSame('Room A', $class->location);
+        $this->assertSame('450 Ryder St', $class->address);
     }
 
     public function test_attaching_does_not_overwrite_existing_class_venue(): void

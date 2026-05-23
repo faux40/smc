@@ -49,10 +49,12 @@ export interface ClassDetail {
     id: string;
     name: string;
     scheduled_date: string | null;
+    start_time: string | null;
+    end_time: string | null;
     location: string | null;
-    training_location: string | null;
-    training_address: string | null;
+    address: string | null;
     instructor: string | null;
+    show_signature: boolean;
     total_hours: string | null;
     notes: string | null;
     status: 'scheduled' | 'completed';
@@ -65,10 +67,12 @@ export interface ClassDetail {
 export interface ClassFormPayload {
     name: string;
     scheduled_date: string;
+    start_time: string | null;
+    end_time: string | null;
     location: string | null;
-    training_location: string | null;
-    training_address: string | null;
+    address: string | null;
     instructor: string | null;
+    show_signature: boolean;
     notes: string | null;
     // Create-only: snapshot these trainings onto the new class.
     training_ids?: string[];

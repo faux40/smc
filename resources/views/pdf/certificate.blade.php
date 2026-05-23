@@ -35,6 +35,9 @@
         .lead { top: 3.5in; font-style: italic; font-size: 13px; color: #4b5563; }
         .cert-title { top: 3.85in; font-size: 18px; font-weight: bold; }
         .body-text { top: 4.3in; font-size: 12px; color: #374151; line-height: 1.4; }
+        .body-text p { margin: 0 0 4px; }
+        .body-text strong { font-weight: bold; }
+        .body-text em { font-style: italic; }
 
         .footer { position: absolute; left: 1.1in; right: 1.1in; bottom: 0.95in; }
         .footer td { vertical-align: bottom; font-size: 10.5px; }
@@ -56,11 +59,7 @@
 
         <div class="layer lead">Has successfully fulfilled the training requirements for</div>
         <div class="layer cert-title">{{ $c['cert_title'] }}</div>
-        <div class="layer body-text">
-            @foreach ($c['text_lines'] as $line)
-                {{ $line }}<br>
-            @endforeach
-        </div>
+        <div class="layer body-text">{!! $c['cert_html'] !!}</div>
 
         <div class="footer">
             <table width="100%">

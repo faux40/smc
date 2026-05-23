@@ -73,10 +73,12 @@ const isDirty = computed(() => {
     return (
         text(f.name) !== text(d.name) ||
         text(f.scheduled_date) !== text(d.scheduled_date) ||
+        text(f.start_time) !== text(d.start_time) ||
+        text(f.end_time) !== text(d.end_time) ||
         text(f.location) !== text(d.location) ||
-        text(f.training_location) !== text(d.training_location) ||
-        text(f.training_address) !== text(d.training_address) ||
+        text(f.address) !== text(d.address) ||
         text(f.instructor) !== text(d.instructor) ||
+        f.show_signature !== d.show_signature ||
         text(f.notes) !== text(d.notes)
     );
 });

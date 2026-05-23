@@ -33,13 +33,9 @@ class ClassTraining extends Model
         'hours',
         'expire_date',
         'cert_title',
-        'cert_text_line_1',
-        'cert_text_line_2',
-        'cert_text_line_3',
-        'cert_text_line_4',
+        'cert_text',
         'lifespan_months',
         'cert_code',
-        'show_signature_on_cert',
     ];
 
     protected $casts = [
@@ -50,7 +46,6 @@ class ClassTraining extends Model
         'hours' => 'decimal:2',
         'expire_date' => 'date',
         'lifespan_months' => 'integer',
-        'show_signature_on_cert' => 'boolean',
     ];
 
     /** @return BelongsTo<TrainingClass, $this> */

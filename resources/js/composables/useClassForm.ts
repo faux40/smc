@@ -10,10 +10,12 @@ import { useErrorStore } from '@/stores/errors';
 export interface ClassFormFields {
     name: string;
     scheduled_date: string;
+    start_time: string;
+    end_time: string;
     location: string;
-    training_location: string;
-    training_address: string;
+    address: string;
     instructor: string;
+    show_signature: boolean;
     notes: string;
 }
 
@@ -21,10 +23,12 @@ function emptyFields(): ClassFormFields {
     return {
         name: '',
         scheduled_date: '',
+        start_time: '',
+        end_time: '',
         location: '',
-        training_location: '',
-        training_address: '',
+        address: '',
         instructor: '',
+        show_signature: false,
         notes: '',
     };
 }
@@ -44,10 +48,12 @@ export function useClassForm(context: string) {
         form.value = {
             name: target?.name ?? '',
             scheduled_date: target?.scheduled_date ?? '',
+            start_time: target?.start_time ?? '',
+            end_time: target?.end_time ?? '',
             location: target?.location ?? '',
-            training_location: target?.training_location ?? '',
-            training_address: target?.training_address ?? '',
+            address: target?.address ?? '',
             instructor: target?.instructor ?? '',
+            show_signature: target?.show_signature ?? false,
             notes: target?.notes ?? '',
         };
     }
@@ -89,10 +95,12 @@ export function useClassForm(context: string) {
         return {
             name: form.value.name,
             scheduled_date: form.value.scheduled_date,
+            start_time: blank(form.value.start_time),
+            end_time: blank(form.value.end_time),
             location: blank(form.value.location),
-            training_location: blank(form.value.training_location),
-            training_address: blank(form.value.training_address),
+            address: blank(form.value.address),
             instructor: blank(form.value.instructor),
+            show_signature: form.value.show_signature,
             notes: blank(form.value.notes),
         };
     }

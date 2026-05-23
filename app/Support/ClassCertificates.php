@@ -6,6 +6,7 @@ use App\Models\ClassTraining;
 use App\Models\Completion;
 use App\Models\TrainingClass;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * Builds the per-certificate view-models for a completed class: one row per
@@ -45,24 +46,22 @@ class ClassCertificates
                     ? Carbon::parse($issue)->addMonths($ct->lifespan_months)
                     : null;
 
-                $lines = array_values(array_filter([
-                    $ct->cert_text_line_1,
-                    $ct->cert_text_line_2,
-                    $ct->cert_text_line_3,
-                    $ct->cert_text_line_4,
-                ], fn ($l) => filled($l)));
-
                 return [
                     'org_name' => $orgName,
                     'student_name' => $comp->user?->name,
                     'cert_title' => $ct->cert_title ?: $ct->training_name,
-                    'text_lines' => $lines,
+                    // Markdown → safe HTML subset (raw HTML stripped) for the
+                    // certificate body; gives the author control over line
+                    // breaks plus light bold/italic styling.
+                    'cert_html' => filled($ct->cert_text)
+                        ? Str::markdown($ct->cert_text, ['html_input' => 'strip', 'allow_unsafe_links' => false])
+                        : '',
                     'cert_id' => $comp->cert_id,
                     'issue_date' => $issue ? Carbon::parse($issue)->format('F j, Y') : '',
                     'expires' => $expires ? $expires->format('F j, Y') : '—',
                     'hours' => $ct->hours !== null ? number_format((float) $ct->hours, 2) : '—',
                     'trainer' => $class->instructor,
-                    'show_signature' => (bool) $ct->show_signature_on_cert,
+                    'show_signature' => (bool) $class->show_signature,
                 ];
             })
             ->filter()

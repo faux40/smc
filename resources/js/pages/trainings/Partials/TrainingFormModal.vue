@@ -53,44 +53,32 @@ interface FormState {
     as_needed: boolean;
     // Certificate content defaults.
     cert_title: string;
-    cert_text_line_1: string;
-    cert_text_line_2: string;
-    cert_text_line_3: string;
-    cert_text_line_4: string;
+    cert_text: string;
     lifespan_months: string | number;
     cert_code: string;
-    show_signature_on_cert: boolean;
     default_trainer: string;
-    default_training_location: string;
-    default_training_address: string;
+    default_location: string;
+    default_address: string;
 }
 
 function blankCert(): Pick<
     FormState,
     | 'cert_title'
-    | 'cert_text_line_1'
-    | 'cert_text_line_2'
-    | 'cert_text_line_3'
-    | 'cert_text_line_4'
+    | 'cert_text'
     | 'lifespan_months'
     | 'cert_code'
-    | 'show_signature_on_cert'
     | 'default_trainer'
-    | 'default_training_location'
-    | 'default_training_address'
+    | 'default_location'
+    | 'default_address'
 > {
     return {
         cert_title: '',
-        cert_text_line_1: '',
-        cert_text_line_2: '',
-        cert_text_line_3: '',
-        cert_text_line_4: '',
+        cert_text: '',
         lifespan_months: '',
         cert_code: '',
-        show_signature_on_cert: false,
         default_trainer: '',
-        default_training_location: '',
-        default_training_address: '',
+        default_location: '',
+        default_address: '',
     };
 }
 
@@ -141,16 +129,12 @@ watch(
             form.std_freq_id = t.std_freq_id;
             form.as_needed = t.as_needed;
             form.cert_title = t.cert_title ?? '';
-            form.cert_text_line_1 = t.cert_text_line_1 ?? '';
-            form.cert_text_line_2 = t.cert_text_line_2 ?? '';
-            form.cert_text_line_3 = t.cert_text_line_3 ?? '';
-            form.cert_text_line_4 = t.cert_text_line_4 ?? '';
+            form.cert_text = t.cert_text ?? '';
             form.lifespan_months = t.lifespan_months ?? '';
             form.cert_code = t.cert_code ?? '';
-            form.show_signature_on_cert = t.show_signature_on_cert;
             form.default_trainer = t.default_trainer ?? '';
-            form.default_training_location = t.default_training_location ?? '';
-            form.default_training_address = t.default_training_address ?? '';
+            form.default_location = t.default_location ?? '';
+            form.default_address = t.default_address ?? '';
         } else {
             form.name = '';
             form.description = '';
@@ -189,16 +173,12 @@ const submit = async () => {
             std_freq_id: form.repeating ? form.std_freq_id : null,
             as_needed: form.as_needed,
             cert_title: blank(form.cert_title),
-            cert_text_line_1: blank(form.cert_text_line_1),
-            cert_text_line_2: blank(form.cert_text_line_2),
-            cert_text_line_3: blank(form.cert_text_line_3),
-            cert_text_line_4: blank(form.cert_text_line_4),
+            cert_text: blank(form.cert_text),
             lifespan_months: optionalNumber(form.lifespan_months),
             cert_code: blank(form.cert_code),
-            show_signature_on_cert: form.show_signature_on_cert,
             default_trainer: blank(form.default_trainer),
-            default_training_location: blank(form.default_training_location),
-            default_training_address: blank(form.default_training_address),
+            default_location: blank(form.default_location),
+            default_address: blank(form.default_address),
         };
 
         if (isEdit.value && props.target) {
@@ -330,26 +310,23 @@ const submit = async () => {
                     </div>
 
                     <div class="grid gap-2">
-                        <Label>Certificate text (up to 4 lines)</Label>
-                        <Input
-                            v-model="form.cert_text_line_1"
-                            placeholder="Line 1"
-                        />
-                        <Input
-                            v-model="form.cert_text_line_2"
-                            placeholder="Line 2"
-                        />
-                        <Input
-                            v-model="form.cert_text_line_3"
-                            placeholder="Line 3"
-                        />
-                        <Input
-                            v-model="form.cert_text_line_4"
-                            placeholder="Line 4"
-                        />
+                        <Label for="t_cert_text">Certificate text</Label>
+                        <textarea
+                            id="t_cert_text"
+                            v-model="form.cert_text"
+                            rows="4"
+                            class="w-full rounded border border-input bg-background p-2 text-sm"
+                            placeholder="Satisfies **Cal/OSHA** requirements…"
+                        ></textarea>
+                        <p class="text-xs text-muted-foreground">
+                            Markdown: blank lines start a new paragraph,
+                            <code>**bold**</code> and <code>*italic*</code> are
+                            supported. Printed on the certificate body.
+                        </p>
+                        <InputError :message="fieldErrors.message('cert_text')" />
                     </div>
 
-                    <div class="grid grid-cols-3 gap-3">
+                    <div class="grid grid-cols-2 gap-3">
                         <div class="grid gap-2">
                             <Label for="t_lifespan">Lifespan (months)</Label>
                             <Input
@@ -375,12 +352,6 @@ const submit = async () => {
                                 :message="fieldErrors.message('cert_code')"
                             />
                         </div>
-                        <label
-                            class="mt-6 flex items-center gap-2 text-sm"
-                        >
-                            <Checkbox v-model="form.show_signature_on_cert" />
-                            Signature
-                        </label>
                     </div>
 
                     <div class="grid gap-2">
@@ -392,17 +363,17 @@ const submit = async () => {
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div class="grid gap-2">
-                            <Label for="t_def_loc">Default training location</Label>
+                            <Label for="t_def_loc">Default location</Label>
                             <Input
                                 id="t_def_loc"
-                                v-model="form.default_training_location"
+                                v-model="form.default_location"
                             />
                         </div>
                         <div class="grid gap-2">
-                            <Label for="t_def_addr">Default training address</Label>
+                            <Label for="t_def_addr">Default address</Label>
                             <textarea
                                 id="t_def_addr"
-                                v-model="form.default_training_address"
+                                v-model="form.default_address"
                                 rows="2"
                                 class="rounded border border-input bg-background p-2 text-sm"
                             ></textarea>

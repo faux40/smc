@@ -15,13 +15,9 @@ return new class extends Migration
     {
         Schema::table('class_training', function (Blueprint $table) {
             $table->string('cert_title')->nullable()->after('std_freq_name');
-            $table->string('cert_text_line_1')->nullable()->after('cert_title');
-            $table->string('cert_text_line_2')->nullable()->after('cert_text_line_1');
-            $table->string('cert_text_line_3')->nullable()->after('cert_text_line_2');
-            $table->string('cert_text_line_4')->nullable()->after('cert_text_line_3');
-            $table->unsignedSmallInteger('lifespan_months')->nullable()->after('cert_text_line_4');
+            $table->text('cert_text')->nullable()->after('cert_title');
+            $table->unsignedSmallInteger('lifespan_months')->nullable()->after('cert_text');
             $table->string('cert_code', 32)->nullable()->after('lifespan_months');
-            $table->boolean('show_signature_on_cert')->default(false)->after('cert_code');
         });
     }
 
@@ -30,13 +26,9 @@ return new class extends Migration
         Schema::table('class_training', function (Blueprint $table) {
             $table->dropColumn([
                 'cert_title',
-                'cert_text_line_1',
-                'cert_text_line_2',
-                'cert_text_line_3',
-                'cert_text_line_4',
+                'cert_text',
                 'lifespan_months',
                 'cert_code',
-                'show_signature_on_cert',
             ]);
         });
     }

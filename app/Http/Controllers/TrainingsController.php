@@ -121,16 +121,12 @@ class TrainingsController extends Controller
     {
         return [
             'cert_title' => $data['cert_title'] ?? null,
-            'cert_text_line_1' => $data['cert_text_line_1'] ?? null,
-            'cert_text_line_2' => $data['cert_text_line_2'] ?? null,
-            'cert_text_line_3' => $data['cert_text_line_3'] ?? null,
-            'cert_text_line_4' => $data['cert_text_line_4'] ?? null,
+            'cert_text' => $data['cert_text'] ?? null,
             'lifespan_months' => $data['lifespan_months'] ?? null,
             'cert_code' => $data['cert_code'] ?? null,
-            'show_signature_on_cert' => (bool) ($data['show_signature_on_cert'] ?? false),
             'default_trainer' => $data['default_trainer'] ?? null,
-            'default_training_location' => $data['default_training_location'] ?? null,
-            'default_training_address' => $data['default_training_address'] ?? null,
+            'default_location' => $data['default_location'] ?? null,
+            'default_address' => $data['default_address'] ?? null,
         ];
     }
 
@@ -139,16 +135,12 @@ class TrainingsController extends Controller
     {
         return [
             'cert_title' => $t->cert_title,
-            'cert_text_line_1' => $t->cert_text_line_1,
-            'cert_text_line_2' => $t->cert_text_line_2,
-            'cert_text_line_3' => $t->cert_text_line_3,
-            'cert_text_line_4' => $t->cert_text_line_4,
+            'cert_text' => $t->cert_text,
             'lifespan_months' => $t->lifespan_months,
             'cert_code' => $t->cert_code,
-            'show_signature_on_cert' => $t->show_signature_on_cert,
             'default_trainer' => $t->default_trainer,
-            'default_training_location' => $t->default_training_location,
-            'default_training_address' => $t->default_training_address,
+            'default_location' => $t->default_location,
+            'default_address' => $t->default_address,
         ];
     }
 }
