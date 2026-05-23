@@ -209,6 +209,10 @@ function onDrop(targetSide: Side): void {
                 <thead class="bg-muted/40 text-xs">
                     <tr>
                         <th
+                            v-if="side === 'available'"
+                            class="w-8 px-2 py-1.5"
+                        ></th>
+                        <th
                             v-for="col in columns"
                             :key="col.key"
                             class="cursor-pointer select-none px-3 py-1.5 text-left font-medium"
@@ -235,7 +239,10 @@ function onDrop(targetSide: Side): void {
                         >
                             <slot name="extra-header" />
                         </th>
-                        <th class="w-8 px-2 py-1.5"></th>
+                        <th
+                            v-if="side === 'assigned'"
+                            class="w-8 px-2 py-1.5"
+                        ></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
@@ -249,6 +256,17 @@ function onDrop(targetSide: Side): void {
                         :class="{ 'cursor-grab': !disabled }"
                         @dragstart="onDragStart($event, item, side)"
                     >
+                        <td v-if="side === 'available'" class="px-2 py-1.5">
+                            <button
+                                v-if="!disabled"
+                                type="button"
+                                aria-label="Add"
+                                class="rounded p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
+                                @click="emit('assign', item)"
+                            >
+                                <Plus class="size-4" />
+                            </button>
+                        </td>
                         <td
                             v-for="col in columns"
                             :key="col.key"
@@ -259,18 +277,12 @@ function onDrop(targetSide: Side): void {
                         <td v-if="$slots['extra']" class="px-3 py-1.5">
                             <slot name="extra" :item="item" :side="side" />
                         </td>
-                        <td class="px-2 py-1.5 text-right">
+                        <td
+                            v-if="side === 'assigned'"
+                            class="px-2 py-1.5 text-right"
+                        >
                             <button
-                                v-if="!disabled && side === 'available'"
-                                type="button"
-                                aria-label="Add"
-                                class="rounded p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
-                                @click="emit('assign', item)"
-                            >
-                                <Plus class="size-4" />
-                            </button>
-                            <button
-                                v-else-if="!disabled"
+                                v-if="!disabled"
                                 type="button"
                                 aria-label="Remove"
                                 class="rounded p-1 text-destructive hover:bg-destructive/10"
