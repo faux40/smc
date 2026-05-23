@@ -49,6 +49,29 @@ Three long-running processes. Missing any one degrades a whole feature area:
    daily due-soon/overdue watchdog (15.3) and the weekly manager digest
    (15.6). **Without the cron these notifications never send.**
 
+### Local development — realtime needs the worker too
+
+Realtime is the most common "it's broken" foot-gun in dev: with
+`QUEUE_CONNECTION=redis` (or `database`) every broadcast event implements
+`ShouldBroadcast`, so it's **queued** and only sent to Reverb when a worker
+processes it. So locally you must run **both**:
+
+```sh
+php artisan reverb:start          # the websocket server (browser → ws)
+php artisan queue:work            # delivers the queued broadcasts → Reverb
+```
+
+Without `queue:work` the websocket connects fine but no events ever arrive —
+the UI just silently never updates. (Set `QUEUE_CONNECTION=sync` if you'd
+rather not run a worker in dev; broadcasts then fire inline, but that's not
+how prod behaves.)
+
+**Smoke test:** the **Bug** icon in the app header pings `/realtime/ping` and
+waits for the round-trip. Connected + worker running → an inbound monitor
+toast appears within a second. Worker not running → a red error toast
+("No Reverb round-trip in 5s … Is the queue worker running?"). Socket not
+connected → "Realtime socket not connected …".
+
 ## Deploy script (order matters)
 
 ```sh

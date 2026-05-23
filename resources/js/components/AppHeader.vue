@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import axios from 'axios';
 import {
     Bug,
     CalendarDays,
@@ -15,7 +14,7 @@ import {
     Users as UsersIcon,
     Workflow,
 } from 'lucide-vue-next';
-import { computed, onMounted } from 'vue';
+import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
@@ -49,7 +48,7 @@ import {
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
-import { useRealtime } from '@/composables/useRealtime';
+import { useReverbProbe } from '@/composables/useReverbProbe';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { page as assignmentsPage } from '@/routes/assignments';
@@ -60,7 +59,6 @@ import { page as tagsPage } from '@/routes/tags';
 import { page as trainingsPage } from '@/routes/trainings';
 import { index as usersIndex } from '@/routes/users';
 import { bulkAssignment as bulkAssignmentPage } from '@/routes/workflows';
-import { useErrorStore } from '@/stores/errors';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
 type Props = {
@@ -144,29 +142,11 @@ const mainNavItems = computed<NavItem[]>(() => {
 
 const rightNavItems: NavItem[] = [];
 
-// TEMP DIAGNOSTIC — Bug button fires the existing `/realtime/ping`
-// smoke route (RealtimePing → public `realtime-ping` channel). On
-// mount we subscribe to that channel so the realtime monitor toast
-// fires when the broadcast comes back. Remove this block + the Bug
-// button + the realtime monitor when Reverb is no longer monitored.
-const errorStore = useErrorStore();
-onMounted(() => {
-    const { bind } = useRealtime('realtime-ping', 'public');
-    bind('RealtimePing', () => {
-        // Handler is intentionally empty — the monitor toast inside
-        // useRealtime.bind() fires before this and is what we observe.
-    });
-});
-
-async function triggerRealtimePing(): Promise<void> {
-    try {
-        await axios.post('/realtime/ping', { message: 'header ping' });
-    } catch (e) {
-        errorStore.reportFromAxios(e, 'temp:realtime-ping', {
-            fallback: 'Realtime ping failed',
-        });
-    }
-}
+// TEMP DIAGNOSTIC — the Bug button posts /realtime/ping and watches for the
+// RealtimePing broadcast to round-trip over Reverb, toasting clear feedback
+// (sent / not-connected / no round-trip / send-failed). Remove the button +
+// this composable + the realtime monitor when Reverb is no longer monitored.
+const { ping: triggerRealtimePing } = useReverbProbe();
 </script>
 
 <template>
@@ -296,7 +276,7 @@ async function triggerRealtimePing(): Promise<void> {
                             variant="ghost"
                             size="icon"
                             class="group h-9 w-9 cursor-pointer"
-                            title="Trigger Reverb ping"
+                            title="Reverb smoke test — pings and waits for the round-trip"
                             @click="triggerRealtimePing"
                         >
                             <Bug
