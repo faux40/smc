@@ -20,7 +20,10 @@
         .label { color: #4b5563; width: 115px; }
         .col-gap { width: 40px; }
 
-        .section-title { font-size: 15px; font-weight: bold; margin-bottom: 6px; }
+        .section-title { font-size: 15px; font-weight: bold; margin: 4px 0 6px; }
+        ul.trainings { margin: 0 0 16px 18px; padding: 0; }
+        ul.trainings li { font-size: 13px; line-height: 1.6; }
+        ul.trainings .meta { color: #4b5563; }
         table.certs { width: 100%; border-collapse: collapse; }
         table.certs th, table.certs td {
             border-bottom: 1px solid #e5e7eb; text-align: left; padding: 7px 7px; font-size: 12px;
@@ -64,6 +67,20 @@
             <td></td><td></td>
         </tr>
     </table>
+
+    <div class="section-title">Trainings</div>
+    @if (count($trainings))
+        <ul class="trainings">
+            @foreach ($trainings as $t)
+                <li>
+                    {{ $t['name'] }}
+                    <span class="meta">— {{ $t['hours'] }}@if ($t['frequency']) · {{ $t['frequency'] }}@endif</span>
+                </li>
+            @endforeach
+        </ul>
+    @else
+        <p style="color:#6b7280; margin-bottom:16px;">No trainings on this class.</p>
+    @endif
 
     <div class="section-title">Certificate Issued</div>
     <table class="certs">

@@ -65,6 +65,34 @@ class ClassSummaryTest extends TestCase
         $this->assertSame('May 13, 2029', $row['expires']); // +36 months
     }
 
+    public function test_data_lists_the_class_trainings(): void
+    {
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_name' => 'Fall Protection',
+            'hours' => 4,
+            'std_freq_name' => 'Annual',
+        ]);
+        ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_name' => 'First Aid',
+            'hours' => 2.5,
+            'std_freq_name' => null,
+        ]);
+
+        $data = ClassSummary::data($class->fresh());
+
+        $this->assertCount(2, $data['trainings']);
+        $this->assertSame('Fall Protection', $data['trainings'][0]['name']);
+        $this->assertSame('4.00 hrs', $data['trainings'][0]['hours']);
+        $this->assertSame('Annual', $data['trainings'][0]['frequency']);
+        $this->assertSame('First Aid', $data['trainings'][1]['name']);
+        $this->assertSame('2.50 hrs', $data['trainings'][1]['hours']);
+        $this->assertNull($data['trainings'][1]['frequency']);
+    }
+
     public function test_endpoint_returns_a_pdf(): void
     {
         $org = Organization::factory()->create();

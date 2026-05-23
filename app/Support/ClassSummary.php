@@ -52,9 +52,18 @@ class ClassSummary
             ];
         })->values()->all();
 
+        $trainings = $class->classTrainings->map(fn (ClassTraining $ct) => [
+            'name' => $ct->training_name,
+            'hours' => $ct->hours !== null
+                ? number_format((float) $ct->hours, 2).' hrs'
+                : '—',
+            'frequency' => $ct->std_freq_name,
+        ])->values()->all();
+
         return [
             'org_name' => $class->organization?->name ?? '',
             'title' => $class->name,
+            'trainings' => $trainings,
             'start_date' => $class->scheduled_date?->format('M j, Y'),
             'end_date' => $class->scheduled_date?->format('M j, Y'),
             'closed_date' => $class->completion_date?->format('M j, Y'),
