@@ -122,36 +122,31 @@ describe('classes/Show inline edit', () => {
         expect(hrefs).not.toContain('/api/classes/c1/summary');
     });
 
-    it('renders the roster shuttle with the enrolled student', async () => {
+    it('lists the enrolled student name in the right-hand roster column', async () => {
         const wrapper = await mountShow();
 
-        // The enrolled student shows in the assigned roster list.
+        // Compact list shows the name; the email/picker lives in the modal.
         expect(wrapper.text()).toContain('Dana Reed');
-        expect(wrapper.text()).toContain('dana.reed@demo.local');
     });
 
-    it('enrolls an available student via the roster + button', async () => {
-        (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({
-            data: detail,
-        });
+    it('shows compact topic names with hours inside the details card', async () => {
+        // Add a topic to the detail used by the mock.
+        detail.trainings = [
+            {
+                id: 'ct1',
+                training_id: 't1',
+                training_name: 'Fall Protection',
+                initial_only: false,
+                repeating: true,
+                as_needed: false,
+                std_freq_name: 'Annual',
+                repeat_days: 365,
+                hours: '4.00',
+            },
+        ];
         const wrapper = await mountShow();
-
-        // Reveal the available list under the Roster section, then enroll Sam.
-        const enrollBtn = wrapper
-            .findAll('button')
-            .find((b) => b.text().includes('Enroll students'))!;
-        await enrollBtn.trigger('click');
-
-        const addBtn = wrapper
-            .findAll('button[aria-label="Add"]')
-            .at(-1)!; // available student row
-        await addBtn.trigger('click');
-        await flushPromises();
-
-        expect(axios.post).toHaveBeenCalledWith(
-            '/api/classes/c1/enrollments',
-            { user_id: 'u2' },
-            expect.anything(),
-        );
+        expect(wrapper.text()).toContain('Fall Protection');
+        expect(wrapper.text()).toContain('(4h)');
+        detail.trainings = []; // restore for other tests
     });
 });
