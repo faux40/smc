@@ -4,6 +4,7 @@ use App\Events\RealtimePing;
 use App\Http\Controllers\AssignmentsController;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\BulkAssignmentsController;
+use App\Http\Controllers\ClassDocumentsController;
 use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\CompletionsController;
@@ -136,6 +137,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // backs the Pinia store; Inertia pages are thin shells.
     Route::get('api/classes', [ClassesController::class, 'index'])->name('classes.index');
     Route::post('api/classes', [ClassesController::class, 'store'])->name('classes.store');
+    Route::get('api/classes/{class}/certificates', [ClassDocumentsController::class, 'certificates'])->name('classes.certificates');
     Route::get('api/classes/{class}', [ClassesController::class, 'show'])->name('classes.show');
     Route::patch('api/classes/{class}', [ClassesController::class, 'update'])->name('classes.update');
     Route::delete('api/classes/{class}', [ClassesController::class, 'destroy'])->name('classes.destroy');
