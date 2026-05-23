@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\TrainingClass;
 use App\Support\ClassCertificates;
 use App\Support\ClassSignInSheet;
+use App\Support\ClassSummary;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\Response;
@@ -38,5 +39,15 @@ class ClassDocumentsController extends Controller
             ->setPaper('letter', 'portrait');
 
         return $pdf->stream("sign-in-sheet-{$class->id}.pdf");
+    }
+
+    public function summary(TrainingClass $class): Response
+    {
+        Gate::authorize('view', $class);
+
+        $pdf = Pdf::loadView('pdf.class-summary', ClassSummary::data($class))
+            ->setPaper('letter', 'portrait');
+
+        return $pdf->stream("class-summary-{$class->id}.pdf");
     }
 }
