@@ -26,12 +26,14 @@ class Training extends Model
         'repeating',
         'std_freq_id',
         'as_needed',
+        'default_hours',
     ];
 
     protected $casts = [
         'initial_only' => 'boolean',
         'repeating' => 'boolean',
         'as_needed' => 'boolean',
+        'default_hours' => 'decimal:2',
     ];
 
     public function stdFrequency(): BelongsTo

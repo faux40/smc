@@ -140,6 +140,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::patch('api/classes/{class}', [ClassesController::class, 'update'])->name('classes.update');
     Route::delete('api/classes/{class}', [ClassesController::class, 'destroy'])->name('classes.destroy');
     Route::post('api/classes/{class}/trainings', [ClassesController::class, 'attachTraining'])->name('classes.trainings.attach');
+    Route::patch('api/classes/{class}/trainings/{classTraining}', [ClassesController::class, 'updateTraining'])->name('classes.trainings.update');
     Route::delete('api/classes/{class}/trainings/{classTraining}', [ClassesController::class, 'detachTraining'])->name('classes.trainings.detach');
     Route::post('api/classes/{class}/enrollments', [ClassesController::class, 'enroll'])->name('classes.enrollments.store');
     Route::delete('api/classes/{class}/enrollments/{enrollment}', [ClassesController::class, 'unenroll'])->name('classes.enrollments.destroy');

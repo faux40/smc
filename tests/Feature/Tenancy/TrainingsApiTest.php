@@ -75,6 +75,31 @@ class TrainingsApiTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_set_default_hours(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $freq = StdFrequency::factory()->for($org, 'organization')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/trainings', [
+                'name' => 'Fall Protection',
+                'default_hours' => 2.5,
+                'initial_only' => false,
+                'repeating' => true,
+                'std_freq_id' => $freq->id,
+                'as_needed' => false,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('default_hours', '2.50');
+
+        $this->assertDatabaseHas('trainings', [
+            'org_id' => $org->id,
+            'name' => 'Fall Protection',
+            'default_hours' => 2.5,
+        ]);
+    }
+
     public function test_admin_can_create_initial_only_training(): void
     {
         $org = Organization::factory()->create();

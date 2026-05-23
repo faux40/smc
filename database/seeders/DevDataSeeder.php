@@ -77,14 +77,14 @@ class DevDataSeeder extends Seeder
      * @var array<int, array{name: string, description: string, mode: string, freq?: string}>
      */
     private const TRAININGS = [
-        ['name' => 'Fall Protection',     'description' => 'OSHA 1926.500 — protection against falls above 6 ft.', 'mode' => 'repeating', 'freq' => 'Annual'],
-        ['name' => 'Traffic Control',     'description' => 'Flagger / work-zone traffic-management procedures.',  'mode' => 'repeating', 'freq' => 'Semi-Annual'],
-        ['name' => 'Lockout/Tagout',      'description' => 'OSHA 1910.147 — control of hazardous energy sources.', 'mode' => 'repeating', 'freq' => 'Annual'],
-        ['name' => 'Forklift',            'description' => 'OSHA 1910.178 — powered industrial truck operation.',  'mode' => 'repeating', 'freq' => 'Quarterly'],
-        ['name' => 'Hazmat',              'description' => 'Hazardous-materials handling + DOT placarding.',       'mode' => 'repeating', 'freq' => 'Monthly'],
-        ['name' => 'First Aid',           'description' => 'Basic first aid + CPR refresher.',                     'mode' => 'repeating', 'freq' => 'Every 10 days'],
-        ['name' => 'Confined Space',      'description' => 'Permit-required confined-space entry training.',       'mode' => 'initial_only'],
-        ['name' => 'Hearing Conservation', 'description' => 'OSHA 1910.95 — hearing protection on the job.',       'mode' => 'as_needed'],
+        ['name' => 'Fall Protection',     'description' => 'OSHA 1926.500 — protection against falls above 6 ft.', 'mode' => 'repeating', 'freq' => 'Annual', 'hours' => 4],
+        ['name' => 'Traffic Control',     'description' => 'Flagger / work-zone traffic-management procedures.',  'mode' => 'repeating', 'freq' => 'Semi-Annual', 'hours' => 2],
+        ['name' => 'Lockout/Tagout',      'description' => 'OSHA 1910.147 — control of hazardous energy sources.', 'mode' => 'repeating', 'freq' => 'Annual', 'hours' => 3],
+        ['name' => 'Forklift',            'description' => 'OSHA 1910.178 — powered industrial truck operation.',  'mode' => 'repeating', 'freq' => 'Quarterly', 'hours' => 8],
+        ['name' => 'Hazmat',              'description' => 'Hazardous-materials handling + DOT placarding.',       'mode' => 'repeating', 'freq' => 'Monthly', 'hours' => 4],
+        ['name' => 'First Aid',           'description' => 'Basic first aid + CPR refresher.',                     'mode' => 'repeating', 'freq' => 'Every 10 days', 'hours' => 1.5],
+        ['name' => 'Confined Space',      'description' => 'Permit-required confined-space entry training.',       'mode' => 'initial_only', 'hours' => 6],
+        ['name' => 'Hearing Conservation', 'description' => 'OSHA 1910.95 — hearing protection on the job.',       'mode' => 'as_needed', 'hours' => null],
     ];
 
     /**
@@ -184,6 +184,7 @@ class DevDataSeeder extends Seeder
                 'org_id' => $org->id,
                 'name' => $row['name'],
                 'description' => $row['description'],
+                'default_hours' => $row['hours'] ?? null,
                 'initial_only' => $row['mode'] === 'initial_only',
                 'repeating' => $row['mode'] === 'repeating',
                 'std_freq_id' => $row['mode'] === 'repeating' ? $freqByName[$row['freq']]->id : null,

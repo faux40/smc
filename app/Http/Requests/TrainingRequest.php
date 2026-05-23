@@ -36,6 +36,7 @@ class TrainingRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            'default_hours' => ['nullable', 'numeric', 'min:0'],
             'initial_only' => ['required', 'boolean'],
             'repeating' => ['required', 'boolean'],
             'as_needed' => ['required', 'boolean'],

@@ -13,6 +13,7 @@ function training(id: string, name: string): TrainingRow {
         std_freq_id: null,
         std_freq_name: null,
         as_needed: false,
+        default_hours: null,
         can_edit: true,
         can_delete: true,
     };

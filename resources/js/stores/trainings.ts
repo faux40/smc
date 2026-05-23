@@ -22,6 +22,7 @@ export interface TrainingRow {
     std_freq_id: string | null;
     std_freq_name: string | null;
     as_needed: boolean;
+    default_hours: string | null;
     can_edit: boolean;
     can_delete: boolean;
 }
@@ -29,6 +30,7 @@ export interface TrainingRow {
 export interface TrainingFormPayload {
     name: string;
     description: string | null;
+    default_hours: number | null;
     initial_only: boolean;
     repeating: boolean;
     std_freq_id: string | null;

@@ -94,6 +94,21 @@ describe('useClassesStore', () => {
         expect(store.detail.c1.name).toBe('Class A');
     });
 
+    it('updateTrainingHours() PATCHes the class_training hours and caches', async () => {
+        const patch = axios.patch as ReturnType<typeof vi.fn>;
+        patch.mockResolvedValue({ data: detailA });
+        const store = useClassesStore();
+
+        await store.updateTrainingHours('c1', 'ct1', 3.5);
+
+        expect(patch).toHaveBeenCalledWith(
+            '/api/classes/c1/trainings/ct1',
+            { hours: 3.5 },
+            expect.anything(),
+        );
+        expect(store.detail.c1.id).toBe('c1');
+    });
+
     it('complete() posts the close-out and caches the returned detail', async () => {
         const post = axios.post as ReturnType<typeof vi.fn>;
         post.mockResolvedValue({ data: { ...detailA, status: 'completed' } });

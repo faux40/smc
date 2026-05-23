@@ -22,6 +22,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { useFieldErrors } from '@/composables/useFieldErrors';
+import { optionalNumber } from '@/lib/forms';
 import { useErrorStore } from '@/stores/errors';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
 import { useTrainingsStore } from '@/stores/trainings';
@@ -45,6 +46,7 @@ const frequencies = useStdFrequenciesStore();
 interface FormState {
     name: string;
     description: string;
+    default_hours: string | number;
     initial_only: boolean;
     repeating: boolean;
     std_freq_id: string | null;
@@ -54,6 +56,7 @@ interface FormState {
 const form = reactive<FormState>({
     name: '',
     description: '',
+    default_hours: '',
     initial_only: false,
     repeating: false,
     std_freq_id: null,
@@ -90,6 +93,7 @@ watch(
             const t = props.target;
             form.name = t.name;
             form.description = t.description ?? '';
+            form.default_hours = t.default_hours ?? '';
             form.initial_only = t.initial_only;
             form.repeating = t.repeating;
             form.std_freq_id = t.std_freq_id;
@@ -97,6 +101,7 @@ watch(
         } else {
             form.name = '';
             form.description = '';
+            form.default_hours = '';
             form.initial_only = false;
             form.repeating = false;
             form.std_freq_id = null;
@@ -124,6 +129,7 @@ const submit = async () => {
             name: form.name,
             description:
                 form.description.trim() === '' ? null : form.description,
+            default_hours: optionalNumber(form.default_hours),
             initial_only: form.initial_only,
             repeating: form.repeating,
             std_freq_id: form.repeating ? form.std_freq_id : null,
@@ -177,6 +183,23 @@ const submit = async () => {
                         class="w-full rounded border border-input bg-background p-2 text-sm"
                     ></textarea>
                     <InputError :message="fieldErrors.message('description')" />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="t_hours">Default hours</Label>
+                    <Input
+                        id="t_hours"
+                        type="number"
+                        step="0.25"
+                        min="0"
+                        v-model="form.default_hours"
+                        class="w-32"
+                        placeholder="e.g. 4"
+                    />
+                    <p class="text-xs text-muted-foreground">
+                        Pre-fills the hours when this topic is added to a class.
+                    </p>
+                    <InputError :message="fieldErrors.message('default_hours')" />
                 </div>
 
                 <div class="space-y-2">

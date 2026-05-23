@@ -164,6 +164,20 @@ export const useClassesStore = defineStore('classes', () => {
         return cache(data);
     }
 
+    async function updateTrainingHours(
+        id: string,
+        classTrainingId: string,
+        hours: number | null,
+    ): Promise<ClassDetail> {
+        const { data } = await axios.patch<ClassDetail>(
+            `/api/classes/${id}/trainings/${classTrainingId}`,
+            { hours },
+            { headers: defaultHeaders() },
+        );
+
+        return cache(data);
+    }
+
     async function detachTraining(
         id: string,
         classTrainingId: string,
@@ -253,6 +267,7 @@ export const useClassesStore = defineStore('classes', () => {
         update,
         destroy,
         attachTraining,
+        updateTrainingHours,
         detachTraining,
         enroll,
         unenroll,

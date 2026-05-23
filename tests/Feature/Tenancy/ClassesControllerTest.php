@@ -126,6 +126,35 @@ class ClassesControllerTest extends TestCase
         $this->assertSame('2.50', (string) $snapshot->hours);
     }
 
+    public function test_attaching_defaults_hours_from_the_trainings_default_hours(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create(['default_hours' => 3.5]);
+
+        // No hours sent → should fall back to the training's default_hours.
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/trainings", ['training_id' => $training->id])
+            ->assertOk()
+            ->assertJsonPath('trainings.0.hours', '3.50');
+    }
+
+    public function test_can_update_an_attached_trainings_hours(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create(['hours' => 2]);
+
+        $this->actingAs($manager)
+            ->patchJson("/api/classes/{$class->id}/trainings/{$ct->id}", ['hours' => 5.25])
+            ->assertOk()
+            ->assertJsonPath('trainings.0.hours', '5.25');
+
+        $this->assertSame('5.25', (string) $ct->fresh()->hours);
+    }
+
     public function test_cannot_attach_a_cross_org_training(): void
     {
         $org = Organization::factory()->create();

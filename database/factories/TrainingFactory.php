@@ -19,6 +19,7 @@ class TrainingFactory extends Factory
             'org_id' => Organization::factory(),
             'name' => fake()->words(3, true),
             'description' => null,
+            'default_hours' => fake()->randomElement([null, 1, 2, 4, 8]),
             // Default to repeating annually — the most common template.
             'initial_only' => false,
             'repeating' => true,

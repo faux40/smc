@@ -32,6 +32,7 @@ class TrainingsController extends Controller
             'std_freq_id' => $t->std_freq_id,
             'std_freq_name' => $t->stdFrequency?->name,
             'as_needed' => $t->as_needed,
+            'default_hours' => $t->default_hours,
             'can_edit' => Gate::check('update', $t),
             'can_delete' => Gate::check('delete', $t),
         ]));
@@ -46,6 +47,7 @@ class TrainingsController extends Controller
             'org_id' => $request->user()->org_id,
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
+            'default_hours' => $data['default_hours'] ?? null,
             'initial_only' => (bool) $data['initial_only'],
             'repeating' => (bool) $data['repeating'],
             // Null when not repeating; the validator already required it when repeating=true.
@@ -66,6 +68,7 @@ class TrainingsController extends Controller
         $training->update([
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
+            'default_hours' => $data['default_hours'] ?? null,
             'initial_only' => (bool) $data['initial_only'],
             'repeating' => (bool) $data['repeating'],
             'std_freq_id' => ((bool) $data['repeating']) ? $data['std_freq_id'] : null,
@@ -100,6 +103,7 @@ class TrainingsController extends Controller
             'repeating' => $t->repeating,
             'std_freq_id' => $t->std_freq_id,
             'as_needed' => $t->as_needed,
+            'default_hours' => $t->default_hours,
         ];
     }
 }

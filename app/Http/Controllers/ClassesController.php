@@ -134,6 +134,22 @@ class ClassesController extends Controller
         return response()->json($this->detail($class->fresh()));
     }
 
+    public function updateTraining(Request $request, TrainingClass $class, ClassTraining $classTraining): JsonResponse
+    {
+        Gate::authorize('update', $class);
+        $this->assertEditable($class);
+        abort_unless($classTraining->class_id === $class->id, 404);
+
+        $data = $request->validate([
+            'hours' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $classTraining->update(['hours' => $data['hours'] ?? null]);
+        event(new ClassChanged($class->id, $class->org_id, 'updated'));
+
+        return response()->json($this->detail($class->fresh()));
+    }
+
     public function detachTraining(TrainingClass $class, ClassTraining $classTraining): JsonResponse
     {
         Gate::authorize('update', $class);
@@ -283,7 +299,9 @@ class ClassesController extends Controller
             'as_needed' => $training->as_needed,
             'repeat_days' => $training->stdFrequency?->repeat_days,
             'std_freq_name' => $training->stdFrequency?->name,
-            'hours' => $hours,
+            // Default the per-class hours to the topic's typical duration;
+            // editable per class via updateTraining().
+            'hours' => $hours ?? $training->default_hours,
         ]);
     }
 
