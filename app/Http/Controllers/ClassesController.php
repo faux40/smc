@@ -79,6 +79,8 @@ class ClassesController extends Controller
                 foreach ($trainings as $training) {
                     $this->snapshotTraining($class, $training, null);
                 }
+
+                $this->recomputeTotalHours($class);
             }
 
             return $class;
@@ -128,6 +130,7 @@ class ClassesController extends Controller
 
         $training = Training::query()->with('stdFrequency:id,name,repeat_days')->findOrFail($data['training_id']);
         $this->snapshotTraining($class, $training, $data['hours'] ?? null);
+        $this->recomputeTotalHours($class);
 
         event(new ClassChanged($class->id, $class->org_id, 'updated'));
 
@@ -145,6 +148,7 @@ class ClassesController extends Controller
         ]);
 
         $classTraining->update(['hours' => $data['hours'] ?? null]);
+        $this->recomputeTotalHours($class);
         event(new ClassChanged($class->id, $class->org_id, 'updated'));
 
         return response()->json($this->detail($class->fresh()));
@@ -157,6 +161,7 @@ class ClassesController extends Controller
         abort_unless($classTraining->class_id === $class->id, 404);
 
         $classTraining->delete();
+        $this->recomputeTotalHours($class);
         event(new ClassChanged($class->id, $class->org_id, 'updated'));
 
         return response()->json($this->detail($class->fresh()));
@@ -332,6 +337,14 @@ class ClassesController extends Controller
         ]);
 
         $this->prefillClassVenue($class, $training);
+    }
+
+    /** Class total hours = the sum of its topics' (adjusted) hours. */
+    private function recomputeTotalHours(TrainingClass $class): void
+    {
+        $class->update([
+            'total_hours' => (float) $class->classTrainings()->sum('hours'),
+        ]);
     }
 
     /**

@@ -77,31 +77,6 @@ describe('ClassFormModal create validation', () => {
         );
     });
 
-    it('submits a numeric total_hours without throwing (number-input coercion)', async () => {
-        await openCreate();
-
-        const name = document.body.querySelector<HTMLInputElement>('#class_name');
-        const date = document.body.querySelector<HTMLInputElement>('#class_date');
-        const hours = document.body.querySelector<HTMLInputElement>('#class_hours');
-        name!.value = 'Class';
-        name!.dispatchEvent(new Event('input', { bubbles: true }));
-        date!.value = '2026-09-01';
-        date!.dispatchEvent(new Event('input', { bubbles: true }));
-        // type="number" → Vue v-model yields a number; the old code did
-        // `.trim()` on it and threw, killing submit before the POST.
-        hours!.value = '4';
-        hours!.dispatchEvent(new Event('input', { bubbles: true }));
-        await flushPromises();
-
-        clickCreate();
-        await flushPromises();
-
-        expect(axios.post).toHaveBeenCalledWith(
-            '/api/classes',
-            expect.objectContaining({ total_hours: 4 }),
-            expect.anything(),
-        );
-    });
 
     it('the form opts out of silent native validation (novalidate)', async () => {
         await openCreate();

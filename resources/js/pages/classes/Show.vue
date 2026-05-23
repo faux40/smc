@@ -5,12 +5,10 @@ import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import ClassFieldset from '@/components/ClassFieldset.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
-import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useClassForm } from '@/composables/useClassForm';
 import { realtimeTabId } from '@/echo';
-import { optionalNumber } from '@/lib/forms';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ManageRosterModal from '@/pages/classes/Partials/ManageRosterModal.vue';
 import type { PickerUser } from '@/pages/classes/Partials/ManageRosterModal.vue';
@@ -79,7 +77,6 @@ const isDirty = computed(() => {
         text(f.training_location) !== text(d.training_location) ||
         text(f.training_address) !== text(d.training_address) ||
         text(f.instructor) !== text(d.instructor) ||
-        optionalNumber(f.total_hours) !== optionalNumber(d.total_hours) ||
         text(f.notes) !== text(d.notes)
     );
 });
@@ -150,8 +147,11 @@ async function loadUsers(): Promise<void> {
     userPicker.value = data;
 }
 
-const hoursLabel = (h: string | null) =>
-    h !== null && h !== '' ? `${Number(h)}h` : '—';
+const hoursLabel = (h: string | null) => `${Number(h ?? 0)}h`;
+
+const totalHoursLabel = computed(
+    () => `${Number(detail.value?.total_hours ?? 0).toFixed(1)} hours`,
+);
 </script>
 
 <template>
@@ -160,37 +160,62 @@ const hoursLabel = (h: string | null) =>
     <div class="flex flex-col gap-6 p-4">
         <AsyncState :loading="loading" :error="error">
             <template v-if="detail">
-                <div class="flex items-start justify-between gap-4">
-                    <Heading
-                        :title="detail.name"
-                        :description="
+                <div class="flex items-center justify-end gap-2">
+                    <Badge
+                        :variant="
                             detail.status === 'completed'
-                                ? 'Completed — view only'
-                                : 'Scheduled class'
+                                ? 'secondary'
+                                : 'default'
                         "
-                    />
-                    <div class="flex items-center gap-2">
-                        <Badge
-                            :variant="
-                                detail.status === 'completed'
-                                    ? 'secondary'
-                                    : 'default'
-                            "
-                        >
-                            {{ detail.status }}
-                        </Badge>
-                        <Button v-if="canComplete" @click="completeOpen = true">
-                            Complete class
-                        </Button>
-                    </div>
+                    >
+                        {{ detail.status }}
+                    </Badge>
+                    <Button v-if="canComplete" @click="completeOpen = true">
+                        Complete class
+                    </Button>
                 </div>
 
                 <div class="grid gap-6 lg:grid-cols-3">
-                    <!-- Main column: details (+ topics) and documents -->
-                    <div class="space-y-6 lg:col-span-2">
-                        <section class="rounded-md border border-border p-4">
-                            <h2 class="mb-3 text-sm font-semibold">Details</h2>
+                    <!-- Main column: name, topics, details, documents -->
+                    <div class="space-y-4 lg:col-span-2">
+                        <h2 class="text-lg font-semibold">{{ detail.name }}</h2>
 
+                        <!-- Training topics, just under the class name -->
+                        <section class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-sm font-semibold">
+                                    Training topics
+                                    <span class="font-normal text-muted-foreground">
+                                        · {{ totalHoursLabel }}
+                                    </span>
+                                </h3>
+                                <Button
+                                    v-if="canEditDetails"
+                                    variant="outline"
+                                    size="sm"
+                                    @click="topicsOpen = true"
+                                >
+                                    Manage
+                                </Button>
+                            </div>
+                            <ul v-if="detail.trainings.length" class="text-sm">
+                                <li v-for="t in detail.trainings" :key="t.id">
+                                    {{ t.training_name }}
+                                    <span class="text-muted-foreground">
+                                        ({{ hoursLabel(t.hours) }})
+                                    </span>
+                                </li>
+                            </ul>
+                            <p v-else class="text-sm text-muted-foreground">
+                                No topics yet.
+                                <template v-if="canEditDetails">
+                                    Use “Manage”.
+                                </template>
+                            </p>
+                        </section>
+
+                        <!-- Details box -->
+                        <section class="rounded-md border border-border p-4">
                             <template v-if="canEditDetails">
                                 <ErrorBanner :context="FORM_CTX" />
                                 <form @submit.prevent="saveDetails" novalidate>
@@ -238,12 +263,6 @@ const hoursLabel = (h: string | null) =>
                                     </dt>
                                     <dd>{{ detail.instructor || '—' }}</dd>
                                 </div>
-                                <div>
-                                    <dt class="text-xs text-muted-foreground">
-                                        Total hours
-                                    </dt>
-                                    <dd>{{ detail.total_hours ?? '—' }}</dd>
-                                </div>
                                 <div v-if="detail.notes" class="col-span-2">
                                     <dt class="text-xs text-muted-foreground">
                                         Notes
@@ -253,46 +272,6 @@ const hoursLabel = (h: string | null) =>
                                     </dd>
                                 </div>
                             </dl>
-
-                            <!-- Compact topics list (lives inside details) -->
-                            <div class="mt-4 border-t border-border pt-3">
-                                <div class="mb-1 flex items-center justify-between">
-                                    <h3 class="text-xs font-semibold uppercase text-muted-foreground">
-                                        Training topics
-                                    </h3>
-                                    <Button
-                                        v-if="canEditDetails"
-                                        variant="outline"
-                                        size="sm"
-                                        @click="topicsOpen = true"
-                                    >
-                                        Manage
-                                    </Button>
-                                </div>
-                                <ul
-                                    v-if="detail.trainings.length"
-                                    class="text-sm"
-                                >
-                                    <li
-                                        v-for="t in detail.trainings"
-                                        :key="t.id"
-                                    >
-                                        {{ t.training_name }}
-                                        <span class="text-muted-foreground">
-                                            ({{ hoursLabel(t.hours) }})
-                                        </span>
-                                    </li>
-                                </ul>
-                                <p
-                                    v-else
-                                    class="text-sm text-muted-foreground"
-                                >
-                                    No topics yet.
-                                    <template v-if="canEditDetails">
-                                        Use “Manage”.
-                                    </template>
-                                </p>
-                            </div>
                         </section>
 
                         <!-- Documents -->

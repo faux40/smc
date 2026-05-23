@@ -33,29 +33,15 @@ const id = (field: string) => `${props.idPrefix ?? 'class'}_${field}`;
             <InputError :message="fieldErrors.message('name')" />
         </div>
 
-        <div class="grid grid-cols-2 gap-3">
-            <div class="grid gap-2">
-                <Label :for="id('date')">Scheduled date</Label>
-                <Input
-                    :id="id('date')"
-                    type="date"
-                    v-model="form.scheduled_date"
-                />
-                <InputError
-                    :message="fieldErrors.message('scheduled_date')"
-                />
-            </div>
-            <div class="grid gap-2">
-                <Label :for="id('hours')">Total hours</Label>
-                <Input
-                    :id="id('hours')"
-                    type="number"
-                    step="0.25"
-                    min="0"
-                    v-model="form.total_hours"
-                />
-                <InputError :message="fieldErrors.message('total_hours')" />
-            </div>
+        <div class="grid gap-2">
+            <Label :for="id('date')">Scheduled date</Label>
+            <Input
+                :id="id('date')"
+                type="date"
+                v-model="form.scheduled_date"
+                class="sm:w-56"
+            />
+            <InputError :message="fieldErrors.message('scheduled_date')" />
         </div>
 
         <div class="grid grid-cols-2 gap-3">

@@ -105,7 +105,7 @@ describe('classes/Show inline edit', () => {
 
         expect(axios.patch).toHaveBeenCalledWith(
             '/api/classes/c1',
-            expect.objectContaining({ name: 'Renamed', total_hours: 4 }),
+            expect.objectContaining({ name: 'Renamed' }),
             expect.anything(),
         );
     });

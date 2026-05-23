@@ -140,6 +140,37 @@ class ClassesControllerTest extends TestCase
             ->assertJsonPath('trainings.0.hours', '3.50');
     }
 
+    public function test_class_total_hours_auto_sums_the_topic_hours(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create(['total_hours' => null]);
+        $a = Training::factory()->for($org, 'organization')->create(['default_hours' => 2]);
+        $b = Training::factory()->for($org, 'organization')->create(['default_hours' => 3]);
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/trainings", ['training_id' => $a->id])
+            ->assertOk();
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/trainings", ['training_id' => $b->id])
+            ->assertOk()
+            ->assertJsonPath('total_hours', '5.00'); // 2 + 3
+
+        $ctA = ClassTraining::where('class_id', $class->id)->where('training_id', $a->id)->firstOrFail();
+
+        // Editing a topic's hours re-sums the class total.
+        $this->actingAs($manager)
+            ->patchJson("/api/classes/{$class->id}/trainings/{$ctA->id}", ['hours' => 4])
+            ->assertOk()
+            ->assertJsonPath('total_hours', '7.00'); // 4 + 3
+
+        // Detaching a topic re-sums too.
+        $this->actingAs($manager)
+            ->deleteJson("/api/classes/{$class->id}/trainings/{$ctA->id}")
+            ->assertOk()
+            ->assertJsonPath('total_hours', '3.00');
+    }
+
     public function test_can_update_an_attached_trainings_hours(): void
     {
         $org = Organization::factory()->create();

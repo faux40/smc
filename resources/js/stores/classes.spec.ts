@@ -85,7 +85,6 @@ describe('useClassesStore', () => {
             training_location: null,
             training_address: null,
             instructor: null,
-            total_hours: null,
             notes: null,
             training_ids: ['t1', 't2'],
         });

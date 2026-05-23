@@ -31,7 +31,7 @@ describe('useClassForm', () => {
         setFrom(detail);
         expect(form.value.name).toBe('Fall Protection');
         expect(form.value.scheduled_date).toBe('2026-06-01');
-        expect(form.value.total_hours).toBe('4.00');
+        expect(form.value.instructor).toBe('J. Cole');
     });
 
     it('validate fails + reports field errors when name/date blank', () => {
@@ -50,13 +50,12 @@ describe('useClassForm', () => {
         expect(validate()).toBe(true);
     });
 
-    it('payload coerces a numeric total_hours and blanks empties', () => {
+    it('payload blanks empty optional fields', () => {
         const { form, payload } = useClassForm(CTX);
         form.value.name = 'X';
         form.value.scheduled_date = '2026-06-01';
-        form.value.total_hours = 4; // number, as a type=number v-model yields
         const p = payload();
-        expect(p.total_hours).toBe(4);
+        expect(p.name).toBe('X');
         expect(p.location).toBeNull();
         expect(p.notes).toBeNull();
     });
