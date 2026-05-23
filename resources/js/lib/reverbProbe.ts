@@ -70,16 +70,16 @@ export function createReverbProbe(deps: ReverbProbeDeps): ReverbProbe {
             timer = null;
             pending = false;
             deps.error(
-                `No Reverb round-trip in ${Math.round(timeoutMs / 1000)}s — the broadcast wasn’t delivered. Is the queue worker running (php artisan queue:work)?`,
+                `Dang! Bug says NO Reverb round-trip in ${Math.round(timeoutMs / 1000)}s — the broadcast wasn’t delivered. Is the queue worker running (php artisan queue:work)?`,
             );
         }, timeoutMs);
 
         try {
-            await deps.post('header ping');
+            await deps.post();
         } catch (e) {
             stop();
             deps.error(
-                `Realtime ping failed to send — ${(e as Error)?.message ?? 'request error'}.`,
+                `Dang! Bug says Realtime ping failed to send — ${(e as Error)?.message ?? 'request error'}.`,
             );
         }
     }
@@ -87,7 +87,7 @@ export function createReverbProbe(deps: ReverbProbeDeps): ReverbProbe {
     function onRoundTrip(): void {
         if (pending) {
             stop();
-            deps.success('Reverb round-trip OK — realtime is working.');
+            deps.success('YES! Bug says Reverb round-trip OK — realtime is working.');
         }
     }
 
