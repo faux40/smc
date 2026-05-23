@@ -40,6 +40,7 @@ export interface EnrollmentRow {
     id: string;
     user_id: string;
     user_name: string | null;
+    user_email: string | null;
     status: 'enrolled' | 'passed' | 'incomplete';
     notes: string | null;
 }

@@ -334,7 +334,7 @@ class ClassesController extends Controller
     {
         $c->load([
             'classTrainings',
-            'enrollments.user:id,f_name,m_name,l_name,prefix_name,suffix_name',
+            'enrollments.user:id,f_name,m_name,l_name,prefix_name,suffix_name,email',
         ]);
 
         return [
@@ -363,6 +363,7 @@ class ClassesController extends Controller
                 'id' => $e->id,
                 'user_id' => $e->user_id,
                 'user_name' => $e->user?->name,
+                'user_email' => $e->user?->email,
                 'status' => $e->status,
                 'notes' => $e->notes,
             ])->all(),

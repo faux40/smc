@@ -10,14 +10,6 @@ import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import { useClassForm } from '@/composables/useClassForm';
 import { realtimeTabId } from '@/echo';
 import { optionalNumber } from '@/lib/forms';
@@ -58,7 +50,6 @@ const detail = computed(() => store.detail[props.classId] ?? null);
 
 const userPicker = ref<PickerUser[]>([]);
 const completeOpen = ref(false);
-const enrollUserId = ref('');
 const actionError = ref<string | null>(null);
 
 // Inline edit of the class's core fields (scheduled, editable classes).
@@ -156,13 +147,6 @@ async function loadUsers(): Promise<void> {
     userPicker.value = data;
 }
 
-// Enrollable users = org users not already on the roster.
-const enrollableUsers = computed(() => {
-    const enrolled = new Set(detail.value?.enrollments.map((e) => e.user_id));
-
-    return userPicker.value.filter((u) => !enrolled.has(u.id));
-});
-
 const userLabel = (u: PickerUser) =>
     [u.f_name, u.l_name].filter(Boolean).join(' ') || u.email || u.id;
 
@@ -238,15 +222,41 @@ const changeTopicHours = (item: { id: string }, value: string) =>
         store.updateTrainingHours(props.classId, item.id, optionalNumber(value)),
     );
 
-const enroll = () =>
-    run(async () => {
-        if (!enrollUserId.value) {
-            return;
-        }
+// --- Roster: dual-list shuttle (assigned | available students) ---
+const studentColumns = [
+    { key: 'name', label: 'Name' },
+    { key: 'email', label: 'Email' },
+];
 
-        await store.enroll(props.classId, enrollUserId.value);
-        enrollUserId.value = '';
-    });
+interface StudentItem {
+    id: string;
+    name: string;
+    email: string;
+}
+
+const assignedStudents = computed<StudentItem[]>(() =>
+    (detail.value?.enrollments ?? []).map((e) => ({
+        id: e.id, // enrollment id (used to unenroll)
+        name: e.user_name ?? '—',
+        email: e.user_email ?? '',
+    })),
+);
+
+const availableStudents = computed<StudentItem[]>(() => {
+    const enrolled = new Set(
+        (detail.value?.enrollments ?? []).map((e) => e.user_id),
+    );
+
+    return userPicker.value
+        .filter((u) => !enrolled.has(u.id))
+        .map((u) => ({ id: u.id, name: userLabel(u), email: u.email ?? '' }));
+});
+
+const assignStudent = (item: { id: string }) =>
+    run(() => store.enroll(props.classId, item.id));
+
+const unassignStudent = (item: { id: string }) =>
+    run(() => store.unenroll(props.classId, item.id));
 </script>
 
 <template>
@@ -399,71 +409,18 @@ const enroll = () =>
                 <!-- Roster -->
                 <section class="space-y-2">
                     <h2 class="text-sm font-semibold">Roster</h2>
-                    <div
-                        v-if="detail.can_edit && detail.status === 'scheduled'"
-                        class="flex flex-wrap items-end gap-2"
-                    >
-                        <div class="grid gap-1">
-                            <Label class="text-xs">Enroll user</Label>
-                            <Select v-model="enrollUserId">
-                                <SelectTrigger class="w-64">
-                                    <SelectValue placeholder="Pick a user…" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem
-                                        v-for="u in enrollableUsers"
-                                        :key="u.id"
-                                        :value="u.id"
-                                    >
-                                        {{ userLabel(u) }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <Button type="button" @click="enroll">Enroll</Button>
-                    </div>
-
-                    <div
-                        v-if="detail.enrollments.length === 0"
-                        class="rounded border border-dashed border-border p-3 text-xs text-muted-foreground"
-                    >
-                        Nobody enrolled yet.
-                    </div>
-                    <ul
-                        v-else
-                        class="divide-y divide-border rounded-md border border-border"
-                    >
-                        <li
-                            v-for="e in detail.enrollments"
-                            :key="e.id"
-                            class="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-                        >
-                            <span>
-                                {{ e.user_name }}
-                                <Badge
-                                    variant="secondary"
-                                    class="ml-1 text-[10px]"
-                                >
-                                    {{ e.status }}
-                                </Badge>
-                            </span>
-                            <button
-                                v-if="
-                                    detail.can_edit &&
-                                    detail.status === 'scheduled'
-                                "
-                                type="button"
-                                class="text-xs text-destructive hover:underline"
-                                @click="
-                                    run(() =>
-                                        store.unenroll(props.classId, e.id),
-                                    )
-                                "
-                            >
-                                Remove
-                            </button>
-                        </li>
-                    </ul>
+                    <DualListShuttle
+                        :assigned="assignedStudents"
+                        :available="availableStudents"
+                        :columns="studentColumns"
+                        assigned-title="Enrolled"
+                        available-title="Available students"
+                        search-placeholder="Search students…"
+                        add-label="Enroll students"
+                        :disabled="!canEditDetails"
+                        @assign="assignStudent"
+                        @unassign="unassignStudent"
+                    />
                 </section>
 
                 <ClassCompleteModal

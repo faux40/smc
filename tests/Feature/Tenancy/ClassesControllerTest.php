@@ -186,6 +186,21 @@ class ClassesControllerTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_enrollment_detail_includes_the_users_name_and_email(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $student = User::factory()->for($org, 'organization')
+            ->create(['f_name' => 'Dana', 'l_name' => 'Reed', 'email' => 'dana.reed@demo.local']);
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments", ['user_id' => $student->id])
+            ->assertOk()
+            ->assertJsonPath('enrollments.0.user_name', 'Dana Reed')
+            ->assertJsonPath('enrollments.0.user_email', 'dana.reed@demo.local');
+    }
+
     public function test_unenroll_and_detach_remove_rows(): void
     {
         $org = Organization::factory()->create();
