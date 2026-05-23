@@ -16,76 +16,49 @@
         .cert {
             position: relative;
             width: 100%;
-            height: 7.2in;            /* stays within one landscape Letter page */
-            padding: 0.45in;
+            height: 7.4in;            /* one landscape Letter page */
             overflow: hidden;
         }
         .cert.break { page-break-before: always; }
 
-        /* Decorative double frame (original; not the TrainingWise artwork). */
-        .frame-outer {
-            position: absolute;
-            top: 0.3in; left: 0.3in; right: 0.3in; bottom: 0.3in;
-            border: 6px solid #15803d;
-        }
-        .frame-inner {
-            position: absolute;
-            top: 0.42in; left: 0.42in; right: 0.42in; bottom: 0.42in;
-            border: 1.5px solid #15803d;
-        }
-        .corner {
-            position: absolute; color: #15803d; font-size: 26px; line-height: 1;
-        }
-        .corner.tl { top: 0.3in; left: 0.34in; }
-        .corner.tr { top: 0.3in; right: 0.34in; }
-        .corner.bl { bottom: 0.34in; left: 0.34in; }
-        .corner.br { bottom: 0.34in; right: 0.34in; }
+        /* Placeholder background (TrainingWise blank — to be replaced). */
+        .bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
-        .content { position: relative; text-align: center; padding: 0.7in 0.9in 0; }
-        .org { font-size: 20px; font-weight: bold; letter-spacing: 0.5px; }
-        .title {
-            font-size: 46px; letter-spacing: 12px; color: #166534;
-            margin-top: 10px; font-weight: normal;
-        }
-        .subtitle { font-style: italic; font-size: 18px; color: #4b5563; margin-top: 2px; }
-        .name-band {
-            background: #ecfdf5; border-top: 1px solid #a7f3d0; border-bottom: 1px solid #a7f3d0;
-            margin: 22px auto 0; padding: 10px 0; width: 80%;
-        }
-        .name { font-size: 34px; color: #14532d; }
-        .lead { font-style: italic; font-size: 14px; color: #4b5563; margin-top: 18px; }
-        .cert-title { font-size: 20px; font-weight: bold; margin-top: 8px; }
-        .cert-text { font-size: 12.5px; color: #374151; margin-top: 8px; line-height: 1.4; }
+        .layer { position: absolute; left: 0.9in; right: 0.9in; text-align: center; }
+        .org { top: 0.85in; font-size: 19px; font-weight: bold; }
+        .title { top: 1.25in; font-size: 40px; letter-spacing: 11px; color: #1f5c3a; }
+        .subtitle { top: 1.95in; font-style: italic; font-size: 16px; color: #4b5563; }
 
-        .footer { position: absolute; left: 0.9in; right: 0.9in; bottom: 0.85in; }
-        .footer td { vertical-align: bottom; font-size: 11px; }
-        .meta-label { color: #6b7280; padding-right: 8px; }
-        .sig { font-family: 'GreatVibes', cursive; font-size: 30px; color: #111827; line-height: 1; }
-        .sig-line { border-top: 1px solid #9ca3af; margin-top: 2px; padding-top: 3px; }
-        .sig-caption { font-size: 9px; letter-spacing: 1px; color: #6b7280; }
+        /* Name sits inside the background's green banner (~center). */
+        .name { top: 2.55in; font-size: 30px; color: #14532d; }
+
+        .lead { top: 3.5in; font-style: italic; font-size: 13px; color: #4b5563; }
+        .cert-title { top: 3.85in; font-size: 18px; font-weight: bold; }
+        .body-text { top: 4.3in; font-size: 12px; color: #374151; line-height: 1.4; }
+
+        .footer { position: absolute; left: 1.1in; right: 1.1in; bottom: 0.95in; }
+        .footer td { vertical-align: bottom; font-size: 10.5px; }
+        .meta-label { color: #4b5563; padding-right: 8px; }
+        .sig { font-family: 'GreatVibes', cursive; font-size: 28px; color: #111827; line-height: 1; }
+        .sig-line { border-top: 1px solid #6b7280; margin-top: 2px; padding-top: 3px; }
+        .sig-caption { font-size: 9px; letter-spacing: 1px; color: #4b5563; }
     </style>
 </head>
 <body>
 @foreach ($certs as $c)
     <div class="cert {{ $loop->first ? '' : 'break' }}">
-        <div class="frame-outer"></div>
-        <div class="frame-inner"></div>
-        <div class="corner tl">&#10070;</div>
-        <div class="corner tr">&#10070;</div>
-        <div class="corner bl">&#10070;</div>
-        <div class="corner br">&#10070;</div>
+        <img class="bg" src="{{ resource_path('images/cert_background.png') }}" alt="">
 
-        <div class="content">
-            <div class="org">{{ $c['org_name'] }}</div>
-            <div class="title">CERTIFICATE</div>
-            <div class="subtitle">of Training</div>
+        <div class="layer org">{{ $c['org_name'] }}</div>
+        <div class="layer title">CERTIFICATE</div>
+        <div class="layer subtitle">of Training</div>
+        <div class="layer name">{{ $c['student_name'] }}</div>
 
-            <div class="name-band"><div class="name">{{ $c['student_name'] }}</div></div>
-
-            <div class="lead">Has successfully fulfilled the training requirements for</div>
-            <div class="cert-title">{{ $c['cert_title'] }}</div>
+        <div class="layer lead">Has successfully fulfilled the training requirements for</div>
+        <div class="layer cert-title">{{ $c['cert_title'] }}</div>
+        <div class="layer body-text">
             @foreach ($c['text_lines'] as $line)
-                <div class="cert-text">{{ $line }}</div>
+                {{ $line }}<br>
             @endforeach
         </div>
 
@@ -104,10 +77,10 @@
                         @if ($c['show_signature'] && $c['trainer'])
                             <div class="sig">{{ $c['trainer'] }}</div>
                         @else
-                            <div style="height: 30px;">&nbsp;</div>
+                            <div style="height: 28px;">&nbsp;</div>
                         @endif
                         <div class="sig-line sig-caption">INSTRUCTOR</div>
-                        <div style="margin-top: 14px;">{{ $c['issue_date'] }}</div>
+                        <div style="margin-top: 12px;">{{ $c['issue_date'] }}</div>
                         <div class="sig-caption">ISSUE DATE</div>
                     </td>
                 </tr>
