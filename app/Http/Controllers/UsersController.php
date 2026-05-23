@@ -139,6 +139,7 @@ class UsersController extends Controller
 
         $users = User::query()
             ->where('status', 'active')
+            ->with('tags:id')
             ->orderBy('l_name')
             ->orderBy('f_name')
             ->get(['id', 'f_name', 'l_name', 'email']);
@@ -149,6 +150,7 @@ class UsersController extends Controller
             'f_name' => $u->f_name,
             'l_name' => $u->l_name,
             'email' => $u->email,
+            'tag_ids' => $u->tags->pluck('id')->all(),
         ]));
     }
 

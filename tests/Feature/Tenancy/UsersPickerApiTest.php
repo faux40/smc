@@ -3,6 +3,7 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Models\Organization;
+use App\Models\Tag;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -47,6 +48,20 @@ class UsersPickerApiTest extends TestCase
             array_column($rows, 'l_name'),
             'List should be ordered by l_name then f_name.'
         );
+    }
+
+    public function test_picker_includes_each_users_tag_ids(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $student = User::factory()->for($org, 'organization')->create();
+        $tag = Tag::factory()->for($org, 'organization')->create();
+        $student->tags()->attach($tag->id);
+
+        $rows = $this->actingAs($manager)->getJson('/api/users')->assertOk()->json();
+
+        $row = collect($rows)->firstWhere('id', $student->id);
+        $this->assertSame([$tag->id], $row['tag_ids']);
     }
 
     public function test_disabled_users_are_excluded(): void

@@ -20,7 +20,7 @@ export interface PickerUser {
     f_name: string;
     l_name: string;
     email: string | null;
-    tag_ids: string[];
+    tag_ids?: string[];
 }
 
 const props = defineProps<{
@@ -83,7 +83,7 @@ interface StudentItem {
 }
 
 const toItem = (u: PickerUser): StudentItem => {
-    const tags = u.tag_ids
+    const tags = (u.tag_ids ?? [])
         .map((id) => tagsById.value.get(id))
         .filter((t): t is TagRow => t !== undefined);
 
