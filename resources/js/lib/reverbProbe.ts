@@ -57,14 +57,14 @@ export function createReverbProbe(deps: ReverbProbeDeps): ReverbProbe {
     async function ping(): Promise<void> {
         if (!deps.isConnected()) {
             deps.error(
-                'Realtime socket not connected — the browser can’t reach Reverb. Check VITE_REVERB_* and that the Reverb server is running.',
+                'Shoot! Bug says Realtime socket not connected — the browser can’t reach Reverb. Check VITE_REVERB_* and that the Reverb server is running.',
             );
 
             return;
         }
 
         pending = true;
-        deps.info('Reverb ping sent — waiting for round-trip…');
+        deps.info('Bug says Reverb ping sent — waiting for round-trip…');
 
         timer = setTimeout(() => {
             timer = null;
