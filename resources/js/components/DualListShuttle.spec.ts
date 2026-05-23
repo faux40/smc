@@ -39,17 +39,29 @@ function panel(wrapper: ReturnType<typeof mountShuttle>, idx: number) {
     return wrapper.findAll('table')[idx];
 }
 
+// Available is hidden until the user clicks the reveal button (its text is the
+// addLabel; the per-row + buttons are icon-only with aria-label="Add").
+async function revealAvailable(w: ReturnType<typeof mountShuttle>) {
+    const btn = w
+        .findAll('button')
+        .find((b) => b.text().trim().length > 0 && !b.attributes('aria-label'));
+    await btn!.trigger('click');
+}
+
 describe('DualListShuttle', () => {
-    it('renders assigned (left) and available (right) rows', () => {
+    it('shows only the assigned list until Available is revealed', async () => {
         const w = mountShuttle();
+        expect(w.findAll('table')).toHaveLength(1);
         expect(panel(w, 0).text()).toContain('Banana');
-        expect(panel(w, 0).text()).toContain('Apple');
+
+        await revealAvailable(w);
+        expect(w.findAll('table')).toHaveLength(2);
         expect(panel(w, 1).text()).toContain('Cherry');
-        expect(panel(w, 1).text()).toContain('Date');
     });
 
     it('filters a list by its search box', async () => {
         const w = mountShuttle();
+        await revealAvailable(w);
         const search = w.findAll('input[type="search"]')[1]; // available side
         await search.setValue('cher');
 
@@ -77,6 +89,7 @@ describe('DualListShuttle', () => {
 
     it('emits assign from the available + button', async () => {
         const w = mountShuttle();
+        await revealAvailable(w);
         await panel(w, 1).find('button[aria-label="Add"]').trigger('click');
         expect(w.emitted('assign')?.[0]?.[0]).toMatchObject({ id: 'c' });
     });
@@ -87,13 +100,14 @@ describe('DualListShuttle', () => {
         expect(w.emitted('unassign')?.[0]?.[0]).toMatchObject({ id: 'a' });
     });
 
-    it('hides action buttons when disabled', () => {
+    it('hides action buttons + reveal when disabled', () => {
         const w = mountShuttle({ disabled: true });
         expect(w.find('button[aria-label="Add"]').exists()).toBe(false);
         expect(w.find('button[aria-label="Remove"]').exists()).toBe(false);
+        expect(w.findAll('table')).toHaveLength(1); // available can't be opened
     });
 
-    it('renders the assigned-side extra slot', () => {
+    it('renders the extra slot on both lists with a side scope', async () => {
         const w = mount(DualListShuttle, {
             props: {
                 assigned,
@@ -104,11 +118,14 @@ describe('DualListShuttle', () => {
             },
             slots: {
                 'extra-header': 'Hrs',
-                extra: '<span class="extra-cell">x</span>',
+                extra: `<template #extra="{ side }"><span class="extra-cell">{{ side }}</span></template>`,
             },
         });
-        // extra cells only on the assigned (left) table
+        await revealAvailable(w);
+        // extra cells render on both tables now
         expect(panel(w, 0).findAll('.extra-cell')).toHaveLength(2);
-        expect(panel(w, 1).findAll('.extra-cell')).toHaveLength(0);
+        expect(panel(w, 1).findAll('.extra-cell')).toHaveLength(2);
+        expect(panel(w, 0).find('.extra-cell').text()).toBe('assigned');
+        expect(panel(w, 1).find('.extra-cell').text()).toBe('available');
     });
 });

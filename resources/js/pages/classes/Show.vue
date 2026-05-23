@@ -366,13 +366,15 @@ const enroll = () =>
                         assigned-title="Assigned topics"
                         available-title="Available topics"
                         search-placeholder="Search topics…"
+                        add-label="Add topic"
                         :disabled="!canEditDetails"
                         @assign="assignTopic"
                         @unassign="unassignTopic"
                     >
                         <template #extra-header>Hours</template>
-                        <template #extra="{ item }">
+                        <template #extra="{ item, side }">
                             <Input
+                                v-if="side === 'assigned'"
                                 type="number"
                                 step="0.25"
                                 min="0"
@@ -387,6 +389,9 @@ const enroll = () =>
                                     )
                                 "
                             />
+                            <span v-else class="text-xs text-muted-foreground">
+                                {{ item.hours ?? '—' }}
+                            </span>
                         </template>
                     </DualListShuttle>
                 </section>

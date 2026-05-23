@@ -1,6 +1,7 @@
 <script setup lang="ts" generic="Item extends { id: string }">
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 /**
@@ -27,6 +28,8 @@ const props = defineProps<{
     /** Disable all mutation (e.g. a completed, read-only class). */
     disabled?: boolean;
     searchPlaceholder?: string;
+    /** Label for the button that reveals the Available list. */
+    addLabel?: string;
 }>();
 
 const emit = defineEmits<{
@@ -92,6 +95,15 @@ function view(side: Side): Item[] {
 const assignedView = computed(() => view('assigned'));
 const availableView = computed(() => view('available'));
 
+// The Available list is hidden until the user opts in (and never shown when
+// disabled). Collapsed → the Assigned list spans full width, natural height.
+const showAvailable = ref(false);
+const sidesShown = computed<Side[]>(() =>
+    showAvailable.value && !props.disabled
+        ? ['assigned', 'available']
+        : ['assigned'],
+);
+
 function toggleSort(side: Side, key: string): void {
     const s = sorts.value[side];
 
@@ -143,14 +155,40 @@ function onDrop(targetSide: Side): void {
 </script>
 
 <template>
-    <div class="grid gap-4 md:grid-cols-2">
+    <div class="space-y-2">
+        <div v-if="!disabled" class="flex justify-end">
+            <Button
+                v-if="!showAvailable"
+                type="button"
+                size="sm"
+                variant="outline"
+                @click="showAvailable = true"
+            >
+                <Plus class="size-4" />
+                {{ addLabel ?? 'Add' }}
+            </Button>
+            <Button
+                v-else
+                type="button"
+                size="sm"
+                variant="ghost"
+                @click="showAvailable = false"
+            >
+                Done
+            </Button>
+        </div>
+
         <div
-            v-for="side in ['assigned', 'available'] as Side[]"
-            :key="side"
-            class="flex flex-col rounded-md border border-border"
-            @dragover.prevent
-            @drop.prevent="onDrop(side)"
+            class="grid gap-4"
+            :class="{ 'md:grid-cols-2': sidesShown.length === 2 }"
         >
+            <div
+                v-for="side in sidesShown"
+                :key="side"
+                class="flex flex-col self-start rounded-md border border-border"
+                @dragover.prevent
+                @drop.prevent="onDrop(side)"
+            >
             <div class="border-b border-border p-2">
                 <p class="mb-2 text-xs font-semibold text-muted-foreground">
                     {{ side === 'assigned' ? assignedTitle : availableTitle }}
@@ -192,7 +230,7 @@ function onDrop(targetSide: Side): void {
                             </span>
                         </th>
                         <th
-                            v-if="side === 'assigned' && $slots['extra-header']"
+                            v-if="$slots['extra-header']"
                             class="px-3 py-1.5 text-left font-medium"
                         >
                             <slot name="extra-header" />
@@ -218,11 +256,8 @@ function onDrop(targetSide: Side): void {
                         >
                             {{ cell(item, col.key) || '—' }}
                         </td>
-                        <td
-                            v-if="side === 'assigned' && $slots['extra']"
-                            class="px-3 py-1.5"
-                        >
-                            <slot name="extra" :item="item" />
+                        <td v-if="$slots['extra']" class="px-3 py-1.5">
+                            <slot name="extra" :item="item" :side="side" />
                         </td>
                         <td class="px-2 py-1.5 text-right">
                             <button
@@ -247,7 +282,7 @@ function onDrop(targetSide: Side): void {
                     </tr>
                     <tr v-if="(side === 'assigned' ? assignedView : availableView).length === 0">
                         <td
-                            :colspan="columns.length + 2"
+                            :colspan="columns.length + ($slots['extra'] ? 1 : 0) + 1"
                             class="px-3 py-4 text-center text-xs text-muted-foreground"
                         >
                             {{
@@ -259,6 +294,7 @@ function onDrop(targetSide: Side): void {
                     </tr>
                 </tbody>
             </table>
+            </div>
         </div>
     </div>
 </template>
