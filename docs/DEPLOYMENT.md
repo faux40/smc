@@ -90,28 +90,38 @@ php artisan queue:restart              # pick up new code in the worker
 The single most confusing thing. There are **three** Reverb endpoints and they
 are NOT the same host/port in production — don't point the browser at 8080:
 
-| Who connects | Env vars | Dev (Docker, direct) | Prod (behind Caddy) |
+| Who connects | Env vars | Dev (Docker, direct) | Prod (Forge / nginx) |
 |---|---|---|---|
 | Reverb's own listen port | `reverb:start --port` / `REVERB_SERVER_PORT` | `8081` | `8080` (internal) |
 | **PHP → Reverb** (the broadcaster) | `REVERB_HOST` / `REVERB_PORT` / `REVERB_SCHEME` | `reverb` / `8081` / `http` | `127.0.0.1` / `8080` / `http` |
 | **Browser → Reverb** (`VITE_REVERB_*`, baked at build) | `VITE_REVERB_HOST` / `VITE_REVERB_PORT` / `VITE_REVERB_SCHEME` | `localhost` / `8081` / `http` | **your domain** / `443` / `https` |
 
-- In **prod** Reverb sits behind Caddy: the browser opens `wss://<domain>/app/…`
-  on **443**, and Caddy proxies the upgrade to `127.0.0.1:8080`. The raw 8080
-  port is **never exposed publicly**. PHP talks to Reverb directly on
-  `127.0.0.1:8080` (no proxy, no TLS) for speed.
+- In **prod (Forge)** Reverb runs as a Forge daemon on `127.0.0.1:8080` and
+  sits behind **nginx**: the browser opens `wss://<domain>/app/…` on **443**
+  (Forge's TLS), nginx upgrades it to `127.0.0.1:8080`. The raw 8080 port is
+  **never exposed publicly**. PHP talks to Reverb directly on `127.0.0.1:8080`
+  (no proxy, no TLS) for speed. (Dev uses Caddy on `smc.test`; prod is nginx.)
+- Forge has **built-in Reverb support** (site settings) that creates the daemon
+  + the nginx upgrade proxy automatically — prefer it over hand-editing nginx.
 - ⚠️ `.env.example` couples them (`VITE_REVERB_HOST="${REVERB_HOST}"`, etc.).
   That's fine in dev (both are localhost:8081) but **wrong in prod** — there the
   `VITE_REVERB_*` must be set **independently** to the public domain / 443 /
   https, while `REVERB_*` stay `127.0.0.1` / 8080 / http. Decouple them in the
   prod `.env` before `npm run build`.
-- Caddy needs a reverse_proxy for the Reverb upstream, e.g.:
+- Manual nginx (Forge → site → *Edit Nginx Configuration*), inside `server {}`:
+  ```nginx
+  location /app {
+      proxy_pass http://127.0.0.1:8080;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "Upgrade";
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_read_timeout 60s;
+  }
   ```
-  @reverb path /app/* /apps/*
-  reverse_proxy @reverb 127.0.0.1:8080
-  ```
-  (or a dedicated `ws.<domain>` site block). Reverb speaks plain ws on 8080;
-  Caddy terminates TLS and upgrades the connection.
+  Reverb speaks plain ws on 8080; nginx terminates TLS and upgrades the connection.
 - If the browser console shows the socket targeting `:8080`/`:8081` or
   `ws://` on a prod `https://` page, that's this coupling bug (or a stale build).
   The header **Bug button** reports exactly which layer fails.
