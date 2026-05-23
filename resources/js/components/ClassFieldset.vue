@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,10 +12,18 @@ import { useFieldErrors } from '@/composables/useFieldErrors';
  * errors render from the error store under `context`.
  */
 const form = defineModel<ClassFormFields>({ required: true });
-const props = defineProps<{ context: string; idPrefix?: string }>();
+const props = defineProps<{
+    context: string;
+    idPrefix?: string;
+    /** Read-only class total (auto-summed from topics), shown by the date. */
+    classHours?: string | number | null;
+}>();
 
 const fieldErrors = useFieldErrors(props.context);
 const id = (field: string) => `${props.idPrefix ?? 'class'}_${field}`;
+const classHoursLabel = computed(() =>
+    Number(props.classHours ?? 0).toFixed(1),
+);
 </script>
 
 <template>
@@ -33,15 +42,30 @@ const id = (field: string) => `${props.idPrefix ?? 'class'}_${field}`;
             <InputError :message="fieldErrors.message('name')" />
         </div>
 
-        <div class="grid gap-2">
-            <Label :for="id('date')">Scheduled date</Label>
-            <Input
-                :id="id('date')"
-                type="date"
-                v-model="form.scheduled_date"
-                class="sm:w-56"
-            />
-            <InputError :message="fieldErrors.message('scheduled_date')" />
+        <!-- Consumers can drop content (e.g. the topics list) directly under
+             the name field so it reads as part of the form. -->
+        <slot name="after-name" />
+
+        <div class="grid grid-cols-2 gap-3">
+            <div class="grid gap-2">
+                <Label :for="id('date')">Scheduled date</Label>
+                <Input
+                    :id="id('date')"
+                    type="date"
+                    v-model="form.scheduled_date"
+                />
+                <InputError
+                    :message="fieldErrors.message('scheduled_date')"
+                />
+            </div>
+            <div class="grid gap-2">
+                <Label>Class Hours</Label>
+                <div
+                    class="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground"
+                >
+                    {{ classHoursLabel }}
+                </div>
+            </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">

@@ -176,46 +176,10 @@ const totalHoursLabel = computed(
                 </div>
 
                 <div class="grid gap-6 lg:grid-cols-3">
-                    <!-- Main column: name, topics, details, documents -->
-                    <div class="space-y-4 lg:col-span-2">
-                        <h2 class="text-lg font-semibold">{{ detail.name }}</h2>
-
-                        <!-- Training topics, just under the class name -->
-                        <section class="space-y-1">
-                            <div class="flex items-center justify-between">
-                                <h3 class="text-sm font-semibold">
-                                    Training topics
-                                    <span class="font-normal text-muted-foreground">
-                                        · {{ totalHoursLabel }}
-                                    </span>
-                                </h3>
-                                <Button
-                                    v-if="canEditDetails"
-                                    variant="outline"
-                                    size="sm"
-                                    @click="topicsOpen = true"
-                                >
-                                    Manage
-                                </Button>
-                            </div>
-                            <ul v-if="detail.trainings.length" class="text-sm">
-                                <li v-for="t in detail.trainings" :key="t.id">
-                                    {{ t.training_name }}
-                                    <span class="text-muted-foreground">
-                                        ({{ hoursLabel(t.hours) }})
-                                    </span>
-                                </li>
-                            </ul>
-                            <p v-else class="text-sm text-muted-foreground">
-                                No topics yet.
-                                <template v-if="canEditDetails">
-                                    Use “Manage”.
-                                </template>
-                            </p>
-                        </section>
-
-                        <!-- Details box -->
+                    <!-- Main column: details (name → topics → rest) + documents -->
+                    <div class="space-y-6 lg:col-span-2">
                         <section class="rounded-md border border-border p-4">
+                            <!-- Editable: one form; topics sit under the name -->
                             <template v-if="canEditDetails">
                                 <ErrorBanner :context="FORM_CTX" />
                                 <form @submit.prevent="saveDetails" novalidate>
@@ -223,7 +187,48 @@ const totalHoursLabel = computed(
                                         v-model="form"
                                         :context="FORM_CTX"
                                         id-prefix="edit"
-                                    />
+                                        :class-hours="detail.total_hours"
+                                    >
+                                        <template #after-name>
+                                            <div
+                                                class="rounded-md border border-border bg-muted/20 p-3"
+                                            >
+                                                <div class="mb-1 flex items-center justify-between">
+                                                    <h3 class="text-sm font-semibold">
+                                                        Included training courses
+                                                    </h3>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        @click="topicsOpen = true"
+                                                    >
+                                                        Manage
+                                                    </Button>
+                                                </div>
+                                                <ul
+                                                    v-if="detail.trainings.length"
+                                                    class="text-sm"
+                                                >
+                                                    <li
+                                                        v-for="t in detail.trainings"
+                                                        :key="t.id"
+                                                    >
+                                                        {{ t.training_name }}
+                                                        <span class="text-muted-foreground">
+                                                            ({{ hoursLabel(t.hours) }})
+                                                        </span>
+                                                    </li>
+                                                </ul>
+                                                <p
+                                                    v-else
+                                                    class="text-sm text-muted-foreground"
+                                                >
+                                                    No courses yet. Use “Manage”.
+                                                </p>
+                                            </div>
+                                        </template>
+                                    </ClassFieldset>
                                     <div class="mt-4 flex justify-end">
                                         <Button
                                             type="submit"
@@ -235,43 +240,81 @@ const totalHoursLabel = computed(
                                 </form>
                             </template>
 
-                            <dl
-                                v-else
-                                class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm"
-                            >
-                                <div>
-                                    <dt class="text-xs text-muted-foreground">
-                                        Scheduled date
-                                    </dt>
-                                    <dd>{{ detail.scheduled_date || '—' }}</dd>
+                            <!-- Completed (read-only) -->
+                            <template v-else>
+                                <h2 class="text-lg font-semibold">
+                                    {{ detail.name }}
+                                </h2>
+                                <div
+                                    class="mt-3 rounded-md border border-border bg-muted/20 p-3"
+                                >
+                                    <h3 class="mb-1 text-sm font-semibold">
+                                        Included training courses
+                                    </h3>
+                                    <ul
+                                        v-if="detail.trainings.length"
+                                        class="text-sm"
+                                    >
+                                        <li
+                                            v-for="t in detail.trainings"
+                                            :key="t.id"
+                                        >
+                                            {{ t.training_name }}
+                                            <span class="text-muted-foreground">
+                                                ({{ hoursLabel(t.hours) }})
+                                            </span>
+                                        </li>
+                                    </ul>
+                                    <p
+                                        v-else
+                                        class="text-sm text-muted-foreground"
+                                    >
+                                        No courses.
+                                    </p>
                                 </div>
-                                <div>
-                                    <dt class="text-xs text-muted-foreground">
-                                        Completed
-                                    </dt>
-                                    <dd>{{ detail.completion_date || '—' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-xs text-muted-foreground">
-                                        Location
-                                    </dt>
-                                    <dd>{{ detail.location || '—' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-xs text-muted-foreground">
-                                        Instructor
-                                    </dt>
-                                    <dd>{{ detail.instructor || '—' }}</dd>
-                                </div>
-                                <div v-if="detail.notes" class="col-span-2">
-                                    <dt class="text-xs text-muted-foreground">
-                                        Notes
-                                    </dt>
-                                    <dd class="whitespace-pre-line">
-                                        {{ detail.notes }}
-                                    </dd>
-                                </div>
-                            </dl>
+                                <dl
+                                    class="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm"
+                                >
+                                    <div>
+                                        <dt class="text-xs text-muted-foreground">
+                                            Scheduled date
+                                        </dt>
+                                        <dd>{{ detail.scheduled_date || '—' }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-xs text-muted-foreground">
+                                            Class Hours
+                                        </dt>
+                                        <dd>{{ totalHoursLabel }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-xs text-muted-foreground">
+                                            Completed
+                                        </dt>
+                                        <dd>{{ detail.completion_date || '—' }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-xs text-muted-foreground">
+                                            Location
+                                        </dt>
+                                        <dd>{{ detail.location || '—' }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-xs text-muted-foreground">
+                                            Instructor
+                                        </dt>
+                                        <dd>{{ detail.instructor || '—' }}</dd>
+                                    </div>
+                                    <div v-if="detail.notes" class="col-span-2">
+                                        <dt class="text-xs text-muted-foreground">
+                                            Notes
+                                        </dt>
+                                        <dd class="whitespace-pre-line">
+                                            {{ detail.notes }}
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </template>
                         </section>
 
                         <!-- Documents -->
