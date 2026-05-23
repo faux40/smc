@@ -110,6 +110,18 @@ describe('classes/Show inline edit', () => {
         );
     });
 
+    it('shows the sign-in sheet link but gates certificates/summary to completed', async () => {
+        const wrapper = await mountShow();
+        const hrefs = wrapper
+            .findAll('a')
+            .map((a) => a.attributes('href') ?? '');
+
+        expect(hrefs).toContain('/api/classes/c1/sign-in-sheet');
+        // Scheduled class → no certificate / summary links yet.
+        expect(hrefs).not.toContain('/api/classes/c1/certificates');
+        expect(hrefs).not.toContain('/api/classes/c1/summary');
+    });
+
     it('renders the roster shuttle with the enrolled student', async () => {
         const wrapper = await mountShow();
 

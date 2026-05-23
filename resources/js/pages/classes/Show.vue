@@ -377,6 +377,46 @@ const unassignStudent = (item: { id: string }) =>
                     {{ actionError }}
                 </p>
 
+                <!-- Documents -->
+                <section class="space-y-2">
+                    <h2 class="text-sm font-semibold">Documents</h2>
+                    <div class="flex flex-wrap gap-2">
+                        <Button
+                            as="a"
+                            variant="outline"
+                            :href="`/api/classes/${props.classId}/sign-in-sheet`"
+                            target="_blank"
+                        >
+                            Sign-in sheet
+                        </Button>
+                        <Button
+                            v-if="detail.status === 'completed'"
+                            as="a"
+                            variant="outline"
+                            :href="`/api/classes/${props.classId}/certificates`"
+                            target="_blank"
+                        >
+                            Certificates
+                        </Button>
+                        <Button
+                            v-if="detail.status === 'completed'"
+                            as="a"
+                            variant="outline"
+                            :href="`/api/classes/${props.classId}/summary`"
+                            target="_blank"
+                        >
+                            Class summary
+                        </Button>
+                    </div>
+                    <p
+                        v-if="detail.status !== 'completed'"
+                        class="text-xs text-muted-foreground"
+                    >
+                        Certificates and the class summary are available once the
+                        class is completed.
+                    </p>
+                </section>
+
                 <!-- Trainings -->
                 <section class="space-y-2">
                     <h2 class="text-sm font-semibold">Training topics</h2>
