@@ -43,7 +43,26 @@ class ClassSignInSheetTest extends TestCase
         $this->assertSame('John B', $data['trainer']);
         $this->assertSame('Ann Lee', $data['rows'][0]);
         $this->assertSame('', $data['rows'][1]); // padded blank
-        $this->assertGreaterThanOrEqual(14, count($data['rows']));
+        $this->assertCount(14, $data['rows']); // exactly one full page
+    }
+
+    public function test_overflow_pads_to_whole_pages_so_the_last_page_fills(): void
+    {
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        // 16 enrollees → spills onto a 2nd page → pad to 28 rows (2 full pages).
+        foreach (range(1, 16) as $i) {
+            $u = User::factory()->for($org, 'organization')
+                ->create(['f_name' => 'User', 'l_name' => str_pad((string) $i, 2, '0', STR_PAD_LEFT)]);
+            ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $u->id]);
+        }
+
+        $data = ClassSignInSheet::data($class->fresh());
+
+        $this->assertSame(16, $data['students']);
+        $this->assertCount(28, $data['rows']); // 2 pages of 14
+        $this->assertSame('', $data['rows'][27]); // trailing blank for walk-ins
     }
 
     public function test_endpoint_returns_a_pdf_even_with_no_enrollees(): void

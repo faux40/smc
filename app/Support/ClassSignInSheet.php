@@ -12,9 +12,10 @@ use App\Models\TrainingClass;
  */
 class ClassSignInSheet
 {
-    /** Minimum rows so the sheet looks full even with few/no students.
-     *  ~14 fills one Letter page at the current font + 0.75in body padding. */
-    private const MIN_ROWS = 14;
+    /** Rows that fill one Letter page at the current font + 0.75in padding.
+     *  We always pad up to a whole number of pages so the last page is full
+     *  of blank rows (e.g. for walk-ins), never half-empty. */
+    private const ROWS_PER_PAGE = 14;
 
     /**
      * @return array<string, mixed>
@@ -32,7 +33,8 @@ class ClassSignInSheet
             ->sort()
             ->values();
 
-        $rowCount = max(self::MIN_ROWS, $names->count());
+        $pages = max(1, (int) ceil($names->count() / self::ROWS_PER_PAGE));
+        $rowCount = $pages * self::ROWS_PER_PAGE;
         $rows = [];
         for ($i = 0; $i < $rowCount; $i++) {
             $rows[] = $names[$i] ?? '';
