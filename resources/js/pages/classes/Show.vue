@@ -4,6 +4,7 @@ import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import ClassFieldset from '@/components/ClassFieldset.vue';
+import DualListShuttle from '@/components/DualListShuttle.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
@@ -57,8 +58,6 @@ const detail = computed(() => store.detail[props.classId] ?? null);
 
 const userPicker = ref<PickerUser[]>([]);
 const completeOpen = ref(false);
-const attachTrainingId = ref('');
-const attachHours = ref('');
 const enrollUserId = ref('');
 const actionError = ref<string | null>(null);
 
@@ -179,19 +178,65 @@ async function run(fn: () => Promise<unknown>): Promise<void> {
     }
 }
 
-const attachTraining = () =>
-    run(async () => {
-        if (!attachTrainingId.value) {
-            return;
-        }
+// --- Training topics: dual-list shuttle (assigned | available) ---
+const topicColumns = [
+    { key: 'name', label: 'Topic' },
+    { key: 'freq', label: 'Frequency' },
+];
 
-        await store.attachTraining(props.classId, {
-            training_id: attachTrainingId.value,
-            hours: optionalNumber(attachHours.value),
-        });
-        attachTrainingId.value = '';
-        attachHours.value = '';
-    });
+const freqLabel = (t: {
+    std_freq_name: string | null;
+    as_needed: boolean;
+    initial_only: boolean;
+}) =>
+    t.std_freq_name ?? (t.as_needed ? 'as-needed' : t.initial_only ? 'initial' : '—');
+
+interface TopicItem {
+    id: string;
+    name: string;
+    freq: string;
+    hours: string | null;
+}
+
+const assignedTopics = computed<TopicItem[]>(() =>
+    (detail.value?.trainings ?? []).map((t) => ({
+        id: t.id, // class_training id (used to detach + edit hours)
+        name: t.training_name,
+        freq: freqLabel(t),
+        hours: t.hours,
+    })),
+);
+
+const availableTopics = computed<TopicItem[]>(() => {
+    const taken = new Set(
+        (detail.value?.trainings ?? []).map((t) => t.training_id),
+    );
+
+    return trainings.library
+        .filter((t) => !taken.has(t.id))
+        .map((t) => ({
+            id: t.id,
+            name: t.name,
+            freq: freqLabel(t),
+            hours: t.default_hours,
+        }));
+});
+
+const assignTopic = (item: { id: string }) =>
+    run(() =>
+        store.attachTraining(props.classId, {
+            training_id: item.id,
+            hours: null, // backend defaults from the topic's default_hours
+        }),
+    );
+
+const unassignTopic = (item: { id: string }) =>
+    run(() => store.detachTraining(props.classId, item.id));
+
+const changeTopicHours = (item: { id: string }, value: string) =>
+    run(() =>
+        store.updateTrainingHours(props.classId, item.id, optionalNumber(value)),
+    );
 
 const enroll = () =>
     run(async () => {
@@ -313,89 +358,37 @@ const enroll = () =>
 
                 <!-- Trainings -->
                 <section class="space-y-2">
-                    <h2 class="text-sm font-semibold">Trainings</h2>
-                    <div
-                        v-if="detail.can_edit && detail.status === 'scheduled'"
-                        class="flex flex-wrap items-end gap-2"
+                    <h2 class="text-sm font-semibold">Training topics</h2>
+                    <DualListShuttle
+                        :assigned="assignedTopics"
+                        :available="availableTopics"
+                        :columns="topicColumns"
+                        assigned-title="Assigned topics"
+                        available-title="Available topics"
+                        search-placeholder="Search topics…"
+                        :disabled="!canEditDetails"
+                        @assign="assignTopic"
+                        @unassign="unassignTopic"
                     >
-                        <div class="grid gap-1">
-                            <Label class="text-xs">Add training</Label>
-                            <Select v-model="attachTrainingId">
-                                <SelectTrigger class="w-64">
-                                    <SelectValue
-                                        placeholder="Pick a training…"
-                                    />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem
-                                        v-for="t in trainings.library"
-                                        :key="t.id"
-                                        :value="t.id"
-                                    >
-                                        {{ t.name }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div class="grid gap-1">
-                            <Label class="text-xs">Hours</Label>
+                        <template #extra-header>Hours</template>
+                        <template #extra="{ item }">
                             <Input
-                                v-model="attachHours"
                                 type="number"
                                 step="0.25"
                                 min="0"
-                                class="w-24"
-                            />
-                        </div>
-                        <Button type="button" @click="attachTraining"
-                            >Add</Button
-                        >
-                    </div>
-
-                    <div
-                        v-if="detail.trainings.length === 0"
-                        class="rounded border border-dashed border-border p-3 text-xs text-muted-foreground"
-                    >
-                        No trainings attached yet.
-                    </div>
-                    <ul
-                        v-else
-                        class="divide-y divide-border rounded-md border border-border"
-                    >
-                        <li
-                            v-for="t in detail.trainings"
-                            :key="t.id"
-                            class="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-                        >
-                            <span>
-                                {{ t.training_name }}
-                                <span class="text-xs text-muted-foreground">
-                                    {{
-                                        t.std_freq_name ??
-                                        (t.as_needed ? 'as-needed' : 'initial')
-                                    }}{{ t.hours ? ` · ${t.hours}h` : '' }}
-                                </span>
-                            </span>
-                            <button
-                                v-if="
-                                    detail.can_edit &&
-                                    detail.status === 'scheduled'
-                                "
-                                type="button"
-                                class="text-xs text-destructive hover:underline"
-                                @click="
-                                    run(() =>
-                                        store.detachTraining(
-                                            props.classId,
-                                            t.id,
-                                        ),
+                                :model-value="item.hours ?? ''"
+                                :disabled="!canEditDetails"
+                                class="h-7 w-20 text-xs"
+                                @change="
+                                    changeTopicHours(
+                                        item,
+                                        ($event.target as HTMLInputElement)
+                                            .value,
                                     )
                                 "
-                            >
-                                Remove
-                            </button>
-                        </li>
-                    </ul>
+                            />
+                        </template>
+                    </DualListShuttle>
                 </section>
 
                 <!-- Roster -->
