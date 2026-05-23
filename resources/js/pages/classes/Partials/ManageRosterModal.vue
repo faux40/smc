@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import DualListShuttle from '@/components/DualListShuttle.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,17 +34,23 @@ const canEdit = computed(
 );
 
 const actionError = ref<string | null>(null);
-async function run(fn: () => Promise<unknown>): Promise<void> {
-    actionError.value = null;
+const saving = ref(false);
 
-    try {
-        await fn();
-    } catch (e) {
-        actionError.value =
-            (e as { response?: { data?: { message?: string } } }).response?.data
-                ?.message ?? (e as Error).message;
-    }
-}
+// Local working set of enrolled user-ids — moves are instant client-side and
+// only persisted (diffed against the server roster) when the modal closes.
+const selected = ref<Set<string>>(new Set());
+
+watch(
+    () => props.open,
+    (open) => {
+        if (open) {
+            actionError.value = null;
+            selected.value = new Set(
+                (detail.value?.enrollments ?? []).map((e) => e.user_id),
+            );
+        }
+    },
+);
 
 const userLabel = (u: PickerUser) =>
     [u.f_name, u.l_name].filter(Boolean).join(' ') || u.email || u.id;
@@ -60,37 +66,85 @@ interface StudentItem {
     email: string;
 }
 
-const assigned = computed<StudentItem[]>(() =>
-    (detail.value?.enrollments ?? []).map((e) => ({
-        id: e.id,
-        name: e.user_name ?? '—',
-        email: e.user_email ?? '',
-    })),
-);
-
-const available = computed<StudentItem[]>(() => {
-    const enrolled = new Set(
-        (detail.value?.enrollments ?? []).map((e) => e.user_id),
-    );
-
-    return props.users
-        .filter((u) => !enrolled.has(u.id))
-        .map((u) => ({ id: u.id, name: userLabel(u), email: u.email ?? '' }));
+const toItem = (u: PickerUser): StudentItem => ({
+    id: u.id,
+    name: userLabel(u),
+    email: u.email ?? '',
 });
 
-const assign = (item: { id: string }) =>
-    run(() => store.enroll(props.classId, item.id));
-const unassign = (item: { id: string }) =>
-    run(() => store.unenroll(props.classId, item.id));
+const assigned = computed<StudentItem[]>(() =>
+    props.users.filter((u) => selected.value.has(u.id)).map(toItem),
+);
+const available = computed<StudentItem[]>(() =>
+    props.users.filter((u) => !selected.value.has(u.id)).map(toItem),
+);
+
+function assign(item: { id: string }): void {
+    const next = new Set(selected.value);
+    next.add(item.id);
+    selected.value = next;
+}
+function unassign(item: { id: string }): void {
+    const next = new Set(selected.value);
+    next.delete(item.id);
+    selected.value = next;
+}
+
+// Persist the queued add/removes (diff vs the server roster) on close.
+async function commit(): Promise<void> {
+    const d = detail.value;
+
+    if (!d || !canEdit.value) {
+        return;
+    }
+
+    const original = new Map(d.enrollments.map((e) => [e.user_id, e.id]));
+    const toEnroll = props.users
+        .filter((u) => selected.value.has(u.id) && !original.has(u.id))
+        .map((u) => u.id);
+    const toUnenroll = d.enrollments
+        .filter((e) => !selected.value.has(e.user_id))
+        .map((e) => e.id);
+
+    if (toEnroll.length === 0 && toUnenroll.length === 0) {
+        return;
+    }
+
+    saving.value = true;
+
+    try {
+        for (const id of toEnroll) {
+            await store.enroll(props.classId, id);
+        }
+
+        for (const enrollmentId of toUnenroll) {
+            await store.unenroll(props.classId, enrollmentId);
+        }
+    } catch (e) {
+        actionError.value =
+            (e as { response?: { data?: { message?: string } } }).response?.data
+                ?.message ?? (e as Error).message;
+    } finally {
+        saving.value = false;
+    }
+}
+
+function onOpenChange(value: boolean): void {
+    if (!value) {
+        void commit();
+    }
+
+    emit('update:open', value);
+}
 </script>
 
 <template>
-    <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
+    <Dialog :open="open" @update:open="onOpenChange">
         <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
             <DialogHeader>
                 <DialogTitle>Roster</DialogTitle>
                 <DialogDescription>
-                    Enroll or remove students. Changes save immediately.
+                    Move students between the lists; changes save when you close.
                 </DialogDescription>
             </DialogHeader>
 
@@ -108,14 +162,18 @@ const unassign = (item: { id: string }) =>
                 assigned-title="Enrolled"
                 available-title="Available students"
                 search-placeholder="Search students…"
-                add-label="Enroll students"
+                always-expanded
                 :disabled="!canEdit"
                 @assign="assign"
                 @unassign="unassign"
             />
 
             <DialogFooter>
-                <Button type="button" @click="emit('update:open', false)">
+                <Button
+                    type="button"
+                    :disabled="saving"
+                    @click="onOpenChange(false)"
+                >
                     Done
                 </Button>
             </DialogFooter>

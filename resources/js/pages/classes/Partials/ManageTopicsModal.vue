@@ -129,7 +129,7 @@ const changeHours = (item: { id: string }, value: string) =>
                 assigned-title="Assigned topics"
                 available-title="Available topics"
                 search-placeholder="Search topics…"
-                add-label="Add topic"
+                always-expanded
                 :disabled="!canEdit"
                 @assign="assign"
                 @unassign="unassign"

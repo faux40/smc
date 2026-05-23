@@ -39,42 +39,82 @@ const users = [
     { id: 'u2', f_name: 'Sam', l_name: 'Lee', email: 'sam@x.com' },
 ];
 
+async function openModal() {
+    const wrapper = mount(ManageRosterModal, {
+        props: { open: false, classId: 'c1', users },
+        attachTo: document.body,
+    });
+    await wrapper.setProps({ open: true }); // triggers the init watch
+    await flushPromises();
+
+    return wrapper;
+}
+
+function findBtn(text: string) {
+    return Array.from(
+        document.body.querySelectorAll<HTMLButtonElement>('button'),
+    ).find((b) => b.textContent?.trim() === text);
+}
+
 describe('ManageRosterModal', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
         useClassesStore().detail = { c1: detail };
         (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({ data: detail });
+        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({ data: detail });
     });
 
     afterEach(() => {
         document.body.innerHTML = '';
     });
 
-    it('enrolls an available student via the + button', async () => {
-        mount(ManageRosterModal, {
-            props: { open: true, classId: 'c1', users },
-            attachTo: document.body,
-        });
-        await flushPromises();
+    it('opens with both lists shown (no reveal needed)', async () => {
+        await openModal();
+        // Two tables = both Assigned and Available are visible immediately.
+        expect(document.body.querySelectorAll('table')).toHaveLength(2);
+    });
 
-        // Reveal the Available list (button text = the addLabel).
-        const reveal = Array.from(
-            document.body.querySelectorAll<HTMLButtonElement>('button'),
-        ).find((b) => b.textContent?.includes('Enroll students'));
-        reveal!.click();
-        await flushPromises();
+    it('queues a move locally without hitting the server, then saves on close', async () => {
+        await openModal();
 
-        // Only u2 is available (u1 already enrolled) → its + button.
+        // u2 is the only Available row → click its + button.
         const add = document.body.querySelector<HTMLButtonElement>(
             'button[aria-label="Add"]',
         );
         add!.click();
         await flushPromises();
 
+        // No server round-trip yet — purely local.
+        expect(axios.post).not.toHaveBeenCalled();
+
+        // Closing (Done) commits the queued change.
+        findBtn('Done')!.click();
+        await flushPromises();
+
         expect(axios.post).toHaveBeenCalledWith(
             '/api/classes/c1/enrollments',
             { user_id: 'u2' },
+            expect.anything(),
+        );
+    });
+
+    it('removing an enrolled student queues an unenroll on close', async () => {
+        await openModal();
+
+        // u1 (enrolled) is the only Assigned row → click its × button.
+        const remove = document.body.querySelector<HTMLButtonElement>(
+            'button[aria-label="Remove"]',
+        );
+        remove!.click();
+        await flushPromises();
+        expect(axios.delete).not.toHaveBeenCalled();
+
+        findBtn('Done')!.click();
+        await flushPromises();
+
+        expect(axios.delete).toHaveBeenCalledWith(
+            '/api/classes/c1/enrollments/e1',
             expect.anything(),
         );
     });

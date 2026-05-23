@@ -30,6 +30,8 @@ const props = defineProps<{
     searchPlaceholder?: string;
     /** Label for the button that reveals the Available list. */
     addLabel?: string;
+    /** Show both lists immediately (no reveal/collapse toggle). */
+    alwaysExpanded?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -99,7 +101,7 @@ const availableView = computed(() => view('available'));
 // disabled). Collapsed → the Assigned list spans full width, natural height.
 const showAvailable = ref(false);
 const sidesShown = computed<Side[]>(() =>
-    showAvailable.value && !props.disabled
+    (props.alwaysExpanded || showAvailable.value) && !props.disabled
         ? ['assigned', 'available']
         : ['assigned'],
 );
@@ -156,7 +158,7 @@ function onDrop(targetSide: Side): void {
 
 <template>
     <div class="space-y-2">
-        <div v-if="!disabled" class="flex justify-end">
+        <div v-if="!disabled && !alwaysExpanded" class="flex justify-end">
             <Button
                 v-if="!showAvailable"
                 type="button"
