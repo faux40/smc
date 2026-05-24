@@ -41,7 +41,14 @@ the corresponding feature silently fails. All are templated in `.env.example`.
 Three long-running processes. Missing any one degrades a whole feature area:
 
 1. **`php artisan queue:work`** — delivers queued broadcasts + notifications.
-   Without it, realtime/email never fire (and the queue backs up).
+   Without it, realtime/email never fire (and the queue backs up). **Use the
+   bare command (no connection arg)** so it always matches `QUEUE_CONNECTION`
+   — running `queue:work redis` while the queue is `database` (or vice-versa)
+   silently drops every broadcast. Symptom: `DB::table('jobs')->count()` climbs,
+   `failed=0`, and `ps aux | grep '[q]ueue:work'` shows nothing. This is the
+   #1 "Reverb subscribes but messages never arrive" cause in prod — the socket
+   is fine, the worker just isn't delivering. (Forge: set it up under the
+   site's **Queue** tab, not a hand-rolled daemon.)
 2. **`php artisan reverb:start`** — the WebSocket server. Without it, clients
    can't receive broadcasts (the app still works — `echo.ts` degrades to "no
    realtime" — but there are no live updates).
