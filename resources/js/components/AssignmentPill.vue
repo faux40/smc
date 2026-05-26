@@ -86,7 +86,7 @@ const title = computed(() => {
         :class="[
             'inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
             expired
-                ? 'border-border bg-muted/40 text-muted-foreground'
+                ? 'border-neutral-300 bg-neutral-100 text-neutral-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-500'
                 : 'border-border bg-background text-foreground hover:bg-muted',
         ]"
         :title="title"
@@ -95,9 +95,8 @@ const title = computed(() => {
             label
         }}</span>
         <span
-            v-if="dots.length > 0"
+            v-if="dots.length > 0 && !expired"
             class="flex shrink-0 items-center gap-0.5"
-            :class="{ 'opacity-50': expired }"
         >
             <span
                 v-for="(t, i) in visibleDots"
