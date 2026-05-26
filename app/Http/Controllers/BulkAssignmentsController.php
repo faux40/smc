@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Events\AssignmentCreated;
+use App\Events\AssignmentDeleted;
+use App\Events\AssignmentUpdated;
 use App\Http\Requests\BulkAssignmentRequest;
 use App\Models\Assignment;
 use App\Models\Requirement;
@@ -157,5 +159,65 @@ class BulkAssignmentsController extends Controller
             'created_count' => count($newAssignments),
             'skipped_count' => $pairs->count() - count($newAssignments),
         ], 201);
+    }
+
+    /**
+     * Bulk de-assign: for each (user, requirement) pair, act on the active
+     * assignment (end_date IS NULL, not soft-deleted) — `delete` soft-deletes
+     * it, `end` stamps end_date = today. Cross-org rows are invisible to the
+     * org-scoped query, so they're silently skipped rather than leaked.
+     */
+    public function detach(Request $request): JsonResponse
+    {
+        Gate::authorize('deleteAny', Assignment::class);
+
+        $data = $request->validate([
+            'pairs' => ['required', 'array', 'min:1'],
+            'pairs.*.user_id' => ['required', 'string'],
+            'pairs.*.requirement_id' => ['required', 'string'],
+            'mode' => ['required', 'string', 'in:delete,end'],
+        ]);
+
+        $pairKeys = collect($data['pairs'])
+            ->map(fn ($p) => $p['user_id'].'|'.$p['requirement_id'])
+            ->unique()
+            ->flip();
+
+        // One org-scoped query for every active assignment in the pair set.
+        $targets = Assignment::query()
+            ->whereNull('end_date')
+            ->whereIn('user_id', collect($data['pairs'])->pluck('user_id')->unique())
+            ->whereIn('requirement_id', collect($data['pairs'])->pluck('requirement_id')->unique())
+            ->get()
+            ->filter(fn (Assignment $a) => $pairKeys->has($a->user_id.'|'.$a->requirement_id))
+            ->values();
+
+        /** @var list<array{0: string, 1: string, 2: string, 3: string}> $deleted */
+        $deleted = [];
+        /** @var list<Assignment> $ended */
+        $ended = [];
+
+        DB::transaction(function () use ($targets, $data, &$deleted, &$ended): void {
+            foreach ($targets as $assignment) {
+                if ($data['mode'] === 'delete') {
+                    $deleted[] = [$assignment->id, $assignment->user_id, $assignment->requirement_id, $assignment->org_id];
+                    $assignment->delete();
+                } else {
+                    $assignment->update(['end_date' => now()->toDateString()]);
+                    $ended[] = $assignment->fresh();
+                }
+            }
+        });
+
+        // Broadcast outside the transaction so peers don't see phantom
+        // changes if it rolls back.
+        foreach ($deleted as [$id, $userId, $reqId, $orgId]) {
+            event(new AssignmentDeleted($id, $userId, $reqId, $orgId));
+        }
+        foreach ($ended as $assignment) {
+            event(new AssignmentUpdated($assignment));
+        }
+
+        return response()->json(['affected_count' => $targets->count()]);
     }
 }

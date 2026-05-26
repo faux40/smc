@@ -161,6 +161,17 @@ export const useAssignmentsStore = defineStore('assignments', () => {
         rows.value = rows.value.filter((a) => a.id !== id);
     }
 
+    // Force a full re-fetch of the org's assignments, replacing rows. Used
+    // after a bulk operation: the acting tab doesn't receive its own
+    // broadcasts (self-echo is suppressed), so it must refresh explicitly.
+    async function reload(): Promise<void> {
+        const { data } = await axios.get<AssignmentRow[]>('/api/assignments', {
+            headers: defaultHeaders(),
+        });
+        rows.value = data;
+        loadedFilters.value = new Set([filterKey({})]);
+    }
+
     function subscribe(orgId: string): void {
         if (subscribedOrgId.value === orgId) {
             return;
@@ -198,6 +209,7 @@ export const useAssignmentsStore = defineStore('assignments', () => {
         create,
         update,
         destroy,
+        reload,
         subscribe,
     };
 });

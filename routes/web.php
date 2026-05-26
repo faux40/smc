@@ -105,6 +105,9 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // assignments in one transaction. Manager+ gated via AssignmentPolicy.
     Route::get('api/bulk-assignments/preview', [BulkAssignmentsController::class, 'preview'])->name('bulk-assignments.preview');
     Route::post('api/bulk-assignments', [BulkAssignmentsController::class, 'store'])->name('bulk-assignments.store');
+    // Bulk de-assign (Admin+): remove (soft-delete) or end (set end_date) the
+    // active assignment for each (user, requirement) pair.
+    Route::post('api/bulk-assignments/detach', [BulkAssignmentsController::class, 'detach'])->name('bulk-assignments.detach');
 
     Route::inertia('workflows/bulk-assignment', 'workflows/BulkAssignment')->name('workflows.bulk-assignment');
 

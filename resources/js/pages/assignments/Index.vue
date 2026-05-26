@@ -19,10 +19,12 @@ import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { realtimeTabId } from '@/echo';
 import AssignmentFormModal from '@/pages/assignments/Partials/AssignmentFormModal.vue';
+import BulkAssignmentsModal from '@/pages/assignments/Partials/BulkAssignmentsModal.vue';
 import { page as assignmentsPage } from '@/routes/assignments';
 import { useAssignmentsStore } from '@/stores/assignments';
 import type { AssignmentRow } from '@/stores/assignments';
@@ -68,6 +70,14 @@ const canCreate = computed(() =>
         authUser.value?.isManager,
     ),
 );
+// De-assign maps to the delete policy — Admin+ only (not Manager).
+const canDeassign = computed(() =>
+    Boolean(
+        authUser.value?.isOwner ||
+        authUser.value?.isSuperAdmin ||
+        authUser.value?.isAdmin,
+    ),
+);
 
 const userPicker = ref<UserPickerRow[]>([]);
 const search = ref('');
@@ -111,6 +121,11 @@ const modalMode = ref<'create' | 'edit'>('create');
 const editing = ref<AssignmentRow | null>(null);
 const error = ref<string | null>(null);
 const loading = ref(true);
+
+// Row selection for bulk assign / de-assign.
+const selectedUserIds = ref<string[]>([]);
+const bulkOpen = ref(false);
+const bulkMode = ref<'assign' | 'deassign'>('assign');
 
 onMounted(async () => {
     if (authUser.value?.org_id) {
@@ -324,6 +339,47 @@ const shownAssignmentCount = computed(() =>
     userGroups.value.reduce((n, g) => n + g.assignments.length, 0),
 );
 
+// ---- Bulk row selection ----
+const visibleUserIds = computed(() => userGroups.value.map((g) => g.user_id));
+const allVisibleSelected = computed(
+    () =>
+        visibleUserIds.value.length > 0 &&
+        visibleUserIds.value.every((id) => selectedUserIds.value.includes(id)),
+);
+
+function isUserSelected(id: string): boolean {
+    return selectedUserIds.value.includes(id);
+}
+
+function toggleUser(id: string): void {
+    selectedUserIds.value = isUserSelected(id)
+        ? selectedUserIds.value.filter((x) => x !== id)
+        : [...selectedUserIds.value, id];
+}
+
+function toggleSelectAll(): void {
+    if (allVisibleSelected.value) {
+        const visible = new Set(visibleUserIds.value);
+        selectedUserIds.value = selectedUserIds.value.filter(
+            (id) => !visible.has(id),
+        );
+    } else {
+        selectedUserIds.value = [
+            ...new Set([...selectedUserIds.value, ...visibleUserIds.value]),
+        ];
+    }
+}
+
+function openBulk(mode: 'assign' | 'deassign'): void {
+    bulkMode.value = mode;
+    bulkOpen.value = true;
+}
+
+async function onBulkApplied(): Promise<void> {
+    await store.reload();
+    selectedUserIds.value = [];
+}
+
 function toggleSort(key: SortKey): void {
     if (sortKey.value === key) {
         sortAsc.value = !sortAsc.value;
@@ -493,6 +549,33 @@ function defaultHeaders(): Record<string, string> {
             </span>
         </div>
 
+        <div
+            v-if="selectedUserIds.length > 0"
+            class="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/40 p-2"
+        >
+            <span class="text-sm font-medium">
+                {{ selectedUserIds.length }} selected
+            </span>
+            <Button v-if="canCreate" size="sm" @click="openBulk('assign')">
+                Assign requirements
+            </Button>
+            <Button
+                v-if="canDeassign"
+                size="sm"
+                variant="outline"
+                @click="openBulk('deassign')"
+            >
+                De-assign requirements
+            </Button>
+            <button
+                type="button"
+                class="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                @click="selectedUserIds = []"
+            >
+                Clear selection
+            </button>
+        </div>
+
         <AsyncState
             :loading="loading"
             :error="error"
@@ -513,6 +596,13 @@ function defaultHeaders(): Record<string, string> {
                 <table class="min-w-full divide-y divide-border text-sm">
                     <thead class="bg-muted/40">
                         <tr>
+                            <th class="w-10 px-4 py-2 text-left align-top">
+                                <Checkbox
+                                    :model-value="allVisibleSelected"
+                                    aria-label="Select all"
+                                    @update:model-value="toggleSelectAll"
+                                />
+                            </th>
                             <th
                                 class="w-64 px-4 py-2 text-left align-top font-medium"
                             >
@@ -552,6 +642,15 @@ function defaultHeaders(): Record<string, string> {
                             :key="group.user_id"
                             class="align-top"
                         >
+                            <td class="px-4 py-3">
+                                <Checkbox
+                                    :model-value="isUserSelected(group.user_id)"
+                                    :aria-label="`Select ${group.name}`"
+                                    @update:model-value="
+                                        toggleUser(group.user_id)
+                                    "
+                                />
+                            </td>
                             <td class="px-4 py-3">
                                 <div class="font-medium">{{ group.name }}</div>
                                 <div
@@ -600,6 +699,13 @@ function defaultHeaders(): Record<string, string> {
             :mode="modalMode"
             :target="editing"
             :initial-user-id="createUserId"
+        />
+
+        <BulkAssignmentsModal
+            v-model:open="bulkOpen"
+            :mode="bulkMode"
+            :user-ids="selectedUserIds"
+            @applied="onBulkApplied"
         />
     </div>
 </template>

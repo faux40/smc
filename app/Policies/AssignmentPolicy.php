@@ -47,4 +47,14 @@ class AssignmentPolicy
     {
         return $this->update($actor, $assignment);
     }
+
+    /**
+     * Class-level gate for the bulk de-assign endpoint (no single instance
+     * to check). Same write roles as delete; per-row org scoping is enforced
+     * by the org-scoped query in the controller.
+     */
+    public function deleteAny(User $actor): bool
+    {
+        return $actor->hasAnyRole(self::WRITE_ROLES);
+    }
 }

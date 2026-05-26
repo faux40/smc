@@ -3,6 +3,8 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Events\AssignmentCreated;
+use App\Events\AssignmentDeleted;
+use App\Events\AssignmentUpdated;
 use App\Models\Assignment;
 use App\Models\Organization;
 use App\Models\Requirement;
@@ -271,5 +273,109 @@ class BulkAssignmentsApiTest extends TestCase
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('pairs');
+    }
+
+    public function test_detach_delete_soft_deletes_active_assignments(): void
+    {
+        Event::fake([AssignmentDeleted::class]);
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $userA = User::factory()->for($org, 'organization')->create();
+        $reqA = Requirement::factory()->for($org, 'organization')->create();
+        $reqB = Requirement::factory()->for($org, 'organization')->create();
+
+        $a = Assignment::factory()->for($org, 'organization')->for($userA, 'user')->for($reqA, 'requirement')->create(['end_date' => null]);
+        $b = Assignment::factory()->for($org, 'organization')->for($userA, 'user')->for($reqB, 'requirement')->create(['end_date' => null]);
+
+        $this->actingAs($admin)
+            ->postJson('/api/bulk-assignments/detach', [
+                'pairs' => [['user_id' => $userA->id, 'requirement_id' => $reqA->id]],
+                'mode' => 'delete',
+            ])
+            ->assertOk()
+            ->assertJsonPath('affected_count', 1);
+
+        $this->assertSoftDeleted('assignments', ['id' => $a->id]);
+        $this->assertNotSoftDeleted('assignments', ['id' => $b->id]);
+        Event::assertDispatchedTimes(AssignmentDeleted::class, 1);
+    }
+
+    public function test_detach_end_stamps_end_date(): void
+    {
+        Event::fake([AssignmentUpdated::class]);
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $userA = User::factory()->for($org, 'organization')->create();
+        $reqA = Requirement::factory()->for($org, 'organization')->create();
+
+        $a = Assignment::factory()->for($org, 'organization')->for($userA, 'user')->for($reqA, 'requirement')->create(['end_date' => null]);
+
+        $this->actingAs($admin)
+            ->postJson('/api/bulk-assignments/detach', [
+                'pairs' => [['user_id' => $userA->id, 'requirement_id' => $reqA->id]],
+                'mode' => 'end',
+            ])
+            ->assertOk()
+            ->assertJsonPath('affected_count', 1);
+
+        $this->assertNotSoftDeleted('assignments', ['id' => $a->id]);
+        $this->assertNotNull($a->fresh()->end_date);
+        Event::assertDispatchedTimes(AssignmentUpdated::class, 1);
+    }
+
+    public function test_detach_ignores_already_ended_assignments(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $userA = User::factory()->for($org, 'organization')->create();
+        $reqA = Requirement::factory()->for($org, 'organization')->create();
+
+        // Already ended → not "active", so detach is a no-op for it.
+        Assignment::factory()->for($org, 'organization')->for($userA, 'user')->for($reqA, 'requirement')->create(['end_date' => '2026-01-01']);
+
+        $this->actingAs($admin)
+            ->postJson('/api/bulk-assignments/detach', [
+                'pairs' => [['user_id' => $userA->id, 'requirement_id' => $reqA->id]],
+                'mode' => 'delete',
+            ])
+            ->assertOk()
+            ->assertJsonPath('affected_count', 0);
+    }
+
+    public function test_detach_requires_admin_role(): void
+    {
+        $org = Organization::factory()->create();
+        // Manager can create in bulk but NOT de-assign (delete is Admin+).
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $userA = User::factory()->for($org, 'organization')->create();
+        $reqA = Requirement::factory()->for($org, 'organization')->create();
+        Assignment::factory()->for($org, 'organization')->for($userA, 'user')->for($reqA, 'requirement')->create();
+
+        $this->actingAs($manager)
+            ->postJson('/api/bulk-assignments/detach', [
+                'pairs' => [['user_id' => $userA->id, 'requirement_id' => $reqA->id]],
+                'mode' => 'delete',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_detach_does_not_touch_cross_org(): void
+    {
+        $orgA = Organization::factory()->create();
+        $orgB = Organization::factory()->create();
+        $adminA = User::factory()->for($orgA, 'organization')->withRole('Admin')->create();
+        $userB = User::factory()->for($orgB, 'organization')->create();
+        $reqB = Requirement::factory()->for($orgB, 'organization')->create();
+        $b = Assignment::factory()->for($orgB, 'organization')->for($userB, 'user')->for($reqB, 'requirement')->create(['end_date' => null]);
+
+        $this->actingAs($adminA)
+            ->postJson('/api/bulk-assignments/detach', [
+                'pairs' => [['user_id' => $userB->id, 'requirement_id' => $reqB->id]],
+                'mode' => 'delete',
+            ])
+            ->assertOk()
+            ->assertJsonPath('affected_count', 0);
+
+        $this->assertNotSoftDeleted('assignments', ['id' => $b->id]);
     }
 }
