@@ -252,7 +252,9 @@ function matchSearch(
     return words.every((w) => hay.includes(w)); // 'and' — all words present
 }
 
-// One row per user; their assignments become timing-coded pills.
+// One row per user — every active user shows, with or without assignments
+// (this is also where you assign, via the per-row "+ Add"). A user's
+// assignments become timing-coded pills.
 interface UserGroup {
     user_id: string;
     name: string;
@@ -269,9 +271,18 @@ const userGroups = computed<UserGroup[]>(() => {
         byUser.set(a.user_id, list);
     }
 
+    // Every active user, plus any user that has assignments but isn't in the
+    // active picker (e.g. disabled) so their rows don't silently vanish.
+    const userIds = new Set<string>(userPicker.value.map((u) => u.id));
+
+    for (const id of byUser.keys()) {
+        userIds.add(id);
+    }
+
     const groups: UserGroup[] = [];
 
-    for (const [user_id, assignments] of byUser) {
+    for (const user_id of userIds) {
+        const assignments = byUser.get(user_id) ?? [];
         const name = userName(user_id) || user_id;
         const email = userById(user_id)?.email ?? null;
 
