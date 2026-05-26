@@ -94,6 +94,10 @@ const isEdit = computed(() => props.mode === 'edit');
 const title = computed(() =>
     isEdit.value ? 'Edit assignment' : 'New assignment',
 );
+// Lock the user picker on edit, and on the per-row quick-add (where the
+// user is pre-selected via initialUserId). The top-level "+ New assignment"
+// leaves initialUserId null, so the picker stays free.
+const userLocked = computed(() => isEdit.value || Boolean(props.initialUserId));
 
 const sortedUsers = computed(() => [...userPicker.value]);
 const sortedRequirements = computed(() =>
@@ -285,7 +289,7 @@ function defaultHeaders(): Record<string, string> {
 
                 <div class="grid gap-2">
                     <Label for="a_user">User</Label>
-                    <Select v-model="form.user_id" :disabled="isEdit">
+                    <Select v-model="form.user_id" :disabled="userLocked">
                         <SelectTrigger id="a_user">
                             <SelectValue placeholder="Pick a user…">
                                 {{ form.user_id ? userName(form.user_id) : '' }}
@@ -316,6 +320,13 @@ function defaultHeaders(): Record<string, string> {
                     <p v-if="isEdit" class="text-xs text-muted-foreground">
                         User can't change after creation — delete + recreate to
                         re-target.
+                    </p>
+                    <p
+                        v-else-if="userLocked"
+                        class="text-xs text-muted-foreground"
+                    >
+                        Adding for {{ userName(form.user_id) }}. Use “+ New
+                        assignment” to pick a different user.
                     </p>
                     <InputError :message="fieldErrors.message('user_id')" />
                 </div>
