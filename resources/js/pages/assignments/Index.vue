@@ -83,6 +83,25 @@ const tagFilterMode = ref<TagFilterMode>('and');
 // have all" is degenerate.
 const USER_FILTER_MODES: FilterMode[] = ['or', 'not'];
 
+const hasActiveFilters = computed(
+    () =>
+        search.value.trim() !== '' ||
+        userFilterIds.value.length > 0 ||
+        requirementFilterIds.value.length > 0 ||
+        tagFilter.value.length > 0,
+);
+
+function clearFilters(): void {
+    search.value = '';
+    searchMode.value = 'and';
+    userFilterIds.value = [];
+    userFilterMode.value = 'or';
+    requirementFilterIds.value = [];
+    requirementFilterMode.value = 'or';
+    tagFilter.value = [];
+    tagFilterMode.value = 'and';
+}
+
 type SortKey = 'user' | 'count' | 'tags';
 const sortKey = ref<SortKey>('user');
 const sortAsc = ref(true);
@@ -398,7 +417,7 @@ function defaultHeaders(): Record<string, string> {
                     v-model:mode="userFilterMode"
                     :options="userOptions"
                     :modes="USER_FILTER_MODES"
-                    add-label="Add user…"
+                    label="users"
                 />
             </div>
             <div class="grid gap-1">
@@ -407,7 +426,7 @@ function defaultHeaders(): Record<string, string> {
                     v-model:selected="requirementFilterIds"
                     v-model:mode="requirementFilterMode"
                     :options="requirementOptions"
-                    add-label="Add requirement…"
+                    label="requirements"
                 />
             </div>
             <div class="grid gap-1">
@@ -418,6 +437,14 @@ function defaultHeaders(): Record<string, string> {
                     placeholder="Any tag…"
                 />
             </div>
+            <button
+                v-if="hasActiveFilters"
+                type="button"
+                class="h-8 rounded border border-input px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                @click="clearFilters"
+            >
+                Clear filters
+            </button>
             <span class="text-xs text-muted-foreground">
                 {{ userGroups.length }} users · {{ shownAssignmentCount }} of
                 {{ store.rows.length }}
