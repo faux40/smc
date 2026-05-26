@@ -8,7 +8,6 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Validator;
 
 /**
  * Validator for POST /api/bulk-assignments. The bulk flow ships its own
@@ -18,9 +17,8 @@ use Illuminate\Validation\Validator;
  * of in the controller) means cross-org callers see 403, not 422 with
  * leaked foreign-row info. Same pattern as CompletionRequest.
  *
- * Timing rules mirror AssignmentRequest verbatim — at-least-one flag,
- * initial_only ⇄ repeating mutex, std_freq required when repeating,
- * start_date required, end_date ≥ start.
+ * Timing lives on the requirement's elements, not the assignment, so the
+ * payload is just the pairs[] plus the active window.
  */
 class BulkAssignmentRequest extends FormRequest
 {
@@ -52,40 +50,8 @@ class BulkAssignmentRequest extends FormRequest
                     ->where('org_id', $orgId)
                     ->whereNull('deleted_at'),
             ],
-            'initial_only' => ['required', 'boolean'],
-            'repeating' => ['required', 'boolean'],
-            'as_needed' => ['required', 'boolean'],
-            'std_freq_id' => [
-                'nullable',
-                'string',
-                Rule::exists('std_frequencies', 'id')
-                    ->where('org_id', $orgId)
-                    ->whereNull('deleted_at'),
-            ],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
         ];
-    }
-
-    public function withValidator(Validator $validator): void
-    {
-        $validator->after(function (Validator $v): void {
-            $data = $v->getData();
-            $initial = (bool) ($data['initial_only'] ?? false);
-            $repeating = (bool) ($data['repeating'] ?? false);
-            $asNeeded = (bool) ($data['as_needed'] ?? false);
-
-            if (! $initial && ! $repeating && ! $asNeeded) {
-                $v->errors()->add('initial_only', 'At least one timing flag (initial-only / repeating / as-needed) must be true.');
-            }
-
-            if ($initial && $repeating) {
-                $v->errors()->add('repeating', 'An assignment can be initial-only OR repeating, not both.');
-            }
-
-            if ($repeating && empty($data['std_freq_id'])) {
-                $v->errors()->add('std_freq_id', 'Repeating assignments require a frequency.');
-            }
-        });
     }
 }

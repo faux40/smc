@@ -2,25 +2,27 @@
 /*
  * Single-assignment form modal — create + edit.
  *
- * On create: pick user + requirement + timing + start_date. Server is
- * responsible for copying the requirement name + description onto the
- * assignment row.
+ * On create: pick user + requirement + start_date. The server owns the
+ * assignment name (a snapshot of the requirement); the client never sends
+ * it. `initialUserId` pre-selects the user for the per-row quick-add.
  *
  * On edit: user_id + requirement_id are locked (the AssignmentRequest
  * server-side disallows re-targeting an existing assignment). Only
- * name / description / timing / dates can change.
+ * description / dates change. Edit mode also offers Delete.
+ *
+ * Timing is not set here — it lives on the requirement's elements. The
+ * editor shows them read-only so the admin sees the schedule being assigned.
  *
  * Picker data:
  *  - Users via /api/users (Manager+ gated).
  *  - Requirements via useRequirementsStore.
- *  - Frequencies via useStdFrequenciesStore.
+ *  - Elements via useRqmtElementsStore (read-only preview).
  */
 import axios from 'axios';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -40,11 +42,12 @@ import {
 } from '@/components/ui/select';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import { realtimeTabId } from '@/echo';
+import { elementTimingLabel } from '@/lib/timing';
 import { useAssignmentsStore } from '@/stores/assignments';
 import type { AssignmentRow } from '@/stores/assignments';
 import { useErrorStore } from '@/stores/errors';
 import { useRequirementsStore } from '@/stores/requirements';
-import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
+import { useRqmtElementsStore } from '@/stores/rqmtElements';
 
 const FORM_CTX = 'form:assignment';
 
@@ -62,13 +65,14 @@ const props = defineProps<{
     open: boolean;
     mode: Mode;
     target?: AssignmentRow | null;
+    initialUserId?: string | null;
 }>();
 
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
 
 const store = useAssignmentsStore();
 const requirements = useRequirementsStore();
-const frequencies = useStdFrequenciesStore();
+const rqmtElements = useRqmtElementsStore();
 
 const userPicker = ref<UserPickerRow[]>([]);
 const pickersLoaded = ref(false);
@@ -77,16 +81,12 @@ const loadError = ref<string | null>(null);
 const form = reactive({
     user_id: '' as string,
     requirement_id: '' as string,
-    name: '' as string,
     description: '' as string,
-    initial_only: false,
-    repeating: true,
-    std_freq_id: null as string | null,
-    as_needed: false,
     start_date: new Date().toISOString().slice(0, 10),
     end_date: '' as string,
 });
 const submitting = ref(false);
+const deleting = ref(false);
 const errorStore = useErrorStore();
 const fieldErrors = useFieldErrors(FORM_CTX);
 
@@ -107,6 +107,13 @@ const userName = (id: string) => {
 const requirementName = (id: string) =>
     requirements.library.find((r) => r.id === id)?.name ?? '—';
 
+// Read-only preview of the requirement's elements + their timing, so the
+// admin sees the compliance schedule the assignment will follow.
+const previewElements = computed(() =>
+    form.requirement_id ? rqmtElements.listFor(form.requirement_id) : [],
+);
+const canDelete = computed(() => isEdit.value && props.target?.can_delete);
+
 onMounted(async () => {
     await loadPickers();
 });
@@ -122,7 +129,6 @@ async function loadPickers(): Promise<void> {
                 headers: defaultHeaders(),
             }),
             requirements.load(),
-            frequencies.load(),
         ]);
         userPicker.value = u.data;
         pickersLoaded.value = true;
@@ -145,56 +151,38 @@ watch(
         if (isEdit.value && props.target) {
             form.user_id = props.target.user_id;
             form.requirement_id = props.target.requirement_id;
-            form.name = props.target.name;
             form.description = props.target.description ?? '';
-            form.initial_only = props.target.initial_only;
-            form.repeating = props.target.repeating;
-            form.std_freq_id = props.target.std_freq_id;
-            form.as_needed = props.target.as_needed;
             form.start_date =
                 props.target.start_date ??
                 new Date().toISOString().slice(0, 10);
             form.end_date = props.target.end_date ?? '';
         } else {
-            form.user_id = '';
+            form.user_id = props.initialUserId ?? '';
             form.requirement_id = '';
-            form.name = '';
             form.description = '';
-            form.initial_only = false;
-            form.repeating = true;
-            form.std_freq_id = null;
-            form.as_needed = false;
             form.start_date = new Date().toISOString().slice(0, 10);
             form.end_date = '';
         }
     },
 );
 
-// Default the name + description from the chosen requirement on create.
-// Don't overwrite if the admin already typed something.
+// Load the chosen requirement's elements for the preview, and default the
+// description from it on create (without clobbering anything typed).
 watch(
     () => form.requirement_id,
-    (id) => {
-        if (isEdit.value) {
-            return;
-        }
-
+    async (id) => {
         if (!id) {
             return;
         }
 
-        const r = requirements.library.find((x) => x.id === id);
+        await rqmtElements.loadFor(id);
 
-        if (!r) {
-            return;
-        }
+        if (!isEdit.value) {
+            const r = requirements.library.find((x) => x.id === id);
 
-        if (form.name.trim() === '') {
-            form.name = r.name;
-        }
-
-        if (form.description.trim() === '') {
-            form.description = r.description ?? '';
+            if (r && form.description.trim() === '') {
+                form.description = r.description ?? '';
+            }
         }
     },
 );
@@ -207,13 +195,8 @@ const submit = async () => {
         const payload = {
             user_id: form.user_id,
             requirement_id: form.requirement_id,
-            name: form.name,
             description:
                 form.description.trim() === '' ? null : form.description,
-            initial_only: form.initial_only,
-            repeating: form.repeating,
-            std_freq_id: form.repeating ? form.std_freq_id : null,
-            as_needed: form.as_needed,
             start_date: form.start_date,
             end_date: form.end_date === '' ? null : form.end_date,
         };
@@ -232,6 +215,36 @@ const submit = async () => {
         });
     } finally {
         submitting.value = false;
+    }
+};
+
+const remove = async () => {
+    if (!props.target) {
+        return;
+    }
+
+    const who = userName(props.target.user_id);
+
+    if (
+        !window.confirm(
+            `Delete the "${requirementName(props.target.requirement_id)}" assignment for ${who}?`,
+        )
+    ) {
+        return;
+    }
+
+    deleting.value = true;
+    errorStore.clear(FORM_CTX);
+
+    try {
+        await store.destroy(props.target.id);
+        emit('update:open', false);
+    } catch (e) {
+        errorStore.reportFromAxios(e, FORM_CTX, {
+            fallback: 'Failed to delete assignment',
+        });
+    } finally {
+        deleting.value = false;
     }
 };
 
@@ -335,12 +348,6 @@ function defaultHeaders(): Record<string, string> {
                 </div>
 
                 <div class="grid gap-2">
-                    <Label for="a_name">Name</Label>
-                    <Input id="a_name" v-model="form.name" required />
-                    <InputError :message="fieldErrors.message('name')" />
-                </div>
-
-                <div class="grid gap-2">
                     <Label for="a_desc">Description</Label>
                     <textarea
                         id="a_desc"
@@ -351,46 +358,32 @@ function defaultHeaders(): Record<string, string> {
                     <InputError :message="fieldErrors.message('description')" />
                 </div>
 
-                <div class="space-y-2">
-                    <p class="text-sm font-medium">Timing</p>
-                    <label class="flex items-center gap-2 text-sm">
-                        <Checkbox v-model="form.initial_only" />
-                        Initial-only
-                    </label>
-                    <label class="flex items-center gap-2 text-sm">
-                        <Checkbox v-model="form.repeating" />
-                        Repeating
-                    </label>
-                    <label class="flex items-center gap-2 text-sm">
-                        <Checkbox v-model="form.as_needed" />
-                        As-needed
-                    </label>
-                    <InputError
-                        :message="fieldErrors.message('initial_only')"
-                    />
-                    <InputError :message="fieldErrors.message('repeating')" />
-                    <InputError :message="fieldErrors.message('as_needed')" />
-                </div>
-
-                <div v-if="form.repeating" class="grid gap-2">
-                    <Label for="a_freq">Frequency</Label>
-                    <Select v-model="form.std_freq_id">
-                        <SelectTrigger id="a_freq">
-                            <SelectValue placeholder="Pick a frequency…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem
-                                v-for="f in frequencies.library"
-                                :key="f.id"
-                                :value="f.id"
-                            >
-                                {{ f.name }} ({{ f.repeat_days }} day{{
-                                    f.repeat_days === 1 ? '' : 's'
-                                }})
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <InputError :message="fieldErrors.message('std_freq_id')" />
+                <div
+                    v-if="form.requirement_id"
+                    class="grid gap-2 rounded-md border border-border bg-muted/40 p-3"
+                >
+                    <p class="text-xs font-medium">
+                        Schedule (set on the requirement, not here)
+                    </p>
+                    <ul
+                        v-if="previewElements.length > 0"
+                        class="space-y-1 text-xs"
+                    >
+                        <li
+                            v-for="el in previewElements"
+                            :key="el.id"
+                            class="flex items-center justify-between gap-3"
+                        >
+                            <span class="truncate">{{ el.name }}</span>
+                            <span class="shrink-0 text-muted-foreground">
+                                {{ elementTimingLabel(el) }}
+                            </span>
+                        </li>
+                    </ul>
+                    <p v-else class="text-xs text-muted-foreground">
+                        This requirement has no elements yet — add trainings to
+                        it from the requirement page.
+                    </p>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
@@ -415,17 +408,29 @@ function defaultHeaders(): Record<string, string> {
                     </div>
                 </div>
 
-                <DialogFooter>
+                <DialogFooter class="sm:justify-between">
                     <Button
+                        v-if="canDelete"
                         type="button"
-                        variant="outline"
-                        @click="emit('update:open', false)"
+                        variant="destructive"
+                        :disabled="deleting || submitting"
+                        @click="remove"
                     >
-                        Cancel
+                        {{ deleting ? 'Deleting…' : 'Delete' }}
                     </Button>
-                    <Button type="submit" :disabled="submitting">
-                        {{ submitting ? 'Saving…' : 'Save' }}
-                    </Button>
+                    <span v-else />
+                    <div class="flex gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            @click="emit('update:open', false)"
+                        >
+                            Cancel
+                        </Button>
+                        <Button type="submit" :disabled="submitting">
+                            {{ submitting ? 'Saving…' : 'Save' }}
+                        </Button>
+                    </div>
                 </DialogFooter>
             </form>
         </DialogContent>

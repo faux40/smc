@@ -28,7 +28,10 @@ const props = defineProps<{
     target?: RequirementRow | null;
 }>();
 
-const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
+const emit = defineEmits<{
+    (e: 'update:open', v: boolean): void;
+    (e: 'created', row: RequirementRow): void;
+}>();
 
 const store = useRequirementsStore();
 
@@ -75,7 +78,8 @@ const submit = async () => {
         if (isEdit.value && props.target) {
             await store.update(props.target.id, payload);
         } else {
-            await store.create(payload);
+            const row = await store.create(payload);
+            emit('created', row);
         }
 
         emit('update:open', false);

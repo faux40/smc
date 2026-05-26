@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import Heading from '@/components/Heading.vue';
@@ -39,8 +39,6 @@ const canCreate = computed(() =>
 );
 
 const modalOpen = ref(false);
-const modalMode = ref<'create' | 'edit'>('create');
-const editing = ref<RequirementRow | null>(null);
 const error = ref<string | null>(null);
 const loading = ref(true);
 
@@ -59,15 +57,13 @@ onMounted(async () => {
 });
 
 const openCreate = () => {
-    modalMode.value = 'create';
-    editing.value = null;
     modalOpen.value = true;
 };
 
-const openEdit = (row: RequirementRow) => {
-    modalMode.value = 'edit';
-    editing.value = row;
-    modalOpen.value = true;
+// Land on the new requirement's detail page — that's where elements (and
+// further name/description edits) are managed.
+const onCreated = (row: RequirementRow) => {
+    router.visit(requirementsShow(row.id));
 };
 
 const remove = async (row: RequirementRow) => {
@@ -96,7 +92,7 @@ const remove = async (row: RequirementRow) => {
         <div class="flex items-start justify-between gap-4">
             <Heading
                 title="Requirements"
-                description="Named groups of rqmt_elements. Use the detail page to add Trainings / future modules."
+                description="Named groups of trainings. Open one to edit its details and manage its elements."
             />
             <Button v-if="canCreate" @click="openCreate"
                 >+ New requirement</Button
@@ -154,14 +150,12 @@ const remove = async (row: RequirementRow) => {
                                 }}</Badge>
                             </td>
                             <td class="space-x-3 px-4 py-2 text-right text-xs">
-                                <button
-                                    v-if="row.can_edit"
-                                    type="button"
+                                <Link
+                                    :href="requirementsShow(row.id)"
                                     class="text-primary hover:underline"
-                                    @click="openEdit(row)"
                                 >
-                                    Edit
-                                </button>
+                                    Open
+                                </Link>
                                 <button
                                     v-if="row.can_delete"
                                     type="button"
@@ -179,8 +173,8 @@ const remove = async (row: RequirementRow) => {
 
         <RequirementFormModal
             v-model:open="modalOpen"
-            :mode="modalMode"
-            :target="editing"
+            mode="create"
+            @created="onCreated"
         />
     </div>
 </template>

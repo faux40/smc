@@ -126,10 +126,9 @@ class BulkAssignmentsController extends Controller
             ->get()
             ->keyBy('id');
 
-        $repeating = (bool) $data['repeating'];
         $newAssignments = [];
 
-        DB::transaction(function () use ($orgId, $toCreate, $requirements, $data, $repeating, &$newAssignments) {
+        DB::transaction(function () use ($orgId, $toCreate, $requirements, $data, &$newAssignments) {
             foreach ($toCreate as $pair) {
                 /** @var Requirement $req */
                 $req = $requirements[$pair['requirement_id']];
@@ -139,10 +138,6 @@ class BulkAssignmentsController extends Controller
                     'requirement_id' => $req->id,
                     'name' => $req->name,
                     'description' => $req->description,
-                    'initial_only' => (bool) $data['initial_only'],
-                    'repeating' => $repeating,
-                    'std_freq_id' => $repeating ? $data['std_freq_id'] : null,
-                    'as_needed' => (bool) $data['as_needed'],
                     'start_date' => $data['start_date'],
                     'end_date' => $data['end_date'] ?? null,
                 ]);

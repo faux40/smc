@@ -132,51 +132,20 @@ class BulkAssignmentsApiTest extends TestCase
                     ['user_id' => $userA->id, 'requirement_id' => $reqB->id],
                     ['user_id' => $userB->id, 'requirement_id' => $reqA->id],
                 ],
-                'initial_only' => false,
-                'repeating' => true,
-                'std_freq_id' => null,
-                'as_needed' => false,
-                'start_date' => '2026-05-12',
-            ])
-            ->assertStatus(422)
-            ->json();
-
-        // std_freq required because repeating=true — sanity that the
-        // shared timing rules fire on bulk too.
-        $this->assertArrayHasKey('std_freq_id', $response['errors']);
-    }
-
-    public function test_store_creates_with_initial_only_timing(): void
-    {
-        Event::fake([AssignmentCreated::class]);
-        [$org, $manager] = $this->scaffoldOrg();
-        $userA = User::factory()->for($org, 'organization')->create();
-        $userB = User::factory()->for($org, 'organization')->create();
-        $reqA = Requirement::factory()->for($org, 'organization')->create();
-
-        $response = $this->actingAs($manager)
-            ->postJson('/api/bulk-assignments', [
-                'pairs' => [
-                    ['user_id' => $userA->id, 'requirement_id' => $reqA->id],
-                    ['user_id' => $userB->id, 'requirement_id' => $reqA->id],
-                ],
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertCreated()
             ->json();
 
-        $this->assertSame(2, $response['created_count']);
+        $this->assertSame(3, $response['created_count']);
         $this->assertSame(0, $response['skipped_count']);
         $this->assertDatabaseHas('assignments', [
-            'user_id' => $userA->id, 'requirement_id' => $reqA->id, 'initial_only' => true,
+            'user_id' => $userA->id, 'requirement_id' => $reqA->id,
         ]);
         $this->assertDatabaseHas('assignments', [
             'user_id' => $userB->id, 'requirement_id' => $reqA->id,
         ]);
-        Event::assertDispatchedTimes(AssignmentCreated::class, 2);
+        Event::assertDispatchedTimes(AssignmentCreated::class, 3);
     }
 
     public function test_store_skips_existing_pairs(): void
@@ -199,9 +168,6 @@ class BulkAssignmentsApiTest extends TestCase
                     ['user_id' => $userA->id, 'requirement_id' => $reqA->id], // already assigned
                     ['user_id' => $userB->id, 'requirement_id' => $reqA->id], // new
                 ],
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertCreated()
@@ -225,9 +191,6 @@ class BulkAssignmentsApiTest extends TestCase
                     ['user_id' => $userA->id, 'requirement_id' => $reqA->id],
                     ['user_id' => $userA->id, 'requirement_id' => $reqA->id], // duplicate
                 ],
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertCreated()
@@ -249,9 +212,6 @@ class BulkAssignmentsApiTest extends TestCase
                 'pairs' => [
                     ['user_id' => $userA->id, 'requirement_id' => $reqA->id],
                 ],
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertCreated();
@@ -277,9 +237,6 @@ class BulkAssignmentsApiTest extends TestCase
                 'pairs' => [
                     ['user_id' => $userB->id, 'requirement_id' => $reqA->id],
                 ],
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertStatus(422);
@@ -297,32 +254,9 @@ class BulkAssignmentsApiTest extends TestCase
                 'pairs' => [
                     ['user_id' => $user->id, 'requirement_id' => $req->id],
                 ],
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertForbidden();
-    }
-
-    public function test_store_rejects_no_timing_flag(): void
-    {
-        $org = Organization::factory()->create();
-        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
-        $user = User::factory()->for($org, 'organization')->create();
-        $req = Requirement::factory()->for($org, 'organization')->create();
-
-        $this->actingAs($manager)
-            ->postJson('/api/bulk-assignments', [
-                'pairs' => [
-                    ['user_id' => $user->id, 'requirement_id' => $req->id],
-                ],
-                'initial_only' => false,
-                'repeating' => false,
-                'as_needed' => false,
-                'start_date' => '2026-05-12',
-            ])
-            ->assertStatus(422);
     }
 
     public function test_store_requires_at_least_one_pair(): void
@@ -333,9 +267,6 @@ class BulkAssignmentsApiTest extends TestCase
         $this->actingAs($manager)
             ->postJson('/api/bulk-assignments', [
                 'pairs' => [],
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertStatus(422)

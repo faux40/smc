@@ -581,19 +581,29 @@ class UserComplianceCalculator
         ];
     }
 
+    /**
+     * Human label for the requirement's element-timing mix. Timing lives on
+     * the elements (a requirement can mix repeating / initial-only /
+     * as-needed), so this summarises the breakdown rather than emitting a
+     * single per-assignment flag.
+     */
     private function timingLabel(Assignment $a): string
     {
-        if ($a->initial_only) {
-            return 'Initial-only';
+        $summary = $a->requirement?->elementTimingSummary()
+            ?? ['initial' => 0, 'repeating' => 0, 'as_needed' => 0, 'none' => 0];
+
+        $parts = [];
+        if ($summary['repeating'] > 0) {
+            $parts[] = $summary['repeating'].' repeating';
         }
-        if ($a->as_needed) {
-            return 'As-needed';
+        if ($summary['initial'] > 0) {
+            $parts[] = $summary['initial'].' initial-only';
         }
-        if ($a->repeating) {
-            return 'Repeating';
+        if ($summary['as_needed'] > 0) {
+            $parts[] = $summary['as_needed'].' as-needed';
         }
 
-        return '—';
+        return $parts === [] ? '—' : implode(', ', $parts);
     }
 
     /**

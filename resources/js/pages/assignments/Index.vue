@@ -9,9 +9,11 @@
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
+import AssignmentPill from '@/components/AssignmentPill.vue';
 import AsyncState from '@/components/AsyncState.vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { realtimeTabId } from '@/echo';
 import AssignmentFormModal from '@/pages/assignments/Partials/AssignmentFormModal.vue';
@@ -59,6 +61,11 @@ const canCreate = computed(() =>
 const userPicker = ref<UserPickerRow[]>([]);
 const userFilter = ref('');
 const requirementFilter = ref('');
+const search = ref('');
+
+type SortKey = 'user' | 'count';
+const sortKey = ref<SortKey>('user');
+const sortAsc = ref(true);
 
 const modalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
@@ -95,22 +102,106 @@ const userById = (id: string) => userPicker.value.find((u) => u.id === id);
 const requirementById = (id: string) =>
     requirements.library.find((r) => r.id === id);
 
-const filteredRows = computed(() => {
-    return store.rows.filter((a) => {
+const userName = (id: string): string => {
+    const u = userById(id);
+
+    return u
+        ? [u.f_name, u.l_name].filter(Boolean).join(' ') || u.email || ''
+        : '';
+};
+const reqName = (row: AssignmentRow): string =>
+    requirementById(row.requirement_id)?.name ?? row.name ?? '';
+
+// One row per user; their assignments become timing-coded pills. Filters
+// narrow which assignments count toward a row, and a row drops out once it
+// has no matching assignments left.
+interface UserGroup {
+    user_id: string;
+    name: string;
+    email: string | null;
+    assignments: AssignmentRow[];
+}
+
+const userGroups = computed<UserGroup[]>(() => {
+    const q = search.value.trim().toLowerCase();
+    const byUser = new Map<string, AssignmentRow[]>();
+
+    for (const a of store.rows) {
         if (userFilter.value && a.user_id !== userFilter.value) {
-            return false;
+            continue;
         }
 
         if (
             requirementFilter.value &&
             a.requirement_id !== requirementFilter.value
         ) {
-            return false;
+            continue;
         }
 
-        return true;
+        const list = byUser.get(a.user_id) ?? [];
+        list.push(a);
+        byUser.set(a.user_id, list);
+    }
+
+    const groups: UserGroup[] = [];
+
+    for (const [user_id, assignments] of byUser) {
+        const name = userName(user_id) || user_id;
+        const email = userById(user_id)?.email ?? null;
+
+        // Search matches either the person or any of their requirements;
+        // a person match keeps the whole row so the context stays intact.
+        if (q) {
+            const userMatch = `${name} ${email ?? ''}`
+                .toLowerCase()
+                .includes(q);
+            const reqMatch = assignments.some((a) =>
+                reqName(a).toLowerCase().includes(q),
+            );
+
+            if (!userMatch && !reqMatch) {
+                continue;
+            }
+        }
+
+        assignments.sort((a, b) => reqName(a).localeCompare(reqName(b)));
+        groups.push({ user_id, name, email, assignments });
+    }
+
+    const dir = sortAsc.value ? 1 : -1;
+
+    groups.sort((a, b) => {
+        const cmp =
+            sortKey.value === 'count'
+                ? a.assignments.length - b.assignments.length
+                : a.name.localeCompare(b.name);
+
+        return cmp * dir;
     });
+
+    return groups;
 });
+
+const shownAssignmentCount = computed(() =>
+    userGroups.value.reduce((n, g) => n + g.assignments.length, 0),
+);
+
+function toggleSort(key: SortKey): void {
+    if (sortKey.value === key) {
+        sortAsc.value = !sortAsc.value;
+    } else {
+        sortKey.value = key;
+        sortAsc.value = true;
+    }
+}
+
+function sortIndicator(key: SortKey): string {
+    if (sortKey.value !== key) {
+        return '';
+    }
+
+    return sortAsc.value ? '▲' : '▼';
+}
 
 const sortedUsers = computed(() =>
     [...userPicker.value].sort((a, b) =>
@@ -121,9 +212,14 @@ const sortedRequirements = computed(() =>
     [...requirements.library].sort((a, b) => a.name.localeCompare(b.name)),
 );
 
-const openCreate = () => {
+// Pre-selected user for the per-row quick-add ("+ Add"); null for the
+// top-level "+ New assignment".
+const createUserId = ref<string | null>(null);
+
+const openCreate = (userId: string | null = null) => {
     modalMode.value = 'create';
     editing.value = null;
+    createUserId.value = userId;
     modalOpen.value = true;
 };
 
@@ -131,28 +227,6 @@ const openEdit = (row: AssignmentRow) => {
     modalMode.value = 'edit';
     editing.value = row;
     modalOpen.value = true;
-};
-
-const remove = async (row: AssignmentRow) => {
-    const userName = (() => {
-        const u = userById(row.user_id);
-
-        return u ? [u.f_name, u.l_name].filter(Boolean).join(' ') : 'user';
-    })();
-
-    if (
-        !window.confirm(`Soft-delete assignment "${row.name}" for ${userName}?`)
-    ) {
-        return;
-    }
-
-    error.value = null;
-
-    try {
-        await store.destroy(row.id);
-    } catch (e) {
-        error.value = (e as Error).message;
-    }
 };
 
 function defaultHeaders(): Record<string, string> {
@@ -184,6 +258,17 @@ function defaultHeaders(): Record<string, string> {
         </div>
 
         <div class="flex flex-wrap items-end gap-3">
+            <div class="grid gap-1">
+                <Label for="filter_search" class="text-xs">Search</Label>
+                <Input
+                    id="filter_search"
+                    v-model="search"
+                    type="search"
+                    placeholder="Search user or requirement…"
+                    class="h-8 w-64"
+                    aria-label="Search assignments"
+                />
+            </div>
             <div class="grid gap-1">
                 <Label for="filter_user" class="text-xs">Filter by user</Label>
                 <select
@@ -221,14 +306,46 @@ function defaultHeaders(): Record<string, string> {
                 </select>
             </div>
             <span class="text-xs text-muted-foreground">
-                {{ filteredRows.length }} of {{ store.rows.length }}
+                {{ userGroups.length }} users · {{ shownAssignmentCount }} of
+                {{ store.rows.length }}
+                assignments
+            </span>
+        </div>
+
+        <div
+            class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground"
+        >
+            <span>Each dot is one requirement element, by timing:</span>
+            <span class="inline-flex items-center gap-1">
+                <span
+                    class="h-2.5 w-2.5 rounded-full bg-emerald-400 ring-1 ring-emerald-300 ring-inset dark:bg-emerald-500"
+                />
+                Repeating
+            </span>
+            <span class="inline-flex items-center gap-1">
+                <span
+                    class="h-2.5 w-2.5 rounded-full bg-sky-400 ring-1 ring-sky-300 ring-inset dark:bg-sky-500"
+                />
+                Initial-only
+            </span>
+            <span class="inline-flex items-center gap-1">
+                <span
+                    class="h-2.5 w-2.5 rounded-full bg-yellow-400 ring-1 ring-yellow-300 ring-inset dark:bg-yellow-500"
+                />
+                As-needed
+            </span>
+            <span class="inline-flex items-center gap-1">
+                <span
+                    class="h-2.5 w-2.5 rounded-full bg-neutral-300 ring-1 ring-neutral-300 ring-inset dark:bg-neutral-500"
+                />
+                No timing set
             </span>
         </div>
 
         <AsyncState
             :loading="loading"
             :error="error"
-            :empty="filteredRows.length === 0"
+            :empty="userGroups.length === 0"
         >
             <template #empty>
                 <div
@@ -245,84 +362,64 @@ function defaultHeaders(): Record<string, string> {
                 <table class="min-w-full divide-y divide-border text-sm">
                     <thead class="bg-muted/40">
                         <tr>
-                            <th class="px-4 py-2 text-left font-medium">
-                                User
+                            <th
+                                class="w-64 px-4 py-2 text-left align-top font-medium"
+                            >
+                                <button
+                                    type="button"
+                                    class="hover:underline"
+                                    @click="toggleSort('user')"
+                                >
+                                    User {{ sortIndicator('user') }}
+                                </button>
                             </th>
                             <th class="px-4 py-2 text-left font-medium">
-                                Requirement
+                                <button
+                                    type="button"
+                                    class="hover:underline"
+                                    @click="toggleSort('count')"
+                                >
+                                    Assignments {{ sortIndicator('count') }}
+                                </button>
                             </th>
-                            <th class="px-4 py-2 text-left font-medium">
-                                Timing
-                            </th>
-                            <th class="px-4 py-2 text-left font-medium">
-                                Start
-                            </th>
-                            <th class="px-4 py-2 text-left font-medium">End</th>
-                            <th class="px-4 py-2"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-border">
-                        <tr v-for="row in filteredRows" :key="row.id">
-                            <td class="px-4 py-2">
-                                <template v-if="userById(row.user_id)">
-                                    {{
-                                        [
-                                            userById(row.user_id)?.f_name,
-                                            userById(row.user_id)?.l_name,
-                                        ]
-                                            .filter(Boolean)
-                                            .join(' ')
-                                    }}
-                                    <div
-                                        v-if="userById(row.user_id)?.email"
-                                        class="text-xs text-muted-foreground"
+                        <tr
+                            v-for="group in userGroups"
+                            :key="group.user_id"
+                            class="align-top"
+                        >
+                            <td class="px-4 py-3">
+                                <div class="font-medium">{{ group.name }}</div>
+                                <div
+                                    v-if="group.email"
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    {{ group.email }}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div
+                                    class="flex flex-wrap items-center gap-1.5"
+                                >
+                                    <AssignmentPill
+                                        v-for="a in group.assignments"
+                                        :key="a.id"
+                                        :label="reqName(a)"
+                                        :summary="a.element_timing"
+                                        @click="openEdit(a)"
+                                    />
+                                    <button
+                                        v-if="canCreate"
+                                        type="button"
+                                        class="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        title="Add an assignment for this user"
+                                        @click="openCreate(group.user_id)"
                                     >
-                                        {{ userById(row.user_id)?.email }}
-                                    </div>
-                                </template>
-                                <span v-else class="text-muted-foreground"
-                                    >—</span
-                                >
-                            </td>
-                            <td class="px-4 py-2">
-                                {{
-                                    requirementById(row.requirement_id)?.name ??
-                                    row.name
-                                }}
-                            </td>
-                            <td class="px-4 py-2 text-xs">
-                                <span v-if="row.initial_only"
-                                    >Initial-only</span
-                                >
-                                <span v-else-if="row.repeating">Repeating</span>
-                                <span v-else-if="row.as_needed">As-needed</span>
-                                <span v-else class="text-muted-foreground"
-                                    >—</span
-                                >
-                            </td>
-                            <td class="px-4 py-2 text-xs">
-                                {{ row.start_date ?? '—' }}
-                            </td>
-                            <td class="px-4 py-2 text-xs">
-                                {{ row.end_date ?? '—' }}
-                            </td>
-                            <td class="space-x-3 px-4 py-2 text-right text-xs">
-                                <button
-                                    v-if="row.can_edit"
-                                    type="button"
-                                    class="text-primary hover:underline"
-                                    @click="openEdit(row)"
-                                >
-                                    Edit
-                                </button>
-                                <button
-                                    v-if="row.can_delete"
-                                    type="button"
-                                    class="text-destructive hover:underline"
-                                    @click="remove(row)"
-                                >
-                                    Delete
-                                </button>
+                                        + Add
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     </tbody>
@@ -334,6 +431,7 @@ function defaultHeaders(): Record<string, string> {
             v-model:open="modalOpen"
             :mode="modalMode"
             :target="editing"
+            :initial-user-id="createUserId"
         />
     </div>
 </template>

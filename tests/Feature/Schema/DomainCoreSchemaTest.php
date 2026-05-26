@@ -94,11 +94,15 @@ class DomainCoreSchemaTest extends TestCase
     {
         $this->assertTrue(Schema::hasColumns('assignments', [
             'id', 'org_id', 'user_id', 'requirement_id',
-            'initial_only', 'repeating', 'std_freq_id', 'as_needed',
             'name', 'description',
             'start_date', 'end_date',
             'created_at', 'updated_at', 'deleted_at',
         ]));
+        // Timing was dropped — it lives on the requirement's elements now,
+        // not flattened onto the assignment. Assert it's gone so we can't
+        // regress.
+        $this->assertFalse(Schema::hasColumn('assignments', 'initial_only'));
+        $this->assertFalse(Schema::hasColumn('assignments', 'std_freq_id'));
 
         $org = Organization::factory()->create();
         $user = User::factory()->for($org, 'organization')->create();

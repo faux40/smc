@@ -19,10 +19,6 @@ class Assignment extends Model
         'org_id',
         'user_id',
         'requirement_id',
-        'initial_only',
-        'repeating',
-        'std_freq_id',
-        'as_needed',
         'name',
         'description',
         'start_date',
@@ -30,9 +26,6 @@ class Assignment extends Model
     ];
 
     protected $casts = [
-        'initial_only' => 'boolean',
-        'repeating' => 'boolean',
-        'as_needed' => 'boolean',
         'start_date' => 'date',
         'end_date' => 'date',
     ];
@@ -45,10 +38,5 @@ class Assignment extends Model
     public function requirement(): BelongsTo
     {
         return $this->belongsTo(Requirement::class, 'requirement_id');
-    }
-
-    public function stdFrequency(): BelongsTo
-    {
-        return $this->belongsTo(StdFrequency::class, 'std_freq_id');
     }
 }

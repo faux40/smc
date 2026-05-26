@@ -27,7 +27,6 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { realtimeTabId } from '@/echo';
-import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
 import { useTagsStore } from '@/stores/tags';
 import type { TagRow } from '@/stores/tags';
 
@@ -61,7 +60,6 @@ defineOptions({
 });
 
 const tagsStore = useTagsStore();
-const frequencies = useStdFrequenciesStore();
 const page = usePage();
 
 const authUser = computed(
@@ -93,10 +91,6 @@ const previewError = ref<string | null>(null);
 const selection = reactive<Record<string, Record<string, boolean>>>({});
 
 const form = reactive({
-    initial_only: false,
-    repeating: true,
-    std_freq_id: null as string | null,
-    as_needed: false,
     start_date: new Date().toISOString().slice(0, 10),
     end_date: '' as string,
 });
@@ -110,7 +104,7 @@ onMounted(async () => {
     }
 
     try {
-        await Promise.all([tagsStore.loadLibrary(), frequencies.load()]);
+        await tagsStore.loadLibrary();
     } catch (e) {
         previewError.value = (e as Error).message;
     }
@@ -255,10 +249,6 @@ const submit = async () => {
     try {
         const payload = {
             pairs: pickedPairs.value,
-            initial_only: form.initial_only,
-            repeating: form.repeating,
-            std_freq_id: form.repeating ? form.std_freq_id : null,
-            as_needed: form.as_needed,
             start_date: form.start_date,
             end_date: form.end_date === '' ? null : form.end_date,
         };
@@ -491,48 +481,12 @@ function defaultHeaders(): Record<string, string> {
 
                     <div class="grid gap-4 rounded-md border border-border p-4">
                         <p class="text-sm font-medium">
-                            Timing — applied to every new assignment
+                            Active window — applied to every new assignment
                         </p>
-
-                        <div class="flex flex-wrap gap-4 text-sm">
-                            <label class="flex items-center gap-2">
-                                <Checkbox v-model="form.initial_only" />
-                                Initial-only
-                            </label>
-                            <label class="flex items-center gap-2">
-                                <Checkbox v-model="form.repeating" />
-                                Repeating
-                            </label>
-                            <label class="flex items-center gap-2">
-                                <Checkbox v-model="form.as_needed" />
-                                As-needed
-                            </label>
-                        </div>
-                        <InputError :message="errors.initial_only" />
-                        <InputError :message="errors.repeating" />
-
-                        <div v-if="form.repeating" class="grid max-w-xs gap-2">
-                            <Label for="freq">Frequency</Label>
-                            <Select v-model="form.std_freq_id">
-                                <SelectTrigger id="freq">
-                                    <SelectValue
-                                        placeholder="Pick a frequency…"
-                                    />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem
-                                        v-for="f in frequencies.library"
-                                        :key="f.id"
-                                        :value="f.id"
-                                    >
-                                        {{ f.name }} ({{ f.repeat_days }} day{{
-                                            f.repeat_days === 1 ? '' : 's'
-                                        }})
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError :message="errors.std_freq_id" />
-                        </div>
+                        <p class="text-xs text-muted-foreground">
+                            Timing is set per training on each requirement, not
+                            here.
+                        </p>
 
                         <div class="grid max-w-md grid-cols-2 gap-3">
                             <div class="grid gap-2">

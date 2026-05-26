@@ -16,16 +16,26 @@ import { computed, ref } from 'vue';
 import { useRealtime } from '@/composables/useRealtime';
 import { realtimeTabId } from '@/echo';
 
+/**
+ * Per-timing-type element counts for the assignment's requirement. Timing
+ * lives on the requirement's elements (a requirement can mix repeating /
+ * initial-only / as-needed), so the assignment carries the breakdown rather
+ * than a single flag. Drives the dots on AssignmentPill.
+ */
+export interface ElementTimingSummary {
+    initial: number;
+    repeating: number;
+    as_needed: number;
+    none: number;
+}
+
 export interface AssignmentRow {
     id: string;
     user_id: string;
     requirement_id: string;
     name: string;
     description: string | null;
-    initial_only: boolean;
-    repeating: boolean;
-    std_freq_id: string | null;
-    as_needed: boolean;
+    element_timing: ElementTimingSummary;
     start_date: string | null;
     end_date: string | null;
     can_edit: boolean;
@@ -35,12 +45,7 @@ export interface AssignmentRow {
 export interface AssignmentCreatePayload {
     user_id: string;
     requirement_id: string;
-    name: string;
     description: string | null;
-    initial_only: boolean;
-    repeating: boolean;
-    std_freq_id: string | null;
-    as_needed: boolean;
     start_date: string;
     end_date: string | null;
 }

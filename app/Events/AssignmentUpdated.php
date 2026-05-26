@@ -30,10 +30,8 @@ class AssignmentUpdated implements ShouldBroadcast
             'requirement_id' => $this->assignment->requirement_id,
             'name' => $this->assignment->name,
             'description' => $this->assignment->description,
-            'initial_only' => $this->assignment->initial_only,
-            'repeating' => $this->assignment->repeating,
-            'std_freq_id' => $this->assignment->std_freq_id,
-            'as_needed' => $this->assignment->as_needed,
+            'element_timing' => $this->assignment->requirement?->elementTimingSummary()
+                ?? ['initial' => 0, 'repeating' => 0, 'as_needed' => 0, 'none' => 0],
             'start_date' => optional($this->assignment->start_date)->toDateString(),
             'end_date' => optional($this->assignment->end_date)->toDateString(),
             'origin_tab' => RealtimeOrigin::tab(),

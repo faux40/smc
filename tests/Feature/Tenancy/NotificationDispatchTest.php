@@ -59,16 +59,13 @@ class NotificationDispatchTest extends TestCase
             ->postJson('/api/assignments', [
                 'user_id' => $member->id,
                 'requirement_id' => $req->id,
-                'name' => 'OSHA Test',
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertCreated();
 
-        Notification::assertSentTo($member, AssignmentCreatedForYou::class, function ($n) {
-            return $n->assignment->name === 'OSHA Test';
+        // Name is the requirement snapshot the server copies in.
+        Notification::assertSentTo($member, AssignmentCreatedForYou::class, function ($n) use ($req) {
+            return $n->assignment->name === $req->name;
         });
         Notification::assertNotSentTo($admin, AssignmentCreatedForYou::class);
     }
@@ -86,9 +83,6 @@ class NotificationDispatchTest extends TestCase
                 'pairs' => [
                     ['user_id' => $member->id, 'requirement_id' => $req->id],
                 ],
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertCreated();
@@ -111,10 +105,6 @@ class NotificationDispatchTest extends TestCase
             ->postJson('/api/assignments', [
                 'user_id' => $admin->id,
                 'requirement_id' => $req->id,
-                'name' => 'Self assigned',
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertCreated();
@@ -170,10 +160,6 @@ class NotificationDispatchTest extends TestCase
             ->postJson('/api/assignments', [
                 'user_id' => $member->id,
                 'requirement_id' => $req->id,
-                'name' => 'OSHA Test',
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertCreated();

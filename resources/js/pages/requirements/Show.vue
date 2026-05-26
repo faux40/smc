@@ -5,8 +5,11 @@ import AsyncState from '@/components/AsyncState.vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { elementTimingLabel } from '@/lib/timing';
+import RequirementFormModal from '@/pages/requirements/Partials/RequirementFormModal.vue';
 import RqmtElementFormModal from '@/pages/requirements/Partials/RqmtElementFormModal.vue';
 import { page as requirementsPage } from '@/routes/requirements';
+import { useRequirementsStore } from '@/stores/requirements';
 import { useRqmtElementsStore } from '@/stores/rqmtElements';
 import type { RqmtElementRow } from '@/stores/rqmtElements';
 import { useTrainingsStore } from '@/stores/trainings';
@@ -26,6 +29,7 @@ defineOptions({
 });
 
 const store = useRqmtElementsStore();
+const requirementsStore = useRequirementsStore();
 const trainings = useTrainingsStore();
 const page = usePage();
 const authUser = computed(
@@ -48,19 +52,30 @@ const canManage = computed(() =>
 const modalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
 const editing = ref<RqmtElementRow | null>(null);
+const detailsModalOpen = ref(false);
 const error = ref<string | null>(null);
 const loading = ref(true);
 
 const elements = computed(() => store.listFor(props.requirement.id));
 
+// Prefer the live store row (reflects inline edits + RequirementUpdated
+// broadcasts); fall back to the server-rendered Inertia prop on first paint
+// before the library has loaded.
+const storeRequirement = computed(() =>
+    requirementsStore.library.find((r) => r.id === props.requirement.id),
+);
+const requirement = computed(() => storeRequirement.value ?? props.requirement);
+
 onMounted(async () => {
     if (authUser.value?.org_id) {
         store.subscribe(authUser.value.org_id);
+        requirementsStore.subscribe(authUser.value.org_id);
     }
 
     try {
         await Promise.all([
             store.loadFor(props.requirement.id),
+            requirementsStore.load(),
             trainings.load(),
         ]);
     } catch (e) {
@@ -108,39 +123,30 @@ const moduleLabel = (row: RqmtElementRow): string => {
 
     return row.module_type;
 };
-
-const timingSummary = (row: RqmtElementRow): string => {
-    const parts: string[] = [];
-
-    if (row.initial_only) {
-        parts.push('initial-only');
-    }
-
-    if (row.repeating) {
-        parts.push('repeating');
-    }
-
-    if (row.as_needed) {
-        parts.push('as-needed');
-    }
-
-    return parts.join(' · ');
-};
 </script>
 
 <template>
-    <Head :title="`Requirement: ${props.requirement.name}`" />
+    <Head :title="`Requirement: ${requirement.name}`" />
 
     <div class="flex flex-col gap-6 p-4">
         <div class="flex items-start justify-between gap-4">
             <Heading
-                :title="props.requirement.name"
+                :title="requirement.name"
                 :description="
-                    props.requirement.description ??
-                    'Elements bind modules to this requirement.'
+                    requirement.description ??
+                    'Elements bind trainings to this requirement.'
                 "
             />
-            <Button v-if="canManage" @click="openCreate">+ Add element</Button>
+            <div v-if="canManage" class="flex shrink-0 gap-2">
+                <Button
+                    v-if="storeRequirement"
+                    variant="outline"
+                    @click="detailsModalOpen = true"
+                >
+                    Edit details
+                </Button>
+                <Button @click="openCreate">+ Add element</Button>
+            </div>
         </div>
 
         <AsyncState
@@ -191,7 +197,7 @@ const timingSummary = (row: RqmtElementRow): string => {
                             </td>
                             <td class="px-4 py-2">
                                 <Badge variant="secondary">{{
-                                    timingSummary(row)
+                                    elementTimingLabel(row)
                                 }}</Badge>
                             </td>
                             <td class="space-x-3 px-4 py-2 text-right text-xs">
@@ -223,6 +229,13 @@ const timingSummary = (row: RqmtElementRow): string => {
             :mode="modalMode"
             :requirement-id="props.requirement.id"
             :target="editing"
+        />
+
+        <RequirementFormModal
+            v-if="storeRequirement"
+            v-model:open="detailsModalOpen"
+            mode="edit"
+            :target="storeRequirement"
         />
     </div>
 </template>

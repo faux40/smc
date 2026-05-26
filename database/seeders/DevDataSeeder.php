@@ -134,7 +134,7 @@ class DevDataSeeder extends Seeder
             $users = $this->seedUsers($org);
             $trainings = $this->seedTrainings($org, $freqByName);
             $requirements = $this->seedRequirements($org, $trainings);
-            $this->seedAssignments($org, $users, $requirements, $freqByName);
+            $this->seedAssignments($org, $users, $requirements);
         });
     }
 
@@ -252,9 +252,7 @@ class DevDataSeeder extends Seeder
         Organization $org,
         Collection $users,
         Collection $requirements,
-        Collection $freqByName,
     ): void {
-        $annualId = $freqByName['Annual']->id;
         $shuffled = $users->shuffle();
 
         $fullyCovered = $shuffled->take(2);
@@ -263,19 +261,19 @@ class DevDataSeeder extends Seeder
 
         foreach ($fullyCovered as $user) {
             foreach ($requirements as $req) {
-                $this->createAssignment($org->id, $user, $req, $annualId);
+                $this->createAssignment($org->id, $user, $req);
             }
         }
 
         foreach ($partial as $user) {
             $count = random_int(1, 3);
             foreach ($requirements->shuffle()->take($count) as $req) {
-                $this->createAssignment($org->id, $user, $req, $annualId);
+                $this->createAssignment($org->id, $user, $req);
             }
         }
     }
 
-    private function createAssignment(string $orgId, User $user, Requirement $req, string $stdFreqId): void
+    private function createAssignment(string $orgId, User $user, Requirement $req): void
     {
         Assignment::create([
             'org_id' => $orgId,
@@ -283,10 +281,6 @@ class DevDataSeeder extends Seeder
             'requirement_id' => $req->id,
             'name' => $req->name,
             'description' => $req->description,
-            'initial_only' => false,
-            'repeating' => true,
-            'std_freq_id' => $stdFreqId,
-            'as_needed' => false,
             'start_date' => now()->subDays(random_int(30, 365))->toDateString(),
             'end_date' => null,
         ]);

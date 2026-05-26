@@ -29,4 +29,32 @@ class Requirement extends Model
     {
         return $this->hasMany(Assignment::class, 'requirement_id');
     }
+
+    /**
+     * Count this requirement's elements by their timing type. Drives the
+     * element-timing summary shown on assignment pills (a requirement can
+     * mix repeating / initial-only / as-needed elements, so callers render
+     * the breakdown rather than a single label). Reads the loaded
+     * `elements` relation — eager-load it to avoid N+1.
+     *
+     * @return array{initial: int, repeating: int, as_needed: int, none: int}
+     */
+    public function elementTimingSummary(): array
+    {
+        $summary = ['initial' => 0, 'repeating' => 0, 'as_needed' => 0, 'none' => 0];
+
+        foreach ($this->elements as $element) {
+            if ($element->initial_only) {
+                $summary['initial']++;
+            } elseif ($element->repeating) {
+                $summary['repeating']++;
+            } elseif ($element->as_needed) {
+                $summary['as_needed']++;
+            } else {
+                $summary['none']++;
+            }
+        }
+
+        return $summary;
+    }
 }

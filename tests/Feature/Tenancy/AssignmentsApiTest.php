@@ -8,7 +8,8 @@ use App\Events\AssignmentUpdated;
 use App\Models\Assignment;
 use App\Models\Organization;
 use App\Models\Requirement;
-use App\Models\StdFrequency;
+use App\Models\RqmtElement;
+use App\Models\Training;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -88,9 +89,6 @@ class AssignmentsApiTest extends TestCase
                 'user_id' => $member->id,
                 'requirement_id' => $req->id,
                 'name' => 'X',
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertCreated()
@@ -100,9 +98,6 @@ class AssignmentsApiTest extends TestCase
         $this->actingAs($manager)
             ->patchJson("/api/assignments/{$created['id']}", [
                 'name' => 'Renamed',
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertForbidden();
@@ -166,31 +161,63 @@ class AssignmentsApiTest extends TestCase
         $org = Organization::factory()->create();
         $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
         $member = User::factory()->for($org, 'organization')->create();
-        $req = Requirement::factory()->for($org, 'organization')->create();
-        $freq = StdFrequency::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create(['name' => 'Annual Forklift']);
 
         $this->actingAs($admin)
             ->postJson('/api/assignments', [
                 'user_id' => $member->id,
                 'requirement_id' => $req->id,
-                'name' => 'Annual Forklift',
                 'description' => 'OSHA',
-                'initial_only' => false,
-                'repeating' => true,
-                'std_freq_id' => $freq->id,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
                 'end_date' => null,
             ])
             ->assertCreated();
 
+        // Name is copied from the requirement server-side (client omits it).
         $this->assertDatabaseHas('assignments', [
             'org_id' => $org->id,
             'user_id' => $member->id,
             'requirement_id' => $req->id,
             'name' => 'Annual Forklift',
-            'repeating' => true,
         ]);
+    }
+
+    public function test_list_includes_element_timing_summary(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $member = User::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+
+        // Two repeating elements + one as-needed on the requirement.
+        foreach ([['repeating' => true], ['repeating' => true], ['as_needed' => true]] as $attrs) {
+            RqmtElement::factory()
+                ->for($org, 'organization')
+                ->for($req, 'requirement')
+                ->state(array_merge([
+                    'module_type' => Training::class,
+                    'module_id' => $training->id,
+                    'initial_only' => false,
+                    'repeating' => false,
+                    'as_needed' => false,
+                ], $attrs))
+                ->create();
+        }
+
+        Assignment::factory()
+            ->for($org, 'organization')
+            ->for($member, 'user')
+            ->for($req, 'requirement')
+            ->create();
+
+        $this->actingAs($admin)
+            ->getJson('/api/assignments')
+            ->assertOk()
+            ->assertJsonPath('0.element_timing.repeating', 2)
+            ->assertJsonPath('0.element_timing.as_needed', 1)
+            ->assertJsonPath('0.element_timing.initial', 0)
+            ->assertJsonPath('0.element_timing.none', 0);
     }
 
     public function test_selfedit_cannot_create(): void
@@ -205,9 +232,6 @@ class AssignmentsApiTest extends TestCase
                 'user_id' => $member->id,
                 'requirement_id' => $req->id,
                 'name' => 'X',
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertForbidden();
@@ -226,9 +250,6 @@ class AssignmentsApiTest extends TestCase
                 'user_id' => $userB->id,
                 'requirement_id' => $reqA->id,
                 'name' => 'X',
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertStatus(422)
@@ -248,75 +269,10 @@ class AssignmentsApiTest extends TestCase
                 'user_id' => $userA->id,
                 'requirement_id' => $reqB->id,
                 'name' => 'X',
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('requirement_id');
-    }
-
-    public function test_create_rejects_no_timing_flag(): void
-    {
-        $org = Organization::factory()->create();
-        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
-        $member = User::factory()->for($org, 'organization')->create();
-        $req = Requirement::factory()->for($org, 'organization')->create();
-
-        $this->actingAs($admin)
-            ->postJson('/api/assignments', [
-                'user_id' => $member->id,
-                'requirement_id' => $req->id,
-                'name' => 'X',
-                'initial_only' => false,
-                'repeating' => false,
-                'as_needed' => false,
-                'start_date' => '2026-05-12',
-            ])
-            ->assertStatus(422);
-    }
-
-    public function test_create_rejects_initial_and_repeating_mutex(): void
-    {
-        $org = Organization::factory()->create();
-        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
-        $member = User::factory()->for($org, 'organization')->create();
-        $req = Requirement::factory()->for($org, 'organization')->create();
-        $freq = StdFrequency::factory()->for($org, 'organization')->create();
-
-        $this->actingAs($admin)
-            ->postJson('/api/assignments', [
-                'user_id' => $member->id,
-                'requirement_id' => $req->id,
-                'name' => 'X',
-                'initial_only' => true,
-                'repeating' => true,
-                'std_freq_id' => $freq->id,
-                'as_needed' => false,
-                'start_date' => '2026-05-12',
-            ])
-            ->assertStatus(422);
-    }
-
-    public function test_create_rejects_repeating_without_freq(): void
-    {
-        $org = Organization::factory()->create();
-        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
-        $member = User::factory()->for($org, 'organization')->create();
-        $req = Requirement::factory()->for($org, 'organization')->create();
-
-        $this->actingAs($admin)
-            ->postJson('/api/assignments', [
-                'user_id' => $member->id,
-                'requirement_id' => $req->id,
-                'name' => 'X',
-                'initial_only' => false,
-                'repeating' => true,
-                'as_needed' => false,
-                'start_date' => '2026-05-12',
-            ])
-            ->assertStatus(422);
     }
 
     public function test_create_rejects_end_before_start(): void
@@ -331,14 +287,58 @@ class AssignmentsApiTest extends TestCase
                 'user_id' => $member->id,
                 'requirement_id' => $req->id,
                 'name' => 'X',
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
                 'end_date' => '2026-05-11',
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('end_date');
+    }
+
+    public function test_create_rejects_duplicate_active_assignment(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $member = User::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+
+        // An active assignment already exists for this (user, requirement).
+        Assignment::factory()
+            ->for($org, 'organization')
+            ->for($member, 'user')
+            ->for($req, 'requirement')
+            ->create(['end_date' => null]);
+
+        $this->actingAs($admin)
+            ->postJson('/api/assignments', [
+                'user_id' => $member->id,
+                'requirement_id' => $req->id,
+                'start_date' => '2026-05-12',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('requirement_id');
+    }
+
+    public function test_create_allows_reassign_after_prior_ended(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $member = User::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+
+        // A prior assignment that's been ended (end_date set) frees the pair.
+        Assignment::factory()
+            ->for($org, 'organization')
+            ->for($member, 'user')
+            ->for($req, 'requirement')
+            ->create(['end_date' => '2026-01-01']);
+
+        $this->actingAs($admin)
+            ->postJson('/api/assignments', [
+                'user_id' => $member->id,
+                'requirement_id' => $req->id,
+                'start_date' => '2026-05-12',
+            ])
+            ->assertCreated();
     }
 
     public function test_admin_can_update_assignment(): void
@@ -351,23 +351,20 @@ class AssignmentsApiTest extends TestCase
             ->for($org, 'organization')
             ->for($member, 'user')
             ->for($req, 'requirement')
-            ->create(['name' => 'Old', 'initial_only' => false, 'repeating' => false, 'as_needed' => true]);
+            ->create(['name' => 'Old']);
 
         $this->actingAs($admin)
             ->patchJson("/api/assignments/{$assignment->id}", [
-                'name' => 'Renamed',
                 'description' => 'updated',
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
                 'end_date' => '2026-06-12',
             ])
             ->assertOk();
 
         $assignment->refresh();
-        $this->assertSame('Renamed', $assignment->name);
-        $this->assertTrue($assignment->initial_only);
+        // Name is the requirement snapshot — not editable from the form.
+        $this->assertSame('Old', $assignment->name);
+        $this->assertSame('updated', $assignment->description);
         $this->assertSame('2026-06-12', $assignment->end_date->toDateString());
     }
 
@@ -387,9 +384,6 @@ class AssignmentsApiTest extends TestCase
         $this->actingAs($adminA)
             ->patchJson("/api/assignments/{$assignmentB->id}", [
                 'name' => 'hacked',
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->assertNotFound();
@@ -428,17 +422,11 @@ class AssignmentsApiTest extends TestCase
                 'user_id' => $member->id,
                 'requirement_id' => $req->id,
                 'name' => 'X',
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
                 'start_date' => '2026-05-12',
             ])
             ->json();
         $this->actingAs($admin)->patchJson("/api/assignments/{$created['id']}", [
             'name' => 'Y',
-            'initial_only' => true,
-            'repeating' => false,
-            'as_needed' => false,
             'start_date' => '2026-05-12',
         ]);
         $this->actingAs($admin)->deleteJson("/api/assignments/{$created['id']}");
