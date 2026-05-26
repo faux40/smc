@@ -44,6 +44,30 @@ class AssignmentsApiTest extends TestCase
             ->assertJsonCount(1);
     }
 
+    public function test_list_excludes_expired_assignments(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $member = User::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+        $base = fn () => Assignment::factory()
+            ->for($org, 'organization')
+            ->for($member, 'user')
+            ->for($req, 'requirement');
+
+        // Expired (past end_date) — hidden. Active (null), future end, and
+        // ending today — all shown.
+        $base()->create(['end_date' => now()->subDay()->toDateString()]);
+        $base()->create(['end_date' => null]);
+        $base()->create(['end_date' => now()->addWeek()->toDateString()]);
+        $base()->create(['end_date' => now()->toDateString()]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/assignments')
+            ->assertOk()
+            ->assertJsonCount(3);
+    }
+
     public function test_manager_can_list_assignments(): void
     {
         // Phase 13.1 broadened the AssignmentPolicy: Manager can viewAny

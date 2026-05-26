@@ -20,7 +20,15 @@ class AssignmentsController extends Controller
         Gate::authorize('viewAny', Assignment::class);
 
         $query = Assignment::query()
-            ->where('org_id', $request->user()->org_id);
+            ->where('org_id', $request->user()->org_id)
+            // Hide expired assignments: a past end_date means the window has
+            // closed (matches the calculator's `end_date < today → inactive`).
+            // end_date null = active forever; end_date today = still its last
+            // active day.
+            ->where(function ($q) {
+                $q->whereNull('end_date')
+                    ->orWhereDate('end_date', '>=', now()->toDateString());
+            });
 
         if ($request->filled('user_id')) {
             $query->where('user_id', (string) $request->query('user_id'));
