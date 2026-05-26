@@ -12,6 +12,9 @@ import { computed, onMounted, ref } from 'vue';
 import AssignmentPill from '@/components/AssignmentPill.vue';
 import AsyncState from '@/components/AsyncState.vue';
 import Heading from '@/components/Heading.vue';
+import TagFilter from '@/components/TagFilter.vue';
+import type { TagFilterMode } from '@/components/TagFilter.vue';
+import TagsListCell from '@/components/TagsListCell.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +24,9 @@ import { page as assignmentsPage } from '@/routes/assignments';
 import { useAssignmentsStore } from '@/stores/assignments';
 import type { AssignmentRow } from '@/stores/assignments';
 import { useRequirementsStore } from '@/stores/requirements';
+import { useTagsStore } from '@/stores/tags';
+
+const USER_TYPE = 'App\\Models\\User';
 
 defineOptions({
     layout: {
@@ -33,9 +39,11 @@ interface UserPickerRow {
     f_name: string;
     l_name: string;
     email: string | null;
+    tag_ids: string[];
 }
 
 const store = useAssignmentsStore();
+const tagsStore = useTagsStore();
 const requirements = useRequirementsStore();
 const page = usePage();
 
@@ -62,8 +70,10 @@ const userPicker = ref<UserPickerRow[]>([]);
 const userFilter = ref('');
 const requirementFilter = ref('');
 const search = ref('');
+const tagFilter = ref<string[]>([]);
+const tagFilterMode = ref<TagFilterMode>('and');
 
-type SortKey = 'user' | 'count';
+type SortKey = 'user' | 'count' | 'tags';
 const sortKey = ref<SortKey>('user');
 const sortAsc = ref(true);
 
@@ -76,12 +86,14 @@ const loading = ref(true);
 onMounted(async () => {
     if (authUser.value?.org_id) {
         store.subscribe(authUser.value.org_id);
+        tagsStore.subscribe(authUser.value.org_id);
     }
 
     try {
         await Promise.all([
             store.loadFor({}),
             requirements.load(),
+            tagsStore.loadLibrary(),
             loadUsers(),
         ]);
     } catch (e) {
@@ -96,6 +108,42 @@ async function loadUsers(): Promise<void> {
         headers: defaultHeaders(),
     });
     userPicker.value = data;
+
+    // Seed the tags store so each row's TagsListCell shows attached pills on
+    // first paint; TagAttached/TagDetached broadcasts keep it in sync after.
+    for (const u of data) {
+        tagsStore.setAttached({ type: USER_TYPE, id: u.id }, u.tag_ids ?? []);
+    }
+}
+
+const userTagIds = (userId: string): string[] =>
+    tagsStore.attachedTagsFor({ type: USER_TYPE, id: userId }).map((t) => t.id);
+
+// Sorted tag-name signature for the "Tags" column sort; untagged users get
+// an empty string (sort first asc / last desc).
+const tagSignature = (userId: string): string =>
+    tagsStore
+        .attachedTagsFor({ type: USER_TYPE, id: userId })
+        .map((t) => t.name.toLowerCase())
+        .sort()
+        .join(',');
+
+function userMatchesTags(userId: string): boolean {
+    if (tagFilter.value.length === 0) {
+        return true;
+    }
+
+    const ids = new Set(userTagIds(userId));
+
+    if (tagFilterMode.value === 'or') {
+        return tagFilter.value.some((id) => ids.has(id));
+    }
+
+    if (tagFilterMode.value === 'not') {
+        return !tagFilter.value.some((id) => ids.has(id));
+    }
+
+    return tagFilter.value.every((id) => ids.has(id)); // 'and'
 }
 
 const userById = (id: string) => userPicker.value.find((u) => u.id === id);
@@ -138,6 +186,10 @@ const userGroups = computed<UserGroup[]>(() => {
             continue;
         }
 
+        if (!userMatchesTags(a.user_id)) {
+            continue;
+        }
+
         const list = byUser.get(a.user_id) ?? [];
         list.push(a);
         byUser.set(a.user_id, list);
@@ -171,10 +223,17 @@ const userGroups = computed<UserGroup[]>(() => {
     const dir = sortAsc.value ? 1 : -1;
 
     groups.sort((a, b) => {
-        const cmp =
-            sortKey.value === 'count'
-                ? a.assignments.length - b.assignments.length
-                : a.name.localeCompare(b.name);
+        let cmp: number;
+
+        if (sortKey.value === 'count') {
+            cmp = a.assignments.length - b.assignments.length;
+        } else if (sortKey.value === 'tags') {
+            cmp = tagSignature(a.user_id).localeCompare(
+                tagSignature(b.user_id),
+            );
+        } else {
+            cmp = a.name.localeCompare(b.name);
+        }
 
         return cmp * dir;
     });
@@ -305,6 +364,14 @@ function defaultHeaders(): Record<string, string> {
                     </option>
                 </select>
             </div>
+            <div class="grid gap-1">
+                <Label class="text-xs">Filter by tag</Label>
+                <TagFilter
+                    v-model:tag-ids="tagFilter"
+                    v-model:mode="tagFilterMode"
+                    placeholder="Any tag…"
+                />
+            </div>
             <span class="text-xs text-muted-foreground">
                 {{ userGroups.length }} users · {{ shownAssignmentCount }} of
                 {{ store.rows.length }}
@@ -373,6 +440,17 @@ function defaultHeaders(): Record<string, string> {
                                     User {{ sortIndicator('user') }}
                                 </button>
                             </th>
+                            <th
+                                class="w-72 px-4 py-2 text-left align-top font-medium"
+                            >
+                                <button
+                                    type="button"
+                                    class="hover:underline"
+                                    @click="toggleSort('tags')"
+                                >
+                                    Tags {{ sortIndicator('tags') }}
+                                </button>
+                            </th>
                             <th class="px-4 py-2 text-left font-medium">
                                 <button
                                     type="button"
@@ -398,6 +476,12 @@ function defaultHeaders(): Record<string, string> {
                                 >
                                     {{ group.email }}
                                 </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <TagsListCell
+                                    :morphable-type="USER_TYPE"
+                                    :morphable-id="group.user_id"
+                                />
                             </td>
                             <td class="px-4 py-3">
                                 <div
