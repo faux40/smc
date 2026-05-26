@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Requirement;
+use App\Models\RqmtElement;
 use App\Models\Training;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Database\Eloquent\Model;
@@ -100,6 +102,23 @@ class RqmtElementRequest extends FormRequest
                     $orgId = Auth::user()->org_id;
                     if ($row === null || $row->org_id !== $orgId) {
                         $v->errors()->add('module_id', 'The selected module must belong to your organization.');
+                    }
+
+                    // No binding the same module to a requirement twice.
+                    // requirement_id comes from the route, not the payload;
+                    // backed by the rqmt_elements_module_unique index.
+                    $requirement = $this->route('requirement');
+                    $requirementId = $requirement instanceof Requirement
+                        ? $requirement->id
+                        : $requirement;
+
+                    if ($requirementId !== null && RqmtElement::query()
+                        ->where('requirement_id', $requirementId)
+                        ->where('module_type', $type)
+                        ->where('module_id', $id)
+                        ->exists()
+                    ) {
+                        $v->errors()->add('module_id', 'That training is already part of this requirement.');
                     }
                 }
             }

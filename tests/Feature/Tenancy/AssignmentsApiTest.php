@@ -188,10 +188,11 @@ class AssignmentsApiTest extends TestCase
         $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
         $member = User::factory()->for($org, 'organization')->create();
         $req = Requirement::factory()->for($org, 'organization')->create();
-        $training = Training::factory()->for($org, 'organization')->create();
 
-        // Two repeating elements + one as-needed on the requirement.
+        // Two repeating elements + one as-needed on the requirement. Each
+        // binds a distinct training (a requirement can't list one twice).
         foreach ([['repeating' => true], ['repeating' => true], ['as_needed' => true]] as $attrs) {
+            $training = Training::factory()->for($org, 'organization')->create();
             RqmtElement::factory()
                 ->for($org, 'organization')
                 ->for($req, 'requirement')

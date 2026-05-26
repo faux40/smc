@@ -168,15 +168,17 @@ class DomainCoreSchemaTest extends TestCase
         $user = User::factory()->for($org, 'organization')->create();
         $req = Requirement::factory()->for($org, 'organization')->create();
         $training = Training::factory()->for($org, 'organization')->create();
+        $trainingB = Training::factory()->for($org, 'organization')->create();
         $elementA = RqmtElement::factory()
             ->for($org, 'organization')
             ->for($req, 'requirement')
             ->state(['module_type' => Training::class, 'module_id' => $training->id])
             ->create();
+        // Distinct training — a requirement can't bind the same module twice.
         $elementB = RqmtElement::factory()
             ->for($org, 'organization')
             ->for($req, 'requirement')
-            ->state(['module_type' => Training::class, 'module_id' => $training->id])
+            ->state(['module_type' => Training::class, 'module_id' => $trainingB->id])
             ->create();
 
         $completion = Completion::factory()

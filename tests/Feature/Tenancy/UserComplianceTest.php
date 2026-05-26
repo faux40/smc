@@ -331,15 +331,17 @@ class UserComplianceTest extends TestCase
 
     public function test_rollup_is_worst_of_element_statuses(): void
     {
-        // One requirement with TWO elements: one current, one overdue.
-        // The assignment should roll up to overdue.
+        // One requirement with TWO elements (distinct trainings): one
+        // current, one overdue. The assignment should roll up to overdue.
         $req = Requirement::factory()->for($this->org, 'organization')->create();
+        $asNeededTraining = Training::factory()->for($this->org, 'organization')->create();
+        $initialTraining = Training::factory()->for($this->org, 'organization')->create();
         RqmtElement::factory()
             ->for($this->org, 'organization')
             ->for($req, 'requirement')
             ->state([
                 'module_type' => Training::class,
-                'module_id' => $this->training->id,
+                'module_id' => $asNeededTraining->id,
                 'as_needed' => true,
                 'repeating' => false,
                 'initial_only' => false,
@@ -350,7 +352,7 @@ class UserComplianceTest extends TestCase
             ->for($req, 'requirement')
             ->state([
                 'module_type' => Training::class,
-                'module_id' => $this->training->id,
+                'module_id' => $initialTraining->id,
                 'initial_only' => true,
                 'repeating' => false,
                 'as_needed' => false,

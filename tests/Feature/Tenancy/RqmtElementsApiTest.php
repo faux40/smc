@@ -156,6 +156,60 @@ class RqmtElementsApiTest extends TestCase
         ]);
     }
 
+    public function test_create_rejects_duplicate_module_in_requirement(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+
+        // Training is already bound to this requirement.
+        RqmtElement::factory()
+            ->for($org, 'organization')
+            ->for($req, 'requirement')
+            ->state(['module_type' => Training::class, 'module_id' => $training->id])
+            ->create();
+
+        $this->actingAs($admin)
+            ->postJson("/api/requirements/{$req->id}/elements", [
+                'module_type' => Training::class,
+                'module_id' => $training->id,
+                'name' => 'Dup attempt',
+                'initial_only' => true,
+                'repeating' => false,
+                'as_needed' => false,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('module_id');
+    }
+
+    public function test_same_module_allowed_in_a_different_requirement(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $reqA = Requirement::factory()->for($org, 'organization')->create();
+        $reqB = Requirement::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+
+        RqmtElement::factory()
+            ->for($org, 'organization')
+            ->for($reqA, 'requirement')
+            ->state(['module_type' => Training::class, 'module_id' => $training->id])
+            ->create();
+
+        // Same training in a *different* requirement is fine.
+        $this->actingAs($admin)
+            ->postJson("/api/requirements/{$reqB->id}/elements", [
+                'module_type' => Training::class,
+                'module_id' => $training->id,
+                'name' => 'Same training, other requirement',
+                'initial_only' => true,
+                'repeating' => false,
+                'as_needed' => false,
+            ])
+            ->assertCreated();
+    }
+
     public function test_manager_cannot_create(): void
     {
         $org = Organization::factory()->create();
