@@ -8,7 +8,7 @@
  */
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import AssignmentPill from '@/components/AssignmentPill.vue';
 import AsyncState from '@/components/AsyncState.vue';
 import FilterModeToggle from '@/components/FilterModeToggle.vue';
@@ -127,7 +127,22 @@ const selectedUserIds = ref<string[]>([]);
 const bulkOpen = ref(false);
 const bulkMode = ref<'assign' | 'deassign'>('assign');
 
+// Today's date, refreshed periodically so assignments drop off as their
+// end_date passes even if no broadcast fires (pure time-based expiry).
+const nowDate = ref(new Date().toISOString().slice(0, 10));
+let expiryTimer: ReturnType<typeof setInterval> | undefined;
+
+onUnmounted(() => {
+    if (expiryTimer) {
+        clearInterval(expiryTimer);
+    }
+});
+
 onMounted(async () => {
+    expiryTimer = setInterval(() => {
+        nowDate.value = new Date().toISOString().slice(0, 10);
+    }, 60_000);
+
     if (authUser.value?.org_id) {
         store.subscribe(authUser.value.org_id);
         tagsStore.subscribe(authUser.value.org_id);
@@ -281,6 +296,13 @@ const userGroups = computed<UserGroup[]>(() => {
     const byUser = new Map<string, AssignmentRow[]>();
 
     for (const a of store.rows) {
+        // Skip expired (past end_date) — keeps the list current as the date
+        // rolls over, even without a broadcast. Belt-and-suspenders with the
+        // store's upsertOrDrop + the API index filter.
+        if (a.end_date !== null && a.end_date < nowDate.value) {
+            continue;
+        }
+
         const list = byUser.get(a.user_id) ?? [];
         list.push(a);
         byUser.set(a.user_id, list);

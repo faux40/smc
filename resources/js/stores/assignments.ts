@@ -104,6 +104,29 @@ export const useAssignmentsStore = defineStore('assignments', () => {
         }
     }
 
+    // A past end_date means the window has closed — same rule the API index
+    // uses to hide it. end_date null = active forever; end_date today = still
+    // its last active day.
+    function isExpired(row: AssignmentRow): boolean {
+        return (
+            row.end_date !== null &&
+            row.end_date < new Date().toISOString().slice(0, 10)
+        );
+    }
+
+    // Apply a create/update from any source (mutation or broadcast): patch the
+    // row in place, OR drop it if the change made it expired — so an edited /
+    // bulk-ended assignment falls off the list live, matching the index.
+    function upsertOrDrop(row: AssignmentRow): void {
+        if (isExpired(row)) {
+            rows.value = rows.value.filter((a) => a.id !== row.id);
+
+            return;
+        }
+
+        upsert(row);
+    }
+
     async function loadFor(filter: AssignmentFilter = {}): Promise<void> {
         const key = filterKey(filter);
 
@@ -137,7 +160,7 @@ export const useAssignmentsStore = defineStore('assignments', () => {
             payload,
             { headers: defaultHeaders() },
         );
-        upsert(data);
+        upsertOrDrop(data);
 
         return data;
     }
@@ -151,7 +174,7 @@ export const useAssignmentsStore = defineStore('assignments', () => {
             payload,
             { headers: defaultHeaders() },
         );
-        upsert(data);
+        upsertOrDrop(data);
     }
 
     async function destroy(id: string): Promise<void> {
@@ -184,16 +207,19 @@ export const useAssignmentsStore = defineStore('assignments', () => {
         bind('AssignmentCreated', (p: AssignmentRow) => {
             // Peer broadcast — actor lost edit/delete rights by default;
             // a follow-on hydrate would refresh `can_edit` / `can_delete`.
-            upsert({ ...p, can_edit: false, can_delete: false });
+            upsertOrDrop({ ...p, can_edit: false, can_delete: false });
         });
         bind('AssignmentUpdated', (p: AssignmentRow) => {
             const existing = rows.value.find((a) => a.id === p.id);
 
-            if (!existing) {
-                return;
-            }
-
-            upsert({ ...existing, ...p });
+            // Drop if the edit expired it; add if it un-expired (end_date
+            // pushed into the future). The broadcast doesn't carry
+            // can_edit/can_delete, so keep the existing row's (peer → false).
+            upsertOrDrop({
+                ...p,
+                can_edit: existing?.can_edit ?? false,
+                can_delete: existing?.can_delete ?? false,
+            });
         });
         bind('AssignmentDeleted', (p: { id: string }) => {
             rows.value = rows.value.filter((a) => a.id !== p.id);
