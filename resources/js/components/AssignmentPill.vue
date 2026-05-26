@@ -23,6 +23,9 @@ import type { ElementTimingSummary } from '@/stores/assignments';
 const props = defineProps<{
     label: string;
     summary: ElementTimingSummary;
+    // Past end_date — rendered greyed + struck-through when surfaced via the
+    // "show expired" toggle.
+    expired?: boolean;
 }>();
 
 type Timing = 'repeating' | 'initial' | 'as_needed' | 'none';
@@ -68,20 +71,34 @@ const title = computed(() => {
         (t) => `${props.summary[t]} ${WORD[t]}`,
     );
 
-    return parts.length > 0
-        ? `${props.label} — ${parts.join(', ')}`
-        : `${props.label} — no elements`;
+    const base =
+        parts.length > 0
+            ? `${props.label} — ${parts.join(', ')}`
+            : `${props.label} — no elements`;
+
+    return props.expired ? `${base} (expired)` : base;
 });
 </script>
 
 <template>
     <button
         type="button"
-        class="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+        :class="[
+            'inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+            expired
+                ? 'border-border bg-muted/40 text-muted-foreground'
+                : 'border-border bg-background text-foreground hover:bg-muted',
+        ]"
         :title="title"
     >
-        <span class="truncate">{{ label }}</span>
-        <span v-if="dots.length > 0" class="flex shrink-0 items-center gap-0.5">
+        <span class="truncate" :class="{ 'line-through': expired }">{{
+            label
+        }}</span>
+        <span
+            v-if="dots.length > 0"
+            class="flex shrink-0 items-center gap-0.5"
+            :class="{ 'opacity-50': expired }"
+        >
             <span
                 v-for="(t, i) in visibleDots"
                 :key="i"

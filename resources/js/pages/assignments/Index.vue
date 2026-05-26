@@ -8,7 +8,7 @@
  */
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import AssignmentPill from '@/components/AssignmentPill.vue';
 import AsyncState from '@/components/AsyncState.vue';
 import FilterModeToggle from '@/components/FilterModeToggle.vue';
@@ -88,6 +88,7 @@ const requirementFilterIds = ref<string[]>([]);
 const requirementFilterMode = ref<FilterMode>('or');
 const tagFilter = ref<string[]>([]);
 const tagFilterMode = ref<TagFilterMode>('and');
+const showExpired = ref(false);
 
 // Users can only be matched with OR/NONE — a row is one person, so "must
 // have all" is degenerate.
@@ -150,7 +151,7 @@ onMounted(async () => {
 
     try {
         await Promise.all([
-            store.loadFor({}),
+            store.loadFor({}, showExpired.value),
             requirements.load(),
             tagsStore.loadLibrary(),
             loadUsers(),
@@ -218,6 +219,11 @@ const userName = (id: string): string => {
 };
 const reqName = (row: AssignmentRow): string =>
     requirementById(row.requirement_id)?.name ?? row.name ?? '';
+
+// Past end_date — hidden unless "show expired" is on, where it renders
+// greyed + struck-through. nowDate ticks so this stays current over time.
+const isExpired = (row: AssignmentRow): boolean =>
+    row.end_date !== null && row.end_date < nowDate.value;
 
 // All four filters narrow which user *rows* show (pills always render the
 // user's full assignment set). Each supports &/||/! over its selected set.
@@ -296,10 +302,8 @@ const userGroups = computed<UserGroup[]>(() => {
     const byUser = new Map<string, AssignmentRow[]>();
 
     for (const a of store.rows) {
-        // Skip expired (past end_date) — keeps the list current as the date
-        // rolls over, even without a broadcast. Belt-and-suspenders with the
-        // store's upsertOrDrop + the API index filter.
-        if (a.end_date !== null && a.end_date < nowDate.value) {
+        // Expired (past end_date) rows are hidden unless "show expired" is on.
+        if (isExpired(a) && !showExpired.value) {
             continue;
         }
 
@@ -398,9 +402,17 @@ function openBulk(mode: 'assign' | 'deassign'): void {
 }
 
 async function onBulkApplied(): Promise<void> {
-    await store.reload();
+    await store.reload(showExpired.value);
     selectedUserIds.value = [];
 }
+
+// Toggling "show expired" re-fetches with/without the historical expired
+// rows (live edits are already in the store; this pulls the rest).
+watch(showExpired, (v) => {
+    store.reload(v).catch((e) => {
+        error.value = (e as Error).message;
+    });
+});
 
 function toggleSort(key: SortKey): void {
     if (sortKey.value === key) {
@@ -526,6 +538,12 @@ function defaultHeaders(): Record<string, string> {
                     placeholder="Any tag…"
                 />
             </div>
+            <label
+                class="inline-flex h-8 cursor-pointer items-center gap-2 self-end text-sm"
+            >
+                <Checkbox v-model="showExpired" />
+                Show expired
+            </label>
             <button
                 v-if="hasActiveFilters"
                 type="button"
@@ -697,6 +715,7 @@ function defaultHeaders(): Record<string, string> {
                                         :key="a.id"
                                         :label="reqName(a)"
                                         :summary="a.element_timing"
+                                        :expired="isExpired(a)"
                                         @click="openEdit(a)"
                                     />
                                     <button

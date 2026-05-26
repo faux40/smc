@@ -104,31 +104,11 @@ export const useAssignmentsStore = defineStore('assignments', () => {
         }
     }
 
-    // A past end_date means the window has closed — same rule the API index
-    // uses to hide it. end_date null = active forever; end_date today = still
-    // its last active day.
-    function isExpired(row: AssignmentRow): boolean {
-        return (
-            row.end_date !== null &&
-            row.end_date < new Date().toISOString().slice(0, 10)
-        );
-    }
-
-    // Apply a create/update from any source (mutation or broadcast): patch the
-    // row in place, OR drop it if the change made it expired — so an edited /
-    // bulk-ended assignment falls off the list live, matching the index.
-    function upsertOrDrop(row: AssignmentRow): void {
-        if (isExpired(row)) {
-            rows.value = rows.value.filter((a) => a.id !== row.id);
-
-            return;
-        }
-
-        upsert(row);
-    }
-
-    async function loadFor(filter: AssignmentFilter = {}): Promise<void> {
-        const key = filterKey(filter);
+    async function loadFor(
+        filter: AssignmentFilter = {},
+        includeExpired = false,
+    ): Promise<void> {
+        const key = `${filterKey(filter)}|e:${includeExpired ? 1 : 0}`;
 
         if (loadedFilters.value.has(key)) {
             return;
@@ -142,6 +122,10 @@ export const useAssignmentsStore = defineStore('assignments', () => {
 
         if (filter.requirement_id) {
             params.requirement_id = filter.requirement_id;
+        }
+
+        if (includeExpired) {
+            params.include_expired = '1';
         }
 
         const { data } = await axios.get<AssignmentRow[]>('/api/assignments', {
@@ -160,7 +144,7 @@ export const useAssignmentsStore = defineStore('assignments', () => {
             payload,
             { headers: defaultHeaders() },
         );
-        upsertOrDrop(data);
+        upsert(data);
 
         return data;
     }
@@ -174,7 +158,7 @@ export const useAssignmentsStore = defineStore('assignments', () => {
             payload,
             { headers: defaultHeaders() },
         );
-        upsertOrDrop(data);
+        upsert(data);
     }
 
     async function destroy(id: string): Promise<void> {
@@ -185,14 +169,17 @@ export const useAssignmentsStore = defineStore('assignments', () => {
     }
 
     // Force a full re-fetch of the org's assignments, replacing rows. Used
-    // after a bulk operation: the acting tab doesn't receive its own
-    // broadcasts (self-echo is suppressed), so it must refresh explicitly.
-    async function reload(): Promise<void> {
+    // after a bulk operation (the acting tab doesn't get its own broadcasts)
+    // and when the "show expired" toggle flips.
+    async function reload(includeExpired = false): Promise<void> {
         const { data } = await axios.get<AssignmentRow[]>('/api/assignments', {
             headers: defaultHeaders(),
+            params: includeExpired ? { include_expired: '1' } : {},
         });
         rows.value = data;
-        loadedFilters.value = new Set([filterKey({})]);
+        loadedFilters.value = new Set([
+            `${filterKey({})}|e:${includeExpired ? 1 : 0}`,
+        ]);
     }
 
     function subscribe(orgId: string): void {
@@ -207,15 +194,15 @@ export const useAssignmentsStore = defineStore('assignments', () => {
         bind('AssignmentCreated', (p: AssignmentRow) => {
             // Peer broadcast — actor lost edit/delete rights by default;
             // a follow-on hydrate would refresh `can_edit` / `can_delete`.
-            upsertOrDrop({ ...p, can_edit: false, can_delete: false });
+            upsert({ ...p, can_edit: false, can_delete: false });
         });
         bind('AssignmentUpdated', (p: AssignmentRow) => {
             const existing = rows.value.find((a) => a.id === p.id);
 
-            // Drop if the edit expired it; add if it un-expired (end_date
-            // pushed into the future). The broadcast doesn't carry
+            // Patch in place (incl. a changed end_date — the page decides
+            // whether an expired row is shown). The broadcast doesn't carry
             // can_edit/can_delete, so keep the existing row's (peer → false).
-            upsertOrDrop({
+            upsert({
                 ...p,
                 can_edit: existing?.can_edit ?? false,
                 can_delete: existing?.can_delete ?? false,

@@ -66,6 +66,12 @@ class AssignmentsApiTest extends TestCase
             ->getJson('/api/assignments')
             ->assertOk()
             ->assertJsonCount(3);
+
+        // Opt-in returns the expired one too (drives the "show expired" toggle).
+        $this->actingAs($admin)
+            ->getJson('/api/assignments?include_expired=1')
+            ->assertOk()
+            ->assertJsonCount(4);
     }
 
     public function test_manager_can_list_assignments(): void
