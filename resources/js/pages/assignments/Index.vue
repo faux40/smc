@@ -11,7 +11,10 @@ import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
 import AssignmentPill from '@/components/AssignmentPill.vue';
 import AsyncState from '@/components/AsyncState.vue';
+import FilterModeToggle from '@/components/FilterModeToggle.vue';
+import type { FilterMode } from '@/components/FilterModeToggle.vue';
 import Heading from '@/components/Heading.vue';
+import MultiSelectFilter from '@/components/MultiSelectFilter.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
@@ -67,11 +70,18 @@ const canCreate = computed(() =>
 );
 
 const userPicker = ref<UserPickerRow[]>([]);
-const userFilter = ref('');
-const requirementFilter = ref('');
 const search = ref('');
+const searchMode = ref<FilterMode>('and');
+const userFilterIds = ref<string[]>([]);
+const userFilterMode = ref<FilterMode>('or');
+const requirementFilterIds = ref<string[]>([]);
+const requirementFilterMode = ref<FilterMode>('or');
 const tagFilter = ref<string[]>([]);
 const tagFilterMode = ref<TagFilterMode>('and');
+
+// Users can only be matched with OR/NONE — a row is one person, so "must
+// have all" is degenerate.
+const USER_FILTER_MODES: FilterMode[] = ['or', 'not'];
 
 type SortKey = 'user' | 'count' | 'tags';
 const sortKey = ref<SortKey>('user');
@@ -160,9 +170,70 @@ const userName = (id: string): string => {
 const reqName = (row: AssignmentRow): string =>
     requirementById(row.requirement_id)?.name ?? row.name ?? '';
 
-// One row per user; their assignments become timing-coded pills. Filters
-// narrow which assignments count toward a row, and a row drops out once it
-// has no matching assignments left.
+// All four filters narrow which user *rows* show (pills always render the
+// user's full assignment set). Each supports &/||/! over its selected set.
+
+function matchUser(userId: string): boolean {
+    if (userFilterIds.value.length === 0) {
+        return true;
+    }
+
+    const inSet = userFilterIds.value.includes(userId);
+
+    // 'and' is degenerate for a single-valued field → behaves like 'or'.
+    return userFilterMode.value === 'not' ? !inSet : inSet;
+}
+
+function matchRequirements(assignments: AssignmentRow[]): boolean {
+    const sel = requirementFilterIds.value;
+
+    if (sel.length === 0) {
+        return true;
+    }
+
+    const have = new Set(assignments.map((a) => a.requirement_id));
+
+    if (requirementFilterMode.value === 'or') {
+        return sel.some((id) => have.has(id));
+    }
+
+    if (requirementFilterMode.value === 'not') {
+        return !sel.some((id) => have.has(id));
+    }
+
+    return sel.every((id) => have.has(id)); // 'and' — has all selected
+}
+
+function matchSearch(
+    name: string,
+    email: string | null,
+    assignments: AssignmentRow[],
+): boolean {
+    const words = search.value
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
+
+    if (words.length === 0) {
+        return true;
+    }
+
+    const hay =
+        `${name} ${email ?? ''} ${assignments.map((a) => reqName(a)).join(' ')}`.toLowerCase();
+
+    if (searchMode.value === 'or') {
+        return words.some((w) => hay.includes(w));
+    }
+
+    if (searchMode.value === 'not') {
+        return !words.some((w) => hay.includes(w));
+    }
+
+    return words.every((w) => hay.includes(w)); // 'and' — all words present
+}
+
+// One row per user; their assignments become timing-coded pills.
 interface UserGroup {
     user_id: string;
     name: string;
@@ -171,25 +242,9 @@ interface UserGroup {
 }
 
 const userGroups = computed<UserGroup[]>(() => {
-    const q = search.value.trim().toLowerCase();
     const byUser = new Map<string, AssignmentRow[]>();
 
     for (const a of store.rows) {
-        if (userFilter.value && a.user_id !== userFilter.value) {
-            continue;
-        }
-
-        if (
-            requirementFilter.value &&
-            a.requirement_id !== requirementFilter.value
-        ) {
-            continue;
-        }
-
-        if (!userMatchesTags(a.user_id)) {
-            continue;
-        }
-
         const list = byUser.get(a.user_id) ?? [];
         list.push(a);
         byUser.set(a.user_id, list);
@@ -201,19 +256,13 @@ const userGroups = computed<UserGroup[]>(() => {
         const name = userName(user_id) || user_id;
         const email = userById(user_id)?.email ?? null;
 
-        // Search matches either the person or any of their requirements;
-        // a person match keeps the whole row so the context stays intact.
-        if (q) {
-            const userMatch = `${name} ${email ?? ''}`
-                .toLowerCase()
-                .includes(q);
-            const reqMatch = assignments.some((a) =>
-                reqName(a).toLowerCase().includes(q),
-            );
-
-            if (!userMatch && !reqMatch) {
-                continue;
-            }
+        if (
+            !matchUser(user_id) ||
+            !matchRequirements(assignments) ||
+            !userMatchesTags(user_id) ||
+            !matchSearch(name, email, assignments)
+        ) {
+            continue;
         }
 
         assignments.sort((a, b) => reqName(a).localeCompare(reqName(b)));
@@ -262,13 +311,21 @@ function sortIndicator(key: SortKey): string {
     return sortAsc.value ? '▲' : '▼';
 }
 
-const sortedUsers = computed(() =>
-    [...userPicker.value].sort((a, b) =>
-        (a.l_name ?? '').localeCompare(b.l_name ?? ''),
-    ),
+const userOptions = computed(() =>
+    [...userPicker.value]
+        .sort((a, b) => (a.l_name ?? '').localeCompare(b.l_name ?? ''))
+        .map((u) => ({
+            id: u.id,
+            label:
+                [u.f_name, u.l_name].filter(Boolean).join(' ') ||
+                u.email ||
+                u.id,
+        })),
 );
-const sortedRequirements = computed(() =>
-    [...requirements.library].sort((a, b) => a.name.localeCompare(b.name)),
+const requirementOptions = computed(() =>
+    [...requirements.library]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((r) => ({ id: r.id, label: r.name })),
 );
 
 // Pre-selected user for the per-row quick-add ("+ Add"); null for the
@@ -319,50 +376,39 @@ function defaultHeaders(): Record<string, string> {
         <div class="flex flex-wrap items-end gap-3">
             <div class="grid gap-1">
                 <Label for="filter_search" class="text-xs">Search</Label>
-                <Input
-                    id="filter_search"
-                    v-model="search"
-                    type="search"
-                    placeholder="Search user or requirement…"
-                    class="h-8 w-64"
-                    aria-label="Search assignments"
+                <div class="flex items-center gap-1">
+                    <Input
+                        id="filter_search"
+                        v-model="search"
+                        type="search"
+                        placeholder="Search user or requirement…"
+                        class="h-8 w-64"
+                        aria-label="Search assignments"
+                    />
+                    <FilterModeToggle
+                        v-if="search.trim() !== ''"
+                        v-model:mode="searchMode"
+                    />
+                </div>
+            </div>
+            <div class="grid gap-1">
+                <Label class="text-xs">Filter by user</Label>
+                <MultiSelectFilter
+                    v-model:selected="userFilterIds"
+                    v-model:mode="userFilterMode"
+                    :options="userOptions"
+                    :modes="USER_FILTER_MODES"
+                    add-label="Add user…"
                 />
             </div>
             <div class="grid gap-1">
-                <Label for="filter_user" class="text-xs">Filter by user</Label>
-                <select
-                    id="filter_user"
-                    v-model="userFilter"
-                    class="rounded border border-input bg-background px-2 py-1 text-sm"
-                >
-                    <option value="">All users</option>
-                    <option v-for="u in sortedUsers" :key="u.id" :value="u.id">
-                        {{
-                            [u.f_name, u.l_name].filter(Boolean).join(' ') ||
-                            u.email ||
-                            u.id
-                        }}
-                    </option>
-                </select>
-            </div>
-            <div class="grid gap-1">
-                <Label for="filter_req" class="text-xs"
-                    >Filter by requirement</Label
-                >
-                <select
-                    id="filter_req"
-                    v-model="requirementFilter"
-                    class="rounded border border-input bg-background px-2 py-1 text-sm"
-                >
-                    <option value="">All requirements</option>
-                    <option
-                        v-for="r in sortedRequirements"
-                        :key="r.id"
-                        :value="r.id"
-                    >
-                        {{ r.name }}
-                    </option>
-                </select>
+                <Label class="text-xs">Filter by requirement</Label>
+                <MultiSelectFilter
+                    v-model:selected="requirementFilterIds"
+                    v-model:mode="requirementFilterMode"
+                    :options="requirementOptions"
+                    add-label="Add requirement…"
+                />
             </div>
             <div class="grid gap-1">
                 <Label class="text-xs">Filter by tag</Label>
