@@ -87,6 +87,72 @@ class RequirementsApiTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_create_rejects_duplicate_name_case_insensitive(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        Requirement::factory()->for($org, 'organization')->create(['name' => 'Fall Protection']);
+
+        $this->actingAs($admin)
+            ->postJson('/api/requirements', ['name' => 'fall protection'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('name');
+    }
+
+    public function test_create_allows_same_name_in_other_org(): void
+    {
+        $orgA = Organization::factory()->create();
+        $orgB = Organization::factory()->create();
+        $adminB = User::factory()->for($orgB, 'organization')->withRole('Admin')->create();
+        Requirement::factory()->for($orgA, 'organization')->create(['name' => 'Fall Protection']);
+
+        // Same name is fine in a different org — uniqueness is per-org.
+        $this->actingAs($adminB)
+            ->postJson('/api/requirements', ['name' => 'Fall Protection'])
+            ->assertCreated();
+    }
+
+    public function test_create_allows_reuse_of_soft_deleted_name(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create(['name' => 'Forklift']);
+        $req->delete();
+
+        $this->actingAs($admin)
+            ->postJson('/api/requirements', ['name' => 'Forklift'])
+            ->assertCreated();
+    }
+
+    public function test_update_rejects_duplicate_name(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        Requirement::factory()->for($org, 'organization')->create(['name' => 'Hazmat']);
+        $other = Requirement::factory()->for($org, 'organization')->create(['name' => 'Lockout']);
+
+        $this->actingAs($admin)
+            ->patchJson("/api/requirements/{$other->id}", ['name' => 'Hazmat'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('name');
+    }
+
+    public function test_update_allows_keeping_own_name(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create(['name' => 'First Aid']);
+
+        // Re-saving the same name (e.g. only editing the description) must
+        // not trip the uniqueness rule against the row itself.
+        $this->actingAs($admin)
+            ->patchJson("/api/requirements/{$req->id}", [
+                'name' => 'First Aid',
+                'description' => 'updated',
+            ])
+            ->assertOk();
+    }
+
     public function test_admin_can_update(): void
     {
         $org = Organization::factory()->create();
