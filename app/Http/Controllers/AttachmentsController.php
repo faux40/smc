@@ -130,27 +130,61 @@ class AttachmentsController extends Controller
     }
 
     /**
-     * 302-redirect to a signed temporary URL for the blob. The frontend
-     * follows the redirect and the browser fetches directly from Linode —
-     * the app server doesn't stream bytes.
+     * 302-redirect to a signed temporary URL for the blob, forcing a download
+     * (Content-Disposition: attachment). The frontend follows the redirect and
+     * the browser fetches directly from Linode — the app server doesn't stream
+     * bytes.
      */
     public function download(Attachment $attachment): RedirectResponse
     {
         Gate::authorize('view', $attachment);
 
-        // A signed-URL failure (object store unreachable) shouldn't surface as
-        // a 500 — degrade to a clean "try again" the UI can show.
+        return redirect()->away($this->signedBlobUrl($attachment, 'attachment'));
+    }
+
+    /**
+     * 302-redirect to a signed temporary URL for the blob, served inline
+     * (Content-Disposition: inline) so the embedded <AttachmentViewer> can
+     * render PDFs/images in-place. Same offload model as download() — the app
+     * authorizes and hands back a short-lived signed URL; it never streams the
+     * bytes itself.
+     */
+    public function view(Attachment $attachment): RedirectResponse
+    {
+        Gate::authorize('view', $attachment);
+
+        return redirect()->away($this->signedBlobUrl($attachment, 'inline'));
+    }
+
+    /**
+     * Mint a 5-minute signed URL for the blob with the given disposition
+     * ('inline' to preview, 'attachment' to download). A signed-URL failure
+     * (object store unreachable) shouldn't surface as a 500 — degrade to a
+     * clean "try again" the UI can show.
+     */
+    private function signedBlobUrl(Attachment $attachment, string $disposition): string
+    {
+        // Strip quotes/CRLF so the filename can't break out of the header.
+        $safeName = str_replace(['"', "\r", "\n"], '', (string) $attachment->filename);
+
+        $options = [
+            'ResponseContentDisposition' => $disposition.'; filename="'.$safeName.'"',
+        ];
+
+        if ($attachment->mime) {
+            $options['ResponseContentType'] = $attachment->mime;
+        }
+
         try {
-            $url = Storage::disk($attachment->disk)->temporaryUrl(
+            return Storage::disk($attachment->disk)->temporaryUrl(
                 $attachment->path,
                 now()->addMinutes(5),
+                $options,
             );
         } catch (\Throwable $e) {
             report($e);
             abort(503, 'File storage is temporarily unavailable. Please try again.');
         }
-
-        return redirect()->away($url);
     }
 
     private function authorizeSameOrgMorphable(string $type, string $id): void

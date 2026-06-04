@@ -210,6 +210,69 @@ class AttachmentsApiTest extends TestCase
             ->assertRedirect();
     }
 
+    public function test_view_redirects_for_org_member(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('None')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+        Storage::disk('linode')->put('attachments/v.pdf', 'data');
+        $att = $target->attachments()->create([
+            'org_id' => $org->id,
+            'uploaded_by_user_id' => $member->id,
+            'filename' => 'v.pdf',
+            'mime' => 'application/pdf',
+            'size' => 4,
+            'disk' => 'linode',
+            'path' => 'attachments/v.pdf',
+        ]);
+
+        $this->actingAs($member)
+            ->get("/api/attachments/{$att->id}/view")
+            ->assertRedirect();
+    }
+
+    public function test_view_cross_org_blocked(): void
+    {
+        $orgA = Organization::factory()->create();
+        $orgB = Organization::factory()->create();
+        $userA = User::factory()->for($orgA, 'organization')->create();
+        $uploaderB = User::factory()->for($orgB, 'organization')->create();
+        $targetB = User::factory()->for($orgB, 'organization')->create();
+        $att = $targetB->attachments()->create([
+            'org_id' => $orgB->id,
+            'uploaded_by_user_id' => $uploaderB->id,
+            'filename' => 'vb.pdf',
+            'mime' => 'application/pdf',
+            'size' => 4,
+            'disk' => 'linode',
+            'path' => 'attachments/vb.pdf',
+        ]);
+
+        $this->actingAs($userA)
+            ->get("/api/attachments/{$att->id}/view")
+            ->assertNotFound();
+    }
+
+    public function test_view_requires_authentication(): void
+    {
+        $org = Organization::factory()->create();
+        $uploader = User::factory()->for($org, 'organization')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+        $att = $target->attachments()->create([
+            'org_id' => $org->id,
+            'uploaded_by_user_id' => $uploader->id,
+            'filename' => 'g.pdf',
+            'mime' => 'application/pdf',
+            'size' => 4,
+            'disk' => 'linode',
+            'path' => 'attachments/g.pdf',
+        ]);
+
+        // No actingAs — a non-authenticated visitor must never reach the blob.
+        $this->get("/api/attachments/{$att->id}/view")
+            ->assertRedirect('/login');
+    }
+
     public function test_download_cross_org_blocked(): void
     {
         $orgA = Organization::factory()->create();

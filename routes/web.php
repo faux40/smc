@@ -124,6 +124,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/attachments', [AttachmentsController::class, 'index'])->name('attachments.index');
     Route::post('api/attachments', [AttachmentsController::class, 'store'])->name('attachments.store');
     Route::delete('api/attachments/{attachment}', [AttachmentsController::class, 'destroy'])->name('attachments.destroy');
+    Route::get('api/attachments/{attachment}/view', [AttachmentsController::class, 'view'])->name('attachments.view');
     Route::get('api/attachments/{attachment}/download', [AttachmentsController::class, 'download'])->name('attachments.download');
 
     // Std frequencies — per-org timing presets used by downstream forms.

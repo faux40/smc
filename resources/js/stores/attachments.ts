@@ -103,6 +103,10 @@ export const useAttachmentsStore = defineStore('attachments', () => {
         return `/api/attachments/${id}/download`;
     }
 
+    function viewUrl(id: string): string {
+        return `/api/attachments/${id}/view`;
+    }
+
     function subscribe(orgId: string): void {
         if (subscribedOrgId.value === orgId) {
             return;
@@ -174,6 +178,7 @@ export const useAttachmentsStore = defineStore('attachments', () => {
         upload,
         destroy,
         downloadUrl,
+        viewUrl,
         subscribe,
     };
 });

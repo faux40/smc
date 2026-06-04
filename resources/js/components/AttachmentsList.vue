@@ -8,6 +8,7 @@
  */
 import { usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
+import AttachmentViewer from '@/components/AttachmentViewer.vue';
 import { Button } from '@/components/ui/button';
 import { useAttachmentsStore } from '@/stores/attachments';
 import type { AttachmentRow } from '@/stores/attachments';
@@ -32,6 +33,14 @@ const attachments = computed<AttachmentRow[]>(() =>
 const fileInput = ref<HTMLInputElement | null>(null);
 const submitting = ref(false);
 const error = ref<string | null>(null);
+
+const viewerOpen = ref(false);
+const activeAttachment = ref<AttachmentRow | null>(null);
+
+const openViewer = (a: AttachmentRow) => {
+    activeAttachment.value = a;
+    viewerOpen.value = true;
+};
 
 onMounted(async () => {
     const orgId = (page.props.auth.user as { org_id?: string } | null)?.org_id;
@@ -137,12 +146,13 @@ const formatSize = (bytes: number | null): string => {
                 class="flex items-center gap-3 rounded border border-border p-3 text-sm"
             >
                 <div class="flex-1">
-                    <a
-                        :href="store.downloadUrl(a.id)"
-                        class="font-medium text-primary hover:underline"
+                    <button
+                        type="button"
+                        class="text-left font-medium text-primary hover:underline"
+                        @click="openViewer(a)"
                     >
                         {{ a.filename }}
-                    </a>
+                    </button>
                     <div class="text-xs text-muted-foreground">
                         <span v-if="a.mime">{{ a.mime }}</span>
                         <span v-if="a.size !== null">
@@ -154,6 +164,12 @@ const formatSize = (bytes: number | null): string => {
                         <span v-if="a.created_at"> · {{ a.created_at }}</span>
                     </div>
                 </div>
+                <a
+                    :href="store.downloadUrl(a.id)"
+                    class="text-xs text-primary hover:underline"
+                >
+                    Download
+                </a>
                 <button
                     v-if="a.can_delete"
                     type="button"
@@ -164,5 +180,10 @@ const formatSize = (bytes: number | null): string => {
                 </button>
             </li>
         </ul>
+
+        <AttachmentViewer
+            v-model:open="viewerOpen"
+            :attachment="activeAttachment"
+        />
     </section>
 </template>
