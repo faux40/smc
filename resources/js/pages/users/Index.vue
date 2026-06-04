@@ -2,9 +2,11 @@
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { onMounted, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
+import SortableHeader from '@/components/SortableHeader.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
+import { useTableSort } from '@/composables/useTableSort';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -54,6 +56,23 @@ const store = useUsersStore();
 const tagsStore = useTagsStore();
 const page = usePage();
 const authUser = page.props.auth.user as AuthUser;
+
+// Client-side sort over the in-memory list (server-side filters above produce
+// the set; this orders it). Empties sort last; defaults to last-name ascending.
+const { sortKey, sortDir, toggleSort, sorted } = useTableSort<UserRow>(
+    () => store.users,
+    {
+        name: (u) => `${u.l_name} ${u.f_name}`,
+        email: (u) => u.email,
+        role: (u) => u.role,
+        status: (u) => u.status,
+        job_title: (u) => u.job_title,
+        employee_number: (u) => u.employee_number,
+        department: (u) => u.department,
+        location: (u) => u.location,
+    },
+    { key: 'name', dir: 'asc' },
+);
 
 // TagsListCell on each row reads from `tagsStore.attached` keyed by
 // (morphableType, morphableId). Push the eager-loaded ids into that
@@ -220,15 +239,67 @@ const remove = (row: UserRow) => {
         </div>
 
         <div
-            class="overflow-hidden rounded-md border border-sidebar-border/70 dark:border-sidebar-border"
+            class="overflow-x-auto rounded-md border border-sidebar-border/70 dark:border-sidebar-border"
         >
             <table class="min-w-full divide-y divide-border text-sm">
                 <thead class="bg-muted/40">
                     <tr>
-                        <th class="px-4 py-2 text-left font-medium">Name</th>
-                        <th class="px-4 py-2 text-left font-medium">Email</th>
-                        <th class="px-4 py-2 text-left font-medium">Role</th>
-                        <th class="px-4 py-2 text-left font-medium">Status</th>
+                        <SortableHeader
+                            label="Name"
+                            sort-key="name"
+                            :active-key="sortKey"
+                            :dir="sortDir"
+                            @sort="toggleSort"
+                        />
+                        <SortableHeader
+                            label="Email"
+                            sort-key="email"
+                            :active-key="sortKey"
+                            :dir="sortDir"
+                            @sort="toggleSort"
+                        />
+                        <SortableHeader
+                            label="Role"
+                            sort-key="role"
+                            :active-key="sortKey"
+                            :dir="sortDir"
+                            @sort="toggleSort"
+                        />
+                        <SortableHeader
+                            label="Status"
+                            sort-key="status"
+                            :active-key="sortKey"
+                            :dir="sortDir"
+                            @sort="toggleSort"
+                        />
+                        <SortableHeader
+                            label="Job title"
+                            sort-key="job_title"
+                            :active-key="sortKey"
+                            :dir="sortDir"
+                            @sort="toggleSort"
+                        />
+                        <SortableHeader
+                            label="Employee #"
+                            sort-key="employee_number"
+                            :active-key="sortKey"
+                            :dir="sortDir"
+                            @sort="toggleSort"
+                        />
+                        <SortableHeader
+                            label="Department"
+                            sort-key="department"
+                            :active-key="sortKey"
+                            :dir="sortDir"
+                            @sort="toggleSort"
+                        />
+                        <SortableHeader
+                            label="Location"
+                            sort-key="location"
+                            :active-key="sortKey"
+                            :dir="sortDir"
+                            @sort="toggleSort"
+                        />
                         <th class="px-4 py-2 text-right font-medium">
                             Actions
                         </th>
@@ -246,7 +317,7 @@ const remove = (row: UserRow) => {
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
-                    <tr v-for="u in store.users" :key="u.id">
+                    <tr v-for="u in sorted" :key="u.id">
                         <td class="px-4 py-2">
                             <Link
                                 :href="userShow(u.id)"
@@ -279,6 +350,12 @@ const remove = (row: UserRow) => {
                                 {{ u.status }}
                             </Badge>
                         </td>
+                        <td class="px-4 py-2">{{ u.job_title ?? '—' }}</td>
+                        <td class="px-4 py-2">
+                            {{ u.employee_number ?? '—' }}
+                        </td>
+                        <td class="px-4 py-2">{{ u.department ?? '—' }}</td>
+                        <td class="px-4 py-2">{{ u.location ?? '—' }}</td>
                         <td class="space-x-3 px-4 py-2 text-right">
                             <button
                                 v-if="u.can_edit"
@@ -314,9 +391,9 @@ const remove = (row: UserRow) => {
                             />
                         </td>
                     </tr>
-                    <tr v-if="store.users.length === 0">
+                    <tr v-if="sorted.length === 0">
                         <td
-                            colspan="6"
+                            colspan="10"
                             class="px-4 py-6 text-center text-muted-foreground"
                         >
                             No users match the current filters.
