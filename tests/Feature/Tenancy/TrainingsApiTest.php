@@ -75,6 +75,75 @@ class TrainingsApiTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_set_nickname_on_create(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $freq = StdFrequency::factory()->for($org, 'organization')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/trainings', [
+                'name' => 'Fall Protection',
+                'nickname' => 'FallPro',
+                'initial_only' => false,
+                'repeating' => true,
+                'std_freq_id' => $freq->id,
+                'as_needed' => false,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('nickname', 'FallPro');
+
+        $this->assertDatabaseHas('trainings', [
+            'org_id' => $org->id,
+            'name' => 'Fall Protection',
+            'nickname' => 'FallPro',
+        ]);
+    }
+
+    public function test_admin_can_update_nickname(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $training = Training::factory()->for($org, 'organization')->create([
+            'name' => 'Fall Protection',
+            'nickname' => null,
+            'initial_only' => true,
+            'repeating' => false,
+            'as_needed' => false,
+        ]);
+
+        $this->actingAs($admin)
+            ->patchJson("/api/trainings/{$training->id}", [
+                'name' => 'Fall Protection',
+                'nickname' => 'FP-Refresh',
+                'initial_only' => true,
+                'repeating' => false,
+                'as_needed' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('nickname', 'FP-Refresh');
+
+        $this->assertDatabaseHas('trainings', [
+            'id' => $training->id,
+            'nickname' => 'FP-Refresh',
+        ]);
+    }
+
+    public function test_index_includes_nickname(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        Training::factory()->for($org, 'organization')->create([
+            'name' => 'Fall Protection',
+            'nickname' => 'FallPro',
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/trainings')
+            ->assertOk()
+            ->assertJsonPath('0.nickname', 'FallPro');
+    }
+
     public function test_admin_can_set_default_hours(): void
     {
         $org = Organization::factory()->create();

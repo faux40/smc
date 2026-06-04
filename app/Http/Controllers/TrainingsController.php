@@ -26,6 +26,7 @@ class TrainingsController extends Controller
         return response()->json($rows->map(fn (Training $t) => [
             'id' => $t->id,
             'name' => $t->name,
+            'nickname' => $t->nickname,
             'description' => $t->description,
             'initial_only' => $t->initial_only,
             'repeating' => $t->repeating,
@@ -47,6 +48,7 @@ class TrainingsController extends Controller
         $training = Training::create([
             'org_id' => $request->user()->org_id,
             'name' => $data['name'],
+            'nickname' => $data['nickname'] ?? null,
             'description' => $data['description'] ?? null,
             'default_hours' => $data['default_hours'] ?? null,
             'initial_only' => (bool) $data['initial_only'],
@@ -69,6 +71,7 @@ class TrainingsController extends Controller
         $data = $request->validated();
         $training->update([
             'name' => $data['name'],
+            'nickname' => $data['nickname'] ?? null,
             'description' => $data['description'] ?? null,
             'default_hours' => $data['default_hours'] ?? null,
             'initial_only' => (bool) $data['initial_only'],
@@ -101,6 +104,7 @@ class TrainingsController extends Controller
         return [
             'id' => $t->id,
             'name' => $t->name,
+            'nickname' => $t->nickname,
             'description' => $t->description,
             'initial_only' => $t->initial_only,
             'repeating' => $t->repeating,

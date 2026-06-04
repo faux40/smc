@@ -21,6 +21,7 @@ class Training extends Model
     protected $fillable = [
         'org_id',
         'name',
+        'nickname',
         'description',
         'initial_only',
         'repeating',

@@ -35,6 +35,7 @@ class TrainingRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:255'],
+            'nickname' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'default_hours' => ['nullable', 'numeric', 'min:0'],
             // Certificate content defaults (snapshotted onto a class topic).

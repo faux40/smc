@@ -7,6 +7,7 @@ function training(id: string, name: string): TrainingRow {
     return {
         id,
         name,
+        nickname: null,
         description: null,
         initial_only: false,
         repeating: true,

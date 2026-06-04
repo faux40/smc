@@ -16,6 +16,7 @@ import { realtimeTabId } from '@/echo';
 export interface TrainingRow {
     id: string;
     name: string;
+    nickname: string | null;
     description: string | null;
     initial_only: boolean;
     repeating: boolean;
@@ -36,6 +37,7 @@ export interface TrainingRow {
 
 export interface TrainingFormPayload {
     name: string;
+    nickname: string | null;
     description: string | null;
     default_hours: number | null;
     initial_only: boolean;

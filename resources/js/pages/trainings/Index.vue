@@ -148,7 +148,15 @@ const timingSummary = (row: TrainingRow): string => {
                     <tbody class="divide-y divide-border">
                         <tr v-for="row in store.library" :key="row.id">
                             <td class="px-4 py-2">
-                                <div class="font-medium">{{ row.name }}</div>
+                                <div class="font-medium">
+                                    {{ row.name }}
+                                    <span
+                                        v-if="row.nickname"
+                                        class="font-normal text-muted-foreground"
+                                    >
+                                        ({{ row.nickname }})
+                                    </span>
+                                </div>
                                 <div
                                     v-if="row.description"
                                     class="text-xs text-muted-foreground"

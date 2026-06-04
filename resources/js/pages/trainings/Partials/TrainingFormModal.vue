@@ -45,6 +45,7 @@ const frequencies = useStdFrequenciesStore();
 
 interface FormState {
     name: string;
+    nickname: string;
     description: string;
     default_hours: string | number;
     initial_only: boolean;
@@ -84,6 +85,7 @@ function blankCert(): Pick<
 
 const form = reactive<FormState>({
     name: '',
+    nickname: '',
     description: '',
     default_hours: '',
     initial_only: false,
@@ -122,6 +124,7 @@ watch(
         if (isEdit.value && props.target) {
             const t = props.target;
             form.name = t.name;
+            form.nickname = t.nickname ?? '';
             form.description = t.description ?? '';
             form.default_hours = t.default_hours ?? '';
             form.initial_only = t.initial_only;
@@ -137,6 +140,7 @@ watch(
             form.default_address = t.default_address ?? '';
         } else {
             form.name = '';
+            form.nickname = '';
             form.description = '';
             form.default_hours = '';
             form.initial_only = false;
@@ -166,6 +170,7 @@ const submit = async () => {
         const blank = (v: string) => (v.trim() === '' ? null : v);
         const payload = {
             name: form.name,
+            nickname: blank(form.nickname),
             description: blank(form.description),
             default_hours: optionalNumber(form.default_hours),
             initial_only: form.initial_only,
@@ -217,6 +222,16 @@ const submit = async () => {
                     <Label for="t_name">Name</Label>
                     <Input id="t_name" v-model="form.name" required autofocus />
                     <InputError :message="fieldErrors.message('name')" />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="t_nickname">Nickname (optional)</Label>
+                    <Input
+                        id="t_nickname"
+                        v-model="form.nickname"
+                        placeholder="Short alias, e.g. FallPro"
+                    />
+                    <InputError :message="fieldErrors.message('nickname')" />
                 </div>
 
                 <div class="grid gap-2">
