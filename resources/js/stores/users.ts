@@ -96,6 +96,14 @@ export const useUsersStore = defineStore('users', () => {
         fieldOptionsLoaded.value = true;
     }
 
+    // Any user add/update may introduce a new department/location/job_title,
+    // so drop the cache; the next form open refetches fresh distinct values
+    // (no page refresh needed). Lazy on purpose — we only pay for the refetch
+    // when the form is actually reopened.
+    function invalidateFieldOptions(): void {
+        fieldOptionsLoaded.value = false;
+    }
+
     function hydrate(initial: UserRow[]) {
         users.value = [...initial];
     }
@@ -159,6 +167,8 @@ export const useUsersStore = defineStore('users', () => {
                 can_delete: false,
             },
         ];
+
+        invalidateFieldOptions();
     }
 
     function applyUpdated(payload: BroadcastUser) {
@@ -187,6 +197,8 @@ export const useUsersStore = defineStore('users', () => {
                   }
                 : u,
         );
+
+        invalidateFieldOptions();
     }
 
     function applySoftDeleted(id: string) {
@@ -232,7 +244,12 @@ export const useUsersStore = defineStore('users', () => {
             form as unknown as Record<string, string>,
             {
                 preserveScroll: true,
-                onSuccess: () => opts.onSuccess?.(),
+                onSuccess: () => {
+                    // The new user may carry a fresh department/location/
+                    // job_title — refresh the type-ahead options next open.
+                    invalidateFieldOptions();
+                    opts.onSuccess?.();
+                },
                 onError: (errors) =>
                     opts.onError?.(errors as Record<string, string>),
             },
@@ -257,7 +274,10 @@ export const useUsersStore = defineStore('users', () => {
             form as unknown as Record<string, string>,
             {
                 preserveScroll: true,
-                onSuccess: () => opts.onSuccess?.(),
+                onSuccess: () => {
+                    invalidateFieldOptions();
+                    opts.onSuccess?.();
+                },
                 onError: (errors) =>
                     opts.onError?.(errors as Record<string, string>),
             },
