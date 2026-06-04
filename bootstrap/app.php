@@ -21,6 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        // Browsers POST CSP violation reports with no CSRF token.
+        $middleware->validateCsrfTokens(except: ['api/csp-report']);
+
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,

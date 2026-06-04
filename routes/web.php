@@ -8,6 +8,7 @@ use App\Http\Controllers\ClassDocumentsController;
 use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\CompletionsController;
+use App\Http\Controllers\CspReportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\NotificationsController;
@@ -31,6 +32,12 @@ Route::inertia('/', 'Welcome', [
 // Phase 16.5 — detailed liveness for uptime monitors. Public + minimal;
 // complements the framework's boots-only `/up`.
 Route::get('health/detailed', [HealthController::class, 'detailed'])->name('health.detailed');
+
+// CSP violation sink (Content-Security-Policy-Report-Only). Public + CSRF-exempt
+// (browsers send no token) + throttled to bound log volume.
+Route::post('api/csp-report', [CspReportController::class, 'store'])
+    ->middleware('throttle:120,1')
+    ->name('csp.report');
 
 // Current session CSRF token, for the SPA to refresh a stale one. The meta
 // token is rendered once at page load and goes stale if the page is left open
