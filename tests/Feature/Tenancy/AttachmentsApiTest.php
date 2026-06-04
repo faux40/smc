@@ -6,6 +6,7 @@ use App\Events\AttachmentCreated;
 use App\Events\AttachmentDeleted;
 use App\Models\Attachment;
 use App\Models\Organization;
+use App\Models\TrainingClass;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -229,6 +230,69 @@ class AttachmentsApiTest extends TestCase
         $this->actingAs($userA)
             ->get("/api/attachments/{$att->id}/download")
             ->assertNotFound();
+    }
+
+    public function test_anyone_in_org_can_list_class_attachments(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('None')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $class->attachments()->create([
+            'org_id' => $org->id,
+            'uploaded_by_user_id' => $member->id,
+            'filename' => 'roster.pdf',
+            'mime' => 'application/pdf',
+            'size' => 1024,
+            'disk' => 'linode',
+            'path' => 'attachments/roster.pdf',
+        ]);
+
+        $this->actingAs($member)
+            ->getJson('/api/attachments?'.http_build_query([
+                'attachable_type' => TrainingClass::class,
+                'attachable_id' => $class->id,
+            ]))
+            ->assertOk()
+            ->assertJsonCount(1);
+    }
+
+    public function test_anyone_in_org_can_upload_to_class(): void
+    {
+        $org = Organization::factory()->create();
+        $uploader = User::factory()->for($org, 'organization')->withRole('None')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $file = UploadedFile::fake()->create('handout.pdf', 256, 'application/pdf');
+
+        $response = $this->actingAs($uploader)
+            ->post('/api/attachments', [
+                'attachable_type' => TrainingClass::class,
+                'attachable_id' => $class->id,
+                'file' => $file,
+            ], ['Accept' => 'application/json']);
+
+        $response->assertCreated();
+        $row = Attachment::firstOrFail();
+        $this->assertSame(TrainingClass::class, $row->attachable_type);
+        $this->assertSame($class->id, $row->attachable_id);
+        $this->assertSame($org->id, $row->org_id);
+        Storage::disk('linode')->assertExists($row->path);
+    }
+
+    public function test_upload_rejects_cross_org_class(): void
+    {
+        $orgA = Organization::factory()->create();
+        $orgB = Organization::factory()->create();
+        $uploaderA = User::factory()->for($orgA, 'organization')->create();
+        $classB = TrainingClass::factory()->for($orgB, 'organization')->create();
+        $file = UploadedFile::fake()->create('x.pdf', 32);
+
+        $this->actingAs($uploaderA)
+            ->post('/api/attachments', [
+                'attachable_type' => TrainingClass::class,
+                'attachable_id' => $classB->id,
+                'file' => $file,
+            ], ['Accept' => 'application/json'])
+            ->assertForbidden();
     }
 
     public function test_create_delete_broadcast(): void

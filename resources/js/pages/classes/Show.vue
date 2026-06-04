@@ -3,6 +3,7 @@ import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
+import AttachmentsList from '@/components/AttachmentsList.vue';
 import ClassFieldset from '@/components/ClassFieldset.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import { Badge } from '@/components/ui/badge';
@@ -398,6 +399,17 @@ const totalHoursLabel = computed(
                                 Certificates and the class summary are available
                                 once the class is completed.
                             </p>
+
+                            <!-- Uploaded files (distinct from the generated PDFs above) -->
+                            <div class="space-y-2 border-t border-border pt-4">
+                                <h3 class="text-xs font-semibold text-muted-foreground">
+                                    Uploaded files
+                                </h3>
+                                <AttachmentsList
+                                    morphable-type="App\Models\TrainingClass"
+                                    :morphable-id="props.classId"
+                                />
+                            </div>
                         </section>
                     </div>
 

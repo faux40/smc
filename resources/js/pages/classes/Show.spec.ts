@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import AttachmentsList from '@/components/AttachmentsList.vue';
 import Show from '@/pages/classes/Show.vue';
 import type { ClassDetail } from '@/stores/classes';
 
@@ -47,7 +48,11 @@ function mockGet() {
             return Promise.resolve({ data: detail });
         }
 
-        if (url === '/api/trainings' || url === '/api/tags') {
+        if (
+            url === '/api/trainings' ||
+            url === '/api/tags' ||
+            url === '/api/attachments'
+        ) {
             return Promise.resolve({ data: [] });
         }
 
@@ -123,6 +128,17 @@ describe('classes/Show inline edit', () => {
         // Scheduled class → no certificate / summary links yet.
         expect(hrefs).not.toContain('/api/classes/c1/certificates');
         expect(hrefs).not.toContain('/api/classes/c1/summary');
+    });
+
+    it('mounts AttachmentsList wired to this class as the morphable', async () => {
+        const wrapper = await mountShow();
+
+        const attachments = wrapper.findComponent(AttachmentsList);
+        expect(attachments.exists()).toBe(true);
+        expect(attachments.props('morphableType')).toBe(
+            'App\\Models\\TrainingClass',
+        );
+        expect(attachments.props('morphableId')).toBe('c1');
     });
 
     it('lists the enrolled student name in the right-hand roster column', async () => {

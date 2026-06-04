@@ -7,6 +7,7 @@ use App\Events\AttachmentDeleted;
 use App\Models\Attachment;
 use App\Models\Requirement;
 use App\Models\Training;
+use App\Models\TrainingClass;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -27,6 +28,7 @@ class AttachmentsController extends Controller
         User::class,
         Training::class,
         Requirement::class,
+        TrainingClass::class,
     ];
 
     private const STORAGE_DISK = 'linode';
