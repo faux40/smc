@@ -99,6 +99,44 @@ class UsersIndexTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page->has('users', 1));
     }
 
+    public function test_index_search_covers_profile_fields_case_insensitively(): void
+    {
+        $org = Organization::factory()->create();
+        $owner = $this->ownerOf($org);
+        User::factory()->forOrganization($org)->create([
+            'f_name' => 'Dana', 'l_name' => 'Reed',
+            'job_title' => 'Foreman', 'department' => 'Operations',
+            'location' => 'Yard 3', 'employee_number' => 'EMP-1234',
+        ]);
+        User::factory()->forOrganization($org)->create([
+            'f_name' => 'Sam', 'l_name' => 'Lee',
+            'job_title' => 'Analyst', 'department' => 'Admin',
+            'location' => 'HQ', 'employee_number' => 'EMP-9999',
+        ]);
+
+        // Only the Dana row matches each of these (owner + Sam have null/other
+        // values). The factory leaves the profile fields null on the others.
+        $expectOne = function (string $q) use ($owner): void {
+            $this->actingAs($owner)
+                ->get(route('users.index', ['q' => $q]))
+                ->assertInertia(fn (AssertableInertia $page) => $page->has('users', 1));
+        };
+
+        // Newly searchable profile fields.
+        $expectOne('Foreman');     // job_title
+        $expectOne('Operations');  // department
+        $expectOne('Yard 3');      // location
+        $expectOne('EMP-1234');    // employee_number
+
+        // Case-insensitive across all searched columns (Postgres LIKE is
+        // case-sensitive, so these would miss before the fix).
+        $expectOne('foreman');
+        $expectOne('operATIONS');
+        $expectOne('emp-1234');
+        $expectOne('dana');        // f_name
+        $expectOne('REED');        // l_name
+    }
+
     public function test_index_status_filter_hides_disabled_by_default(): void
     {
         $org = Organization::factory()->create();

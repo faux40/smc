@@ -44,12 +44,23 @@ class UsersController extends Controller
         $users = User::query()
             ->with(['roles:id,name', 'tags:id'])
             ->when(! $includeDisabled, fn ($q) => $q->where('status', 'active'))
-            ->when($search !== '', fn ($q) => $q->where(function ($inner) use ($search) {
-                $inner->where('f_name', 'like', "%{$search}%")
-                    ->orWhere('m_name', 'like', "%{$search}%")
-                    ->orWhere('l_name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
-            }))
+            ->when($search !== '', function ($q) use ($search) {
+                // Case-insensitive via LOWER() on both sides — portable across
+                // sqlite (tests) and Postgres (dev/prod), where bare LIKE is
+                // case-sensitive. Column names are a fixed allowlist, never
+                // user input, so interpolating them into the raw clause is safe.
+                $term = '%'.mb_strtolower($search).'%';
+                $columns = [
+                    'f_name', 'm_name', 'l_name', 'email',
+                    'job_title', 'department', 'location', 'employee_number',
+                ];
+
+                $q->where(function ($inner) use ($columns, $term) {
+                    foreach ($columns as $column) {
+                        $inner->orWhereRaw("LOWER({$column}) LIKE ?", [$term]);
+                    }
+                });
+            })
             ->when(count($tagIds) > 0, function ($q) use ($tagIds, $tagsMode) {
                 // `taggables.taggable_id` is varchar (schema kept generic
                 // for mixed-PK morphs); `users.id` is uuid. Postgres

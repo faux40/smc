@@ -214,7 +214,7 @@ const remove = (row: UserRow) => {
         <div class="flex flex-wrap items-center gap-3">
             <Input
                 v-model="search"
-                placeholder="Search by name or email"
+                placeholder="Search name, email, title, dept, location, emp #"
                 class="max-w-xs"
             />
             <Select v-model="roleFilter" @update:model-value="applyFilters">

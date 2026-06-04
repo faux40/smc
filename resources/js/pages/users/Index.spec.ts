@@ -141,7 +141,7 @@ describe('users/Index — live filtering', () => {
 
         vi.useFakeTimers();
         const search = wrapper.find(
-            'input[placeholder="Search by name or email"]',
+            'input[placeholder="Search name, email, title, dept, location, emp #"]',
         );
         await search.setValue('dana');
 
