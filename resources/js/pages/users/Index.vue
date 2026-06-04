@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { watchDebounced } from '@vueuse/core';
 import { onMounted, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
 import SortableHeader from '@/components/SortableHeader.vue';
@@ -144,6 +145,11 @@ const applyFilters = () => {
     );
 };
 
+// Search applies live as the user types — debounced so each keystroke doesn't
+// fire a request. Role / disabled / tag changes call applyFilters immediately
+// (discrete actions), so no Apply button is needed.
+watchDebounced(search, () => applyFilters(), { debounce: 300 });
+
 const roles = [
     'Owner',
     'SuperAdmin',
@@ -210,7 +216,6 @@ const remove = (row: UserRow) => {
                 v-model="search"
                 placeholder="Search by name or email"
                 class="max-w-xs"
-                @keyup.enter="applyFilters"
             />
             <Select v-model="roleFilter" @update:model-value="applyFilters">
                 <SelectTrigger class="w-44">
@@ -235,7 +240,6 @@ const remove = (row: UserRow) => {
                 />
                 Show disabled
             </label>
-            <Button variant="outline" @click="applyFilters">Apply</Button>
         </div>
 
         <div

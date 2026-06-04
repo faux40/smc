@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import UsersIndex from '@/pages/users/Index.vue';
 import type { UserRow } from '@/stores/users';
 
+const { routerGet } = vi.hoisted(() => ({ routerGet: vi.fn() }));
+
 vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
     Link: { template: '<a><slot /></a>' },
-    router: { get: vi.fn() },
+    router: { get: routerGet },
     usePage: () => ({
         props: { auth: { user: { id: 'me', org_id: 'org1' } } },
     }),
@@ -116,5 +118,44 @@ describe('users/Index — sortable columns', () => {
             'Zoe Charlie',
             'Bob Baker',
         ]);
+    });
+});
+
+describe('users/Index — live filtering', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+    });
+
+    it('has no Apply button — filters apply live', async () => {
+        const wrapper = mountIndex();
+        await flushPromises();
+        expect(
+            wrapper.findAll('button').some((b) => b.text().trim() === 'Apply'),
+        ).toBe(false);
+    });
+
+    it('applies the search filter as you type, debounced', async () => {
+        const wrapper = mountIndex();
+        await flushPromises();
+
+        vi.useFakeTimers();
+        const search = wrapper.find(
+            'input[placeholder="Search by name or email"]',
+        );
+        await search.setValue('dana');
+
+        // Not yet — still within the debounce window.
+        expect(routerGet).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(400);
+        vi.useRealTimers();
+
+        expect(routerGet).toHaveBeenCalledTimes(1);
+        expect(routerGet).toHaveBeenLastCalledWith(
+            '/users',
+            expect.objectContaining({ q: 'dana' }),
+            expect.objectContaining({ preserveState: true }),
+        );
     });
 });
