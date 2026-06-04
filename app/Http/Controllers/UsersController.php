@@ -155,6 +155,29 @@ class UsersController extends Controller
     }
 
     /**
+     * Distinct existing values for the free-text profile fields, scoped to the
+     * caller's org (the User model's global org scope handles tenancy). Feeds
+     * the type-ahead on the user form so admins reuse "Foreman" instead of
+     * coining "foreman" / "Fore man" — standardization without enforcement.
+     */
+    public function fieldOptions(): JsonResponse
+    {
+        $distinct = fn (string $column): array => User::query()
+            ->whereNotNull($column)
+            ->where($column, '!=', '')
+            ->distinct()
+            ->orderBy($column)
+            ->pluck($column)
+            ->all();
+
+        return response()->json([
+            'department' => $distinct('department'),
+            'location' => $distinct('location'),
+            'job_title' => $distinct('job_title'),
+        ]);
+    }
+
+    /**
      * Per-user detail page (Phase 13.3). Renders the Inertia shell with
      * the basic user header; compliance + completion timelines stream
      * in via the JSON `compliance()` endpoint on mount.

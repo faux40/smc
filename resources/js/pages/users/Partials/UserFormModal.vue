@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
+import ComboboxInput from '@/components/ComboboxInput.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -120,6 +121,9 @@ watch(
         }
 
         errorStore.clear(FORM_CTX);
+        // Cached after the first open — feeds the department/location/job_title
+        // type-ahead so entries stay standardized across the org.
+        void store.loadFieldOptions();
 
         if (isEdit.value && props.target) {
             const t = props.target as UserRow & {
@@ -233,7 +237,7 @@ const submit = () => {
 
 <template>
     <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
-        <DialogContent>
+        <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
             <form @submit.prevent="submit" class="space-y-4">
                 <DialogHeader>
                     <DialogTitle>{{ title }}</DialogTitle>
@@ -325,14 +329,22 @@ const submit = () => {
                 <div class="grid grid-cols-2 gap-3">
                     <div class="grid gap-2">
                         <Label for="user_department">Department</Label>
-                        <Input id="user_department" v-model="form.department" />
+                        <ComboboxInput
+                            id="user_department"
+                            v-model="form.department"
+                            :suggestions="store.fieldOptions.department"
+                        />
                         <InputError
                             :message="fieldErrors.message('department')"
                         />
                     </div>
                     <div class="grid gap-2">
                         <Label for="user_location">Location</Label>
-                        <Input id="user_location" v-model="form.location" />
+                        <ComboboxInput
+                            id="user_location"
+                            v-model="form.location"
+                            :suggestions="store.fieldOptions.location"
+                        />
                         <InputError
                             :message="fieldErrors.message('location')"
                         />
@@ -342,7 +354,11 @@ const submit = () => {
                 <div class="grid grid-cols-2 gap-3">
                     <div class="grid gap-2">
                         <Label for="user_job_title">Job title</Label>
-                        <Input id="user_job_title" v-model="form.job_title" />
+                        <ComboboxInput
+                            id="user_job_title"
+                            v-model="form.job_title"
+                            :suggestions="store.fieldOptions.job_title"
+                        />
                         <InputError
                             :message="fieldErrors.message('job_title')"
                         />

@@ -12,6 +12,7 @@
  */
 
 import { router } from '@inertiajs/vue3';
+import axios from 'axios';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useRealtime } from '@/composables/useRealtime';
@@ -51,6 +52,12 @@ export interface UserRow {
     can_delete: boolean;
 }
 
+export interface FieldOptions {
+    department: string[];
+    location: string[];
+    job_title: string[];
+}
+
 interface BroadcastUser {
     id: string;
     name?: string;
@@ -66,6 +73,28 @@ interface BroadcastUser {
 export const useUsersStore = defineStore('users', () => {
     const users = ref<UserRow[]>([]);
     const subscribedOrgId = ref<string | null>(null);
+
+    // Distinct existing values for the free-text profile fields, cached so the
+    // user-form type-ahead doesn't refetch on every open. One round trip per
+    // session unless forced (e.g. after adding a brand-new value).
+    const fieldOptions = ref<FieldOptions>({
+        department: [],
+        location: [],
+        job_title: [],
+    });
+    const fieldOptionsLoaded = ref(false);
+
+    async function loadFieldOptions(force = false): Promise<void> {
+        if (fieldOptionsLoaded.value && !force) {
+            return;
+        }
+
+        const { data } = await axios.get<FieldOptions>(
+            '/api/users/field-options',
+        );
+        fieldOptions.value = data;
+        fieldOptionsLoaded.value = true;
+    }
 
     function hydrate(initial: UserRow[]) {
         users.value = [...initial];
@@ -267,6 +296,8 @@ export const useUsersStore = defineStore('users', () => {
     return {
         users,
         count,
+        fieldOptions,
+        loadFieldOptions,
         hydrate,
         subscribe,
         applyAdded,
