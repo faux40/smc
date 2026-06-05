@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useTableSort } from '@/composables/useTableSort';
 import { realtimeTabId } from '@/echo';
 import AssignmentFormModal from '@/pages/assignments/Partials/AssignmentFormModal.vue';
 import BulkAssignmentsModal from '@/pages/assignments/Partials/BulkAssignmentsModal.vue';
@@ -45,6 +46,12 @@ interface UserPickerRow {
     l_name: string;
     email: string | null;
     tag_ids: string[];
+    employee_number: string | null;
+    department: string | null;
+    location: string | null;
+    job_title: string | null;
+    supervisor_id: string | null;
+    supervisor_name: string | null;
 }
 
 const store = useAssignmentsStore();
@@ -113,9 +120,6 @@ function clearFilters(): void {
     tagFilterMode.value = 'and';
 }
 
-type SortKey = 'user' | 'count' | 'tags';
-const sortKey = ref<SortKey>('user');
-const sortAsc = ref(true);
 
 const modalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
@@ -295,10 +299,15 @@ interface UserGroup {
     user_id: string;
     name: string;
     email: string | null;
+    employee_number: string | null;
+    department: string | null;
+    location: string | null;
+    job_title: string | null;
+    supervisor_name: string | null;
     assignments: AssignmentRow[];
 }
 
-const userGroups = computed<UserGroup[]>(() => {
+const filteredGroups = computed<UserGroup[]>(() => {
     const byUser = new Map<string, AssignmentRow[]>();
 
     for (const a of store.rows) {
@@ -324,8 +333,9 @@ const userGroups = computed<UserGroup[]>(() => {
 
     for (const user_id of userIds) {
         const assignments = byUser.get(user_id) ?? [];
+        const u = userById(user_id);
         const name = userName(user_id) || user_id;
-        const email = userById(user_id)?.email ?? null;
+        const email = u?.email ?? null;
 
         if (
             !matchUser(user_id) ||
@@ -337,29 +347,39 @@ const userGroups = computed<UserGroup[]>(() => {
         }
 
         assignments.sort((a, b) => reqName(a).localeCompare(reqName(b)));
-        groups.push({ user_id, name, email, assignments });
+        groups.push({
+            user_id,
+            name,
+            email,
+            employee_number: u?.employee_number ?? null,
+            department: u?.department ?? null,
+            location: u?.location ?? null,
+            job_title: u?.job_title ?? null,
+            supervisor_name: u?.supervisor_name ?? null,
+            assignments,
+        });
     }
-
-    const dir = sortAsc.value ? 1 : -1;
-
-    groups.sort((a, b) => {
-        let cmp: number;
-
-        if (sortKey.value === 'count') {
-            cmp = a.assignments.length - b.assignments.length;
-        } else if (sortKey.value === 'tags') {
-            cmp = tagSignature(a.user_id).localeCompare(
-                tagSignature(b.user_id),
-            );
-        } else {
-            cmp = a.name.localeCompare(b.name);
-        }
-
-        return cmp * dir;
-    });
 
     return groups;
 });
+
+// Sorting via the shared composable (empties last, case-insensitive). `tags`
+// sorts by the row's tag signature; `count` by the number of assignments.
+const { sortKey, sortDir, toggleSort, sorted: userGroups } =
+    useTableSort<UserGroup>(
+        () => filteredGroups.value,
+        {
+            user: (g) => g.name,
+            count: (g) => g.assignments.length,
+            tags: (g) => tagSignature(g.user_id),
+            employee_number: (g) => g.employee_number,
+            department: (g) => g.department,
+            location: (g) => g.location,
+            job_title: (g) => g.job_title,
+            supervisor: (g) => g.supervisor_name,
+        },
+        { key: 'user', dir: 'asc' },
+    );
 
 const shownAssignmentCount = computed(() =>
     userGroups.value.reduce((n, g) => n + g.assignments.length, 0),
@@ -414,21 +434,12 @@ watch(showExpired, (v) => {
     });
 });
 
-function toggleSort(key: SortKey): void {
-    if (sortKey.value === key) {
-        sortAsc.value = !sortAsc.value;
-    } else {
-        sortKey.value = key;
-        sortAsc.value = true;
-    }
-}
-
-function sortIndicator(key: SortKey): string {
+function sortIndicator(key: string): string {
     if (sortKey.value !== key) {
         return '';
     }
 
-    return sortAsc.value ? '▲' : '▼';
+    return sortDir.value === 'asc' ? '▲' : '▼';
 }
 
 const userOptions = computed(() =>
@@ -655,6 +666,64 @@ function defaultHeaders(): Record<string, string> {
                                 </button>
                             </th>
                             <th
+                                class="px-4 py-2 text-left align-top font-medium"
+                            >
+                                <button
+                                    type="button"
+                                    class="whitespace-nowrap hover:underline"
+                                    @click="toggleSort('employee_number')"
+                                >
+                                    Employee #
+                                    {{ sortIndicator('employee_number') }}
+                                </button>
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left align-top font-medium"
+                            >
+                                <button
+                                    type="button"
+                                    class="whitespace-nowrap hover:underline"
+                                    @click="toggleSort('job_title')"
+                                >
+                                    Job title {{ sortIndicator('job_title') }}
+                                </button>
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left align-top font-medium"
+                            >
+                                <button
+                                    type="button"
+                                    class="hover:underline"
+                                    @click="toggleSort('department')"
+                                >
+                                    Department
+                                    {{ sortIndicator('department') }}
+                                </button>
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left align-top font-medium"
+                            >
+                                <button
+                                    type="button"
+                                    class="hover:underline"
+                                    @click="toggleSort('location')"
+                                >
+                                    Location {{ sortIndicator('location') }}
+                                </button>
+                            </th>
+                            <th
+                                class="px-4 py-2 text-left align-top font-medium"
+                            >
+                                <button
+                                    type="button"
+                                    class="hover:underline"
+                                    @click="toggleSort('supervisor')"
+                                >
+                                    Supervisor
+                                    {{ sortIndicator('supervisor') }}
+                                </button>
+                            </th>
+                            <th
                                 class="w-72 px-4 py-2 text-left align-top font-medium"
                             >
                                 <button
@@ -699,6 +768,21 @@ function defaultHeaders(): Record<string, string> {
                                 >
                                     {{ group.email }}
                                 </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                {{ group.employee_number ?? '—' }}
+                            </td>
+                            <td class="px-4 py-3">
+                                {{ group.job_title ?? '—' }}
+                            </td>
+                            <td class="px-4 py-3">
+                                {{ group.department ?? '—' }}
+                            </td>
+                            <td class="px-4 py-3">
+                                {{ group.location ?? '—' }}
+                            </td>
+                            <td class="px-4 py-3">
+                                {{ group.supervisor_name ?? '—' }}
                             </td>
                             <td class="px-4 py-3">
                                 <TagsListCell
