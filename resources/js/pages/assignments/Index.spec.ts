@@ -4,12 +4,16 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AssignmentsIndex from '@/pages/assignments/Index.vue';
 
+const { authUser } = vi.hoisted(() => ({
+    authUser: {
+        value: { id: 'me', org_id: 'org1' } as Record<string, unknown>,
+    },
+}));
+
 vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
-    usePage: () => ({
-        props: { auth: { user: { id: 'me', org_id: 'org1' } } },
-    }),
+    usePage: () => ({ props: { auth: { user: authUser.value } } }),
 }));
 vi.mock('@/routes/assignments', () => ({ page: () => ({ url: '/assignments' }) }));
 
@@ -55,6 +59,19 @@ describe('assignments/Index — user profile columns', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        authUser.value = { id: 'me', org_id: 'org1' };
+    });
+
+    it('hides a column the user has turned off in their preferences', async () => {
+        authUser.value = {
+            id: 'me',
+            org_id: 'org1',
+            preferences: { assignments: { visible_columns: { location: false } } },
+        };
+        const wrapper = await mountPage();
+        const headers = wrapper.findAll('thead th').map((th) => th.text());
+        expect(headers.some((h) => h.includes('Location'))).toBe(false);
+        expect(headers.some((h) => h.includes('User'))).toBe(true);
     });
 
     it('renders the new profile column headers', async () => {

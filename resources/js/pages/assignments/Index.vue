@@ -15,6 +15,7 @@ import FilterModeToggle from '@/components/FilterModeToggle.vue';
 import type { FilterMode } from '@/components/FilterModeToggle.vue';
 import Heading from '@/components/Heading.vue';
 import MultiSelectFilter from '@/components/MultiSelectFilter.vue';
+import TableColumnsMenu from '@/components/TableColumnsMenu.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
@@ -23,12 +24,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTableSort } from '@/composables/useTableSort';
+import { useTableView } from '@/composables/useTableView';
 import { realtimeTabId } from '@/echo';
 import AssignmentFormModal from '@/pages/assignments/Partials/AssignmentFormModal.vue';
 import BulkAssignmentsModal from '@/pages/assignments/Partials/BulkAssignmentsModal.vue';
 import { page as assignmentsPage } from '@/routes/assignments';
 import { useAssignmentsStore } from '@/stores/assignments';
 import type { AssignmentRow } from '@/stores/assignments';
+import { usePreferencesStore } from '@/stores/preferences';
 import { useRequirementsStore } from '@/stores/requirements';
 import { useTagsStore } from '@/stores/tags';
 
@@ -67,6 +70,7 @@ const authUser = computed(
             isSuperAdmin?: boolean;
             isAdmin?: boolean;
             isManager?: boolean;
+            preferences?: import('@/stores/preferences').PrefsBlob | null;
         } | null,
 );
 const canCreate = computed(() =>
@@ -147,6 +151,8 @@ onMounted(async () => {
     expiryTimer = setInterval(() => {
         nowDate.value = new Date().toISOString().slice(0, 10);
     }, 60_000);
+
+    prefs.ensureHydrated(authUser.value?.preferences ?? null);
 
     if (authUser.value?.org_id) {
         store.subscribe(authUser.value.org_id);
@@ -370,7 +376,7 @@ const { sortKey, sortDir, toggleSort, sorted: userGroups } =
         () => filteredGroups.value,
         {
             user: (g) => g.name,
-            count: (g) => g.assignments.length,
+            assignments: (g) => g.assignments.length,
             tags: (g) => tagSignature(g.user_id),
             employee_number: (g) => g.employee_number,
             department: (g) => g.department,
@@ -380,6 +386,44 @@ const { sortKey, sortDir, toggleSort, sorted: userGroups } =
         },
         { key: 'user', dir: 'asc' },
     );
+
+// Per-user column control (show/hide + reorder), persisted via the prefs store.
+// The select-checkbox column is fixed (not in this set).
+const prefs = usePreferencesStore();
+const {
+    columns: columnDefs,
+    visibleColumns,
+    toggle: toggleColumn,
+    move: moveColumn,
+} = useTableView('assignments', [
+    { key: 'user', label: 'User', sortable: true },
+    { key: 'employee_number', label: 'Employee #', sortable: true },
+    { key: 'job_title', label: 'Job title', sortable: true },
+    { key: 'department', label: 'Department', sortable: true },
+    { key: 'location', label: 'Location', sortable: true },
+    { key: 'supervisor', label: 'Supervisor', sortable: true },
+    { key: 'tags', label: 'Tags', sortable: true },
+    { key: 'assignments', label: 'Assignments', sortable: true },
+]);
+
+// Plain-text value for the profile columns (user/tags/assignments render their
+// own markup in the template).
+function cellText(g: UserGroup, key: string): string {
+    const value =
+        key === 'supervisor'
+            ? g.supervisor_name
+            : key === 'employee_number'
+              ? g.employee_number
+              : key === 'job_title'
+                ? g.job_title
+                : key === 'department'
+                  ? g.department
+                  : key === 'location'
+                    ? g.location
+                    : null;
+
+    return value ?? '—';
+}
 
 const shownAssignmentCount = computed(() =>
     userGroups.value.reduce((n, g) => n + g.assignments.length, 0),
@@ -568,6 +612,12 @@ function defaultHeaders(): Record<string, string> {
                 {{ store.rows.length }}
                 assignments
             </span>
+            <TableColumnsMenu
+                class="ml-auto self-end"
+                :columns="columnDefs"
+                @toggle="toggleColumn"
+                @move="moveColumn"
+            />
         </div>
 
         <div
@@ -655,92 +705,16 @@ function defaultHeaders(): Record<string, string> {
                                 />
                             </th>
                             <th
-                                class="w-64 px-4 py-2 text-left align-top font-medium"
-                            >
-                                <button
-                                    type="button"
-                                    class="hover:underline"
-                                    @click="toggleSort('user')"
-                                >
-                                    User {{ sortIndicator('user') }}
-                                </button>
-                            </th>
-                            <th
+                                v-for="col in visibleColumns"
+                                :key="col.key"
                                 class="px-4 py-2 text-left align-top font-medium"
                             >
                                 <button
                                     type="button"
                                     class="whitespace-nowrap hover:underline"
-                                    @click="toggleSort('employee_number')"
+                                    @click="toggleSort(col.key)"
                                 >
-                                    Employee #
-                                    {{ sortIndicator('employee_number') }}
-                                </button>
-                            </th>
-                            <th
-                                class="px-4 py-2 text-left align-top font-medium"
-                            >
-                                <button
-                                    type="button"
-                                    class="whitespace-nowrap hover:underline"
-                                    @click="toggleSort('job_title')"
-                                >
-                                    Job title {{ sortIndicator('job_title') }}
-                                </button>
-                            </th>
-                            <th
-                                class="px-4 py-2 text-left align-top font-medium"
-                            >
-                                <button
-                                    type="button"
-                                    class="hover:underline"
-                                    @click="toggleSort('department')"
-                                >
-                                    Department
-                                    {{ sortIndicator('department') }}
-                                </button>
-                            </th>
-                            <th
-                                class="px-4 py-2 text-left align-top font-medium"
-                            >
-                                <button
-                                    type="button"
-                                    class="hover:underline"
-                                    @click="toggleSort('location')"
-                                >
-                                    Location {{ sortIndicator('location') }}
-                                </button>
-                            </th>
-                            <th
-                                class="px-4 py-2 text-left align-top font-medium"
-                            >
-                                <button
-                                    type="button"
-                                    class="hover:underline"
-                                    @click="toggleSort('supervisor')"
-                                >
-                                    Supervisor
-                                    {{ sortIndicator('supervisor') }}
-                                </button>
-                            </th>
-                            <th
-                                class="w-72 px-4 py-2 text-left align-top font-medium"
-                            >
-                                <button
-                                    type="button"
-                                    class="hover:underline"
-                                    @click="toggleSort('tags')"
-                                >
-                                    Tags {{ sortIndicator('tags') }}
-                                </button>
-                            </th>
-                            <th class="px-4 py-2 text-left font-medium">
-                                <button
-                                    type="button"
-                                    class="hover:underline"
-                                    @click="toggleSort('count')"
-                                >
-                                    Assignments {{ sortIndicator('count') }}
+                                    {{ col.label }} {{ sortIndicator(col.key) }}
                                 </button>
                             </th>
                         </tr>
@@ -760,58 +734,54 @@ function defaultHeaders(): Record<string, string> {
                                     "
                                 />
                             </td>
-                            <td class="px-4 py-3">
-                                <div class="font-medium">{{ group.name }}</div>
-                                <div
-                                    v-if="group.email"
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    {{ group.email }}
-                                </div>
-                            </td>
-                            <td class="px-4 py-3">
-                                {{ group.employee_number ?? '—' }}
-                            </td>
-                            <td class="px-4 py-3">
-                                {{ group.job_title ?? '—' }}
-                            </td>
-                            <td class="px-4 py-3">
-                                {{ group.department ?? '—' }}
-                            </td>
-                            <td class="px-4 py-3">
-                                {{ group.location ?? '—' }}
-                            </td>
-                            <td class="px-4 py-3">
-                                {{ group.supervisor_name ?? '—' }}
-                            </td>
-                            <td class="px-4 py-3">
-                                <TagsListCell
-                                    :morphable-type="USER_TYPE"
-                                    :morphable-id="group.user_id"
-                                />
-                            </td>
-                            <td class="px-4 py-3">
-                                <div
-                                    class="flex flex-wrap items-center gap-1.5"
-                                >
-                                    <AssignmentPill
-                                        v-for="a in group.assignments"
-                                        :key="a.id"
-                                        :label="reqName(a)"
-                                        :summary="a.element_timing"
-                                        :expired="isExpired(a)"
-                                        @click="openEdit(a)"
-                                    />
-                                    <button
-                                        v-if="canCreate"
-                                        type="button"
-                                        class="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                                        title="Add an assignment for this user"
-                                        @click="openCreate(group.user_id)"
+                            <td
+                                v-for="col in visibleColumns"
+                                :key="col.key"
+                                class="px-4 py-3"
+                            >
+                                <template v-if="col.key === 'user'">
+                                    <div class="font-medium">
+                                        {{ group.name }}
+                                    </div>
+                                    <div
+                                        v-if="group.email"
+                                        class="text-xs text-muted-foreground"
                                     >
-                                        + Add
-                                    </button>
-                                </div>
+                                        {{ group.email }}
+                                    </div>
+                                </template>
+                                <template v-else-if="col.key === 'tags'">
+                                    <TagsListCell
+                                        :morphable-type="USER_TYPE"
+                                        :morphable-id="group.user_id"
+                                    />
+                                </template>
+                                <template v-else-if="col.key === 'assignments'">
+                                    <div
+                                        class="flex flex-wrap items-center gap-1.5"
+                                    >
+                                        <AssignmentPill
+                                            v-for="a in group.assignments"
+                                            :key="a.id"
+                                            :label="reqName(a)"
+                                            :summary="a.element_timing"
+                                            :expired="isExpired(a)"
+                                            @click="openEdit(a)"
+                                        />
+                                        <button
+                                            v-if="canCreate"
+                                            type="button"
+                                            class="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                                            title="Add an assignment for this user"
+                                            @click="openCreate(group.user_id)"
+                                        >
+                                            + Add
+                                        </button>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    {{ cellText(group, col.key) }}
+                                </template>
                             </td>
                         </tr>
                     </tbody>
