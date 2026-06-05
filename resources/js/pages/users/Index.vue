@@ -71,6 +71,7 @@ const { sortKey, sortDir, toggleSort, sorted } = useTableSort<UserRow>(
         employee_number: (u) => u.employee_number,
         department: (u) => u.department,
         location: (u) => u.location,
+        supervisor: (u) => u.supervisor_name,
     },
     { key: 'name', dir: 'asc' },
 );
@@ -304,6 +305,13 @@ const remove = (row: UserRow) => {
                             :dir="sortDir"
                             @sort="toggleSort"
                         />
+                        <SortableHeader
+                            label="Supervisor"
+                            sort-key="supervisor"
+                            :active-key="sortKey"
+                            :dir="sortDir"
+                            @sort="toggleSort"
+                        />
                         <th class="px-4 py-2 text-right font-medium">
                             Actions
                         </th>
@@ -360,6 +368,7 @@ const remove = (row: UserRow) => {
                         </td>
                         <td class="px-4 py-2">{{ u.department ?? '—' }}</td>
                         <td class="px-4 py-2">{{ u.location ?? '—' }}</td>
+                        <td class="px-4 py-2">{{ u.supervisor_name ?? '—' }}</td>
                         <td class="space-x-3 px-4 py-2 text-right">
                             <button
                                 v-if="u.can_edit"
@@ -397,7 +406,7 @@ const remove = (row: UserRow) => {
                     </tr>
                     <tr v-if="sorted.length === 0">
                         <td
-                            colspan="10"
+                            colspan="11"
                             class="px-4 py-6 text-center text-muted-foreground"
                         >
                             No users match the current filters.

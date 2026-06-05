@@ -37,6 +37,7 @@ function user(overrides: Partial<UserRow>): UserRow {
         job_title: null,
         employee_number: null,
         supervisor_id: null,
+        supervisor_name: null,
         start_date: null,
         end_date: null,
         created_at: null,
@@ -94,6 +95,31 @@ describe('users/Index — sortable columns', () => {
         expect(headers.some((h) => h.includes('Employee #'))).toBe(true);
         expect(headers.some((h) => h.includes('Department'))).toBe(true);
         expect(headers.some((h) => h.includes('Location'))).toBe(true);
+        expect(headers.some((h) => h.includes('Supervisor'))).toBe(true);
+    });
+
+    it('shows each user\'s supervisor name in the Supervisor column', async () => {
+        const withBoss = [
+            user({
+                id: 'u9',
+                name: 'Pat Lee',
+                f_name: 'Pat',
+                l_name: 'Lee',
+                supervisor_name: 'Dana Boss',
+            }),
+        ];
+        const wrapper = mount(UsersIndex, {
+            props: {
+                users: withBoss,
+                filters: { q: '', role: '', include_disabled: false, tags: [], tags_mode: 'and' },
+                can_create: false,
+            },
+            global: {
+                stubs: { TagFilter: true, TagsListCell: true, UserFormModal: true },
+            },
+        });
+        await flushPromises();
+        expect(wrapper.find('tbody').text()).toContain('Dana Boss');
     });
 
     it('defaults to last-name ascending order', async () => {
