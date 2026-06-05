@@ -4,16 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import UsersIndex from '@/pages/users/Index.vue';
 import type { UserRow } from '@/stores/users';
 
-const { routerGet } = vi.hoisted(() => ({ routerGet: vi.fn() }));
+const { routerGet, authUser } = vi.hoisted(() => ({
+    routerGet: vi.fn(),
+    authUser: {
+        value: { id: 'me', org_id: 'org1' } as Record<string, unknown>,
+    },
+}));
 
 vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
     Link: { template: '<a><slot /></a>' },
     router: { get: routerGet },
-    usePage: () => ({
-        props: { auth: { user: { id: 'me', org_id: 'org1' } } },
-    }),
+    usePage: () => ({ props: { auth: { user: authUser.value } } }),
 }));
 vi.mock('@/routes/users', () => ({
     index: () => ({ url: '/users' }),
@@ -85,6 +88,7 @@ describe('users/Index — sortable columns', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        authUser.value = { id: 'me', org_id: 'org1' };
     });
 
     it('renders the new profile column headers', async () => {
@@ -122,6 +126,20 @@ describe('users/Index — sortable columns', () => {
         expect(wrapper.find('tbody').text()).toContain('Dana Boss');
     });
 
+    it('hides a column the user has turned off in their preferences', async () => {
+        authUser.value = {
+            id: 'me',
+            org_id: 'org1',
+            preferences: { users: { visible_columns: { email: false } } },
+        };
+        const wrapper = mountIndex();
+        await flushPromises();
+
+        const headers = wrapper.findAll('thead th').map((th) => th.text());
+        expect(headers.some((h) => h.includes('Email'))).toBe(false);
+        expect(headers.some((h) => h.includes('Name'))).toBe(true);
+    });
+
     it('defaults to last-name ascending order', async () => {
         const wrapper = mountIndex();
         await flushPromises();
@@ -151,6 +169,7 @@ describe('users/Index — live filtering', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        authUser.value = { id: 'me', org_id: 'org1' };
     });
 
     it('has no Apply button — filters apply live', async () => {

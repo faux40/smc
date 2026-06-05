@@ -50,6 +50,13 @@ describe('preferences store', () => {
         expect(store.view('assignments').visible_columns).toEqual({ tags: true });
     });
 
+    it('ensureHydrated only hydrates once (later calls are no-ops)', () => {
+        const store = usePreferencesStore();
+        store.ensureHydrated({ users: { filters: { q: 'first' } } });
+        store.ensureHydrated({ users: { filters: { q: 'second' } } });
+        expect(store.view('users').filters).toEqual({ q: 'first' });
+    });
+
     it('persists the whole blob to the endpoint, debounced', async () => {
         vi.useFakeTimers();
         const store = usePreferencesStore();

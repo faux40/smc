@@ -39,9 +39,20 @@ function defaultHeaders(): Record<string, string> {
 
 export const usePreferencesStore = defineStore('preferences', () => {
     const prefs = ref<PrefsBlob>({});
+    const hydrated = ref(false);
 
     function hydrate(initial: PrefsBlob | null | undefined): void {
         prefs.value = initial ? { ...initial } : {};
+        hydrated.value = true;
+    }
+
+    // Hydrate once per session from the shared auth.user.preferences, then the
+    // store owns the state (optimistic + persisted) — so navigating between
+    // pages doesn't re-pull and clobber unsaved changes.
+    function ensureHydrated(initial: PrefsBlob | null | undefined): void {
+        if (!hydrated.value) {
+            hydrate(initial);
+        }
     }
 
     function view(viewId: string): ViewPrefs {
@@ -68,5 +79,5 @@ export const usePreferencesStore = defineStore('preferences', () => {
         void persist();
     }
 
-    return { prefs, hydrate, view, update };
+    return { prefs, hydrate, ensureHydrated, view, update };
 });

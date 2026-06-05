@@ -4,10 +4,12 @@ import { watchDebounced } from '@vueuse/core';
 import { onMounted, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
 import SortableHeader from '@/components/SortableHeader.vue';
+import TableColumnsMenu from '@/components/TableColumnsMenu.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
 import { useTableSort } from '@/composables/useTableSort';
+import { useTableView } from '@/composables/useTableView';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -21,6 +23,7 @@ import {
 } from '@/components/ui/select';
 import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import { index, show as userShow } from '@/routes/users';
+import { usePreferencesStore, type PrefsBlob } from '@/stores/preferences';
 import { useTagsStore } from '@/stores/tags';
 import { useUsersStore } from '@/stores/users';
 import type { UserRow } from '@/stores/users';
@@ -39,6 +42,7 @@ type AuthUser = {
     isOwner?: boolean;
     isSuperAdmin?: boolean;
     isAdmin?: boolean;
+    preferences?: PrefsBlob | null;
 };
 
 const props = defineProps<{
@@ -76,6 +80,47 @@ const { sortKey, sortDir, toggleSort, sorted } = useTableSort<UserRow>(
     { key: 'name', dir: 'asc' },
 );
 
+// Per-user column control (show/hide + horizontal order), persisted via the
+// prefs store. Actions + Tags are fixed utility columns, not in this set.
+const prefs = usePreferencesStore();
+const {
+    columns: columnDefs,
+    visibleColumns,
+    toggle: toggleColumn,
+    move: moveColumn,
+} = useTableView('users', [
+    { key: 'name', label: 'Name', sortable: true },
+    { key: 'email', label: 'Email', sortable: true },
+    { key: 'role', label: 'Role', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'job_title', label: 'Job title', sortable: true },
+    { key: 'employee_number', label: 'Employee #', sortable: true },
+    { key: 'department', label: 'Department', sortable: true },
+    { key: 'location', label: 'Location', sortable: true },
+    { key: 'supervisor', label: 'Supervisor', sortable: true },
+]);
+
+// Plain-text cell value for the non-bespoke columns (name/role/status render
+// their own markup in the template).
+function cellText(u: UserRow, key: string): string {
+    const value =
+        key === 'supervisor'
+            ? u.supervisor_name
+            : key === 'email'
+              ? u.email
+              : key === 'job_title'
+                ? u.job_title
+                : key === 'employee_number'
+                  ? u.employee_number
+                  : key === 'department'
+                    ? u.department
+                    : key === 'location'
+                      ? u.location
+                      : null;
+
+    return value ?? '—';
+}
+
 // TagsListCell on each row reads from `tagsStore.attached` keyed by
 // (morphableType, morphableId). Push the eager-loaded ids into that
 // map so the first paint already shows attached pills; subsequent
@@ -103,6 +148,7 @@ const tagFilterMode = ref<TagFilterMode>(props.filters.tags_mode ?? 'and');
 onMounted(() => {
     store.hydrate(props.users);
     hydrateTagAttachments(props.users);
+    prefs.ensureHydrated(authUser?.preferences ?? null);
 
     if (authUser?.org_id) {
         store.subscribe(authUser.org_id);
@@ -241,6 +287,12 @@ const remove = (row: UserRow) => {
                 />
                 Show disabled
             </label>
+            <TableColumnsMenu
+                class="ml-auto"
+                :columns="columnDefs"
+                @toggle="toggleColumn"
+                @move="moveColumn"
+            />
         </div>
 
         <div
@@ -250,64 +302,10 @@ const remove = (row: UserRow) => {
                 <thead class="bg-muted/40">
                     <tr>
                         <SortableHeader
-                            label="Name"
-                            sort-key="name"
-                            :active-key="sortKey"
-                            :dir="sortDir"
-                            @sort="toggleSort"
-                        />
-                        <SortableHeader
-                            label="Email"
-                            sort-key="email"
-                            :active-key="sortKey"
-                            :dir="sortDir"
-                            @sort="toggleSort"
-                        />
-                        <SortableHeader
-                            label="Role"
-                            sort-key="role"
-                            :active-key="sortKey"
-                            :dir="sortDir"
-                            @sort="toggleSort"
-                        />
-                        <SortableHeader
-                            label="Status"
-                            sort-key="status"
-                            :active-key="sortKey"
-                            :dir="sortDir"
-                            @sort="toggleSort"
-                        />
-                        <SortableHeader
-                            label="Job title"
-                            sort-key="job_title"
-                            :active-key="sortKey"
-                            :dir="sortDir"
-                            @sort="toggleSort"
-                        />
-                        <SortableHeader
-                            label="Employee #"
-                            sort-key="employee_number"
-                            :active-key="sortKey"
-                            :dir="sortDir"
-                            @sort="toggleSort"
-                        />
-                        <SortableHeader
-                            label="Department"
-                            sort-key="department"
-                            :active-key="sortKey"
-                            :dir="sortDir"
-                            @sort="toggleSort"
-                        />
-                        <SortableHeader
-                            label="Location"
-                            sort-key="location"
-                            :active-key="sortKey"
-                            :dir="sortDir"
-                            @sort="toggleSort"
-                        />
-                        <SortableHeader
-                            label="Supervisor"
-                            sort-key="supervisor"
+                            v-for="col in visibleColumns"
+                            :key="col.key"
+                            :label="col.label"
+                            :sort-key="col.key"
                             :active-key="sortKey"
                             :dir="sortDir"
                             @sort="toggleSort"
@@ -330,45 +328,46 @@ const remove = (row: UserRow) => {
                 </thead>
                 <tbody class="divide-y divide-border">
                     <tr v-for="u in sorted" :key="u.id">
-                        <td class="px-4 py-2">
-                            <Link
-                                :href="userShow(u.id)"
-                                class="font-medium text-primary hover:underline"
-                            >
-                                {{ u.name }}
-                            </Link>
-                            <span
-                                v-if="isSelf(u)"
-                                class="ml-1 text-xs text-muted-foreground"
-                            >
-                                (you)
-                            </span>
+                        <td
+                            v-for="col in visibleColumns"
+                            :key="col.key"
+                            class="px-4 py-2"
+                        >
+                            <template v-if="col.key === 'name'">
+                                <Link
+                                    :href="userShow(u.id)"
+                                    class="font-medium text-primary hover:underline"
+                                >
+                                    {{ u.name }}
+                                </Link>
+                                <span
+                                    v-if="isSelf(u)"
+                                    class="ml-1 text-xs text-muted-foreground"
+                                >
+                                    (you)
+                                </span>
+                            </template>
+                            <template v-else-if="col.key === 'role'">
+                                <Badge variant="secondary" v-if="u.role">
+                                    {{ u.role }}
+                                </Badge>
+                                <span v-else class="text-muted-foreground">
+                                    —
+                                </span>
+                            </template>
+                            <template v-else-if="col.key === 'status'">
+                                <Badge
+                                    :variant="
+                                        u.status === 'active'
+                                            ? 'default'
+                                            : 'destructive'
+                                    "
+                                >
+                                    {{ u.status }}
+                                </Badge>
+                            </template>
+                            <template v-else>{{ cellText(u, col.key) }}</template>
                         </td>
-                        <td class="px-4 py-2">{{ u.email ?? '—' }}</td>
-                        <td class="px-4 py-2">
-                            <Badge variant="secondary" v-if="u.role">
-                                {{ u.role }}
-                            </Badge>
-                            <span v-else class="text-muted-foreground">—</span>
-                        </td>
-                        <td class="px-4 py-2">
-                            <Badge
-                                :variant="
-                                    u.status === 'active'
-                                        ? 'default'
-                                        : 'destructive'
-                                "
-                            >
-                                {{ u.status }}
-                            </Badge>
-                        </td>
-                        <td class="px-4 py-2">{{ u.job_title ?? '—' }}</td>
-                        <td class="px-4 py-2">
-                            {{ u.employee_number ?? '—' }}
-                        </td>
-                        <td class="px-4 py-2">{{ u.department ?? '—' }}</td>
-                        <td class="px-4 py-2">{{ u.location ?? '—' }}</td>
-                        <td class="px-4 py-2">{{ u.supervisor_name ?? '—' }}</td>
                         <td class="space-x-3 px-4 py-2 text-right">
                             <button
                                 v-if="u.can_edit"
@@ -406,7 +405,7 @@ const remove = (row: UserRow) => {
                     </tr>
                     <tr v-if="sorted.length === 0">
                         <td
-                            colspan="11"
+                            :colspan="visibleColumns.length + 2"
                             class="px-4 py-6 text-center text-muted-foreground"
                         >
                             No users match the current filters.
