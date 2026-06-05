@@ -1,6 +1,5 @@
 import { onUnmounted } from 'vue';
 import { realtimeTabId } from '@/echo';
-import { debugRealtimeEvent } from '@/lib/debugRealtime';
 
 /*
  * Subscribe to a private/public Reverb channel for the lifetime of a Vue
@@ -46,8 +45,6 @@ export function useRealtime(
     const bind = (eventName: string, handler: (payload: any) => void): void => {
         boundEvents.push(eventName);
         channel.listen(eventName, (payload: any) => {
-            debugRealtimeEvent(channelName, eventName, payload);
-
             if (payload?.origin_tab && payload.origin_tab === ownTab) {
                 return; // self-echo — skip
             }

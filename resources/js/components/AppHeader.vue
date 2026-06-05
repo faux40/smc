@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import {
-    Bug,
     CalendarDays,
     CheckCircle2,
     ClipboardList,
@@ -48,7 +47,6 @@ import {
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
-import { useReverbProbe } from '@/composables/useReverbProbe';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { page as assignmentsPage } from '@/routes/assignments';
@@ -141,12 +139,6 @@ const mainNavItems = computed<NavItem[]>(() => {
 });
 
 const rightNavItems: NavItem[] = [];
-
-// TEMP DIAGNOSTIC — the Bug button posts /realtime/ping and watches for the
-// RealtimePing broadcast to round-trip over Reverb, toasting clear feedback
-// (sent / not-connected / no round-trip / send-failed). Remove the button +
-// this composable + the realtime monitor when Reverb is no longer monitored.
-const { ping: triggerRealtimePing } = useReverbProbe();
 </script>
 
 <template>
@@ -270,19 +262,6 @@ const { ping: triggerRealtimePing } = useReverbProbe();
                 <div class="ml-auto flex items-center space-x-2">
                     <div class="relative flex items-center space-x-1">
                         <NotificationBell />
-
-                        <!-- TEMP DIAGNOSTIC: trigger /realtime/ping smoke event -->
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            class="group h-9 w-9 cursor-pointer"
-                            title="Reverb smoke test — pings and waits for the round-trip"
-                            @click="triggerRealtimePing"
-                        >
-                            <Bug
-                                class="size-5 opacity-80 group-hover:opacity-100"
-                            />
-                        </Button>
 
                         <Button
                             variant="ghost"

@@ -1,6 +1,5 @@
 <?php
 
-use App\Events\RealtimePing;
 use App\Http\Controllers\AssignmentsController;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\BulkAssignmentsController;
@@ -20,7 +19,6 @@ use App\Http\Controllers\TrainingsController;
 use App\Http\Controllers\UsersController;
 use App\Models\Requirement;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -233,21 +231,5 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
         ]);
     })->name('requirements.show');
 });
-
-// Permanent realtime smoke canary. Dispatches a RealtimePing event on
-// every POST — used by RealtimePingTest as a breakage detector across
-// the whole substrate (HTTP → event dispatch → broadcast contract).
-// Public on purpose so a dev can manually verify Echo end-to-end via
-// the browser console without needing auth setup.
-Route::post('/realtime/ping', function (Request $request) {
-    Log::info('DIAG realtime.ping route entered', [
-        'broadcast_conn' => config('broadcasting.default'),
-        'queue_conn' => config('queue.default'),
-    ]);
-    event(new RealtimePing(message: (string) $request->input('message', 'ping')));
-    Log::info('DIAG realtime.ping event() returned');
-
-    return response()->json(['ok' => true]);
-})->name('realtime.ping');
 
 require __DIR__.'/settings.php';
