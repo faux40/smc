@@ -64,6 +64,37 @@ class UsersPickerApiTest extends TestCase
         $this->assertSame([$tag->id], $row['tag_ids']);
     }
 
+    public function test_picker_includes_profile_fields_and_supervisor_name(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        // Supervisor is disabled on purpose: they won't appear in the picker
+        // list, but the report's supervisor_name must still resolve via the
+        // relation (server-side, not a client lookup over the active list).
+        $boss = User::factory()->for($org, 'organization')->disabled()
+            ->create(['f_name' => 'Sam', 'l_name' => 'Boss']);
+        $report = User::factory()->for($org, 'organization')->create([
+            'employee_number' => 'EMP-42',
+            'department' => 'Operations',
+            'location' => 'Yard 3',
+            'job_title' => 'Foreman',
+            'supervisor_id' => $boss->id,
+        ]);
+
+        $rows = $this->actingAs($manager)->getJson('/api/users')->assertOk()->json();
+        $row = collect($rows)->firstWhere('id', $report->id);
+
+        $this->assertSame('EMP-42', $row['employee_number']);
+        $this->assertSame('Operations', $row['department']);
+        $this->assertSame('Yard 3', $row['location']);
+        $this->assertSame('Foreman', $row['job_title']);
+        $this->assertSame($boss->id, $row['supervisor_id']);
+        $this->assertSame('Sam Boss', $row['supervisor_name']);
+
+        // The disabled supervisor is not itself a picker row.
+        $this->assertNull(collect($rows)->firstWhere('id', $boss->id));
+    }
+
     public function test_disabled_users_are_excluded(): void
     {
         $org = Organization::factory()->create();

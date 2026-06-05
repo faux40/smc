@@ -42,7 +42,7 @@ class UsersController extends Controller
             : 'and';
 
         $users = User::query()
-            ->with(['roles:id,name', 'tags:id'])
+            ->with(['roles:id,name', 'tags:id', 'supervisor:id,prefix_name,f_name,m_name,l_name,suffix_name'])
             ->when(! $includeDisabled, fn ($q) => $q->where('status', 'active'))
             ->when($search !== '', function ($q) use ($search) {
                 // Case-insensitive via LOWER() on both sides — portable across
@@ -110,6 +110,7 @@ class UsersController extends Controller
                 'job_title' => $u->job_title,
                 'employee_number' => $u->employee_number,
                 'supervisor_id' => $u->supervisor_id,
+                'supervisor_name' => $u->supervisor?->name,
                 'start_date' => $u->start_date?->toDateString(),
                 'end_date' => $u->end_date?->toDateString(),
                 'created_at' => $u->created_at?->toDateTimeString(),
@@ -150,10 +151,13 @@ class UsersController extends Controller
 
         $users = User::query()
             ->where('status', 'active')
-            ->with('tags:id')
+            ->with(['tags:id', 'supervisor:id,prefix_name,f_name,m_name,l_name,suffix_name'])
             ->orderBy('l_name')
             ->orderBy('f_name')
-            ->get(['id', 'f_name', 'l_name', 'email']);
+            ->get([
+                'id', 'f_name', 'l_name', 'email', 'employee_number',
+                'department', 'location', 'job_title', 'supervisor_id',
+            ]);
 
         return response()->json($users->map(fn (User $u) => [
             'id' => $u->id,
@@ -161,6 +165,12 @@ class UsersController extends Controller
             'f_name' => $u->f_name,
             'l_name' => $u->l_name,
             'email' => $u->email,
+            'employee_number' => $u->employee_number,
+            'department' => $u->department,
+            'location' => $u->location,
+            'job_title' => $u->job_title,
+            'supervisor_id' => $u->supervisor_id,
+            'supervisor_name' => $u->supervisor?->name,
             'tag_ids' => $u->tags->pluck('id')->all(),
         ]));
     }

@@ -137,6 +137,21 @@ class UsersIndexTest extends TestCase
         $expectOne('REED');        // l_name
     }
 
+    public function test_index_includes_supervisor_name(): void
+    {
+        $org = Organization::factory()->create();
+        $owner = $this->ownerOf($org);
+        $boss = User::factory()->forOrganization($org)->create(['f_name' => 'Sam', 'l_name' => 'Boss']);
+        $report = User::factory()->forOrganization($org)->create(['supervisor_id' => $boss->id]);
+
+        $this->actingAs($owner)
+            ->get(route('users.index'))
+            ->assertInertia(function (AssertableInertia $page) use ($report) {
+                $rows = collect($page->toArray()['props']['users'])->keyBy('id');
+                $this->assertSame('Sam Boss', $rows[$report->id]['supervisor_name']);
+            });
+    }
+
     public function test_index_status_filter_hides_disabled_by_default(): void
     {
         $org = Organization::factory()->create();
