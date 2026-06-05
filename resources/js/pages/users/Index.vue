@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { watchDebounced } from '@vueuse/core';
-import { onMounted, ref, watch } from 'vue';
+import { useDebounceFn } from '@vueuse/core';
+import { computed, onMounted, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
 import SortableHeader from '@/components/SortableHeader.vue';
 import TableColumnsMenu from '@/components/TableColumnsMenu.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
+import { useTableFilter } from '@/composables/useTableFilter';
 import { useTableSort } from '@/composables/useTableSort';
 import { useTableView } from '@/composables/useTableView';
 import { Badge } from '@/components/ui/badge';
@@ -139,16 +140,70 @@ function hydrateTagAttachments(rows: UserRow[]): void {
 // sentinel for the "All roles" option and strip it back out before
 // the request goes to the backend.
 const ALL_ROLES = '__all';
-const search = ref(props.filters.q);
-const roleFilter = ref(props.filters.role || ALL_ROLES);
-const includeDisabled = ref(props.filters.include_disabled);
-const tagFilter = ref<string[]>(props.filters.tags ?? []);
-const tagFilterMode = ref<TagFilterMode>(props.filters.tags_mode ?? 'and');
+
+type UserFilters = {
+    q: string;
+    role: string; // '' = all roles
+    include_disabled: boolean;
+    tags: string[];
+    tags_mode: TagFilterMode;
+};
+
+// Server-side filtering relayed through the prefs store: applies the query
+// (Inertia reload) + saves the filter view, restored on a clean visit.
+const { params: filters, commit, restoreSaved } = useTableFilter<UserFilters>(
+    'users',
+    {
+        q: props.filters.q,
+        role: props.filters.role,
+        include_disabled: props.filters.include_disabled,
+        tags: props.filters.tags ?? [],
+        tags_mode: props.filters.tags_mode ?? 'and',
+    },
+    (p) =>
+        router.get(
+            index().url,
+            {
+                q: p.q || undefined,
+                role: p.role || undefined,
+                include_disabled: p.include_disabled ? 1 : undefined,
+                tags: p.tags.length > 0 ? p.tags : undefined,
+                tags_mode: p.tags.length > 0 ? p.tags_mode : undefined,
+            },
+            { preserveState: true, replace: true },
+        ),
+);
+
+// reka-ui <Select> rejects empty-string item values — proxy '' ↔ the sentinel.
+const roleModel = computed({
+    get: () => filters.role || ALL_ROLES,
+    set: (v: string) => {
+        filters.role = v === ALL_ROLES ? '' : v;
+        commit();
+    },
+});
+
+// Search applies live, debounced; filters.q updates immediately so the input
+// stays responsive while the server query waits for the pause in typing.
+const debouncedCommit = useDebounceFn(() => commit(), 300);
+function onSearch(value: string | number): void {
+    filters.q = String(value);
+    debouncedCommit();
+}
 
 onMounted(() => {
     store.hydrate(props.users);
     hydrateTagAttachments(props.users);
     prefs.ensureHydrated(authUser?.preferences ?? null);
+
+    // Restore the user's last filters when arriving at a clean (unfiltered)
+    // /users — server-side, so it reloads once with the saved query.
+    restoreSaved(
+        !props.filters.q &&
+            !props.filters.role &&
+            !props.filters.include_disabled &&
+            (props.filters.tags?.length ?? 0) === 0,
+    );
 
     if (authUser?.org_id) {
         store.subscribe(authUser.org_id);
@@ -171,31 +226,6 @@ watch(
         hydrateTagAttachments(next);
     },
 );
-
-const applyFilters = () => {
-    router.get(
-        index().url,
-        {
-            q: search.value || undefined,
-            role:
-                roleFilter.value && roleFilter.value !== ALL_ROLES
-                    ? roleFilter.value
-                    : undefined,
-            include_disabled: includeDisabled.value ? 1 : undefined,
-            tags: tagFilter.value.length > 0 ? tagFilter.value : undefined,
-            // Only send mode when there are tags — keeps the URL clean
-            // when the filter is empty.
-            tags_mode:
-                tagFilter.value.length > 0 ? tagFilterMode.value : undefined,
-        },
-        { preserveState: true, replace: true },
-    );
-};
-
-// Search applies live as the user types — debounced so each keystroke doesn't
-// fire a request. Role / disabled / tag changes call applyFilters immediately
-// (discrete actions), so no Apply button is needed.
-watchDebounced(search, () => applyFilters(), { debounce: 300 });
 
 const roles = [
     'Owner',
@@ -260,11 +290,12 @@ const remove = (row: UserRow) => {
 
         <div class="flex flex-wrap items-center gap-3">
             <Input
-                v-model="search"
+                :model-value="filters.q"
                 placeholder="Search name, email, title, dept, location, emp #"
                 class="max-w-xs"
+                @update:model-value="onSearch"
             />
-            <Select v-model="roleFilter" @update:model-value="applyFilters">
+            <Select v-model="roleModel">
                 <SelectTrigger class="w-44">
                     <SelectValue placeholder="All roles" />
                 </SelectTrigger>
@@ -277,11 +308,11 @@ const remove = (row: UserRow) => {
             </Select>
             <label class="flex items-center gap-2 text-sm">
                 <Checkbox
-                    :model-value="includeDisabled"
+                    :model-value="filters.include_disabled"
                     @update:model-value="
                         (v) => {
-                            includeDisabled = Boolean(v);
-                            applyFilters();
+                            filters.include_disabled = Boolean(v);
+                            commit();
                         }
                     "
                 />
@@ -317,10 +348,10 @@ const remove = (row: UserRow) => {
                             <div class="inline-flex items-center gap-2">
                                 <span>Tags</span>
                                 <TagFilter
-                                    v-model:tag-ids="tagFilter"
-                                    v-model:mode="tagFilterMode"
-                                    @update:tag-ids="applyFilters"
-                                    @update:mode="applyFilters"
+                                    v-model:tag-ids="filters.tags"
+                                    v-model:mode="filters.tags_mode"
+                                    @update:tag-ids="commit"
+                                    @update:mode="commit"
                                 />
                             </div>
                         </th>

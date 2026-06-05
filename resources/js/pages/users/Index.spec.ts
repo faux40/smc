@@ -172,6 +172,22 @@ describe('users/Index — live filtering', () => {
         authUser.value = { id: 'me', org_id: 'org1' };
     });
 
+    it('restores the user\'s saved filters on a clean (unfiltered) visit', async () => {
+        authUser.value = {
+            id: 'me',
+            org_id: 'org1',
+            preferences: { users: { filters: { q: 'saved-term', role: '' } } },
+        };
+        mountIndex(); // props.filters are all default → unfiltered
+        await flushPromises();
+
+        expect(routerGet).toHaveBeenCalledWith(
+            '/users',
+            expect.objectContaining({ q: 'saved-term' }),
+            expect.objectContaining({ preserveState: true }),
+        );
+    });
+
     it('has no Apply button — filters apply live', async () => {
         const wrapper = mountIndex();
         await flushPromises();
