@@ -93,4 +93,39 @@ describe('assignments/Index — user profile columns', () => {
         expect(body).toContain('Foreman');
         expect(body).toContain('Dana Boss');
     });
+
+    it('restores the user\'s saved filters on mount', async () => {
+        authUser.value = {
+            id: 'me',
+            org_id: 'org1',
+            preferences: { assignments: { filters: { search: 'fall-protection' } } },
+        };
+        const wrapper = await mountPage();
+        const input = wrapper.find('#filter_search');
+        expect((input.element as HTMLInputElement).value).toBe('fall-protection');
+    });
+
+    it('persists filters to prefs when they change (debounced)', async () => {
+        (axios.patch as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} });
+        const wrapper = await mountPage();
+
+        vi.useFakeTimers();
+        await wrapper.find('#filter_search').setValue('confined-space');
+        await vi.advanceTimersByTimeAsync(700);
+        vi.useRealTimers();
+
+        expect(axios.patch).toHaveBeenCalledWith(
+            '/api/me/preferences',
+            expect.objectContaining({
+                preferences: expect.objectContaining({
+                    assignments: expect.objectContaining({
+                        filters: expect.objectContaining({
+                            search: 'confined-space',
+                        }),
+                    }),
+                }),
+            }),
+            expect.anything(),
+        );
+    });
 });

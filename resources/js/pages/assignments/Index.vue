@@ -153,6 +153,7 @@ onMounted(async () => {
     }, 60_000);
 
     prefs.ensureHydrated(authUser.value?.preferences ?? null);
+    restoreSavedFilters();
 
     if (authUser.value?.org_id) {
         store.subscribe(authUser.value.org_id);
@@ -423,6 +424,66 @@ function cellText(g: UserGroup, key: string): string {
                     : null;
 
     return value ?? '—';
+}
+
+// Persist + restore the filter view through the prefs store. Filtering stays
+// client-side (the org's assignments are bounded, and the roster is the full
+// picker, so zero-assignment users never drop out) — we just remember the
+// user's last filters and restore them on the next visit.
+function snapshotFilters() {
+    return {
+        search: search.value,
+        searchMode: searchMode.value,
+        userFilterIds: userFilterIds.value,
+        userFilterMode: userFilterMode.value,
+        requirementFilterIds: requirementFilterIds.value,
+        requirementFilterMode: requirementFilterMode.value,
+        tagFilter: tagFilter.value,
+        tagFilterMode: tagFilterMode.value,
+        showExpired: showExpired.value,
+    };
+}
+
+// prefs.update already debounces the PATCH, so a plain watch is enough (the
+// in-memory blob update per change is cheap; only the network save is delayed).
+watch(
+    [
+        search,
+        searchMode,
+        userFilterIds,
+        userFilterMode,
+        requirementFilterIds,
+        requirementFilterMode,
+        tagFilter,
+        tagFilterMode,
+        showExpired,
+    ],
+    () => prefs.update('assignments', { filters: snapshotFilters() }),
+    { deep: true },
+);
+
+function restoreSavedFilters(): void {
+    const saved = prefs.view('assignments').filters as
+        | Partial<ReturnType<typeof snapshotFilters>>
+        | undefined;
+
+    if (!saved) {
+        return;
+    }
+
+    if (typeof saved.search === 'string') search.value = saved.search;
+    if (saved.searchMode) searchMode.value = saved.searchMode;
+    if (Array.isArray(saved.userFilterIds))
+        userFilterIds.value = saved.userFilterIds;
+    if (saved.userFilterMode) userFilterMode.value = saved.userFilterMode;
+    if (Array.isArray(saved.requirementFilterIds))
+        requirementFilterIds.value = saved.requirementFilterIds;
+    if (saved.requirementFilterMode)
+        requirementFilterMode.value = saved.requirementFilterMode;
+    if (Array.isArray(saved.tagFilter)) tagFilter.value = saved.tagFilter;
+    if (saved.tagFilterMode) tagFilterMode.value = saved.tagFilterMode;
+    if (typeof saved.showExpired === 'boolean')
+        showExpired.value = saved.showExpired;
 }
 
 const shownAssignmentCount = computed(() =>
