@@ -104,15 +104,17 @@ class SecurityHeaders
     }
 
     /**
-     * The wss:// origin(s) the browser opens to Reverb, from broadcasting
-     * config. Includes the explicit port only when it's non-default.
+     * The wss:// origin(s) the browser opens to Reverb. Sourced from the
+     * **browser-facing** config (the VITE_* build vars the Echo client uses),
+     * not the server-side broadcast host — the two can differ. Includes the
+     * explicit port only when it's non-default.
      *
      * @return list<string>
      */
     private function reverbWebSocketSources(): array
     {
-        $options = config('broadcasting.connections.reverb.options', []);
-        $host = $options['host'] ?? null;
+        $options = config('broadcasting.connections.reverb.browser', []);
+        $host = is_array($options) ? ($options['host'] ?? null) : null;
 
         if (! is_string($host) || $host === '') {
             return [];

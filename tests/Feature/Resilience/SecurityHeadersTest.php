@@ -30,9 +30,11 @@ class SecurityHeadersTest extends TestCase
         // the assertions don't depend on the local .env.
         config([
             'filesystems.disks.linode.endpoint' => 'https://objects.example.test',
-            'broadcasting.connections.reverb.options.host' => 'ws.example.test',
-            'broadcasting.connections.reverb.options.scheme' => 'https',
-            'broadcasting.connections.reverb.options.port' => 443,
+            // Browser-facing reverb host (what the Echo client connects to),
+            // which can differ from the server-side broadcast host.
+            'broadcasting.connections.reverb.browser.host' => 'ws.example.test',
+            'broadcasting.connections.reverb.browser.scheme' => 'https',
+            'broadcasting.connections.reverb.browser.port' => 443,
         ]);
 
         $response = $this->get('/');
