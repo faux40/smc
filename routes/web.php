@@ -16,9 +16,9 @@ use App\Http\Controllers\RqmtElementsController;
 use App\Http\Controllers\StdFrequenciesController;
 use App\Http\Controllers\TagsController;
 use App\Http\Controllers\TrainingsController;
+use App\Http\Controllers\UserPreferencesController;
 use App\Http\Controllers\UsersController;
 use App\Models\Requirement;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -50,6 +50,11 @@ Route::get('csrf-token', fn () => response()->json(['token' => csrf_token()]))
 // its own stricter Fortify throttle. Tune as real usage data arrives (16.6).
 Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+
+    // Save the current user's UI preferences (table column visibility/order +
+    // filter defaults). Self-only — shared back via the auth.user prop.
+    Route::patch('api/me/preferences', [UserPreferencesController::class, 'update'])
+        ->name('me.preferences.update');
 
     // Phase 15.2 in-app inbox. Index returns the actor's last 100
     // notifications + unread count for the bell badge; mark-read flips
