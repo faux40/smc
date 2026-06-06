@@ -24,6 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTableSort } from '@/composables/useTableSort';
+import { useColumnDrag } from '@/composables/useColumnDrag';
 import { useTableView } from '@/composables/useTableView';
 import { realtimeTabId } from '@/echo';
 import AssignmentFormModal from '@/pages/assignments/Partials/AssignmentFormModal.vue';
@@ -395,7 +396,7 @@ const {
     columns: columnDefs,
     visibleColumns,
     toggle: toggleColumn,
-    move: moveColumn,
+    reorder: reorderColumn,
 } = useTableView('assignments', [
     { key: 'user', label: 'User', sortable: true },
     { key: 'employee_number', label: 'Employee #', sortable: true },
@@ -406,6 +407,7 @@ const {
     { key: 'tags', label: 'Tags', sortable: true },
     { key: 'assignments', label: 'Assignments', sortable: true },
 ]);
+const { dragAttrs } = useColumnDrag(columnDefs, reorderColumn);
 
 // Plain-text value for the profile columns (user/tags/assignments render their
 // own markup in the template).
@@ -677,7 +679,6 @@ function defaultHeaders(): Record<string, string> {
                 class="ml-auto self-end"
                 :columns="columnDefs"
                 @toggle="toggleColumn"
-                @move="moveColumn"
             />
         </div>
 
@@ -768,6 +769,7 @@ function defaultHeaders(): Record<string, string> {
                             <th
                                 v-for="col in visibleColumns"
                                 :key="col.key"
+                                v-bind="dragAttrs(col.key)"
                                 class="px-4 py-2 text-left align-top font-medium"
                             >
                                 <button

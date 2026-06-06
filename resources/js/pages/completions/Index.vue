@@ -9,6 +9,7 @@ import TableColumnsMenu from '@/components/TableColumnsMenu.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { useColumnDrag } from '@/composables/useColumnDrag';
 import { useTableSort } from '@/composables/useTableSort';
 import { useTableView } from '@/composables/useTableView';
 import { realtimeTabId } from '@/echo';
@@ -71,7 +72,7 @@ const {
     columns: columnDefs,
     visibleColumns,
     toggle: toggleColumn,
-    move: moveColumn,
+    reorder: reorderColumn,
 } = useTableView('completions', [
     { key: 'user', label: 'User', sortable: true },
     { key: 'module', label: 'Module', sortable: true },
@@ -79,6 +80,7 @@ const {
     { key: 'expires', label: 'Expires', sortable: true },
     { key: 'credits', label: 'Credits', sortable: true },
 ]);
+const { dragAttrs } = useColumnDrag(columnDefs, reorderColumn);
 
 // ── Filtering + sorting ───────────────────────────────────────────────────────
 const filteredRows = computed(() =>
@@ -240,7 +242,6 @@ function defaultHeaders(): Record<string, string> {
                 class="ml-auto"
                 :columns="columnDefs"
                 @toggle="toggleColumn"
-                @move="moveColumn"
             />
         </div>
 
@@ -267,6 +268,7 @@ function defaultHeaders(): Record<string, string> {
                             <SortableHeader
                                 v-for="col in visibleColumns"
                                 :key="col.key"
+                                v-bind="dragAttrs(col.key)"
                                 :label="col.label"
                                 :sort-key="col.key"
                                 :active-key="sortKey"

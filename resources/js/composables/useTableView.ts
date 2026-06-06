@@ -88,11 +88,16 @@ export function useTableView(viewId: string, columns: ColumnDef[]) {
         prefs.update(viewId, { column_order: keys });
     }
 
+    function reorder(newOrder: string[]): void {
+        prefs.update(viewId, { column_order: newOrder });
+    }
+
     return {
         columns: columnsResolved,
         visibleColumns,
         isVisible,
         toggle,
         move,
+        reorder,
     };
 }

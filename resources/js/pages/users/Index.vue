@@ -8,6 +8,7 @@ import TableColumnsMenu from '@/components/TableColumnsMenu.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
+import { useColumnDrag } from '@/composables/useColumnDrag';
 import { useTableFilter } from '@/composables/useTableFilter';
 import { useTableSort } from '@/composables/useTableSort';
 import { useTableView } from '@/composables/useTableView';
@@ -88,7 +89,7 @@ const {
     columns: columnDefs,
     visibleColumns,
     toggle: toggleColumn,
-    move: moveColumn,
+    reorder: reorderColumn,
 } = useTableView('users', [
     { key: 'name', label: 'Name', sortable: true },
     { key: 'email', label: 'Email', sortable: true },
@@ -100,6 +101,7 @@ const {
     { key: 'location', label: 'Location', sortable: true },
     { key: 'supervisor', label: 'Supervisor', sortable: true },
 ]);
+const { dragAttrs } = useColumnDrag(columnDefs, reorderColumn);
 
 // Plain-text cell value for the non-bespoke columns (name/role/status render
 // their own markup in the template).
@@ -322,7 +324,6 @@ const remove = (row: UserRow) => {
                 class="ml-auto"
                 :columns="columnDefs"
                 @toggle="toggleColumn"
-                @move="moveColumn"
             />
         </div>
 
@@ -335,6 +336,7 @@ const remove = (row: UserRow) => {
                         <SortableHeader
                             v-for="col in visibleColumns"
                             :key="col.key"
+                            v-bind="dragAttrs(col.key)"
                             :label="col.label"
                             :sort-key="col.key"
                             :active-key="sortKey"

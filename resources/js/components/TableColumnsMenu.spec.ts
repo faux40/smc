@@ -10,9 +10,7 @@ const columns = [
 
 async function openMenu() {
     const wrapper = mount(TableColumnsMenu, { props: { columns } });
-    // First button is the "Columns" trigger.
     await wrapper.find('button').trigger('click');
-
     return wrapper;
 }
 
@@ -31,29 +29,14 @@ describe('TableColumnsMenu', () => {
 
     it('emits toggle with the column key when a checkbox is clicked', async () => {
         const wrapper = await openMenu();
-        // email is the 2nd checkbox.
         await wrapper.findAll('[role="checkbox"]')[1].trigger('click');
         expect(
             wrapper.emitted('toggle')?.some((e) => e[0] === 'email'),
         ).toBe(true);
     });
 
-    it('emits move on the reorder buttons', async () => {
+    it('hints that headers are draggable to reorder', async () => {
         const wrapper = await openMenu();
-        const right = wrapper.findAll('button[aria-label="Move right"]');
-        await right[0].trigger('click'); // move 'name' right
-        expect(
-            wrapper
-                .emitted('move')
-                ?.some((e) => e[0] === 'name' && e[1] === 'right'),
-        ).toBe(true);
-    });
-
-    it('disables move-left on the first column and move-right on the last', async () => {
-        const wrapper = await openMenu();
-        const left = wrapper.findAll('button[aria-label="Move left"]');
-        const right = wrapper.findAll('button[aria-label="Move right"]');
-        expect(left[0].attributes('disabled')).toBeDefined();
-        expect(right[right.length - 1].attributes('disabled')).toBeDefined();
+        expect(wrapper.text()).toContain('drag headers to reorder');
     });
 });
