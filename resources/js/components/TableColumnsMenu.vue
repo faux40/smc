@@ -17,6 +17,8 @@ import type { ResolvedColumn } from '@/composables/useTableView';
 defineProps<{ columns: ResolvedColumn[] }>();
 const emit = defineEmits<{
     (e: 'toggle', key: string): void;
+    (e: 'reset'): void;
+    (e: 'reset-all'): void;
 }>();
 
 const open = ref(false);
@@ -68,6 +70,25 @@ onUnmounted(() => document.removeEventListener('click', onDocClick));
                     </label>
                 </li>
             </ul>
+
+            <div class="mt-1 space-y-0.5 border-t border-border pt-1">
+                <button
+                    type="button"
+                    data-action="reset"
+                    class="w-full rounded px-1 py-1 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                    @click="emit('reset'); open = false"
+                >
+                    Reset this table
+                </button>
+                <button
+                    type="button"
+                    data-action="reset-all"
+                    class="w-full rounded px-1 py-1 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                    @click="emit('reset-all'); open = false"
+                >
+                    Reset all tables
+                </button>
+            </div>
         </div>
     </div>
 </template>

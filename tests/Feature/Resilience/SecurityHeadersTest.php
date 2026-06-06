@@ -9,6 +9,24 @@ use Tests\TestCase;
  */
 class SecurityHeadersTest extends TestCase
 {
+    private ?string $hotFile = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->hotFile = public_path('hot');
+    }
+
+    protected function tearDown(): void
+    {
+        // Remove any hot file written during a test so other tests are unaffected.
+        if (file_exists($this->hotFile)) {
+            @unlink($this->hotFile);
+        }
+        parent::tearDown();
+    }
+
+
     public function test_baseline_security_headers_are_present(): void
     {
         $response = $this->get('/');
@@ -66,5 +84,48 @@ class SecurityHeadersTest extends TestCase
                 'blocked-uri' => 'https://evil.example',
             ],
         ])->assertNoContent();
+    }
+
+    /**
+     * The Vite dev-server origin is read from public/hot, not hard-coded, so
+     * Docker Vite (port 5175) and local Vite (5173) both produce correct CSP
+     * without any config change.
+     */
+    public function test_csp_vite_origins_are_read_from_hot_file(): void
+    {
+        // Simulate Docker Vite writing its URL into public/hot.
+        file_put_contents($this->hotFile, 'http://localhost:5175');
+
+        $this->app->detectEnvironment(fn () => 'local');
+
+        $csp = $this->get('/')->headers->get('Content-Security-Policy-Report-Only');
+        $this->assertNotNull($csp);
+
+        // All three directives that load Vite assets must include the origin.
+        $this->assertMatchesRegularExpression('/script-src[^;]*localhost:5175/', $csp);
+        $this->assertMatchesRegularExpression('/style-src[^;]*localhost:5175/', $csp);
+        $this->assertMatchesRegularExpression('/font-src[^;]*localhost:5175/', $csp);
+        // HMR websocket upgrade also needs the origin.
+        $this->assertMatchesRegularExpression('/connect-src[^;]*ws:\/\/localhost:5175/', $csp);
+        // 127.0.0.1 alias included.
+        $this->assertMatchesRegularExpression('/script-src[^;]*127\.0\.0\.1:5175/', $csp);
+
+        // The hard-coded 5173 should NOT appear — it was replaced by hot-file detection.
+        $this->assertStringNotContainsString('5173', $csp);
+    }
+
+    public function test_csp_vite_origins_absent_when_no_hot_file(): void
+    {
+        // Ensure hot file is absent (setUp/tearDown handles cleanup but be explicit).
+        if (file_exists($this->hotFile)) {
+            unlink($this->hotFile);
+        }
+
+        $csp = $this->get('/')->headers->get('Content-Security-Policy-Report-Only');
+        $this->assertNotNull($csp);
+
+        // No dev-server port should appear at all.
+        $this->assertStringNotContainsString('5173', $csp);
+        $this->assertStringNotContainsString('5175', $csp);
     }
 }

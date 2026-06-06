@@ -50,9 +50,12 @@ class SecurityHeaders
         // eval; allow it so the dev console isn't flooded. Prod/staging/testing
         // get the stricter policy.
         $isLocal = app()->environment('local');
-        $viteHttp = $isLocal ? ['http://localhost:5173', 'http://127.0.0.1:5173'] : [];
+        $viteOrigins = $isLocal ? $this->viteDevOrigins() : [];
         $viteEval = $isLocal ? ["'unsafe-eval'"] : [];
-        $viteWs = $isLocal ? ['ws://localhost:5173', 'ws://127.0.0.1:5173'] : [];
+        $viteWs = array_map(
+            fn (string $o) => str_replace(['http://', 'https://'], ['ws://', 'wss://'], $o),
+            $viteOrigins,
+        );
 
         $directives = [
             'default-src' => ["'self'"],
@@ -60,12 +63,12 @@ class SecurityHeaders
             'object-src' => ["'none'"],
             'frame-ancestors' => ["'self'"],
             'form-action' => ["'self'"],
-            'script-src' => array_merge(["'self'"], $viteEval, $viteHttp),
+            'script-src' => array_merge(["'self'"], $viteEval, $viteOrigins),
             // Vue binds dynamic inline style attributes (tag colours, layout),
             // and style injection is low-risk, so 'unsafe-inline' is pragmatic.
-            'style-src' => ["'self'", "'unsafe-inline'"],
+            'style-src' => array_merge(["'self'", "'unsafe-inline'"], $viteOrigins),
             'img-src' => array_merge(["'self'", 'data:'], $linode),
-            'font-src' => ["'self'", 'data:'],
+            'font-src' => array_merge(["'self'", 'data:'], $viteOrigins),
             'connect-src' => array_merge(["'self'"], $reverb, $viteWs),
             'frame-src' => array_merge(["'self'"], $linode),
             'media-src' => array_merge(["'self'"], $linode),
@@ -77,6 +80,38 @@ class SecurityHeaders
             ->implode('; ');
 
         return $policy.'; report-uri '.self::REPORT_PATH;
+    }
+
+    /**
+     * Read the actual Vite dev-server origin from public/hot (the file Vite
+     * writes when its server starts). Returns both the primary origin and the
+     * 127.0.0.1 equivalent so the browser can reach it either way.
+     *
+     * When there is no hot file (production / staging static assets) it returns
+     * an empty array — no dev-server origins are needed.
+     *
+     * Handles both local Vite (port 5173) and Docker Vite (port 5175) without
+     * any hard-coded port, because the port is read directly from the file.
+     *
+     * @return list<string>
+     */
+    private function viteDevOrigins(): array
+    {
+        $hotFile = public_path('hot');
+
+        if (! file_exists($hotFile)) {
+            return [];
+        }
+
+        $raw = trim((string) file_get_contents($hotFile));
+        $parsed = parse_url($raw);
+        $scheme = $parsed['scheme'] ?? 'http';
+        $port = isset($parsed['port']) ? ':'.$parsed['port'] : '';
+
+        return [
+            $scheme.'://localhost'.$port,
+            $scheme.'://127.0.0.1'.$port,
+        ];
     }
 
     /**

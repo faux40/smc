@@ -57,6 +57,47 @@ describe('preferences store', () => {
         expect(store.view('users').filters).toEqual({ q: 'first' });
     });
 
+    it('resetView removes column_order and visible_columns but keeps filters', () => {
+        const store = usePreferencesStore();
+        store.hydrate({
+            users: {
+                visible_columns: { email: false },
+                column_order: ['email', 'name'],
+                filters: { q: 'hello' },
+            },
+            assignments: { column_order: ['date'] },
+        });
+
+        store.resetView('users');
+
+        expect(store.view('users').visible_columns).toBeUndefined();
+        expect(store.view('users').column_order).toBeUndefined();
+        // filters are NOT cleared — only column layout is reset
+        expect(store.view('users').filters).toEqual({ q: 'hello' });
+        // other views untouched
+        expect(store.view('assignments').column_order).toEqual(['date']);
+    });
+
+    it('resetAllViews removes column_order and visible_columns from every view, keeps filters', () => {
+        const store = usePreferencesStore();
+        store.hydrate({
+            users: {
+                visible_columns: { email: false },
+                column_order: ['email'],
+                filters: { q: 'a' },
+            },
+            assignments: { visible_columns: { date: false }, column_order: ['date'] },
+        });
+
+        store.resetAllViews();
+
+        expect(store.view('users').visible_columns).toBeUndefined();
+        expect(store.view('users').column_order).toBeUndefined();
+        expect(store.view('users').filters).toEqual({ q: 'a' });
+        expect(store.view('assignments').visible_columns).toBeUndefined();
+        expect(store.view('assignments').column_order).toBeUndefined();
+    });
+
     it('persists the whole blob to the endpoint, debounced', async () => {
         vi.useFakeTimers();
         const store = usePreferencesStore();

@@ -87,9 +87,10 @@ const { sortKey, sortDir, toggleSort, sorted } = useTableSort<UserRow>(
 const prefs = usePreferencesStore();
 const {
     columns: columnDefs,
-    visibleColumns,
     toggle: toggleColumn,
     reorder: reorderColumn,
+    reset: resetColumns,
+    resetAll: resetAllColumns,
 } = useTableView('users', [
     { key: 'name', label: 'Name', sortable: true },
     { key: 'email', label: 'Email', sortable: true },
@@ -101,7 +102,7 @@ const {
     { key: 'location', label: 'Location', sortable: true },
     { key: 'supervisor', label: 'Supervisor', sortable: true },
 ]);
-const { dragAttrs } = useColumnDrag(columnDefs, reorderColumn);
+const { dragAttrs, previewVisibleColumns } = useColumnDrag(columnDefs, reorderColumn);
 
 // Plain-text cell value for the non-bespoke columns (name/role/status render
 // their own markup in the template).
@@ -324,6 +325,8 @@ const remove = (row: UserRow) => {
                 class="ml-auto"
                 :columns="columnDefs"
                 @toggle="toggleColumn"
+                @reset="resetColumns"
+                @reset-all="resetAllColumns"
             />
         </div>
 
@@ -334,7 +337,7 @@ const remove = (row: UserRow) => {
                 <thead class="bg-muted/40">
                     <tr>
                         <SortableHeader
-                            v-for="col in visibleColumns"
+                            v-for="col in previewVisibleColumns"
                             :key="col.key"
                             v-bind="dragAttrs(col.key)"
                             :label="col.label"
@@ -362,7 +365,7 @@ const remove = (row: UserRow) => {
                 <tbody class="divide-y divide-border">
                     <tr v-for="u in sorted" :key="u.id">
                         <td
-                            v-for="col in visibleColumns"
+                            v-for="col in previewVisibleColumns"
                             :key="col.key"
                             class="px-4 py-2"
                         >
@@ -438,7 +441,7 @@ const remove = (row: UserRow) => {
                     </tr>
                     <tr v-if="sorted.length === 0">
                         <td
-                            :colspan="visibleColumns.length + 2"
+                            :colspan="previewVisibleColumns.length + 2"
                             class="px-4 py-6 text-center text-muted-foreground"
                         >
                             No users match the current filters.

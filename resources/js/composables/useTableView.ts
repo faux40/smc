@@ -92,6 +92,14 @@ export function useTableView(viewId: string, columns: ColumnDef[]) {
         prefs.update(viewId, { column_order: newOrder });
     }
 
+    function reset(): void {
+        prefs.resetView(viewId);
+    }
+
+    function resetAll(): void {
+        prefs.resetAllViews();
+    }
+
     return {
         columns: columnsResolved,
         visibleColumns,
@@ -99,5 +107,7 @@ export function useTableView(viewId: string, columns: ColumnDef[]) {
         toggle,
         move,
         reorder,
+        reset,
+        resetAll,
     };
 }

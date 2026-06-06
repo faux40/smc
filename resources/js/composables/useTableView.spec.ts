@@ -96,6 +96,36 @@ describe('useTableView', () => {
         ]);
     });
 
+    it('reset() restores default order and visibility, delegating to prefs.resetView', () => {
+        const prefs = usePreferencesStore();
+        prefs.hydrate({
+            users: {
+                visible_columns: { email: false, dept: true },
+                column_order: ['role', 'name', 'email', 'dept'],
+                filters: { q: 'preserved' },
+            },
+        });
+        const spy = vi.spyOn(prefs, 'resetView');
+        const view = useTableView('users', COLUMNS);
+
+        view.reset();
+
+        expect(spy).toHaveBeenCalledWith('users');
+        // columns back to declared default order
+        expect(view.columns.value.map((c) => c.key)).toEqual([
+            'name',
+            'email',
+            'role',
+            'dept',
+        ]);
+        // visibility back to declared defaults: dept hidden, rest visible
+        expect(view.visibleColumns.value.map((c) => c.key)).toEqual([
+            'name',
+            'email',
+            'role',
+        ]);
+    });
+
     it('move is a no-op at the edges', () => {
         const prefs = usePreferencesStore();
         prefs.hydrate({});

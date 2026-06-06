@@ -18,6 +18,7 @@ import { page as completionsPage } from '@/routes/completions';
 import { useCompletionsStore } from '@/stores/completions';
 import type { CompletionRow } from '@/stores/completions';
 import { usePreferencesStore } from '@/stores/preferences';
+import type { PrefsBlob } from '@/stores/preferences';
 import { useTrainingsStore } from '@/stores/trainings';
 
 defineOptions({
@@ -46,7 +47,7 @@ const authUser = computed(
             isSuperAdmin?: boolean;
             isAdmin?: boolean;
             isManager?: boolean;
-            preferences?: Record<string, unknown>;
+            preferences?: PrefsBlob | null;
         } | null,
 );
 const canCreate = computed(() =>
@@ -70,9 +71,10 @@ const loading = ref(true);
 // ── Column control ────────────────────────────────────────────────────────────
 const {
     columns: columnDefs,
-    visibleColumns,
     toggle: toggleColumn,
     reorder: reorderColumn,
+    reset: resetColumns,
+    resetAll: resetAllColumns,
 } = useTableView('completions', [
     { key: 'user', label: 'User', sortable: true },
     { key: 'module', label: 'Module', sortable: true },
@@ -80,7 +82,7 @@ const {
     { key: 'expires', label: 'Expires', sortable: true },
     { key: 'credits', label: 'Credits', sortable: true },
 ]);
-const { dragAttrs } = useColumnDrag(columnDefs, reorderColumn);
+const { dragAttrs, previewVisibleColumns } = useColumnDrag(columnDefs, reorderColumn);
 
 // ── Filtering + sorting ───────────────────────────────────────────────────────
 const filteredRows = computed(() =>
@@ -242,6 +244,8 @@ function defaultHeaders(): Record<string, string> {
                 class="ml-auto"
                 :columns="columnDefs"
                 @toggle="toggleColumn"
+                @reset="resetColumns"
+                @reset-all="resetAllColumns"
             />
         </div>
 
@@ -266,7 +270,7 @@ function defaultHeaders(): Record<string, string> {
                     <thead class="bg-muted/40">
                         <tr>
                             <SortableHeader
-                                v-for="col in visibleColumns"
+                                v-for="col in previewVisibleColumns"
                                 :key="col.key"
                                 v-bind="dragAttrs(col.key)"
                                 :label="col.label"
@@ -281,7 +285,7 @@ function defaultHeaders(): Record<string, string> {
                     <tbody class="divide-y divide-border">
                         <tr v-for="row in sorted" :key="row.id">
                             <td
-                                v-for="col in visibleColumns"
+                                v-for="col in previewVisibleColumns"
                                 :key="col.key"
                                 class="px-4 py-2"
                             >

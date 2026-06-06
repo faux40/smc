@@ -39,4 +39,22 @@ describe('TableColumnsMenu', () => {
         const wrapper = await openMenu();
         expect(wrapper.text()).toContain('drag headers to reorder');
     });
+
+    it('emits reset when "Reset this table" is clicked', async () => {
+        const wrapper = await openMenu();
+        const btns = wrapper.findAll('button[data-action]');
+        const resetBtn = btns.find((b) => b.text().includes('Reset this table'));
+        expect(resetBtn).toBeDefined();
+        await resetBtn!.trigger('click');
+        expect(wrapper.emitted('reset')).toBeTruthy();
+    });
+
+    it('emits reset-all when "Reset all tables" is clicked', async () => {
+        const wrapper = await openMenu();
+        const btns = wrapper.findAll('button[data-action]');
+        const resetAllBtn = btns.find((b) => b.text().includes('Reset all tables'));
+        expect(resetAllBtn).toBeDefined();
+        await resetAllBtn!.trigger('click');
+        expect(wrapper.emitted('reset-all')).toBeTruthy();
+    });
 });
