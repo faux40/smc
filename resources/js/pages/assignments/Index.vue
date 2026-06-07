@@ -11,11 +11,11 @@ import axios from 'axios';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import AssignmentPill from '@/components/AssignmentPill.vue';
 import AsyncState from '@/components/AsyncState.vue';
+import DataTable from '@/components/DataTable.vue';
 import FilterModeToggle from '@/components/FilterModeToggle.vue';
 import type { FilterMode } from '@/components/FilterModeToggle.vue';
 import Heading from '@/components/Heading.vue';
 import MultiSelectFilter from '@/components/MultiSelectFilter.vue';
-import TableColumnsMenu from '@/components/TableColumnsMenu.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
@@ -24,8 +24,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTableSort } from '@/composables/useTableSort';
-import { useColumnDrag } from '@/composables/useColumnDrag';
-import { useTableView } from '@/composables/useTableView';
 import { realtimeTabId } from '@/echo';
 import AssignmentFormModal from '@/pages/assignments/Partials/AssignmentFormModal.vue';
 import BulkAssignmentsModal from '@/pages/assignments/Partials/BulkAssignmentsModal.vue';
@@ -58,10 +56,37 @@ interface UserPickerRow {
     supervisor_name: string | null;
 }
 
+// One row per user — every active user shows, with or without assignments
+// (this is also where you assign, via the per-row "+ Add"). A user's
+// assignments become timing-coded pills.
+interface UserGroup {
+    user_id: string;
+    name: string;
+    email: string | null;
+    employee_number: string | null;
+    department: string | null;
+    location: string | null;
+    job_title: string | null;
+    supervisor_name: string | null;
+    assignments: AssignmentRow[];
+}
+
+const ASSIGNMENTS_COLUMNS = [
+    { key: 'user', label: 'User', sortable: true },
+    { key: 'employee_number', label: 'Employee #', sortable: true },
+    { key: 'job_title', label: 'Job title', sortable: true },
+    { key: 'department', label: 'Department', sortable: true },
+    { key: 'location', label: 'Location', sortable: true },
+    { key: 'supervisor', label: 'Supervisor', sortable: true },
+    { key: 'tags', label: 'Tags', sortable: true },
+    { key: 'assignments', label: 'Assignments', sortable: true },
+];
+
 const store = useAssignmentsStore();
 const tagsStore = useTagsStore();
 const requirements = useRequirementsStore();
 const page = usePage();
+const prefs = usePreferencesStore();
 
 const authUser = computed(
     () =>
@@ -124,7 +149,6 @@ function clearFilters(): void {
     tagFilter.value = [];
     tagFilterMode.value = 'and';
 }
-
 
 const modalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
@@ -300,21 +324,6 @@ function matchSearch(
     return words.every((w) => hay.includes(w)); // 'and' — all words present
 }
 
-// One row per user — every active user shows, with or without assignments
-// (this is also where you assign, via the per-row "+ Add"). A user's
-// assignments become timing-coded pills.
-interface UserGroup {
-    user_id: string;
-    name: string;
-    email: string | null;
-    employee_number: string | null;
-    department: string | null;
-    location: string | null;
-    job_title: string | null;
-    supervisor_name: string | null;
-    assignments: AssignmentRow[];
-}
-
 const filteredGroups = computed<UserGroup[]>(() => {
     const byUser = new Map<string, AssignmentRow[]>();
 
@@ -388,46 +397,6 @@ const { sortKey, sortDir, toggleSort, sorted: userGroups } =
         },
         { key: 'user', dir: 'asc' },
     );
-
-// Per-user column control (show/hide + reorder), persisted via the prefs store.
-// The select-checkbox column is fixed (not in this set).
-const prefs = usePreferencesStore();
-const {
-    columns: columnDefs,
-    toggle: toggleColumn,
-    reorder: reorderColumn,
-    reset: resetColumns,
-    resetAll: resetAllColumns,
-} = useTableView('assignments', [
-    { key: 'user', label: 'User', sortable: true },
-    { key: 'employee_number', label: 'Employee #', sortable: true },
-    { key: 'job_title', label: 'Job title', sortable: true },
-    { key: 'department', label: 'Department', sortable: true },
-    { key: 'location', label: 'Location', sortable: true },
-    { key: 'supervisor', label: 'Supervisor', sortable: true },
-    { key: 'tags', label: 'Tags', sortable: true },
-    { key: 'assignments', label: 'Assignments', sortable: true },
-]);
-const { dragAttrs, previewVisibleColumns } = useColumnDrag(columnDefs, reorderColumn);
-
-// Plain-text value for the profile columns (user/tags/assignments render their
-// own markup in the template).
-function cellText(g: UserGroup, key: string): string {
-    const value =
-        key === 'supervisor'
-            ? g.supervisor_name
-            : key === 'employee_number'
-              ? g.employee_number
-              : key === 'job_title'
-                ? g.job_title
-                : key === 'department'
-                  ? g.department
-                  : key === 'location'
-                    ? g.location
-                    : null;
-
-    return value ?? '—';
-}
 
 // Persist + restore the filter view through the prefs store. Filtering stays
 // client-side (the org's assignments are bounded, and the roster is the full
@@ -542,14 +511,6 @@ watch(showExpired, (v) => {
     });
 });
 
-function sortIndicator(key: string): string {
-    if (sortKey.value !== key) {
-        return '';
-    }
-
-    return sortDir.value === 'asc' ? '▲' : '▼';
-}
-
 const userOptions = computed(() =>
     [...userPicker.value]
         .sort((a, b) => (a.l_name ?? '').localeCompare(b.l_name ?? ''))
@@ -607,82 +568,7 @@ function defaultHeaders(): Record<string, string> {
                 title="Assignments"
                 description="Per-(user, requirement) compliance timing records. Create one at a time here; use Bulk assign for tag-driven cross-products."
             />
-            <Button v-if="canCreate" @click="openCreate"
-                >+ New assignment</Button
-            >
-        </div>
-
-        <div class="flex flex-wrap items-end gap-3">
-            <div class="grid gap-1">
-                <Label for="filter_search" class="text-xs">Search</Label>
-                <div class="flex items-center gap-1">
-                    <Input
-                        id="filter_search"
-                        v-model="search"
-                        type="search"
-                        placeholder="Search user or requirement…"
-                        class="h-8 w-64"
-                        aria-label="Search assignments"
-                    />
-                    <FilterModeToggle
-                        v-if="search.trim() !== ''"
-                        v-model:mode="searchMode"
-                    />
-                </div>
-            </div>
-            <div class="grid gap-1">
-                <Label class="text-xs">Filter by user</Label>
-                <MultiSelectFilter
-                    v-model:selected="userFilterIds"
-                    v-model:mode="userFilterMode"
-                    :options="userOptions"
-                    :modes="USER_FILTER_MODES"
-                    label="users"
-                />
-            </div>
-            <div class="grid gap-1">
-                <Label class="text-xs">Filter by requirement</Label>
-                <MultiSelectFilter
-                    v-model:selected="requirementFilterIds"
-                    v-model:mode="requirementFilterMode"
-                    :options="requirementOptions"
-                    label="requirements"
-                />
-            </div>
-            <div class="grid gap-1">
-                <Label class="text-xs">Filter by tag</Label>
-                <TagFilter
-                    v-model:tag-ids="tagFilter"
-                    v-model:mode="tagFilterMode"
-                    placeholder="Any tag…"
-                />
-            </div>
-            <label
-                class="inline-flex h-8 cursor-pointer items-center gap-2 self-end text-sm"
-            >
-                <Checkbox v-model="showExpired" />
-                Show expired
-            </label>
-            <button
-                v-if="hasActiveFilters"
-                type="button"
-                class="h-8 rounded border border-input px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-                @click="clearFilters"
-            >
-                Clear filters
-            </button>
-            <span class="text-xs text-muted-foreground">
-                {{ userGroups.length }} users · {{ shownAssignmentCount }} of
-                {{ store.rows.length }}
-                assignments
-            </span>
-            <TableColumnsMenu
-                class="ml-auto self-end"
-                :columns="columnDefs"
-                @toggle="toggleColumn"
-                @reset="resetColumns"
-                @reset-all="resetAllColumns"
-            />
+            <Button v-if="canCreate" @click="openCreate">+ New assignment</Button>
         </div>
 
         <div
@@ -691,25 +577,25 @@ function defaultHeaders(): Record<string, string> {
             <span>Each dot is one requirement element, by timing:</span>
             <span class="inline-flex items-center gap-1">
                 <span
-                    class="h-2.5 w-2.5 rounded-full bg-emerald-400 ring-1 ring-emerald-300 ring-inset dark:bg-emerald-500"
+                    class="h-2.5 w-2.5 rounded-full bg-emerald-400 ring-1 ring-inset ring-emerald-300 dark:bg-emerald-500"
                 />
                 Repeating
             </span>
             <span class="inline-flex items-center gap-1">
                 <span
-                    class="h-2.5 w-2.5 rounded-full bg-sky-400 ring-1 ring-sky-300 ring-inset dark:bg-sky-500"
+                    class="h-2.5 w-2.5 rounded-full bg-sky-400 ring-1 ring-inset ring-sky-300 dark:bg-sky-500"
                 />
                 Initial-only
             </span>
             <span class="inline-flex items-center gap-1">
                 <span
-                    class="h-2.5 w-2.5 rounded-full bg-yellow-400 ring-1 ring-yellow-300 ring-inset dark:bg-yellow-500"
+                    class="h-2.5 w-2.5 rounded-full bg-yellow-400 ring-1 ring-inset ring-yellow-300 dark:bg-yellow-500"
                 />
                 As-needed
             </span>
             <span class="inline-flex items-center gap-1">
                 <span
-                    class="h-2.5 w-2.5 rounded-full bg-neutral-300 ring-1 ring-neutral-300 ring-inset dark:bg-neutral-500"
+                    class="h-2.5 w-2.5 rounded-full bg-neutral-300 ring-1 ring-inset ring-neutral-300 dark:bg-neutral-500"
                 />
                 No timing set
             </span>
@@ -758,101 +644,140 @@ function defaultHeaders(): Record<string, string> {
                 </div>
             </template>
 
-            <div class="overflow-hidden rounded-md border border-border">
-                <table class="min-w-full divide-y divide-border text-sm">
-                    <thead class="bg-muted/40">
-                        <tr>
-                            <th class="w-10 px-4 py-2 text-left align-top">
-                                <Checkbox
-                                    :model-value="allVisibleSelected"
-                                    aria-label="Select all"
-                                    @update:model-value="toggleSelectAll"
-                                />
-                            </th>
-                            <th
-                                v-for="col in previewVisibleColumns"
-                                :key="col.key"
-                                v-bind="dragAttrs(col.key)"
-                                class="px-4 py-2 text-left align-top font-medium"
-                            >
-                                <button
-                                    type="button"
-                                    class="whitespace-nowrap hover:underline"
-                                    @click="toggleSort(col.key)"
-                                >
-                                    {{ col.label }} {{ sortIndicator(col.key) }}
-                                </button>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border">
-                        <tr
-                            v-for="group in userGroups"
-                            :key="group.user_id"
-                            class="align-top"
+            <DataTable
+                view-id="assignments"
+                :default-columns="ASSIGNMENTS_COLUMNS"
+                :rows="userGroups"
+                :sort-key="sortKey"
+                :sort-dir="sortDir"
+                :row-key="(row) => row.user_id"
+                @sort="toggleSort"
+            >
+                <template #filters>
+                    <div class="grid gap-1">
+                        <Label for="filter_search" class="text-xs">Search</Label>
+                        <div class="flex items-center gap-1">
+                            <Input
+                                id="filter_search"
+                                v-model="search"
+                                type="search"
+                                placeholder="Search user or requirement…"
+                                class="h-8 w-64"
+                                aria-label="Search assignments"
+                            />
+                            <FilterModeToggle
+                                v-if="search.trim() !== ''"
+                                v-model:mode="searchMode"
+                            />
+                        </div>
+                    </div>
+                    <div class="grid gap-1">
+                        <Label class="text-xs">Filter by user</Label>
+                        <MultiSelectFilter
+                            v-model:selected="userFilterIds"
+                            v-model:mode="userFilterMode"
+                            :options="userOptions"
+                            :modes="USER_FILTER_MODES"
+                            label="users"
+                        />
+                    </div>
+                    <div class="grid gap-1">
+                        <Label class="text-xs">Filter by requirement</Label>
+                        <MultiSelectFilter
+                            v-model:selected="requirementFilterIds"
+                            v-model:mode="requirementFilterMode"
+                            :options="requirementOptions"
+                            label="requirements"
+                        />
+                    </div>
+                    <div class="grid gap-1">
+                        <Label class="text-xs">Filter by tag</Label>
+                        <TagFilter
+                            v-model:tag-ids="tagFilter"
+                            v-model:mode="tagFilterMode"
+                            placeholder="Any tag…"
+                        />
+                    </div>
+                    <label
+                        class="inline-flex h-8 cursor-pointer items-center gap-2 self-end text-sm"
+                    >
+                        <Checkbox v-model="showExpired" />
+                        Show expired
+                    </label>
+                    <button
+                        v-if="hasActiveFilters"
+                        type="button"
+                        class="h-8 rounded border border-input px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                        @click="clearFilters"
+                    >
+                        Clear filters
+                    </button>
+                    <span class="text-xs text-muted-foreground">
+                        {{ userGroups.length }} users · {{ shownAssignmentCount }} of
+                        {{ store.rows.length }} assignments
+                    </span>
+                </template>
+
+                <template #lead-header>
+                    <th class="w-10 px-4 py-2 text-left align-top">
+                        <Checkbox
+                            :model-value="allVisibleSelected"
+                            aria-label="Select all"
+                            @update:model-value="toggleSelectAll"
+                        />
+                    </th>
+                </template>
+
+                <template #lead-cells="{ row }">
+                    <td class="px-4 py-3">
+                        <Checkbox
+                            :model-value="isUserSelected(row.user_id)"
+                            :aria-label="`Select ${row.name}`"
+                            @update:model-value="toggleUser(row.user_id)"
+                        />
+                    </td>
+                </template>
+
+                <template #col-user="{ row }">
+                    <div class="font-medium">{{ row.name }}</div>
+                    <div v-if="row.email" class="text-xs text-muted-foreground">
+                        {{ row.email }}
+                    </div>
+                </template>
+
+                <template #col-supervisor="{ row }">
+                    {{ row.supervisor_name ?? '—' }}
+                </template>
+
+                <template #col-tags="{ row }">
+                    <TagsListCell
+                        :morphable-type="USER_TYPE"
+                        :morphable-id="row.user_id"
+                    />
+                </template>
+
+                <template #col-assignments="{ row }">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <AssignmentPill
+                            v-for="a in row.assignments"
+                            :key="a.id"
+                            :label="reqName(a)"
+                            :summary="a.element_timing"
+                            :expired="isExpired(a)"
+                            @click="openEdit(a)"
+                        />
+                        <button
+                            v-if="canCreate"
+                            type="button"
+                            class="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                            title="Add an assignment for this user"
+                            @click="openCreate(row.user_id)"
                         >
-                            <td class="px-4 py-3">
-                                <Checkbox
-                                    :model-value="isUserSelected(group.user_id)"
-                                    :aria-label="`Select ${group.name}`"
-                                    @update:model-value="
-                                        toggleUser(group.user_id)
-                                    "
-                                />
-                            </td>
-                            <td
-                                v-for="col in previewVisibleColumns"
-                                :key="col.key"
-                                class="px-4 py-3"
-                            >
-                                <template v-if="col.key === 'user'">
-                                    <div class="font-medium">
-                                        {{ group.name }}
-                                    </div>
-                                    <div
-                                        v-if="group.email"
-                                        class="text-xs text-muted-foreground"
-                                    >
-                                        {{ group.email }}
-                                    </div>
-                                </template>
-                                <template v-else-if="col.key === 'tags'">
-                                    <TagsListCell
-                                        :morphable-type="USER_TYPE"
-                                        :morphable-id="group.user_id"
-                                    />
-                                </template>
-                                <template v-else-if="col.key === 'assignments'">
-                                    <div
-                                        class="flex flex-wrap items-center gap-1.5"
-                                    >
-                                        <AssignmentPill
-                                            v-for="a in group.assignments"
-                                            :key="a.id"
-                                            :label="reqName(a)"
-                                            :summary="a.element_timing"
-                                            :expired="isExpired(a)"
-                                            @click="openEdit(a)"
-                                        />
-                                        <button
-                                            v-if="canCreate"
-                                            type="button"
-                                            class="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                                            title="Add an assignment for this user"
-                                            @click="openCreate(group.user_id)"
-                                        >
-                                            + Add
-                                        </button>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    {{ cellText(group, col.key) }}
-                                </template>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+                            + Add
+                        </button>
+                    </div>
+                </template>
+            </DataTable>
         </AsyncState>
 
         <AssignmentFormModal

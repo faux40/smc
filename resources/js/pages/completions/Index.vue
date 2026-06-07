@@ -3,15 +3,12 @@ import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
+import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
-import SortableHeader from '@/components/SortableHeader.vue';
-import TableColumnsMenu from '@/components/TableColumnsMenu.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { useColumnDrag } from '@/composables/useColumnDrag';
 import { useTableSort } from '@/composables/useTableSort';
-import { useTableView } from '@/composables/useTableView';
 import { realtimeTabId } from '@/echo';
 import CompletionFormModal from '@/pages/completions/Partials/CompletionFormModal.vue';
 import { page as completionsPage } from '@/routes/completions';
@@ -33,6 +30,14 @@ interface UserPickerRow {
     l_name: string;
     email: string | null;
 }
+
+const COMPLETIONS_COLUMNS = [
+    { key: 'user', label: 'User', sortable: true },
+    { key: 'module', label: 'Module', sortable: true },
+    { key: 'date', label: 'Date', sortable: true },
+    { key: 'expires', label: 'Expires', sortable: true },
+    { key: 'credits', label: 'Credits', sortable: true },
+];
 
 const store = useCompletionsStore();
 const trainings = useTrainingsStore();
@@ -68,22 +73,6 @@ const editing = ref<CompletionRow | null>(null);
 const error = ref<string | null>(null);
 const loading = ref(true);
 
-// ── Column control ────────────────────────────────────────────────────────────
-const {
-    columns: columnDefs,
-    toggle: toggleColumn,
-    reorder: reorderColumn,
-    reset: resetColumns,
-    resetAll: resetAllColumns,
-} = useTableView('completions', [
-    { key: 'user', label: 'User', sortable: true },
-    { key: 'module', label: 'Module', sortable: true },
-    { key: 'date', label: 'Date', sortable: true },
-    { key: 'expires', label: 'Expires', sortable: true },
-    { key: 'credits', label: 'Credits', sortable: true },
-]);
-const { dragAttrs, previewVisibleColumns } = useColumnDrag(columnDefs, reorderColumn);
-
 // ── Filtering + sorting ───────────────────────────────────────────────────────
 const filteredRows = computed(() =>
     store.rows.filter((c) => !userFilter.value || c.user_id === userFilter.value),
@@ -96,7 +85,6 @@ const moduleLabel = (row: CompletionRow): string => {
     if (row.module_type === 'App\\Models\\Training') {
         return trainingById(row.module_id)?.name ?? 'Training';
     }
-
     return row.module_type;
 };
 
@@ -174,7 +162,6 @@ const openEdit = (row: CompletionRow) => {
 const remove = async (row: CompletionRow) => {
     const userName = (() => {
         const u = userById(row.user_id);
-
         return u ? [u.f_name, u.l_name].filter(Boolean).join(' ') : 'user';
     })();
 
@@ -214,39 +201,7 @@ function defaultHeaders(): Record<string, string> {
                 title="Completions"
                 description="Record that a user satisfied one or more rqmt_elements on a date. One completion can credit several Requirements at once."
             />
-            <Button v-if="canCreate" @click="openCreate"
-                >+ New completion</Button
-            >
-        </div>
-
-        <div class="flex flex-wrap items-end gap-3">
-            <div class="grid gap-1">
-                <Label for="filter_user" class="text-xs">Filter by user</Label>
-                <select
-                    id="filter_user"
-                    v-model="userFilter"
-                    class="rounded border border-input bg-background px-2 py-1 text-sm"
-                >
-                    <option value="">All users</option>
-                    <option v-for="u in sortedUsers" :key="u.id" :value="u.id">
-                        {{
-                            [u.f_name, u.l_name].filter(Boolean).join(' ') ||
-                            u.email ||
-                            u.id
-                        }}
-                    </option>
-                </select>
-            </div>
-            <span class="text-xs text-muted-foreground">
-                {{ sorted.length }} of {{ store.rows.length }}
-            </span>
-            <TableColumnsMenu
-                class="ml-auto"
-                :columns="columnDefs"
-                @toggle="toggleColumn"
-                @reset="resetColumns"
-                @reset-all="resetAllColumns"
-            />
+            <Button v-if="canCreate" @click="openCreate">+ New completion</Button>
         </div>
 
         <AsyncState
@@ -265,105 +220,99 @@ function defaultHeaders(): Record<string, string> {
                 </div>
             </template>
 
-            <div class="overflow-hidden rounded-md border border-border">
-                <table class="min-w-full divide-y divide-border text-sm">
-                    <thead class="bg-muted/40">
-                        <tr>
-                            <SortableHeader
-                                v-for="col in previewVisibleColumns"
-                                :key="col.key"
-                                v-bind="dragAttrs(col.key)"
-                                :label="col.label"
-                                :sort-key="col.key"
-                                :active-key="sortKey"
-                                :dir="sortDir"
-                                @sort="toggleSort"
-                            />
-                            <th class="px-4 py-2"></th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border">
-                        <tr v-for="row in sorted" :key="row.id">
-                            <td
-                                v-for="col in previewVisibleColumns"
-                                :key="col.key"
-                                class="px-4 py-2"
-                            >
-                                <template v-if="col.key === 'user'">
-                                    <template v-if="userById(row.user_id)">
-                                        {{
-                                            [
-                                                userById(row.user_id)?.f_name,
-                                                userById(row.user_id)?.l_name,
-                                            ]
-                                                .filter(Boolean)
-                                                .join(' ')
-                                        }}
-                                        <div
-                                            v-if="
-                                                userById(row.user_id)?.email
-                                            "
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            {{ userById(row.user_id)?.email }}
-                                        </div>
-                                    </template>
-                                    <span
-                                        v-else
-                                        class="text-muted-foreground"
-                                        >—</span
-                                    >
-                                </template>
+            <DataTable
+                view-id="completions"
+                :default-columns="COMPLETIONS_COLUMNS"
+                :rows="sorted"
+                :sort-key="sortKey"
+                :sort-dir="sortDir"
+                :row-key="(row) => row.id"
+                @sort="toggleSort"
+            >
+                <template #filters>
+                    <div class="grid gap-1">
+                        <Label for="filter_user" class="text-xs">Filter by user</Label>
+                        <select
+                            id="filter_user"
+                            v-model="userFilter"
+                            class="rounded border border-input bg-background px-2 py-1 text-sm"
+                        >
+                            <option value="">All users</option>
+                            <option v-for="u in sortedUsers" :key="u.id" :value="u.id">
+                                {{
+                                    [u.f_name, u.l_name].filter(Boolean).join(' ') ||
+                                    u.email ||
+                                    u.id
+                                }}
+                            </option>
+                        </select>
+                    </div>
+                    <span class="text-xs text-muted-foreground">
+                        {{ sorted.length }} of {{ store.rows.length }}
+                    </span>
+                </template>
 
-                                <template v-else-if="col.key === 'module'">
-                                    {{ moduleLabel(row) }}
-                                </template>
+                <template #col-user="{ row }">
+                    <template v-if="userById(row.user_id)">
+                        {{
+                            [
+                                userById(row.user_id)?.f_name,
+                                userById(row.user_id)?.l_name,
+                            ]
+                                .filter(Boolean)
+                                .join(' ')
+                        }}
+                        <div
+                            v-if="userById(row.user_id)?.email"
+                            class="text-xs text-muted-foreground"
+                        >
+                            {{ userById(row.user_id)?.email }}
+                        </div>
+                    </template>
+                    <span v-else class="text-muted-foreground">—</span>
+                </template>
 
-                                <template v-else-if="col.key === 'date'">
-                                    <span class="text-xs">{{
-                                        row.completion_date ?? '—'
-                                    }}</span>
-                                </template>
+                <template #col-module="{ row }">{{ moduleLabel(row) }}</template>
 
-                                <template v-else-if="col.key === 'expires'">
-                                    <span class="text-xs">{{
-                                        row.expire_date ?? '—'
-                                    }}</span>
-                                </template>
+                <template #col-date="{ row }">
+                    <span class="text-xs">{{ row.completion_date ?? '—' }}</span>
+                </template>
 
-                                <template v-else-if="col.key === 'credits'">
-                                    <Badge variant="secondary"
-                                        >{{
-                                            row.rqmt_element_ids.length
-                                        }}
-                                        element(s)</Badge
-                                    >
-                                </template>
-                            </td>
-                            <td
-                                class="space-x-3 px-4 py-2 text-right text-xs"
-                            >
-                                <button
-                                    v-if="row.can_edit"
-                                    type="button"
-                                    class="text-primary hover:underline"
-                                    @click="openEdit(row)"
-                                >
-                                    Edit
-                                </button>
-                                <button
-                                    v-if="row.can_delete"
-                                    type="button"
-                                    class="text-destructive hover:underline"
-                                    @click="remove(row)"
-                                >
-                                    Delete
-                                </button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+                <template #col-expires="{ row }">
+                    <span class="text-xs">{{ row.expire_date ?? '—' }}</span>
+                </template>
+
+                <template #col-credits="{ row }">
+                    <Badge variant="secondary">
+                        {{ row.rqmt_element_ids.length }} element(s)
+                    </Badge>
+                </template>
+
+                <template #trail-header>
+                    <th class="px-4 py-2"></th>
+                </template>
+
+                <template #trail-cells="{ row }">
+                    <td class="space-x-3 px-4 py-2 text-right text-xs">
+                        <button
+                            v-if="row.can_edit"
+                            type="button"
+                            class="text-primary hover:underline"
+                            @click="openEdit(row)"
+                        >
+                            Edit
+                        </button>
+                        <button
+                            v-if="row.can_delete"
+                            type="button"
+                            class="text-destructive hover:underline"
+                            @click="remove(row)"
+                        >
+                            Delete
+                        </button>
+                    </td>
+                </template>
+            </DataTable>
         </AsyncState>
 
         <CompletionFormModal
