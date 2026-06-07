@@ -1,4 +1,4 @@
-<script setup lang="ts" generic="TRow extends Record<string, unknown>">
+<script setup lang="ts" generic="TRow extends object = Record<string, unknown>">
 import { computed } from 'vue';
 import SortableHeader from '@/components/SortableHeader.vue';
 import TableColumnsMenu from '@/components/TableColumnsMenu.vue';
@@ -77,7 +77,7 @@ const colspanTotal = computed(() => previewVisibleColumns.value.length);
                             class="px-4 py-2"
                         >
                             <slot :name="`col-${col.key}`" :col="col" :row="row">
-                                {{ row[col.key] ?? '—' }}
+                                {{ (row as Record<string, unknown>)[col.key] ?? '—' }}
                             </slot>
                         </td>
                         <slot name="trail-cells" :row="row" />
