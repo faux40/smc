@@ -15,6 +15,7 @@ use App\Http\Controllers\RequirementsController;
 use App\Http\Controllers\RqmtElementsController;
 use App\Http\Controllers\StdFrequenciesController;
 use App\Http\Controllers\TagsController;
+use App\Http\Controllers\TrainingAssignmentsController;
 use App\Http\Controllers\TrainingsController;
 use App\Http\Controllers\UserPreferencesController;
 use App\Http\Controllers\UsersController;
@@ -209,6 +210,12 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::post('api/assignments', [AssignmentsController::class, 'store'])->name('assignments.store');
     Route::patch('api/assignments/{assignment}', [AssignmentsController::class, 'update'])->name('assignments.update');
     Route::delete('api/assignments/{assignment}', [AssignmentsController::class, 'destroy'])->name('assignments.destroy');
+
+    // Training assignments (redesign) — training-as-atom model.
+    // store handles both direct (training_id) and requirement-exploded (requirement_id) sources.
+    Route::get('api/training-assignments', [TrainingAssignmentsController::class, 'index'])->name('training-assignments.index');
+    Route::post('api/training-assignments', [TrainingAssignmentsController::class, 'store'])->name('training-assignments.store');
+    Route::delete('api/training-assignments/{trainingAssignment}', [TrainingAssignmentsController::class, 'destroy'])->name('training-assignments.destroy');
 
     // Completions — flat API with optional ?user_id filter. Pivot to
     // rqmt_elements is sync()'d from the rqmt_element_ids array in the
