@@ -13,10 +13,16 @@ import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
 import Heading from '@/components/Heading.vue';
 import TagsField from '@/components/TagsField.vue';
+import TrainingAssignmentPill from '@/components/TrainingAssignmentPill.vue';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { realtimeTabId } from '@/echo';
+import TrainingAssignmentFormModal from '@/pages/assignments/Partials/TrainingAssignmentFormModal.vue';
 import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import { index as usersIndex } from '@/routes/users';
+import { useOrgSettingsStore } from '@/stores/orgSettings';
+import { useTrainingAssignmentsStore } from '@/stores/trainingAssignments';
+import type { TrainingAssignmentRow } from '@/stores/trainingAssignments';
 
 interface Subject {
     id: string;
@@ -83,6 +89,7 @@ const authUser = computed(
             isOwner?: boolean;
             isSuperAdmin?: boolean;
             isAdmin?: boolean;
+            isManager?: boolean;
         } | null,
 );
 const canManageTagLibrary = computed(() =>
@@ -92,6 +99,35 @@ const canManageTagLibrary = computed(() =>
         authUser.value?.isAdmin,
     ),
 );
+const canAssign = computed(() =>
+    Boolean(
+        authUser.value?.isOwner ||
+        authUser.value?.isSuperAdmin ||
+        authUser.value?.isAdmin ||
+        authUser.value?.isManager,
+    ),
+);
+
+const taStore = useTrainingAssignmentsStore();
+const orgSettings = useOrgSettingsStore();
+const userTas = computed<TrainingAssignmentRow[]>(() =>
+    taStore.forUser(props.subject.id),
+);
+
+const taModalOpen = ref(false);
+const taModalMode = ref<'create' | 'view'>('create');
+const taModalTarget = ref<TrainingAssignmentRow | null>(null);
+
+function openTaCreate(): void {
+    taModalMode.value = 'create';
+    taModalTarget.value = null;
+    taModalOpen.value = true;
+}
+function openTaView(row: TrainingAssignmentRow): void {
+    taModalMode.value = 'view';
+    taModalTarget.value = row;
+    taModalOpen.value = true;
+}
 
 defineOptions({
     layout: {
@@ -107,7 +143,10 @@ const loading = ref(true);
 const error = ref<string | null>(null);
 
 onMounted(async () => {
-    await load();
+    await Promise.all([
+        load(),
+        taStore.loadFor({ user_id: props.subject.id }),
+    ]);
 });
 
 async function load(): Promise<void> {
@@ -272,6 +311,46 @@ function defaultHeaders(): Record<string, string> {
                 :can-manage-library="canManageTagLibrary"
             />
         </div>
+
+        <!-- Training assignments (Phase E2) -->
+        <section class="flex flex-col gap-2" data-testid="training-assignments-section">
+            <div class="flex items-center justify-between">
+                <h2 class="text-base font-semibold">Training assignments</h2>
+                <Button
+                    v-if="canAssign"
+                    size="sm"
+                    variant="outline"
+                    data-testid="ta-assign-btn"
+                    @click="openTaCreate"
+                >
+                    + Assign
+                </Button>
+            </div>
+
+            <div
+                v-if="userTas.length === 0"
+                class="rounded border border-dashed border-border p-3 text-xs text-muted-foreground"
+            >
+                No training assignments yet.
+            </div>
+
+            <div v-else class="flex flex-wrap gap-1.5">
+                <TrainingAssignmentPill
+                    v-for="ta in userTas"
+                    :key="ta.id"
+                    :row="ta"
+                    :expiring-soon-days="orgSettings.expiringSoonDays"
+                    @click="openTaView(ta)"
+                />
+            </div>
+        </section>
+
+        <TrainingAssignmentFormModal
+            v-model:open="taModalOpen"
+            :mode="taModalMode"
+            :target="taModalTarget"
+            :initial-user-id="taModalMode === 'create' ? subject.id : null"
+        />
 
         <p
             v-if="error"
