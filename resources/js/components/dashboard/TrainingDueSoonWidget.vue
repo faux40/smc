@@ -27,8 +27,8 @@ onMounted(async () => {
             '/api/dashboard/training-due-soon',
             { headers: defaultHeaders() },
         );
-        overdue.value = data.overdue;
-        dueSoon.value = data.due_soon;
+        overdue.value = Array.isArray(data?.overdue) ? data.overdue : [];
+        dueSoon.value = Array.isArray(data?.due_soon) ? data.due_soon : [];
     } catch (e) {
         error.value = (e as Error).message;
     } finally {
