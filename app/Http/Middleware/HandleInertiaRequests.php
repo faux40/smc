@@ -36,6 +36,7 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
+        $org = $user?->organization;
 
         return [
             ...parent::share($request),
@@ -51,6 +52,9 @@ class HandleInertiaRequests extends Middleware
                     ],
                 ) : null,
             ],
+            'org' => $org ? [
+                'training_thresholds' => $org->training_thresholds,
+            ] : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

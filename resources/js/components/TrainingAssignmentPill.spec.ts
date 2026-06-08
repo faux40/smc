@@ -54,4 +54,23 @@ describe('TrainingAssignmentPill', () => {
         // The root button should carry the expired variant classes.
         expect(wrapper.classes().join(' ')).toMatch(/neutral|muted|line-through|expired/);
     });
+
+    it('treats a date as expiring when within a custom expiringSoonDays window', () => {
+        // 10 days out — within a 14-day custom threshold, outside the default 30.
+        const soon = new Date();
+        soon.setDate(soon.getDate() + 10);
+        const expires = soon.toISOString().slice(0, 10);
+
+        const withDefault = mount(TrainingAssignmentPill, {
+            props: { row: ta({ expires_at: expires }) },
+        });
+        const withCustom = mount(TrainingAssignmentPill, {
+            props: { row: ta({ expires_at: expires }), expiringSoonDays: 14 },
+        });
+
+        // With default 30 days threshold, 10 days out is still "expiring".
+        expect(withDefault.text()).toContain(expires);
+        // With 14-day threshold, also "expiring".
+        expect(withCustom.text()).toContain(expires);
+    });
 });

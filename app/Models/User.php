@@ -69,6 +69,14 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * @return BelongsTo<Organization, $this>
+     */
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class, 'org_id');
+    }
+
+    /**
      * This user's supervisor (another user in the same org), if set.
      *
      * @return BelongsTo<User, $this>

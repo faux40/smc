@@ -27,6 +27,8 @@ class OrganizationController extends Controller
                 'id' => $org->id,
                 'name' => $org->name,
                 'timezone' => $org->timezone,
+                'due_soon_days' => $org->training_thresholds['due_soon_days'] ?? null,
+                'expiring_soon_days' => $org->training_thresholds['expiring_soon_days'] ?? null,
             ],
             'isOwner' => $user->hasRole('Owner'),
             // Full IANA identifier list for the timezone picker.
@@ -37,7 +39,19 @@ class OrganizationController extends Controller
     public function update(OrganizationUpdateRequest $request): RedirectResponse
     {
         $org = Organization::findOrFail($request->user()->org_id);
-        $org->update($request->validated());
+
+        $dueSoon = $request->validated('due_soon_days');
+        $expiringSoon = $request->validated('expiring_soon_days');
+        $thresholds = array_filter([
+            'due_soon_days' => $dueSoon,
+            'expiring_soon_days' => $expiringSoon,
+        ], fn ($v) => $v !== null);
+
+        $org->update([
+            'name' => $request->validated('name'),
+            'timezone' => $request->validated('timezone'),
+            'training_thresholds' => $thresholds ?: null,
+        ]);
 
         event(new OrganizationUpdated($org->fresh()));
 

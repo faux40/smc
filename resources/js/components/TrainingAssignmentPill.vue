@@ -11,22 +11,23 @@ import type { TrainingAssignmentRow } from '@/stores/trainingAssignments';
 
 const props = defineProps<{
     row: TrainingAssignmentRow;
+    expiringSoonDays?: number;
 }>();
 
 defineEmits<{ (e: 'click'): void }>();
 
 type ExpiryStatus = 'ok' | 'expiring' | 'expired';
 
+const threshold = computed(() => props.expiringSoonDays ?? 30);
 const today = new Date().toISOString().slice(0, 10);
 
 const expiryStatus = computed<ExpiryStatus>(() => {
     if (!props.row.expires_at) return 'ok';
     if (props.row.expires_at < today) return 'expired';
-    // Within 30 days = expiring soon (used in Phase F for yellow).
     const daysOut =
         (new Date(props.row.expires_at).getTime() - new Date(today).getTime()) /
         86_400_000;
-    return daysOut <= 30 ? 'expiring' : 'ok';
+    return daysOut <= threshold.value ? 'expiring' : 'ok';
 });
 </script>
 

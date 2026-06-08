@@ -19,7 +19,13 @@ import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/organization';
 
 type Props = {
-    organization: { id: string; name: string; timezone: string };
+    organization: {
+        id: string;
+        name: string;
+        timezone: string;
+        due_soon_days: number | null;
+        expiring_soon_days: number | null;
+    };
     isOwner: boolean;
     timezones: string[];
 };
@@ -98,6 +104,47 @@ const submitDelete = () => {
                     time on Mondays.
                 </p>
                 <InputError class="mt-2" :message="errors.timezone" />
+            </div>
+            <div class="grid gap-2">
+                <Label for="due_soon_days">
+                    "Due soon" window (days)
+                </Label>
+                <Input
+                    id="due_soon_days"
+                    name="due_soon_days"
+                    type="number"
+                    min="1"
+                    max="365"
+                    class="mt-1 block w-40"
+                    :default-value="props.organization.due_soon_days ?? ''"
+                    :placeholder="String(60)"
+                />
+                <p class="text-xs text-muted-foreground">
+                    Assignments expiring within this many days appear in the
+                    "Due soon" dashboard list. Leave blank to use the default
+                    (60 days).
+                </p>
+                <InputError class="mt-2" :message="errors.due_soon_days" />
+            </div>
+            <div class="grid gap-2">
+                <Label for="expiring_soon_days">
+                    "Expiring soon" pill threshold (days)
+                </Label>
+                <Input
+                    id="expiring_soon_days"
+                    name="expiring_soon_days"
+                    type="number"
+                    min="1"
+                    max="365"
+                    class="mt-1 block w-40"
+                    :default-value="props.organization.expiring_soon_days ?? ''"
+                    :placeholder="String(30)"
+                />
+                <p class="text-xs text-muted-foreground">
+                    Assignment pills turn amber when expiry is within this
+                    many days. Leave blank to use the default (30 days).
+                </p>
+                <InputError class="mt-2" :message="errors.expiring_soon_days" />
             </div>
             <div class="flex items-center gap-4">
                 <Button :disabled="processing">Save</Button>

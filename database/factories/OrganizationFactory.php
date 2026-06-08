@@ -17,6 +17,7 @@ class OrganizationFactory extends Factory
         return [
             'name' => fake()->company(),
             'owner_user_id' => null,
+            'timezone' => 'UTC',
         ];
     }
 }
