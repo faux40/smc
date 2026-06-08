@@ -2,20 +2,15 @@
 /*
  * Training assignment form modal.
  *
- * create — pick user + source type (direct training OR from requirement).
- *   - direct      → one training_assignment row per training
- *   - requirement → one training_assignment row per training element
- *   No dates — expiry is computed from completion history by the observer.
+ * create — pick user + a single training-or-requirement from the combined
+ *   picker. The picker value prefix ("training:" / "requirement:") drives
+ *   which store action fires. No source_type concept is exposed to the user.
  *
  * view — read-only display; offers Delete (Admin+).
- *
- * Picker data:
- *   - Trainings from useTrainingsStore
- *   - Requirements from useRequirementsStore
  */
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
-import InputError from '@/components/InputError.vue';
+import TrainingOrRequirementPicker from '@/components/TrainingOrRequirementPicker.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -30,13 +25,10 @@ import { useFieldErrors } from '@/composables/useFieldErrors';
 import { useTrainingAssignmentsStore } from '@/stores/trainingAssignments';
 import type { TrainingAssignmentRow } from '@/stores/trainingAssignments';
 import { useErrorStore } from '@/stores/errors';
-import { useRequirementsStore } from '@/stores/requirements';
-import { useTrainingsStore } from '@/stores/trainings';
 
 const FORM_CTX = 'form:training-assignment';
 
 type Mode = 'create' | 'view';
-type SourceType = 'direct' | 'requirement';
 
 const props = defineProps<{
     open: boolean;
@@ -48,16 +40,12 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
 
 const taStore = useTrainingAssignmentsStore();
-const requirements = useRequirementsStore();
-const trainings = useTrainingsStore();
 const errorStore = useErrorStore();
 const fieldErrors = useFieldErrors(FORM_CTX);
 
 const form = reactive({
     user_id: '' as string,
-    source_type: 'direct' as SourceType,
-    training_id: '' as string,
-    requirement_id: '' as string,
+    selectedItem: '' as string,
 });
 const submitting = ref(false);
 const deleting = ref(false);
@@ -69,29 +57,14 @@ const title = computed(() =>
 );
 const canDelete = computed(() => isView.value && props.target?.can_delete === true);
 
-const sortedTrainings = computed(() =>
-    [...trainings.library].sort((a, b) => a.name.localeCompare(b.name)),
-);
-const sortedRequirements = computed(() =>
-    [...requirements.library].sort((a, b) => a.name.localeCompare(b.name)),
-);
-
-onMounted(async () => {
-    await Promise.all([trainings.load(), requirements.load()]);
-});
-
 watch(
     () => props.open,
-    async (open) => {
+    (open) => {
         if (!open) return;
-
         errorStore.clear(FORM_CTX);
-
         if (isCreate.value) {
             form.user_id = props.initialUserId ?? '';
-            form.source_type = 'direct';
-            form.training_id = '';
-            form.requirement_id = '';
+            form.selectedItem = '';
         }
     },
     { immediate: true },
@@ -104,10 +77,14 @@ const submit = async () => {
     errorStore.clear(FORM_CTX);
 
     try {
-        if (form.source_type === 'direct') {
-            await taStore.assignDirect(form.user_id, form.training_id);
+        const idx = form.selectedItem.indexOf(':');
+        const type = form.selectedItem.slice(0, idx);
+        const id = form.selectedItem.slice(idx + 1);
+
+        if (type === 'requirement') {
+            await taStore.assignFromRequirement(form.user_id, id);
         } else {
-            await taStore.assignFromRequirement(form.user_id, form.requirement_id);
+            await taStore.assignDirect(form.user_id, id);
         }
         emit('update:open', false);
     } catch (e) {
@@ -150,8 +127,7 @@ const remove = async () => {
                     <DialogTitle>{{ title }}</DialogTitle>
                     <DialogDescription>
                         <template v-if="isCreate">
-                            Assign a training directly or pull all trainings from a
-                            requirement.
+                            Pick a requirement or individual training to assign.
                         </template>
                         <template v-else>
                             Training assignment details.
@@ -162,66 +138,14 @@ const remove = async () => {
                 <ErrorBanner :context="FORM_CTX" class="mt-4" />
 
                 <!-- CREATE MODE -->
-                <div v-if="isCreate" class="mt-4 space-y-4">
-                    <!-- Source type -->
-                    <div class="grid gap-2">
-                        <Label for="ta_source_type">Assignment type</Label>
-                        <select
-                            id="ta_source_type"
-                            v-model="form.source_type"
-                            data-testid="source-type-select"
-                            class="h-9 w-full rounded border border-input bg-background px-3 text-sm"
-                        >
-                            <option value="direct">Assign training directly</option>
-                            <option value="requirement">
-                                Pull all trainings from a requirement
-                            </option>
-                        </select>
-                    </div>
-
-                    <!-- Training picker (direct) -->
-                    <div v-if="form.source_type === 'direct'" class="grid gap-2">
-                        <Label for="ta_training">Training</Label>
-                        <select
-                            id="ta_training"
-                            v-model="form.training_id"
-                            data-testid="training-select"
-                            required
-                            class="h-9 w-full rounded border border-input bg-background px-3 text-sm"
-                        >
-                            <option value="" disabled>Pick a training…</option>
-                            <option
-                                v-for="t in sortedTrainings"
-                                :key="t.id"
-                                :value="t.id"
-                            >
-                                {{ t.name }}
-                            </option>
-                        </select>
-                        <InputError :message="fieldErrors.message('training_id')" />
-                    </div>
-
-                    <!-- Requirement picker (requirement-exploded) -->
-                    <div v-else class="grid gap-2">
-                        <Label for="ta_req">Requirement</Label>
-                        <select
-                            id="ta_req"
-                            v-model="form.requirement_id"
-                            data-testid="requirement-select"
-                            required
-                            class="h-9 w-full rounded border border-input bg-background px-3 text-sm"
-                        >
-                            <option value="" disabled>Pick a requirement…</option>
-                            <option
-                                v-for="r in sortedRequirements"
-                                :key="r.id"
-                                :value="r.id"
-                            >
-                                {{ r.name }}
-                            </option>
-                        </select>
-                        <InputError :message="fieldErrors.message('requirement_id')" />
-                    </div>
+                <div v-if="isCreate" class="mt-4 grid gap-2">
+                    <Label for="ta_item">Training or requirement</Label>
+                    <TrainingOrRequirementPicker
+                        id="ta_item"
+                        v-model="form.selectedItem"
+                        :disabled="submitting"
+                    />
+                    <InputError :message="fieldErrors.message('training_id') || fieldErrors.message('requirement_id')" />
                 </div>
 
                 <!-- VIEW MODE -->
@@ -235,12 +159,9 @@ const remove = async () => {
                     </div>
 
                     <div v-if="target?.active_sources?.length" class="text-xs text-muted-foreground">
-                        <p class="font-medium mb-1">Assigned via</p>
+                        <p class="mb-1 font-medium">Assigned via</p>
                         <ul class="space-y-0.5">
-                            <li
-                                v-for="s in target.active_sources"
-                                :key="s.id"
-                            >
+                            <li v-for="s in target.active_sources" :key="s.id">
                                 {{ s.sourceable_type ? 'Requirement' : 'Direct assignment' }}
                             </li>
                         </ul>
@@ -267,7 +188,11 @@ const remove = async () => {
                         >
                             Cancel
                         </Button>
-                        <Button v-if="isCreate" type="submit" :disabled="submitting">
+                        <Button
+                            v-if="isCreate"
+                            type="submit"
+                            :disabled="submitting || !form.selectedItem"
+                        >
                             {{ submitting ? 'Saving…' : 'Assign' }}
                         </Button>
                     </div>

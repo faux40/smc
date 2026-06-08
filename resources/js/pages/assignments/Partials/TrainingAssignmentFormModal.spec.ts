@@ -3,10 +3,9 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TrainingAssignmentFormModal from '@/pages/assignments/Partials/TrainingAssignmentFormModal.vue';
-
-vi.mock('axios');
 import type { TrainingAssignmentRow } from '@/stores/trainingAssignments';
 
+vi.mock('axios');
 vi.mock('@/echo', () => ({ realtimeTabId: () => 'test-tab' }));
 vi.mock('@/composables/useRealtime', () => ({
     useRealtime: vi.fn(() => ({ bind: vi.fn(), leave: vi.fn() })),
@@ -38,6 +37,14 @@ function ta(overrides: Partial<TrainingAssignmentRow> = {}): TrainingAssignmentR
 }
 
 async function mountModal(props: Record<string, unknown> = {}) {
+    (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+        if (url === '/api/trainings')
+            return Promise.resolve({ data: [{ id: 't1', name: 'Fall Protection' }] });
+        if (url === '/api/requirements')
+            return Promise.resolve({ data: [{ id: 'r1', name: 'Forklift Safety Package' }] });
+        return Promise.resolve({ data: [] });
+    });
+
     const wrapper = mount(TrainingAssignmentFormModal, {
         props: { open: true, mode: 'create', ...props },
         global: { stubs: STUBS },
@@ -50,47 +57,27 @@ describe('TrainingAssignmentFormModal', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
-        // Silence the stores' network calls from onMounted load().
-        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
     });
 
     // -- create mode ---------------------------------------------------
 
-    it('shows the training picker when source_type is direct', async () => {
-        (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) =>
-            url === '/api/trainings'
-                ? Promise.resolve({ data: [{ id: 't1', name: 'Fall Protection' }] })
-                : Promise.resolve({ data: [] }),
-        );
-
+    it('shows both trainings and requirements in a single picker', async () => {
         const wrapper = await mountModal();
-        expect(wrapper.text()).toContain('Fall Protection');
+        const text = wrapper.text();
+        expect(text).toContain('Fall Protection');
+        expect(text).toContain('Forklift Safety Package');
     });
 
-    it('shows the requirement picker when source_type is requirement', async () => {
-        (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) =>
-            url === '/api/requirements'
-                ? Promise.resolve({ data: [{ id: 'r1', name: 'Forklift Safety Package' }] })
-                : Promise.resolve({ data: [] }),
-        );
-
+    it('has no source-type selector exposed to the user', async () => {
         const wrapper = await mountModal();
-        const select = wrapper.find('[data-testid="source-type-select"]');
-        await select.setValue('requirement');
-        await flushPromises();
-        expect(wrapper.text()).toContain('Forklift Safety Package');
+        expect(wrapper.find('[data-testid="source-type-select"]').exists()).toBe(false);
     });
 
-    it('calls assignDirect when submitting a direct assignment', async () => {
-        (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) =>
-            url === '/api/trainings'
-                ? Promise.resolve({ data: [{ id: 't1', name: 'Fall Protection' }] })
-                : Promise.resolve({ data: [] }),
-        );
+    it('calls assignDirect when a training is selected', async () => {
         (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [ta()] });
 
         const wrapper = await mountModal({ initialUserId: 'u1' });
-        await wrapper.find('[data-testid="training-select"]').setValue('t1');
+        await wrapper.find('[data-testid="item-select"]').setValue('training:t1');
         await wrapper.find('form').trigger('submit');
         await flushPromises();
 
@@ -101,20 +88,11 @@ describe('TrainingAssignmentFormModal', () => {
         );
     });
 
-    it('calls assignFromRequirement when submitting a requirement assignment', async () => {
-        (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) =>
-            url === '/api/requirements'
-                ? Promise.resolve({ data: [{ id: 'r1', name: 'Forklift Safety Package' }] })
-                : Promise.resolve({ data: [] }),
-        );
+    it('calls assignFromRequirement when a requirement is selected', async () => {
         (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [ta()] });
 
         const wrapper = await mountModal({ initialUserId: 'u1' });
-        const sourceSelect = wrapper.find('[data-testid="source-type-select"]');
-        await sourceSelect.setValue('requirement');
-        await flushPromises();
-
-        await wrapper.find('[data-testid="requirement-select"]').setValue('r1');
+        await wrapper.find('[data-testid="item-select"]').setValue('requirement:r1');
         await wrapper.find('form').trigger('submit');
         await flushPromises();
 
@@ -126,15 +104,10 @@ describe('TrainingAssignmentFormModal', () => {
     });
 
     it('emits update:open=false after successful create', async () => {
-        (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) =>
-            url === '/api/trainings'
-                ? Promise.resolve({ data: [{ id: 't1', name: 'Fall Protection' }] })
-                : Promise.resolve({ data: [] }),
-        );
         (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [ta()] });
 
         const wrapper = await mountModal({ initialUserId: 'u1' });
-        await wrapper.find('[data-testid="training-select"]').setValue('t1');
+        await wrapper.find('[data-testid="item-select"]').setValue('training:t1');
         await wrapper.find('form').trigger('submit');
         await flushPromises();
 
@@ -171,11 +144,7 @@ describe('TrainingAssignmentFormModal', () => {
         (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { ok: true } });
         vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
 
-        const wrapper = await mountModal({
-            mode: 'view',
-            target: ta({ id: 'ta-1' }),
-        });
-
+        const wrapper = await mountModal({ mode: 'view', target: ta({ id: 'ta-1' }) });
         await wrapper.find('[data-testid="delete-btn"]').trigger('click');
         await flushPromises();
 
@@ -189,11 +158,7 @@ describe('TrainingAssignmentFormModal', () => {
     it('does not call destroy when delete is cancelled', async () => {
         vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
 
-        const wrapper = await mountModal({
-            mode: 'view',
-            target: ta({ id: 'ta-1' }),
-        });
-
+        const wrapper = await mountModal({ mode: 'view', target: ta({ id: 'ta-1' }) });
         await wrapper.find('[data-testid="delete-btn"]').trigger('click');
         await flushPromises();
 

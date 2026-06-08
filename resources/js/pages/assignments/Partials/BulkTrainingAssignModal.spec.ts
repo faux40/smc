@@ -48,25 +48,25 @@ describe('BulkTrainingAssignModal', () => {
         expect(wrapper.text()).toContain('3 users');
     });
 
-    it('shows the training picker when source_type is direct', async () => {
+    it('shows both requirements and trainings in a single picker', async () => {
         const wrapper = await mountModal();
-        expect(wrapper.text()).toContain('Fall Protection');
+        const text = wrapper.text();
+        expect(text).toContain('Fall Protection');
+        expect(text).toContain('Forklift Safety Package');
     });
 
-    it('shows the requirement picker when source_type is requirement', async () => {
+    it('has no source-type selector exposed to the user', async () => {
         const wrapper = await mountModal();
-        await wrapper.find('[data-testid="source-type-select"]').setValue('requirement');
-        await flushPromises();
-        expect(wrapper.text()).toContain('Forklift Safety Package');
+        expect(wrapper.find('[data-testid="source-type-select"]').exists()).toBe(false);
     });
 
-    it('POSTs to /api/bulk-training-assignments with correct payload', async () => {
+    it('POSTs to /api/bulk-training-assignments with training payload when a training is selected', async () => {
         (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({
             data: { created_count: 2, skipped_count: 0 },
         });
 
         const wrapper = await mountModal(['u1', 'u2']);
-        await wrapper.find('[data-testid="training-select"]').setValue('t1');
+        await wrapper.find('[data-testid="item-select"]').setValue('training:t1');
         await wrapper.find('form').trigger('submit');
         await flushPromises();
 
@@ -77,13 +77,30 @@ describe('BulkTrainingAssignModal', () => {
         );
     });
 
+    it('POSTs to /api/bulk-training-assignments with requirement payload when a requirement is selected', async () => {
+        (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { created_count: 4, skipped_count: 0 },
+        });
+
+        const wrapper = await mountModal(['u1', 'u2']);
+        await wrapper.find('[data-testid="item-select"]').setValue('requirement:r1');
+        await wrapper.find('form').trigger('submit');
+        await flushPromises();
+
+        expect(axios.post).toHaveBeenCalledWith(
+            '/api/bulk-training-assignments',
+            { user_ids: ['u1', 'u2'], source_type: 'requirement', requirement_id: 'r1' },
+            expect.any(Object),
+        );
+    });
+
     it('emits applied with the result after success', async () => {
         (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({
             data: { created_count: 2, skipped_count: 0 },
         });
 
         const wrapper = await mountModal(['u1', 'u2']);
-        await wrapper.find('[data-testid="training-select"]').setValue('t1');
+        await wrapper.find('[data-testid="item-select"]').setValue('training:t1');
         await wrapper.find('form').trigger('submit');
         await flushPromises();
 
@@ -96,29 +113,10 @@ describe('BulkTrainingAssignModal', () => {
         });
 
         const wrapper = await mountModal(['u1', 'u2']);
-        await wrapper.find('[data-testid="training-select"]').setValue('t1');
+        await wrapper.find('[data-testid="item-select"]').setValue('training:t1');
         await wrapper.find('form').trigger('submit');
         await flushPromises();
 
         expect(wrapper.emitted('update:open')).toEqual([[false]]);
-    });
-
-    it('POSTs requirement_id when source_type is requirement', async () => {
-        (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({
-            data: { created_count: 4, skipped_count: 0 },
-        });
-
-        const wrapper = await mountModal(['u1', 'u2']);
-        await wrapper.find('[data-testid="source-type-select"]').setValue('requirement');
-        await flushPromises();
-        await wrapper.find('[data-testid="requirement-select"]').setValue('r1');
-        await wrapper.find('form').trigger('submit');
-        await flushPromises();
-
-        expect(axios.post).toHaveBeenCalledWith(
-            '/api/bulk-training-assignments',
-            { user_ids: ['u1', 'u2'], source_type: 'requirement', requirement_id: 'r1' },
-            expect.any(Object),
-        );
     });
 });
