@@ -66,11 +66,29 @@ describe('TrainingAssignmentPill', () => {
         expect(wrapper.text()).toContain('2027-06-01');
     });
 
-    it('applies expired styling when expires_at is in the past', () => {
+    it('applies green styling when completed and not expiring soon', () => {
+        const wrapper = mount(TrainingAssignmentPill, {
+            props: { row: completed({ expires_at: '2030-01-01' }) },
+        });
+        expect(wrapper.classes().join(' ')).toMatch(/green/);
+    });
+
+    it('applies amber styling when expiring soon', () => {
+        const soon = new Date();
+        soon.setDate(soon.getDate() + 10);
+        const expires = soon.toISOString().slice(0, 10);
+
+        const wrapper = mount(TrainingAssignmentPill, {
+            props: { row: completed({ expires_at: expires }), expiringSoonDays: 30 },
+        });
+        expect(wrapper.classes().join(' ')).toMatch(/amber/);
+    });
+
+    it('applies red styling when expires_at is in the past', () => {
         const wrapper = mount(TrainingAssignmentPill, {
             props: { row: completed({ expires_at: '2020-01-01' }) },
         });
-        expect(wrapper.classes().join(' ')).toMatch(/neutral|muted|line-through|expired/);
+        expect(wrapper.classes().join(' ')).toMatch(/red/);
     });
 
     it('treats a date as expiring when within a custom expiringSoonDays window', () => {

@@ -76,7 +76,7 @@ const ASSIGNMENTS_COLUMNS = [
     { key: 'location', label: 'Location', sortable: true },
     { key: 'supervisor', label: 'Supervisor', sortable: true },
     { key: 'tags', label: 'Tags', sortable: true },
-    { key: 'assignments', label: 'Assignments', sortable: true },
+    { key: 'assignments', label: 'Net Assignments', sortable: true },
 ];
 
 const taStore = useTrainingAssignmentsStore();
