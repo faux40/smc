@@ -13,25 +13,26 @@ vi.mock('@/routes/users', () => ({
 }));
 vi.mock('@/echo', () => ({ realtimeTabId: () => 'test-tab' }));
 
-const rows = [
-    {
-        id: 'ta-1',
-        user_id: 'u1',
-        user_name: 'Alice Smith',
-        training_name: 'Forklift Safety',
-        expires_at: '2026-07-15',
-    },
-    {
-        id: 'ta-2',
-        user_id: 'u2',
-        user_name: 'Bob Jones',
-        training_name: 'Fall Protection',
-        expires_at: '2026-08-01',
-    },
-];
+const OVERDUE_ROW = {
+    id: 'ta-3',
+    user_id: 'u3',
+    user_name: 'Carol White',
+    training_name: 'Fire Safety',
+    expires_at: null,
+};
 
-async function mountWidget(mockRows: unknown[] = rows) {
-    (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: mockRows });
+const DUE_SOON_ROW = {
+    id: 'ta-1',
+    user_id: 'u1',
+    user_name: 'Alice Smith',
+    training_name: 'Forklift Safety',
+    expires_at: '2026-07-15',
+};
+
+const EMPTY_RESPONSE = { overdue: [], due_soon: [] };
+
+async function mountWidget(response = { overdue: [OVERDUE_ROW], due_soon: [DUE_SOON_ROW] }) {
+    (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: response });
     const wrapper = mount(TrainingDueSoonWidget);
     await flushPromises();
     return wrapper;
@@ -51,30 +52,38 @@ describe('TrainingDueSoonWidget', () => {
         );
     });
 
-    it('renders a row per result', async () => {
-        const wrapper = await mountWidget();
-        const items = wrapper.findAll('li');
-        expect(items).toHaveLength(2);
+    it('renders an "Overdue" section heading when overdue rows exist', async () => {
+        const wrapper = await mountWidget({ overdue: [OVERDUE_ROW], due_soon: [] });
+        expect(wrapper.text()).toMatch(/overdue/i);
     });
 
-    it('shows user name as a link to the user detail page', async () => {
-        const wrapper = await mountWidget();
-        const link = wrapper.find('a');
-        expect(link.text()).toContain('Alice Smith');
-        expect(link.attributes('href')).toBe('/users/u1');
+    it('renders an "Expiring soon" section heading when due_soon rows exist', async () => {
+        const wrapper = await mountWidget({ overdue: [], due_soon: [DUE_SOON_ROW] });
+        expect(wrapper.text()).toMatch(/expiring soon/i);
     });
 
-    it('shows training name and expires_at', async () => {
-        const wrapper = await mountWidget();
-        const text = wrapper.text();
-        expect(text).toContain('Forklift Safety');
-        expect(text).toContain('2026-07-15');
+    it('renders overdue row with user name link and training name', async () => {
+        const wrapper = await mountWidget({ overdue: [OVERDUE_ROW], due_soon: [] });
+        expect(wrapper.text()).toContain('Carol White');
+        expect(wrapper.text()).toContain('Fire Safety');
     });
 
-    it('shows empty state when there are no rows', async () => {
-        const wrapper = await mountWidget([]);
+    it('shows "Never completed" label for overdue rows with no expires_at', async () => {
+        const wrapper = await mountWidget({ overdue: [OVERDUE_ROW], due_soon: [] });
+        expect(wrapper.text()).toContain('Never completed');
+    });
+
+    it('renders due_soon row with user name and expires_at', async () => {
+        const wrapper = await mountWidget({ overdue: [], due_soon: [DUE_SOON_ROW] });
+        expect(wrapper.text()).toContain('Alice Smith');
+        expect(wrapper.text()).toContain('Forklift Safety');
+        expect(wrapper.text()).toContain('2026-07-15');
+    });
+
+    it('shows empty state when both sections are empty', async () => {
+        const wrapper = await mountWidget(EMPTY_RESPONSE);
         expect(wrapper.find('ul').exists()).toBe(false);
-        expect(wrapper.text()).toContain('No training assignments expiring soon.');
+        expect(wrapper.text()).toContain('No overdue or expiring');
     });
 
     it('shows error message on fetch failure', async () => {

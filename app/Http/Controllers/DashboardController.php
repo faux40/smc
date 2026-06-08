@@ -117,29 +117,50 @@ class DashboardController extends Controller
 
         $org = $this->orgFor($request);
         $window = $org->dueSoonDays();
+        $today = now()->toDateString();
+        $windowEnd = now()->addDays($window)->toDateString();
 
-        $rows = TrainingAssignment::query()
+        // Overdue: never started (null last_completed_at) OR already expired.
+        $overdueRows = TrainingAssignment::query()
             ->where('org_id', $org->id)
-            ->whereBetween('expires_at', [
-                now()->toDateString(),
-                now()->addDays($window)->toDateString(),
-            ])
+            ->where(function ($q) use ($today) {
+                $q->whereNull('last_completed_at')
+                    ->orWhere(function ($q2) use ($today) {
+                        $q2->whereNotNull('last_completed_at')
+                            ->whereNotNull('expires_at')
+                            ->where('expires_at', '<', $today);
+                    });
+            })
+            ->orderBy('name', 'asc')
+            ->get();
+
+        // Due soon: completed, not yet expired, within the org threshold window.
+        $dueSoonRows = TrainingAssignment::query()
+            ->where('org_id', $org->id)
+            ->whereNotNull('last_completed_at')
+            ->whereBetween('expires_at', [$today, $windowEnd])
             ->orderBy('expires_at', 'asc')
             ->get();
 
-        $userIds = $rows->pluck('user_id')->unique()->all();
+        $allRows = $overdueRows->merge($dueSoonRows);
+        $userIds = $allRows->pluck('user_id')->unique()->all();
         $users = User::query()
             ->whereIn('id', $userIds)
             ->get()
             ->keyBy('id');
 
-        return response()->json($rows->map(fn (TrainingAssignment $ta) => [
+        $toShape = fn (TrainingAssignment $ta) => [
             'id' => $ta->id,
             'user_id' => $ta->user_id,
             'user_name' => $users[$ta->user_id]?->name ?? 'Unknown',
             'training_name' => $ta->name,
-            'expires_at' => $ta->expires_at->toDateString(),
-        ]));
+            'expires_at' => $ta->expires_at?->toDateString(),
+        ];
+
+        return response()->json([
+            'overdue' => $overdueRows->map($toShape)->values(),
+            'due_soon' => $dueSoonRows->map($toShape)->values(),
+        ]);
     }
 
     private function authorize(Request $request): void
