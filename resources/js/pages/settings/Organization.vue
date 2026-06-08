@@ -5,6 +5,7 @@ import OrganizationController from '@/actions/App/Http/Controllers/Settings/Orga
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
+import TrainingStatusResyncSection from '@/pages/settings/Partials/TrainingStatusResyncSection.vue';
 import {
     Dialog,
     DialogContent,
@@ -150,6 +151,8 @@ const submitDelete = () => {
                 <Button :disabled="processing">Save</Button>
             </div>
         </Form>
+
+        <TrainingStatusResyncSection />
 
         <div v-if="isOwner" class="space-y-3">
             <Heading

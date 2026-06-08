@@ -4,6 +4,7 @@ use App\Http\Controllers\Settings\NotificationPreferencesController;
 use App\Http\Controllers\Settings\OrganizationController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
+use App\Http\Controllers\Settings\TrainingStatusResyncController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {
@@ -20,6 +21,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('settings/organization', [OrganizationController::class, 'edit'])->name('organization.edit');
     Route::patch('settings/organization', [OrganizationController::class, 'update'])->name('organization.update');
     Route::delete('settings/organization', [OrganizationController::class, 'destroy'])->name('organization.destroy');
+
+    Route::post('api/settings/training-status-resync', TrainingStatusResyncController::class)->name('settings.training-status-resync');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {

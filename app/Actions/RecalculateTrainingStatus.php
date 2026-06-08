@@ -9,6 +9,26 @@ use App\Models\TrainingAssignment;
 class RecalculateTrainingStatus
 {
     /**
+     * Recompute all assignments for an org. Returns the number of distinct
+     * (user, training) pairs processed. Idempotent — safe to run repeatedly.
+     *
+     * @return array{processed: int}
+     */
+    public function handleAll(string $orgId): array
+    {
+        $pairs = TrainingAssignment::where('org_id', $orgId)
+            ->select(['user_id', 'training_id'])
+            ->distinct()
+            ->get();
+
+        foreach ($pairs as $pair) {
+            $this->handle($pair->user_id, $pair->training_id);
+        }
+
+        return ['processed' => $pairs->count()];
+    }
+
+    /**
      * Recompute expires_at and last_completed_at on every TrainingAssignment
      * for the given (user, training) pair, based on the user's completion
      * history. Called by the CompletionObserver on every save/delete.
