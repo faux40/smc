@@ -221,7 +221,7 @@ function defaultHeaders(): Record<string, string> {
             No users yet.
         </div>
 
-        <div v-else class="overflow-x-auto">
+        <div v-else class="max-h-[32rem] overflow-x-auto overflow-y-auto">
             <table class="min-w-full divide-y divide-border text-sm">
                 <thead class="bg-muted/40">
                     <tr>
