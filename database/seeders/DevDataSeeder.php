@@ -3,11 +3,14 @@
 namespace Database\Seeders;
 
 use App\Models\Assignment;
+use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
 use App\Models\StdFrequency;
+use App\Models\Tag;
 use App\Models\Training;
+use App\Models\TrainingAssignment;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
@@ -91,13 +94,42 @@ class DevDataSeeder extends Seeder
      * 4 requirements: 2 multi-element + 2 single-element. Element list
      * is the training names from TRAININGS.
      *
-     * @var array<int, array{name: string, description: string, trainings: array<int, string>}>
+     * @var array<int, array{name: string, description: string, trainings: list<string>}>
      */
     private const REQUIREMENT_MAP = [
         ['name' => 'OSHA General',           'description' => 'Site-wide baseline OSHA compliance.', 'trainings' => ['Fall Protection', 'Lockout/Tagout', 'Hazmat']],
         ['name' => 'Forklift Operator',      'description' => 'Authorized powered-industrial-truck operator.', 'trainings' => ['Forklift']],
         ['name' => 'Field Crew',             'description' => 'On-site crew member working in active work zones.', 'trainings' => ['Traffic Control', 'First Aid', 'Hearing Conservation']],
         ['name' => 'Confined Space Entrant', 'description' => 'Authorized confined-space entrant.', 'trainings' => ['Confined Space']],
+    ];
+
+    /**
+     * Twelve business-relevant tags with hex color pairs (background / text).
+     *
+     * @var array<int, array{name: string, color: string, font_color: string}>
+     */
+    private const TAGS = [
+        ['name' => 'OSHA Required',          'color' => '#fef2f2', 'font_color' => '#991b1b'],
+        ['name' => 'Safety Critical',        'color' => '#fff7ed', 'font_color' => '#9a3412'],
+        ['name' => 'Heavy Equipment',        'color' => '#fefce8', 'font_color' => '#854d0e'],
+        ['name' => 'Hazardous Materials',    'color' => '#f0fdf4', 'font_color' => '#166534'],
+        ['name' => 'Field Work',             'color' => '#eff6ff', 'font_color' => '#1e40af'],
+        ['name' => 'New Hire',               'color' => '#f5f3ff', 'font_color' => '#5b21b6'],
+        ['name' => 'Certification Required', 'color' => '#fdf4ff', 'font_color' => '#7e22ce'],
+        ['name' => 'Annual Review',          'color' => '#f0f9ff', 'font_color' => '#0c4a6e'],
+        ['name' => 'DOT Regulated',          'color' => '#fff1f2', 'font_color' => '#9f1239'],
+        ['name' => 'Emergency Response',     'color' => '#fff7ed', 'font_color' => '#7c2d12'],
+        ['name' => 'Supervisor Required',    'color' => '#f0fdf4', 'font_color' => '#14532d'],
+        ['name' => 'Site Specific',          'color' => '#f8fafc', 'font_color' => '#334155'],
+    ];
+
+    private const DEPARTMENTS = ['Engineering', 'Operations', 'Safety', 'Maintenance', 'Administration'];
+
+    private const LOCATIONS = ['Site A', 'Site B', 'Main Office', 'Remote'];
+
+    private const JOB_TITLES = [
+        'Field Technician', 'Safety Officer', 'Equipment Operator',
+        'Lead Technician', 'Site Supervisor', 'Maintenance Technician',
     ];
 
     public function run(): void
@@ -135,6 +167,9 @@ class DevDataSeeder extends Seeder
             $trainings = $this->seedTrainings($org, $freqByName);
             $requirements = $this->seedRequirements($org, $trainings);
             $this->seedAssignments($org, $users, $requirements);
+            $this->seedUserProfiles($users);
+            $this->seedTags($org, $users, $trainings, $requirements);
+            $this->seedTrainingAssignments($org, $trainings);
         });
     }
 
@@ -240,13 +275,8 @@ class DevDataSeeder extends Seeder
      *   - 12 users get 1-3 random requirements
      *   - 6 users get none
      *
-     * Timing is uniform (repeating + Annual) so all assignments validate
-     * cleanly; per-(user, requirement) timing tweaks are an admin-UX
-     * concern, not a seeder concern.
-     *
      * @param  Collection<int, User>  $users
      * @param  Collection<int, Requirement>  $requirements
-     * @param  Collection<string, StdFrequency>  $freqByName
      */
     private function seedAssignments(
         Organization $org,
@@ -284,5 +314,173 @@ class DevDataSeeder extends Seeder
             'start_date' => now()->subDays(random_int(30, 365))->toDateString(),
             'end_date' => null,
         ]);
+    }
+
+    /**
+     * Update ~75 % of users with profile fields (employee number, department,
+     * location, job title). Half of those also get a supervisor from the
+     * Manager tier.
+     *
+     * @param  Collection<int, User>  $users
+     */
+    private function seedUserProfiles(Collection $users): void
+    {
+        $managerIds = User::query()
+            ->withoutGlobalScope('organization')
+            ->whereIn('id', $users->pluck('id'))
+            ->whereHas('roles', fn ($q) => $q->where('name', 'Manager'))
+            ->pluck('id')
+            ->values()
+            ->all();
+
+        $count75 = (int) round($users->count() * 0.75);
+        $count50ofThat = (int) round($count75 * 0.50);
+
+        foreach ($users->take($count75) as $idx => $user) {
+            $user->update([
+                'employee_number' => 'EMP-' . str_pad((string) ($idx + 1), 3, '0', STR_PAD_LEFT),
+                'department' => self::DEPARTMENTS[$idx % count(self::DEPARTMENTS)],
+                'location' => self::LOCATIONS[$idx % count(self::LOCATIONS)],
+                'job_title' => self::JOB_TITLES[$idx % count(self::JOB_TITLES)],
+                'supervisor_id' => ($idx < $count50ofThat && count($managerIds) > 0)
+                    ? $managerIds[$idx % count($managerIds)]
+                    : null,
+            ]);
+        }
+    }
+
+    /**
+     * Create 12 tags and attach them to trainings, requirements, and users.
+     *
+     * @param  Collection<string, Training>   $trainings    keyed by name
+     * @param  Collection<int, Requirement>  $requirements
+     * @param  Collection<int, User>         $users
+     */
+    private function seedTags(
+        Organization $org,
+        Collection $users,
+        Collection $trainings,
+        Collection $requirements,
+    ): void {
+        $tagIds = [];
+        foreach (self::TAGS as $td) {
+            $tag = Tag::create([
+                'org_id' => $org->id,
+                'name' => $td['name'],
+                'color' => $td['color'],
+                'font_color' => $td['font_color'],
+            ]);
+            $tagIds[] = $tag->id;
+        }
+
+        $allIds = collect($tagIds);
+
+        foreach ($trainings as $training) {
+            $training->tags()->syncWithoutDetaching(
+                $allIds->shuffle()->take(random_int(2, 3))->all(),
+            );
+        }
+
+        foreach ($requirements as $req) {
+            $req->tags()->syncWithoutDetaching(
+                $allIds->shuffle()->take(random_int(1, 2))->all(),
+            );
+        }
+
+        $count75 = (int) round($users->count() * 0.75);
+        foreach ($users->take($count75) as $user) {
+            $user->tags()->syncWithoutDetaching(
+                $allIds->shuffle()->take(random_int(2, 3))->all(),
+            );
+        }
+    }
+
+    /**
+     * Expand each (user, requirement) assignment into individual
+     * (user, training) TrainingAssignment rows with varied expiry statuses.
+     * Completions are created for the three "completed" status buckets;
+     * the CompletionObserver fires normally and stamps the correct dates
+     * onto each TrainingAssignment via RecalculateTrainingStatus.
+     *
+     * Status distribution (by index % 4):
+     *   0 → never-started  (null, null)
+     *   1 → expired        (completed 2 yrs ago, expired 30 days ago)
+     *   2 → expiring soon  (completed 11 months ago, expires in 20 days)
+     *   3 → ok             (completed 6 months ago, expires in 180 days)
+     *
+     * @param  Collection<string, Training>  $trainings  keyed by name
+     */
+    private function seedTrainingAssignments(
+        Organization $org,
+        Collection $trainings,
+    ): void {
+        $reqToTrainings = collect(self::REQUIREMENT_MAP)
+            ->mapWithKeys(fn ($rm) => [$rm['name'] => $rm['trainings']]);
+
+        $assignments = Assignment::withoutGlobalScope('organization')
+            ->where('org_id', $org->id)
+            ->with('requirement')
+            ->get();
+
+        $seen = [];
+        $index = 0;
+
+        foreach ($assignments as $assignment) {
+            $trainingNames = $reqToTrainings->get($assignment->requirement->name, []);
+
+            foreach ($trainingNames as $trainingName) {
+                $training = $trainings->get($trainingName);
+                if ($training === null) {
+                    continue;
+                }
+
+                $key = $assignment->user_id . '|' . $training->id;
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+
+                TrainingAssignment::create([
+                    'org_id' => $org->id,
+                    'user_id' => $assignment->user_id,
+                    'training_id' => $training->id,
+                    'name' => $trainingName,
+                    'last_completed_at' => null,
+                    'expires_at' => null,
+                ]);
+
+                [$completionDate, $expireDate] = $this->statusDatesForIndex($index++);
+
+                if ($completionDate !== null) {
+                    // Creating the Completion triggers CompletionObserver →
+                    // RecalculateTrainingStatus, which stamps last_completed_at
+                    // and expires_at on the TrainingAssignment using expire_date.
+                    Completion::create([
+                        'org_id' => $org->id,
+                        'user_id' => $assignment->user_id,
+                        'module_type' => Training::class,
+                        'module_id' => $training->id,
+                        'completion_date' => $completionDate,
+                        'expire_date' => $expireDate,
+                    ]);
+                }
+            }
+        }
+    }
+
+    /**
+     * Return [completion_date, expire_date] strings (or nulls) for the given
+     * status bucket (index % 4).
+     *
+     * @return array{0: string|null, 1: string|null}
+     */
+    private function statusDatesForIndex(int $index): array
+    {
+        return match ($index % 4) {
+            0 => [null, null],
+            1 => [now()->subDays(730)->toDateString(), now()->subDays(30)->toDateString()],
+            2 => [now()->subDays(335)->toDateString(), now()->addDays(20)->toDateString()],
+            default => [now()->subDays(180)->toDateString(), now()->addDays(180)->toDateString()],
+        };
     }
 }

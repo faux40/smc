@@ -3,11 +3,14 @@
 namespace Tests\Feature\Seeding;
 
 use App\Models\Assignment;
+use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
 use App\Models\StdFrequency;
+use App\Models\Tag;
 use App\Models\Training;
+use App\Models\TrainingAssignment;
 use App\Models\User;
 use Database\Seeders\DevDataSeeder;
 use Database\Seeders\DevSeeder;
@@ -170,6 +173,107 @@ class DevDataSeederTest extends TestCase
         $usersWithAny = $perUser->keys();
         $usersWithNone = $newUsers->pluck('id')->diff($usersWithAny);
         $this->assertSame(6, $usersWithNone->count(), 'Exactly 6 users should have no assignments.');
+    }
+
+    public function test_seeds_training_assignments_for_assigned_users(): void
+    {
+        $org = $this->bgOrg();
+        $count = TrainingAssignment::query()
+            ->withoutGlobalScope('organization')
+            ->where('org_id', $org->id)
+            ->count();
+        $this->assertGreaterThan(0, $count, 'DevDataSeeder should create at least one TrainingAssignment.');
+    }
+
+    public function test_seeds_all_four_expiry_statuses(): void
+    {
+        $org = $this->bgOrg();
+        $tas = TrainingAssignment::query()
+            ->withoutGlobalScope('organization')
+            ->where('org_id', $org->id)
+            ->get();
+
+        $today = now()->toDateString();
+
+        $neverStarted = $tas->whereNull('last_completed_at');
+        $expired = $tas->filter(
+            fn (TrainingAssignment $ta) => $ta->last_completed_at !== null
+                && $ta->expires_at !== null
+                && $ta->expires_at->toDateString() < $today,
+        );
+        $expiring = $tas->filter(
+            fn (TrainingAssignment $ta) => $ta->last_completed_at !== null
+                && $ta->expires_at !== null
+                && $ta->expires_at->toDateString() >= $today
+                && $ta->expires_at->toDateString() <= now()->addDays(60)->toDateString(),
+        );
+        $ok = $tas->filter(
+            fn (TrainingAssignment $ta) => $ta->last_completed_at !== null
+                && $ta->expires_at !== null
+                && $ta->expires_at->toDateString() > now()->addDays(60)->toDateString(),
+        );
+
+        $this->assertGreaterThan(0, $neverStarted->count(), 'Should have at least one never-started assignment.');
+        $this->assertGreaterThan(0, $expired->count(), 'Should have at least one expired assignment.');
+        $this->assertGreaterThan(0, $expiring->count(), 'Should have at least one expiring-soon assignment.');
+        $this->assertGreaterThan(0, $ok->count(), 'Should have at least one current (ok) assignment.');
+    }
+
+    public function test_seeds_twelve_tags(): void
+    {
+        $org = $this->bgOrg();
+        $this->assertSame(
+            12,
+            Tag::query()->withoutGlobalScope('organization')->where('org_id', $org->id)->count(),
+            'DevDataSeeder should create exactly 12 tags.',
+        );
+    }
+
+    public function test_seeds_completions_for_completed_assignments(): void
+    {
+        $org = $this->bgOrg();
+
+        $completedTaCount = TrainingAssignment::query()
+            ->withoutGlobalScope('organization')
+            ->where('org_id', $org->id)
+            ->whereNotNull('last_completed_at')
+            ->count();
+
+        $completionCount = Completion::query()
+            ->withoutGlobalScope('organization')
+            ->where('org_id', $org->id)
+            ->where('module_type', Training::class)
+            ->count();
+
+        $this->assertGreaterThan(0, $completionCount, 'Should have at least one Completion.');
+        $this->assertSame(
+            $completedTaCount,
+            $completionCount,
+            'Completion count should match training assignments with last_completed_at set.',
+        );
+    }
+
+    public function test_seeds_user_profiles_for_majority_of_users(): void
+    {
+        $org = $this->bgOrg();
+
+        $total = User::query()
+            ->withoutGlobalScope('organization')
+            ->where('org_id', $org->id)
+            ->count();
+
+        $withProfiles = User::query()
+            ->withoutGlobalScope('organization')
+            ->where('org_id', $org->id)
+            ->whereNotNull('employee_number')
+            ->count();
+
+        // Seeder targets 75%; allow floor of 70% to be robust to rounding.
+        $this->assertGreaterThanOrEqual(
+            (int) floor($total * 0.70),
+            $withProfiles,
+            'At least 70% of users should have an employee_number.',
+        );
     }
 
     public function test_seeder_is_idempotent(): void
