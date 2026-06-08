@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Actions\RecalculateTrainingStatus;
 use App\Events\TrainingAssignmentCreated;
+use App\Events\TrainingAssignmentDeleted;
 use App\Models\AssignmentSource;
 use App\Models\Requirement;
 use App\Models\Training;
@@ -75,6 +76,39 @@ class TrainingAssignmentService
         }
 
         return $created;
+    }
+
+    /**
+     * Remove all AssignmentSource rows for the given (user, requirement) pair
+     * and delete any TrainingAssignment that has no remaining active sources.
+     *
+     * @return array{deleted_ids: list<string>, updated_ids: list<string>}
+     */
+    public function removeRequirementSources(string $orgId, string $userId, string $requirementId): array
+    {
+        $sources = AssignmentSource::where('sourceable_type', Requirement::class)
+            ->where('sourceable_id', $requirementId)
+            ->whereHas('trainingAssignment', fn ($q) => $q->where('org_id', $orgId)->where('user_id', $userId))
+            ->with('trainingAssignment')
+            ->get();
+
+        $deletedIds = [];
+        $updatedIds = [];
+
+        foreach ($sources as $source) {
+            $ta = $source->trainingAssignment;
+            $source->delete();
+
+            if ($ta->activeSources()->count() === 0) {
+                event(new TrainingAssignmentDeleted($ta->id, $ta->user_id, $ta->training_id, $ta->org_id));
+                $ta->delete();
+                $deletedIds[] = $ta->id;
+            } else {
+                $updatedIds[] = $ta->id;
+            }
+        }
+
+        return ['deleted_ids' => $deletedIds, 'updated_ids' => $updatedIds];
     }
 
     private function findOrCreate(string $orgId, string $userId, string $trainingId): TrainingAssignment

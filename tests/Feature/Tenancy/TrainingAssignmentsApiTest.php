@@ -500,4 +500,109 @@ class TrainingAssignmentsApiTest extends TestCase
                 && $e->orgId === $ta->org_id;
         });
     }
+
+    // -- destroyByRequirement -------------------------------------------------
+
+    public function test_destroy_by_requirement_removes_orphaned_training_assignments(): void
+    {
+        Event::fake([TrainingAssignmentDeleted::class]);
+
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $user = User::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+
+        $ta = TrainingAssignment::factory()->create([
+            'org_id' => $org->id,
+            'user_id' => $user->id,
+            'training_id' => $training->id,
+        ]);
+        AssignmentSource::factory()->forRequirement($req)->create([
+            'training_assignment_id' => $ta->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->deleteJson('/api/training-assignments/by-requirement', [
+                'user_id' => $user->id,
+                'requirement_id' => $req->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('deleted_ids.0', $ta->id);
+
+        $this->assertDatabaseMissing('training_assignments', ['id' => $ta->id]);
+        Event::assertDispatched(TrainingAssignmentDeleted::class,
+            fn (TrainingAssignmentDeleted $e) => $e->trainingAssignmentId === $ta->id,
+        );
+    }
+
+    public function test_destroy_by_requirement_keeps_ta_when_another_source_covers_it(): void
+    {
+        Event::fake([TrainingAssignmentDeleted::class]);
+
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $user = User::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+        $reqA = Requirement::factory()->for($org, 'organization')->create();
+        $reqB = Requirement::factory()->for($org, 'organization')->create();
+
+        $ta = TrainingAssignment::factory()->create([
+            'org_id' => $org->id,
+            'user_id' => $user->id,
+            'training_id' => $training->id,
+        ]);
+        AssignmentSource::factory()->forRequirement($reqA)->create(['training_assignment_id' => $ta->id]);
+        AssignmentSource::factory()->forRequirement($reqB)->create(['training_assignment_id' => $ta->id]);
+
+        $this->actingAs($admin)
+            ->deleteJson('/api/training-assignments/by-requirement', [
+                'user_id' => $user->id,
+                'requirement_id' => $reqA->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('deleted_ids', []);
+
+        $this->assertDatabaseHas('training_assignments', ['id' => $ta->id]);
+        $this->assertDatabaseMissing('assignment_sources', [
+            'training_assignment_id' => $ta->id,
+            'sourceable_id' => $reqA->id,
+        ]);
+        $this->assertDatabaseHas('assignment_sources', [
+            'training_assignment_id' => $ta->id,
+            'sourceable_id' => $reqB->id,
+        ]);
+        Event::assertNotDispatched(TrainingAssignmentDeleted::class);
+    }
+
+    public function test_destroy_by_requirement_manager_is_forbidden(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $user = User::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+
+        $this->actingAs($manager)
+            ->deleteJson('/api/training-assignments/by-requirement', [
+                'user_id' => $user->id,
+                'requirement_id' => $req->id,
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_destroy_by_requirement_cross_org_user_blocked(): void
+    {
+        $orgA = Organization::factory()->create();
+        $orgB = Organization::factory()->create();
+        $adminA = User::factory()->for($orgA, 'organization')->withRole('Admin')->create();
+        $userB = User::factory()->for($orgB, 'organization')->create();
+        $reqA = Requirement::factory()->for($orgA, 'organization')->create();
+
+        $this->actingAs($adminA)
+            ->deleteJson('/api/training-assignments/by-requirement', [
+                'user_id' => $userB->id,
+                'requirement_id' => $reqA->id,
+            ])
+            ->assertUnprocessable();
+    }
 }

@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 class TrainingAssignmentsController extends Controller
 {
@@ -54,6 +55,28 @@ class TrainingAssignmentsController extends Controller
             array_map(fn (TrainingAssignment $ta) => $this->serialize($ta->load('activeSources')), $results),
             201,
         );
+    }
+
+    public function destroyByRequirement(Request $request): JsonResponse
+    {
+        Gate::authorize('deleteAny', TrainingAssignment::class);
+
+        $orgId = $request->user()->org_id;
+
+        $data = $request->validate([
+            'user_id' => [
+                'required', 'string',
+                Rule::exists('users', 'id')->where('org_id', $orgId)->whereNull('deleted_at'),
+            ],
+            'requirement_id' => [
+                'required', 'string',
+                Rule::exists('requirements', 'id')->where('org_id', $orgId)->whereNull('deleted_at'),
+            ],
+        ]);
+
+        $result = $this->service->removeRequirementSources($orgId, $data['user_id'], $data['requirement_id']);
+
+        return response()->json($result);
     }
 
     public function destroy(TrainingAssignment $trainingAssignment): JsonResponse
