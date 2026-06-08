@@ -7,6 +7,8 @@ use App\Events\AssignmentCreated;
 use App\Events\CompletionCreated;
 use App\Listeners\NotifyAssignmentCreated;
 use App\Listeners\NotifyCompletionRecorded;
+use App\Models\Completion;
+use App\Observers\CompletionObserver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Date;
@@ -33,6 +35,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->registerAuthProvider();
         $this->registerEventListeners();
+        $this->registerObservers();
     }
 
     /**
@@ -58,6 +61,11 @@ class AppServiceProvider extends ServiceProvider
     {
         Event::listen(AssignmentCreated::class, NotifyAssignmentCreated::class);
         Event::listen(CompletionCreated::class, NotifyCompletionRecorded::class);
+    }
+
+    protected function registerObservers(): void
+    {
+        Completion::observe(CompletionObserver::class);
     }
 
     /**
