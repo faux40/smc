@@ -33,22 +33,35 @@ const picker = [
     },
 ];
 
+const trainingAssignment = {
+    id: 'ta-1',
+    user_id: 'u1',
+    training_id: 't1',
+    name: 'Fall Protection',
+    expires_at: null,
+    last_completed_at: null,
+    active_sources: [],
+    can_delete: true,
+};
+
 const STUBS = {
-    AssignmentPill: true,
+    TrainingAssignmentPill: true,
     TagsListCell: true,
     TagFilter: true,
     MultiSelectFilter: true,
     FilterModeToggle: true,
-    AssignmentFormModal: true,
-    BulkAssignmentsModal: true,
+    TrainingAssignmentFormModal: true,
     Heading: true,
     AsyncState: { template: '<div><slot /></div>' },
 };
 
-async function mountPage() {
-    (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) =>
-        Promise.resolve({ data: url === '/api/users' ? picker : [] }),
-    );
+async function mountPage(mockTrainingAssignments: unknown[] = []) {
+    (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+        if (url === '/api/users') return Promise.resolve({ data: picker });
+        if (url === '/api/training-assignments')
+            return Promise.resolve({ data: mockTrainingAssignments });
+        return Promise.resolve({ data: [] });
+    });
     const wrapper = mount(AssignmentsIndex, { global: { stubs: STUBS } });
     await flushPromises();
 
@@ -74,7 +87,7 @@ describe('assignments/Index — user profile columns', () => {
         expect(headers.some((h) => h.includes('User'))).toBe(true);
     });
 
-    it('renders the new profile column headers', async () => {
+    it('renders the profile column headers', async () => {
         const wrapper = await mountPage();
         const headers = wrapper.findAll('thead th').map((th) => th.text());
         expect(headers.some((h) => h.includes('Job title'))).toBe(true);
@@ -84,7 +97,7 @@ describe('assignments/Index — user profile columns', () => {
         expect(headers.some((h) => h.includes('Supervisor'))).toBe(true);
     });
 
-    it('shows each user row\'s profile fields', async () => {
+    it("shows each user row's profile fields", async () => {
         const wrapper = await mountPage();
         const body = wrapper.find('tbody').text();
         expect(body).toContain('EMP-1');
@@ -94,7 +107,7 @@ describe('assignments/Index — user profile columns', () => {
         expect(body).toContain('Dana Boss');
     });
 
-    it('restores the user\'s saved filters on mount', async () => {
+    it("restores the user's saved filters on mount", async () => {
         authUser.value = {
             id: 'me',
             org_id: 'org1',
@@ -127,5 +140,31 @@ describe('assignments/Index — user profile columns', () => {
             }),
             expect.anything(),
         );
+    });
+});
+
+describe('assignments/Index — training assignment pills', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+        authUser.value = { id: 'me', org_id: 'org1', isAdmin: true };
+    });
+
+    it('fetches /api/training-assignments on mount', async () => {
+        await mountPage();
+        expect(axios.get).toHaveBeenCalledWith(
+            '/api/training-assignments',
+            expect.any(Object),
+        );
+    });
+
+    it('renders a training assignment pill for a user that has TAs', async () => {
+        const wrapper = await mountPage([trainingAssignment]);
+        expect(wrapper.find('training-assignment-pill-stub').exists()).toBe(true);
+    });
+
+    it('renders an Add button for admin users', async () => {
+        const wrapper = await mountPage([trainingAssignment]);
+        expect(wrapper.text()).toContain('+ Add');
     });
 });
