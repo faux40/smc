@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
 use App\Models\Training;
+use App\Models\TrainingAssignment;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -243,9 +244,170 @@ class DashboardApiTest extends TestCase
 
     public function test_endpoints_reject_guest(): void
     {
-        foreach (['summary', 'overdue-users', 'due-soon', 'recent-completions'] as $path) {
+        foreach (['summary', 'overdue-users', 'due-soon', 'recent-completions', 'training-due-soon'] as $path) {
             $this->getJson("/api/dashboard/{$path}")
                 ->assertUnauthorized();
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // training-due-soon
+    // -----------------------------------------------------------------------
+
+    public function test_training_due_soon_returns_rows_in_window(): void
+    {
+        [$org, $manager] = $this->scaffoldOrg();
+        $user = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Test']);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'Forklift Safety']);
+
+        TrainingAssignment::factory()
+            ->for($org, 'organization')
+            ->for($user, 'user')
+            ->for($training, 'training')
+            ->create([
+                'name' => 'Forklift Safety',
+                'expires_at' => now()->addDays(30)->toDateString(),
+            ]);
+
+        $rows = $this->actingAs($manager)
+            ->getJson('/api/dashboard/training-due-soon')
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(1, $rows);
+        $this->assertSame($user->id, $rows[0]['user_id']);
+        $this->assertSame('Forklift Safety', $rows[0]['training_name']);
+        $this->assertArrayHasKey('expires_at', $rows[0]);
+        $this->assertArrayHasKey('user_name', $rows[0]);
+    }
+
+    public function test_training_due_soon_excludes_rows_outside_window(): void
+    {
+        [$org, $manager] = $this->scaffoldOrg();
+        $user = User::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+
+        // Default window = 60 days. This row expires in 90 days — outside.
+        TrainingAssignment::factory()
+            ->for($org, 'organization')
+            ->for($user, 'user')
+            ->for($training, 'training')
+            ->create(['expires_at' => now()->addDays(90)->toDateString()]);
+
+        $rows = $this->actingAs($manager)
+            ->getJson('/api/dashboard/training-due-soon')
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(0, $rows);
+    }
+
+    public function test_training_due_soon_excludes_already_expired(): void
+    {
+        [$org, $manager] = $this->scaffoldOrg();
+        $user = User::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+
+        TrainingAssignment::factory()
+            ->for($org, 'organization')
+            ->for($user, 'user')
+            ->for($training, 'training')
+            ->create(['expires_at' => now()->subDay()->toDateString()]);
+
+        $rows = $this->actingAs($manager)
+            ->getJson('/api/dashboard/training-due-soon')
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(0, $rows);
+    }
+
+    public function test_training_due_soon_respects_org_threshold(): void
+    {
+        $org = Organization::factory()->create(['training_thresholds' => ['due_soon_days' => 14]]);
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $user = User::factory()->for($org, 'organization')->create();
+        $trainingA = Training::factory()->for($org, 'organization')->create();
+        $trainingB = Training::factory()->for($org, 'organization')->create();
+
+        // 10 days out — within the 14-day custom window.
+        TrainingAssignment::factory()
+            ->for($org, 'organization')
+            ->for($user, 'user')
+            ->for($trainingA, 'training')
+            ->create(['expires_at' => now()->addDays(10)->toDateString()]);
+
+        // 20 days out — outside the 14-day custom window.
+        TrainingAssignment::factory()
+            ->for($org, 'organization')
+            ->for($user, 'user')
+            ->for($trainingB, 'training')
+            ->create(['expires_at' => now()->addDays(20)->toDateString()]);
+
+        $rows = $this->actingAs($manager)
+            ->getJson('/api/dashboard/training-due-soon')
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(1, $rows);
+    }
+
+    public function test_training_due_soon_is_org_scoped(): void
+    {
+        [, $managerA] = $this->scaffoldOrg();
+        [$orgB] = $this->scaffoldOrg();
+        $userB = User::factory()->for($orgB, 'organization')->create();
+        $trainingB = Training::factory()->for($orgB, 'organization')->create();
+
+        TrainingAssignment::factory()
+            ->for($orgB, 'organization')
+            ->for($userB, 'user')
+            ->for($trainingB, 'training')
+            ->create(['expires_at' => now()->addDays(5)->toDateString()]);
+
+        $rows = $this->actingAs($managerA)
+            ->getJson('/api/dashboard/training-due-soon')
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(0, $rows);
+    }
+
+    public function test_training_due_soon_rejects_self_edit_role(): void
+    {
+        $org = Organization::factory()->create();
+        $self = User::factory()->for($org, 'organization')->withRole('SelfEdit')->create();
+
+        $this->actingAs($self)
+            ->getJson('/api/dashboard/training-due-soon')
+            ->assertForbidden();
+    }
+
+    public function test_training_due_soon_ordered_by_expires_at_asc(): void
+    {
+        [$org, $manager] = $this->scaffoldOrg();
+        $user = User::factory()->for($org, 'organization')->create();
+        $trainingA = Training::factory()->for($org, 'organization')->create();
+        $trainingB = Training::factory()->for($org, 'organization')->create();
+
+        TrainingAssignment::factory()
+            ->for($org, 'organization')
+            ->for($user, 'user')
+            ->for($trainingA, 'training')
+            ->create(['expires_at' => now()->addDays(40)->toDateString()]);
+
+        TrainingAssignment::factory()
+            ->for($org, 'organization')
+            ->for($user, 'user')
+            ->for($trainingB, 'training')
+            ->create(['expires_at' => now()->addDays(10)->toDateString()]);
+
+        $rows = $this->actingAs($manager)
+            ->getJson('/api/dashboard/training-due-soon')
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(2, $rows);
+        $this->assertTrue($rows[0]['expires_at'] < $rows[1]['expires_at']);
     }
 }

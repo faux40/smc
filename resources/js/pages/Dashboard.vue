@@ -18,6 +18,7 @@ import AllUsersComplianceWidget from '@/components/dashboard/AllUsersComplianceW
 import DueSoonWidget from '@/components/dashboard/DueSoonWidget.vue';
 import RecentCompletionsWidget from '@/components/dashboard/RecentCompletionsWidget.vue';
 import SummaryStatsWidget from '@/components/dashboard/SummaryStatsWidget.vue';
+import TrainingDueSoonWidget from '@/components/dashboard/TrainingDueSoonWidget.vue';
 import { dashboard } from '@/routes';
 import { show as userShow } from '@/routes/users';
 
@@ -65,6 +66,8 @@ const canSeeWidgets = computed(() =>
                 <DueSoonWidget />
                 <RecentCompletionsWidget />
             </div>
+
+            <TrainingDueSoonWidget />
         </template>
 
         <template v-else>

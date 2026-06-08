@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Training;
+use App\Models\TrainingAssignment;
+use App\Models\User;
 use App\Services\UserComplianceCalculator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -107,6 +109,37 @@ class DashboardController extends Controller
                 'credits_count' => $c->rqmtElements->count(),
             ];
         }));
+    }
+
+    public function trainingSoon(Request $request): JsonResponse
+    {
+        $this->authorize($request);
+
+        $org = $this->orgFor($request);
+        $window = $org->dueSoonDays();
+
+        $rows = TrainingAssignment::query()
+            ->where('org_id', $org->id)
+            ->whereBetween('expires_at', [
+                now()->toDateString(),
+                now()->addDays($window)->toDateString(),
+            ])
+            ->orderBy('expires_at', 'asc')
+            ->get();
+
+        $userIds = $rows->pluck('user_id')->unique()->all();
+        $users = User::query()
+            ->whereIn('id', $userIds)
+            ->get()
+            ->keyBy('id');
+
+        return response()->json($rows->map(fn (TrainingAssignment $ta) => [
+            'id' => $ta->id,
+            'user_id' => $ta->user_id,
+            'user_name' => $users[$ta->user_id]?->name ?? 'Unknown',
+            'training_name' => $ta->name,
+            'expires_at' => $ta->expires_at->toDateString(),
+        ]));
     }
 
     private function authorize(Request $request): void
