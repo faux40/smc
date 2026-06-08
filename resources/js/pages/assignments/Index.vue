@@ -1,10 +1,9 @@
 <script setup lang="ts">
 /*
- * Training assignments index page (Phase D redesign).
+ * Training assignments index page.
  *
- * One row per user; pills are per (user, training) training assignments.
- * Legacy requirement-based assignments retired from this view.
- * Bulk assign returns in Phase E with the training-assignment model.
+ * One row per user; pills are per (user, training) training assignment.
+ * Select users via checkboxes to bulk-assign a training or requirement.
  */
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
@@ -25,8 +24,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTableSort } from '@/composables/useTableSort';
 import { realtimeTabId } from '@/echo';
+import BulkTrainingAssignModal from '@/pages/assignments/Partials/BulkTrainingAssignModal.vue';
 import TrainingAssignmentFormModal from '@/pages/assignments/Partials/TrainingAssignmentFormModal.vue';
 import { page as assignmentsPage } from '@/routes/assignments';
+import { useOrgSettingsStore } from '@/stores/orgSettings';
 import { usePreferencesStore } from '@/stores/preferences';
 import { useRequirementsStore } from '@/stores/requirements';
 import { useTagsStore } from '@/stores/tags';
@@ -81,6 +82,7 @@ const ASSIGNMENTS_COLUMNS = [
 const taStore = useTrainingAssignmentsStore();
 const tagsStore = useTagsStore();
 const requirements = useRequirementsStore();
+const orgSettings = useOrgSettingsStore();
 const page = usePage();
 const prefs = usePreferencesStore();
 
@@ -103,14 +105,6 @@ const canCreate = computed(() =>
         authUser.value?.isManager,
     ),
 );
-const canDeassign = computed(() =>
-    Boolean(
-        authUser.value?.isOwner ||
-        authUser.value?.isSuperAdmin ||
-        authUser.value?.isAdmin,
-    ),
-);
-
 const userPicker = ref<UserPickerRow[]>([]);
 const search = ref('');
 const searchMode = ref<FilterMode>('and');
@@ -148,6 +142,34 @@ const editing = ref<TrainingAssignmentRow | null>(null);
 const createUserId = ref<string | null>(null);
 const error = ref<string | null>(null);
 const loading = ref(true);
+
+// Row selection for bulk assign.
+const selectedUserIds = ref<Set<string>>(new Set());
+const isSelected = (userId: string) => selectedUserIds.value.has(userId);
+const allOnPage = computed(() =>
+    userGroups.value.length > 0 &&
+    userGroups.value.every((g) => selectedUserIds.value.has(g.user_id)),
+);
+function toggleUser(userId: string): void {
+    const next = new Set(selectedUserIds.value);
+    next.has(userId) ? next.delete(userId) : next.add(userId);
+    selectedUserIds.value = next;
+}
+function toggleAll(): void {
+    if (allOnPage.value) {
+        selectedUserIds.value = new Set();
+    } else {
+        selectedUserIds.value = new Set(userGroups.value.map((g) => g.user_id));
+    }
+}
+const selectedCount = computed(() => selectedUserIds.value.size);
+
+// Bulk assign modal.
+const bulkOpen = ref(false);
+function onBulkApplied(): void {
+    selectedUserIds.value = new Set();
+    taStore.loadFor({});
+}
 
 onMounted(async () => {
     prefs.ensureHydrated(authUser.value?.preferences ?? null);
@@ -435,7 +457,17 @@ function defaultHeaders(): Record<string, string> {
                 title="Assignments"
                 description="Per-(user, training) compliance records. Assign a training directly or pull all trainings from a requirement."
             />
-            <Button v-if="canCreate" @click="openCreate()">+ New assignment</Button>
+            <div class="flex items-center gap-2">
+                <Button
+                    v-if="canCreate && selectedCount > 0"
+                    variant="outline"
+                    data-testid="bulk-assign-btn"
+                    @click="bulkOpen = true"
+                >
+                    Assign to selected ({{ selectedCount }})
+                </Button>
+                <Button v-if="canCreate" @click="openCreate()">+ New assignment</Button>
+            </div>
         </div>
 
         <AsyncState
@@ -463,6 +495,21 @@ function defaultHeaders(): Record<string, string> {
                 :row-key="(row) => row.user_id"
                 @sort="toggleSort"
             >
+                <template #lead-header>
+                    <Checkbox
+                        :checked="allOnPage"
+                        aria-label="Select all visible users"
+                        @update:checked="toggleAll"
+                    />
+                </template>
+
+                <template #lead-cells="{ row }">
+                    <Checkbox
+                        :checked="isSelected(row.user_id)"
+                        :aria-label="`Select ${row.name}`"
+                        @update:checked="() => toggleUser(row.user_id)"
+                    />
+                </template>
                 <template #filters>
                     <div class="grid gap-1">
                         <Label for="filter_search" class="text-xs">Search</Label>
@@ -547,6 +594,7 @@ function defaultHeaders(): Record<string, string> {
                             v-for="ta in row.trainingAssignments"
                             :key="ta.id"
                             :row="ta"
+                            :expiring-soon-days="orgSettings.expiringSoonDays"
                             @click="openView(ta)"
                         />
                         <button
@@ -568,6 +616,13 @@ function defaultHeaders(): Record<string, string> {
             :mode="modalMode"
             :target="editing"
             :initial-user-id="createUserId"
+        />
+
+        <BulkTrainingAssignModal
+            v-if="canCreate"
+            v-model:open="bulkOpen"
+            :user-ids="[...selectedUserIds]"
+            @applied="onBulkApplied"
         />
     </div>
 </template>

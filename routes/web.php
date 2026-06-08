@@ -3,6 +3,7 @@
 use App\Http\Controllers\AssignmentsController;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\BulkAssignmentsController;
+use App\Http\Controllers\BulkTrainingAssignmentsController;
 use App\Http\Controllers\ClassDocumentsController;
 use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\CommentsController;
@@ -216,6 +217,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/training-assignments', [TrainingAssignmentsController::class, 'index'])->name('training-assignments.index');
     Route::post('api/training-assignments', [TrainingAssignmentsController::class, 'store'])->name('training-assignments.store');
     Route::delete('api/training-assignments/{trainingAssignment}', [TrainingAssignmentsController::class, 'destroy'])->name('training-assignments.destroy');
+    Route::post('api/bulk-training-assignments', [BulkTrainingAssignmentsController::class, 'store'])->name('bulk-training-assignments.store');
 
     // Completions — flat API with optional ?user_id filter. Pivot to
     // rqmt_elements is sync()'d from the rqmt_element_ids array in the

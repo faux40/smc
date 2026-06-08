@@ -2,14 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\RecalculateTrainingStatus;
-use App\Events\TrainingAssignmentCreated;
 use App\Events\TrainingAssignmentDeleted;
 use App\Http\Requests\TrainingAssignmentRequest;
 use App\Models\AssignmentSource;
-use App\Models\Requirement;
-use App\Models\Training;
 use App\Models\TrainingAssignment;
+use App\Services\TrainingAssignmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,7 +15,7 @@ use Illuminate\Support\Facades\Gate;
 class TrainingAssignmentsController extends Controller
 {
     public function __construct(
-        private RecalculateTrainingStatus $recalculate,
+        private TrainingAssignmentService $service,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -50,8 +47,8 @@ class TrainingAssignmentsController extends Controller
         $userId = $data['user_id'];
 
         $results = $data['source_type'] === 'requirement'
-            ? $this->assignFromRequirement($orgId, $userId, $data['requirement_id'])
-            : [$this->assignDirect($orgId, $userId, $data['training_id'])];
+            ? $this->service->assignFromRequirement($orgId, $userId, $data['requirement_id'])
+            : [$this->service->assignDirect($orgId, $userId, $data['training_id'])];
 
         return response()->json(
             array_map(fn (TrainingAssignment $ta) => $this->serialize($ta->load('activeSources')), $results),
@@ -73,74 +70,6 @@ class TrainingAssignmentsController extends Controller
         event(new TrainingAssignmentDeleted($id, $userId, $trainingId, $orgId));
 
         return response()->json(['ok' => true]);
-    }
-
-    // ------------------------------------------------------------------
-    // Helpers
-    // ------------------------------------------------------------------
-
-    /**
-     * Explode a requirement into one TrainingAssignment per training element.
-     * Each gets an AssignmentSource pointing at the requirement.
-     *
-     * @return TrainingAssignment[]
-     */
-    private function assignFromRequirement(string $orgId, string $userId, string $requirementId): array
-    {
-        $requirement = Requirement::with(['elements' => fn ($q) => $q->where('module_type', Training::class)])
-            ->where('org_id', $orgId)
-            ->findOrFail($requirementId);
-
-        $created = [];
-        foreach ($requirement->elements as $element) {
-            $ta = $this->findOrCreateTrainingAssignment($orgId, $userId, $element->module_id);
-
-            AssignmentSource::create([
-                'training_assignment_id' => $ta->id,
-                'sourceable_type' => Requirement::class,
-                'sourceable_id' => $requirement->id,
-                'added_at' => now(),
-            ]);
-
-            $this->recalculate->handle($userId, $element->module_id);
-
-            event(new TrainingAssignmentCreated($ta->fresh(), actorId: Auth::id()));
-
-            $created[] = $ta->fresh();
-        }
-
-        return $created;
-    }
-
-    private function assignDirect(string $orgId, string $userId, string $trainingId): TrainingAssignment
-    {
-        $ta = $this->findOrCreateTrainingAssignment($orgId, $userId, $trainingId);
-
-        AssignmentSource::create([
-            'training_assignment_id' => $ta->id,
-            'sourceable_type' => null,
-            'sourceable_id' => null,
-            'added_at' => now(),
-        ]);
-
-        $this->recalculate->handle($userId, $trainingId);
-
-        event(new TrainingAssignmentCreated($ta->fresh(), actorId: Auth::id()));
-
-        return $ta->fresh();
-    }
-
-    private function findOrCreateTrainingAssignment(
-        string $orgId,
-        string $userId,
-        string $trainingId,
-    ): TrainingAssignment {
-        $training = Training::where('org_id', $orgId)->findOrFail($trainingId);
-
-        return TrainingAssignment::firstOrCreate(
-            ['user_id' => $userId, 'training_id' => $trainingId],
-            ['org_id' => $orgId, 'name' => $training->name],
-        );
     }
 
     private function serialize(TrainingAssignment $ta): array
