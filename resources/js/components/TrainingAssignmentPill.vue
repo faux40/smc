@@ -44,11 +44,7 @@ const expiryStatus = computed<ExpiryStatus>(() => {
             :class="{ 'line-through': expiryStatus === 'expired' }"
         >{{ row.name }}</span>
         <span
-            v-if="expiryStatus === 'never_completed'"
-            class="text-[10px] leading-tight"
-        >Not started</span>
-        <span
-            v-else-if="row.expires_at"
+            v-if="row.expires_at"
             class="text-[10px] leading-tight"
         >{{ row.expires_at }}</span>
     </button>

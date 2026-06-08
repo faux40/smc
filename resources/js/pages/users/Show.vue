@@ -14,6 +14,7 @@ import { computed, onMounted, ref } from 'vue';
 import Heading from '@/components/Heading.vue';
 import TagsField from '@/components/TagsField.vue';
 import TrainingAssignmentPill from '@/components/TrainingAssignmentPill.vue';
+import TrainingAssignmentPillLegend from '@/components/TrainingAssignmentPillLegend.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { realtimeTabId } from '@/echo';
@@ -334,14 +335,17 @@ function defaultHeaders(): Record<string, string> {
                 No training assignments yet.
             </div>
 
-            <div v-else class="flex flex-wrap gap-1.5">
-                <TrainingAssignmentPill
-                    v-for="ta in userTas"
-                    :key="ta.id"
-                    :row="ta"
-                    :expiring-soon-days="orgSettings.expiringSoonDays"
-                    @click="openTaView(ta)"
-                />
+            <div v-else class="flex flex-col gap-2">
+                <TrainingAssignmentPillLegend />
+                <div class="flex flex-wrap gap-1.5">
+                    <TrainingAssignmentPill
+                        v-for="ta in userTas"
+                        :key="ta.id"
+                        :row="ta"
+                        :expiring-soon-days="orgSettings.expiringSoonDays"
+                        @click="openTaView(ta)"
+                    />
+                </div>
             </div>
         </section>
 

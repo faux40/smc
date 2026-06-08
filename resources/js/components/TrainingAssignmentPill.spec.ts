@@ -43,13 +43,6 @@ describe('TrainingAssignmentPill', () => {
 
     // -- never completed (null last_completed_at) --------------------------
 
-    it('shows "Not started" when never completed', () => {
-        const wrapper = mount(TrainingAssignmentPill, {
-            props: { row: ta({ last_completed_at: null, expires_at: null }) },
-        });
-        expect(wrapper.text()).toContain('Not started');
-    });
-
     it('applies red styling when never completed', () => {
         const wrapper = mount(TrainingAssignmentPill, {
             props: { row: ta({ last_completed_at: null, expires_at: null }) },

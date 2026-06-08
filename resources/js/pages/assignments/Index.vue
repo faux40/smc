@@ -18,6 +18,7 @@ import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
 import TrainingAssignmentPill from '@/components/TrainingAssignmentPill.vue';
+import TrainingAssignmentPillLegend from '@/components/TrainingAssignmentPillLegend.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -469,6 +470,8 @@ function defaultHeaders(): Record<string, string> {
                 <Button v-if="canCreate" @click="openCreate()">+ New assignment</Button>
             </div>
         </div>
+
+        <TrainingAssignmentPillLegend />
 
         <AsyncState
             :loading="loading"
