@@ -12,6 +12,7 @@ import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
 import Heading from '@/components/Heading.vue';
+import RequirementAssignmentChip from '@/components/RequirementAssignmentChip.vue';
 import TagsField from '@/components/TagsField.vue';
 import TrainingAssignmentPill from '@/components/TrainingAssignmentPill.vue';
 import TrainingAssignmentPillLegend from '@/components/TrainingAssignmentPillLegend.vue';
@@ -22,6 +23,8 @@ import TrainingAssignmentFormModal from '@/pages/assignments/Partials/TrainingAs
 import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import { index as usersIndex } from '@/routes/users';
 import { useOrgSettingsStore } from '@/stores/orgSettings';
+import { useRequirementAssignmentsStore } from '@/stores/requirementAssignments';
+import { useRequirementsStore } from '@/stores/requirements';
 import { useTrainingAssignmentsStore } from '@/stores/trainingAssignments';
 import type { TrainingAssignmentRow } from '@/stores/trainingAssignments';
 
@@ -110,6 +113,8 @@ const canAssign = computed(() =>
 );
 
 const taStore = useTrainingAssignmentsStore();
+const reqAssignStore = useRequirementAssignmentsStore();
+const requirements = useRequirementsStore();
 const orgSettings = useOrgSettingsStore();
 const userTas = computed<TrainingAssignmentRow[]>(() =>
     taStore.forUser(props.subject.id),
@@ -147,6 +152,7 @@ onMounted(async () => {
     await Promise.all([
         load(),
         taStore.loadFor({ user_id: props.subject.id }),
+        requirements.load(),
     ]);
 });
 
@@ -336,6 +342,18 @@ function defaultHeaders(): Record<string, string> {
             </div>
 
             <div v-else class="flex flex-col gap-2">
+                <div
+                    v-if="reqAssignStore.forUser(subject.id).length"
+                    class="flex flex-wrap gap-1"
+                >
+                    <RequirementAssignmentChip
+                        v-for="ra in reqAssignStore.forUser(subject.id)"
+                        :key="ra.requirement_id"
+                        :row="ra"
+                        :can-delete="canAssign"
+                        @remove="reqAssignStore.destroyByRequirement(ra.user_id, ra.requirement_id)"
+                    />
+                </div>
                 <TrainingAssignmentPillLegend />
                 <div class="flex flex-wrap gap-1.5">
                     <TrainingAssignmentPill

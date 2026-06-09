@@ -2,7 +2,9 @@ import { flushPromises, mount } from '@vue/test-utils';
 import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import RequirementAssignmentChip from '@/components/RequirementAssignmentChip.vue';
 import AssignmentsIndex from '@/pages/assignments/Index.vue';
+import { useRequirementAssignmentsStore } from '@/stores/requirementAssignments';
 
 const { authUser } = vi.hoisted(() => ({
     authUser: {
@@ -199,5 +201,58 @@ describe('assignments/Index — bulk assign', () => {
         }
         // Assert BulkTrainingAssignModal stub is rendered (v-if="canCreate").
         expect(wrapper.findComponent({ name: 'BulkTrainingAssignModal' }).exists()).toBe(true);
+    });
+});
+
+describe('assignments/Index — requirement assignment chips', () => {
+    const taWithReqSource = {
+        ...trainingAssignment,
+        active_sources: [
+            {
+                id: 'src-1',
+                sourceable_type: 'App\\Models\\Requirement',
+                sourceable_id: 'r1',
+                added_at: '2026-01-01T00:00:00.000Z',
+            },
+        ],
+    };
+    const taWithDirectSource = {
+        ...trainingAssignment,
+        active_sources: [
+            {
+                id: 'src-2',
+                sourceable_type: null,
+                sourceable_id: null,
+                added_at: '2026-01-01T00:00:00.000Z',
+            },
+        ],
+    };
+
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+        authUser.value = { id: 'me', org_id: 'org1', isAdmin: true };
+    });
+
+    it('renders a chip for each unique requirement source', async () => {
+        const wrapper = await mountPage([taWithReqSource]);
+        expect(wrapper.findAllComponents(RequirementAssignmentChip)).toHaveLength(1);
+    });
+
+    it('renders no chips when TAs have only direct sources', async () => {
+        const wrapper = await mountPage([taWithDirectSource]);
+        expect(wrapper.findAllComponents(RequirementAssignmentChip)).toHaveLength(0);
+    });
+
+    it('calls destroyByRequirement when a chip emits remove', async () => {
+        const wrapper = await mountPage([taWithReqSource]);
+        const raStore = useRequirementAssignmentsStore();
+        const spy = vi
+            .spyOn(raStore, 'destroyByRequirement')
+            .mockResolvedValue({ deleted_ids: [], updated_ids: [] });
+
+        await wrapper.find('button[aria-label^="Remove"]').trigger('click');
+
+        expect(spy).toHaveBeenCalledWith('u1', 'r1');
     });
 });

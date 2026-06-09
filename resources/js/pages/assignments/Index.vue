@@ -17,6 +17,7 @@ import MultiSelectFilter from '@/components/MultiSelectFilter.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
+import RequirementAssignmentChip from '@/components/RequirementAssignmentChip.vue';
 import TrainingAssignmentPill from '@/components/TrainingAssignmentPill.vue';
 import TrainingAssignmentPillLegend from '@/components/TrainingAssignmentPillLegend.vue';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ import TrainingAssignmentFormModal from '@/pages/assignments/Partials/TrainingAs
 import { page as assignmentsPage } from '@/routes/assignments';
 import { useOrgSettingsStore } from '@/stores/orgSettings';
 import { usePreferencesStore } from '@/stores/preferences';
+import { useRequirementAssignmentsStore } from '@/stores/requirementAssignments';
 import { useRequirementsStore } from '@/stores/requirements';
 import { useTagsStore } from '@/stores/tags';
 import { useTrainingAssignmentsStore } from '@/stores/trainingAssignments';
@@ -81,6 +83,7 @@ const ASSIGNMENTS_COLUMNS = [
 ];
 
 const taStore = useTrainingAssignmentsStore();
+const reqAssignStore = useRequirementAssignmentsStore();
 const tagsStore = useTagsStore();
 const requirements = useRequirementsStore();
 const orgSettings = useOrgSettingsStore();
@@ -592,6 +595,18 @@ function defaultHeaders(): Record<string, string> {
                 </template>
 
                 <template #col-assignments="{ row }">
+                    <div
+                        v-if="reqAssignStore.forUser(row.user_id).length"
+                        class="mb-1 flex flex-wrap gap-1"
+                    >
+                        <RequirementAssignmentChip
+                            v-for="ra in reqAssignStore.forUser(row.user_id)"
+                            :key="ra.requirement_id"
+                            :row="ra"
+                            :can-delete="canCreate"
+                            @remove="reqAssignStore.destroyByRequirement(ra.user_id, ra.requirement_id)"
+                        />
+                    </div>
                     <div class="flex flex-wrap items-center gap-1.5">
                         <TrainingAssignmentPill
                             v-for="ta in row.trainingAssignments"
