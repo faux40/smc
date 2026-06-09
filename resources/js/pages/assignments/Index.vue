@@ -479,14 +479,14 @@ function defaultHeaders(): Record<string, string> {
         <AsyncState
             :loading="loading"
             :error="error"
-            :empty="userGroups.length === 0"
+            :empty="!hasActiveFilters && userGroups.length === 0"
         >
             <template #empty>
                 <div
                     class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
                 >
-                    No assignments match the current filter.
-                    <span v-if="canCreate && taStore.rows.length === 0">
+                    No assignments yet.
+                    <span v-if="canCreate">
                         Click "+ New assignment" to create one.
                     </span>
                 </div>
@@ -516,6 +516,10 @@ function defaultHeaders(): Record<string, string> {
                         @update:checked="() => toggleUser(row.user_id)"
                     />
                 </template>
+                <template #empty>
+                    <span class="text-muted-foreground">No users match the current filter.</span>
+                </template>
+
                 <template #filters>
                     <div class="grid gap-1">
                         <Label for="filter_search" class="text-xs">Search</Label>
