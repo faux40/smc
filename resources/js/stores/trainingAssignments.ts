@@ -48,6 +48,7 @@ interface BroadcastPayload {
     name?: string;
     expires_at?: string | null;
     last_completed_at?: string | null;
+    active_sources?: AssignmentSourceRow[];
     origin_tab?: string | null;
 }
 
@@ -162,6 +163,40 @@ export const useTrainingAssignmentsStore = defineStore(
             rows.value = rows.value.filter((r) => r.id !== id);
         }
 
+        async function breakFromRequirement(
+            taId: string,
+            requirementId: string,
+        ): Promise<{ deleted_id: string | null; updated_ids: string[] }> {
+            const { data } = await axios.delete<{
+                deleted_id: string | null;
+                updated_ids: string[];
+            }>(`/api/training-assignments/${taId}/from-requirement`, {
+                data: { requirement_id: requirementId },
+                headers: defaultHeaders(),
+            });
+
+            if (data.deleted_id) {
+                rows.value = rows.value.filter((r) => r.id !== data.deleted_id);
+            }
+
+            const REQUIREMENT_CLASS = 'App\\Models\\Requirement';
+            rows.value = rows.value.map((ta) => {
+                if (!data.updated_ids.includes(ta.id)) return ta;
+                return {
+                    ...ta,
+                    active_sources: ta.active_sources.filter(
+                        (s) =>
+                            !(
+                                s.sourceable_type === REQUIREMENT_CLASS &&
+                                s.sourceable_id === requirementId
+                            ),
+                    ),
+                };
+            });
+
+            return data;
+        }
+
         function subscribe(orgId: string): void {
             if (subscribedOrgId.value === orgId) {
                 return;
@@ -172,6 +207,7 @@ export const useTrainingAssignmentsStore = defineStore(
             const { bind } = useRealtime(`org.${orgId}`);
 
             bind('TrainingAssignmentCreated', (payload: BroadcastPayload) => {
+                const existing = rows.value.find((r) => r.id === payload.id);
                 upsert({
                     id: payload.id,
                     user_id: payload.user_id ?? '',
@@ -179,8 +215,8 @@ export const useTrainingAssignmentsStore = defineStore(
                     name: payload.name ?? '',
                     expires_at: payload.expires_at ?? null,
                     last_completed_at: payload.last_completed_at ?? null,
-                    active_sources: [],
-                    can_delete: false,
+                    active_sources: payload.active_sources ?? [],
+                    can_delete: existing?.can_delete ?? false,
                 });
             });
 
@@ -199,6 +235,7 @@ export const useTrainingAssignmentsStore = defineStore(
             assignDirect,
             assignFromRequirement,
             destroy,
+            breakFromRequirement,
             subscribe,
         };
     },

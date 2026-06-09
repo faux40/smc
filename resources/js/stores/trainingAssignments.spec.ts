@@ -216,6 +216,51 @@ describe('useTrainingAssignmentsStore', () => {
         expect(store.rows[0].id).toBe('ta-new');
     });
 
+    it('TrainingAssignmentCreated handler maps active_sources from payload', () => {
+        const store = useTrainingAssignmentsStore();
+        store.subscribe('org-1');
+
+        capturedBindings['TrainingAssignmentCreated']({
+            id: 'ta-new',
+            user_id: 'u1',
+            training_id: 't1',
+            name: 'Fire Safety',
+            expires_at: null,
+            last_completed_at: null,
+            active_sources: [
+                {
+                    id: 'src-1',
+                    sourceable_type: 'App\\Models\\Requirement',
+                    sourceable_id: 'r1',
+                    added_at: '2026-01-01T00:00:00.000Z',
+                },
+            ],
+            origin_tab: 'other-tab',
+        });
+
+        expect(store.rows[0].active_sources).toHaveLength(1);
+        expect(store.rows[0].active_sources[0].sourceable_id).toBe('r1');
+    });
+
+    it('TrainingAssignmentCreated handler preserves existing can_delete when patching a peer-tab update', () => {
+        const store = useTrainingAssignmentsStore();
+        store.upsert(ta({ id: 'ta-1', can_delete: true }));
+        store.subscribe('org-1');
+
+        capturedBindings['TrainingAssignmentCreated']({
+            id: 'ta-1',
+            user_id: 'u1',
+            training_id: 't1',
+            name: 'Updated Name',
+            expires_at: null,
+            last_completed_at: null,
+            active_sources: [],
+            origin_tab: 'other-tab',
+        });
+
+        expect(store.rows[0].can_delete).toBe(true);
+    });
+
     it('TrainingAssignmentDeleted handler removes the row', () => {
         const store = useTrainingAssignmentsStore();
         store.upsert(ta({ id: 'ta-1' }));
@@ -224,5 +269,81 @@ describe('useTrainingAssignmentsStore', () => {
         capturedBindings['TrainingAssignmentDeleted']({ id: 'ta-1', origin_tab: 'other-tab' });
 
         expect(store.rows).toHaveLength(0);
+    });
+
+    // ----------------------------------------------------------------
+    // breakFromRequirement
+    // ----------------------------------------------------------------
+
+    it('breakFromRequirement calls DELETE on the correct URL with requirement_id', async () => {
+        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { deleted_id: 'ta-1', updated_ids: [] },
+        });
+
+        const store = useTrainingAssignmentsStore();
+        store.upsert(ta({ id: 'ta-1' }));
+        await store.breakFromRequirement('ta-1', 'r1');
+
+        expect(axios.delete).toHaveBeenCalledWith(
+            '/api/training-assignments/ta-1/from-requirement',
+            expect.objectContaining({ data: { requirement_id: 'r1' } }),
+        );
+    });
+
+    it('breakFromRequirement removes the deleted TA from rows', async () => {
+        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { deleted_id: 'ta-1', updated_ids: [] },
+        });
+
+        const store = useTrainingAssignmentsStore();
+        store.upsert(ta({ id: 'ta-1' }));
+        store.upsert(ta({ id: 'ta-2' }));
+        await store.breakFromRequirement('ta-1', 'r1');
+
+        expect(store.rows.map((r) => r.id)).toEqual(['ta-2']);
+    });
+
+    it('breakFromRequirement strips the requirement source from updated TAs', async () => {
+        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { deleted_id: 'ta-1', updated_ids: ['ta-2', 'ta-3'] },
+        });
+
+        const store = useTrainingAssignmentsStore();
+        store.upsert(ta({ id: 'ta-1' }));
+        store.upsert(ta({
+            id: 'ta-2',
+            active_sources: [
+                source({ id: 'src-req', sourceable_type: 'App\\Models\\Requirement', sourceable_id: 'r1' }),
+                source({ id: 'src-direct', sourceable_type: null }),
+            ],
+        }));
+        store.upsert(ta({
+            id: 'ta-3',
+            active_sources: [
+                source({ id: 'src-req2', sourceable_type: 'App\\Models\\Requirement', sourceable_id: 'r1' }),
+            ],
+        }));
+
+        await store.breakFromRequirement('ta-1', 'r1');
+
+        // ta-2 keeps its direct source, loses the requirement source
+        expect(store.rows.find((r) => r.id === 'ta-2')!.active_sources).toHaveLength(1);
+        expect(store.rows.find((r) => r.id === 'ta-2')!.active_sources[0].id).toBe('src-direct');
+
+        // ta-3 has no remaining sources
+        expect(store.rows.find((r) => r.id === 'ta-3')!.active_sources).toHaveLength(0);
+    });
+
+    it('breakFromRequirement returns the server response', async () => {
+        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { deleted_id: 'ta-1', updated_ids: ['ta-2'] },
+        });
+
+        const store = useTrainingAssignmentsStore();
+        store.upsert(ta({ id: 'ta-1' }));
+        store.upsert(ta({ id: 'ta-2' }));
+        const result = await store.breakFromRequirement('ta-1', 'r1');
+
+        expect(result).toEqual({ deleted_id: 'ta-1', updated_ids: ['ta-2'] });
     });
 });
