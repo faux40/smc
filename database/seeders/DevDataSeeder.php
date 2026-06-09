@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Assignment;
+use App\Models\AssignmentSource;
 use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
@@ -422,6 +423,7 @@ class DevDataSeeder extends Seeder
             ->with('requirement')
             ->get();
 
+        // Maps "user_id|training_id" → training_assignment_id for dedup + multi-source linking.
         $seen = [];
         $index = 0;
 
@@ -435,19 +437,35 @@ class DevDataSeeder extends Seeder
                 }
 
                 $key = $assignment->user_id . '|' . $training->id;
+
                 if (isset($seen[$key])) {
+                    // TA exists from another requirement — add a second source row.
+                    AssignmentSource::create([
+                        'training_assignment_id' => $seen[$key],
+                        'sourceable_type'        => Requirement::class,
+                        'sourceable_id'          => $assignment->requirement_id,
+                        'added_at'               => now(),
+                    ]);
                     continue;
                 }
-                $seen[$key] = true;
 
-                TrainingAssignment::create([
-                    'org_id' => $org->id,
-                    'user_id' => $assignment->user_id,
-                    'training_id' => $training->id,
-                    'name' => $trainingName,
+                $ta = TrainingAssignment::create([
+                    'org_id'            => $org->id,
+                    'user_id'           => $assignment->user_id,
+                    'training_id'       => $training->id,
+                    'name'              => $trainingName,
                     'last_completed_at' => null,
-                    'expires_at' => null,
+                    'expires_at'        => null,
                 ]);
+
+                AssignmentSource::create([
+                    'training_assignment_id' => $ta->id,
+                    'sourceable_type'        => Requirement::class,
+                    'sourceable_id'          => $assignment->requirement_id,
+                    'added_at'               => now(),
+                ]);
+
+                $seen[$key] = $ta->id;
 
                 [$completionDate, $expireDate] = $this->statusDatesForIndex($index++);
 
