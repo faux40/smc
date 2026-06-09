@@ -146,6 +146,52 @@ describe('assignments/Index — user profile columns', () => {
     });
 });
 
+describe('assignments/Index — search includes profile fields', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+        authUser.value = { id: 'me', org_id: 'org1' };
+    });
+
+    // picker fixture has: employee_number 'EMP-1', department 'Operations',
+    // location 'Yard 3', job_title 'Foreman', name 'Pat Lee'
+
+    it('matches on employee number', async () => {
+        const wrapper = await mountPage();
+        await wrapper.find('#filter_search').setValue('EMP-1');
+        await flushPromises();
+        expect(wrapper.find('tbody').text()).toContain('Pat');
+    });
+
+    it('matches on department', async () => {
+        const wrapper = await mountPage();
+        await wrapper.find('#filter_search').setValue('Operations');
+        await flushPromises();
+        expect(wrapper.find('tbody').text()).toContain('Pat');
+    });
+
+    it('matches on location', async () => {
+        const wrapper = await mountPage();
+        await wrapper.find('#filter_search').setValue('Yard 3');
+        await flushPromises();
+        expect(wrapper.find('tbody').text()).toContain('Pat');
+    });
+
+    it('matches on job title', async () => {
+        const wrapper = await mountPage();
+        await wrapper.find('#filter_search').setValue('Foreman');
+        await flushPromises();
+        expect(wrapper.find('tbody').text()).toContain('Pat');
+    });
+
+    it('excludes users that do not match the search term', async () => {
+        const wrapper = await mountPage();
+        await wrapper.find('#filter_search').setValue('NoMatchXYZ999');
+        await flushPromises();
+        expect(wrapper.find('tbody').text()).not.toContain('Pat');
+    });
+});
+
 describe('assignments/Index — training assignment pills', () => {
     beforeEach(() => {
         setActivePinia(createPinia());

@@ -273,6 +273,7 @@ function matchSearch(
     name: string,
     email: string | null,
     tas: TrainingAssignmentRow[],
+    u?: UserPickerRow,
 ): boolean {
     const words = search.value
         .trim()
@@ -282,8 +283,15 @@ function matchSearch(
 
     if (words.length === 0) return true;
 
-    const hay =
-        `${name} ${email ?? ''} ${tas.map((ta) => ta.name).join(' ')}`.toLowerCase();
+    const hay = [
+        name,
+        email ?? '',
+        tas.map((ta) => ta.name).join(' '),
+        u?.employee_number ?? '',
+        u?.job_title ?? '',
+        u?.department ?? '',
+        u?.location ?? '',
+    ].join(' ').toLowerCase();
 
     if (searchMode.value === 'or') return words.some((w) => hay.includes(w));
     if (searchMode.value === 'not') return !words.some((w) => hay.includes(w));
@@ -318,7 +326,7 @@ const filteredGroups = computed<UserGroup[]>(() => {
             !matchUser(user_id) ||
             !matchRequirements(trainingAssignments) ||
             !userMatchesTags(user_id) ||
-            !matchSearch(name, email, trainingAssignments)
+            !matchSearch(name, email, trainingAssignments, u)
         ) {
             continue;
         }
