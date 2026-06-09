@@ -78,8 +78,8 @@ async function submit(): Promise<void> {
 
 <template>
     <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
-        <DialogContent class="sm:max-w-2xl">
-            <form @submit.prevent="submit" novalidate class="space-y-4">
+        <DialogContent class="flex max-h-[90vh] flex-col sm:max-w-2xl">
+            <form @submit.prevent="submit" novalidate class="flex min-h-0 flex-1 flex-col gap-4">
                 <DialogHeader>
                     <DialogTitle>New class</DialogTitle>
                     <DialogDescription>
@@ -88,14 +88,16 @@ async function submit(): Promise<void> {
                     </DialogDescription>
                 </DialogHeader>
 
-                <ErrorBanner :context="FORM_CTX" />
+                <div class="min-h-0 flex-1 overflow-y-auto space-y-4 pr-1">
+                    <ErrorBanner :context="FORM_CTX" />
 
-                <ClassFieldset v-model="form" :context="FORM_CTX" />
+                    <ClassFieldset v-model="form" :context="FORM_CTX" />
 
-                <TrainingMultiSelect
-                    v-model="selectedTrainingIds"
-                    :trainings="trainings.library"
-                />
+                    <TrainingMultiSelect
+                        v-model="selectedTrainingIds"
+                        :trainings="trainings.library"
+                    />
+                </div>
 
                 <DialogFooter>
                     <Button
