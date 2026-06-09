@@ -53,6 +53,9 @@ function toggle(id: string, checked: boolean): void {
                         "
                     />
                     <span>{{ t.name }}</span>
+                    <span v-if="t.default_hours" class="ml-auto text-xs text-muted-foreground">
+                        {{ t.default_hours }}h
+                    </span>
                 </label>
             </li>
         </ul>

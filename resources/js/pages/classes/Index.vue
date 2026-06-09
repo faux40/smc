@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import Heading from '@/components/Heading.vue';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import { page as classesPage, showPage } from '@/routes/classes';
 import { useClassesStore } from '@/stores/classes';
+import type { ClassDetail } from '@/stores/classes';
 
 defineOptions({
     layout: {
@@ -39,6 +40,10 @@ const canManage = computed(() =>
 const error = ref<string | null>(null);
 const loading = ref(true);
 const modalOpen = ref(false);
+
+function onSaved(detail: ClassDetail): void {
+    router.visit(showPage(detail.id));
+}
 
 onMounted(async () => {
     if (authUser.value?.org_id) {
@@ -134,6 +139,6 @@ onMounted(async () => {
             </div>
         </AsyncState>
 
-        <ClassFormModal v-model:open="modalOpen" />
+        <ClassFormModal v-model:open="modalOpen" @saved="onSaved" />
     </div>
 </template>

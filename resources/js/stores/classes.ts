@@ -77,6 +77,7 @@ export interface ClassFormPayload {
     address: string | null;
     instructor: string | null;
     show_signature: boolean;
+    total_hours: number | null;
     notes: string | null;
     // Create-only: snapshot these trainings onto the new class.
     training_ids?: string[];

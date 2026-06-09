@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -16,15 +15,10 @@ const form = defineModel<ClassFormFields>({ required: true });
 const props = defineProps<{
     context: string;
     idPrefix?: string;
-    /** Read-only class total (auto-summed from topics), shown by the date. */
-    classHours?: string | number | null;
 }>();
 
 const fieldErrors = useFieldErrors(props.context);
 const id = (field: string) => `${props.idPrefix ?? 'class'}_${field}`;
-const classHoursLabel = computed(() =>
-    Number(props.classHours ?? 0).toFixed(1),
-);
 </script>
 
 <template>
@@ -60,12 +54,16 @@ const classHoursLabel = computed(() =>
                 />
             </div>
             <div class="grid gap-2">
-                <Label>Class Hours</Label>
-                <div
-                    class="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground"
-                >
-                    {{ classHoursLabel }}
-                </div>
+                <Label :for="id('total_hours')">Class hours</Label>
+                <Input
+                    :id="id('total_hours')"
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    v-model="form.total_hours"
+                    placeholder="e.g. 8"
+                />
+                <InputError :message="fieldErrors.message('total_hours')" />
             </div>
         </div>
 

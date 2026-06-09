@@ -114,6 +114,7 @@ const isDirty = computed(() => {
         text(f.address) !== text(d.address) ||
         text(f.instructor) !== text(d.instructor) ||
         f.show_signature !== d.show_signature ||
+        Number(f.total_hours || 0) !== Number(d.total_hours || 0) ||
         text(f.notes) !== text(d.notes)
     );
 });
@@ -184,7 +185,7 @@ async function loadUsers(): Promise<void> {
     userPicker.value = data;
 }
 
-const hoursLabel = (h: string | null) => `${Number(h ?? 0)}h`;
+const hoursLabel = (h: string | null) => (h ? `${Number(h)}h` : '—');
 
 const totalHoursLabel = computed(
     () => `${Number(detail.value?.total_hours ?? 0).toFixed(1)} hours`,
@@ -231,7 +232,6 @@ const totalHoursLabel = computed(
                                         v-model="form"
                                         :context="FORM_CTX"
                                         id-prefix="edit"
-                                        :class-hours="detail.total_hours"
                                     >
                                         <template #after-name>
                                             <div

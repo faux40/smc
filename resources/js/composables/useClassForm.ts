@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import type { ClassDetail, ClassFormPayload } from '@/stores/classes';
+import { optionalNumber } from '@/lib/forms';
 import { useErrorStore } from '@/stores/errors';
 
 /**
@@ -16,6 +17,7 @@ export interface ClassFormFields {
     address: string;
     instructor: string;
     show_signature: boolean;
+    total_hours: string | number;
     notes: string;
 }
 
@@ -29,6 +31,7 @@ function emptyFields(): ClassFormFields {
         address: '',
         instructor: '',
         show_signature: false,
+        total_hours: '',
         notes: '',
     };
 }
@@ -54,6 +57,7 @@ export function useClassForm(context: string) {
             address: target?.address ?? '',
             instructor: target?.instructor ?? '',
             show_signature: target?.show_signature ?? false,
+            total_hours: target?.total_hours ?? '',
             notes: target?.notes ?? '',
         };
     }
@@ -101,6 +105,7 @@ export function useClassForm(context: string) {
             address: blank(form.value.address),
             instructor: blank(form.value.instructor),
             show_signature: form.value.show_signature,
+            total_hours: optionalNumber(String(form.value.total_hours)),
             notes: blank(form.value.notes),
         };
     }
