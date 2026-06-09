@@ -22,9 +22,10 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useFieldErrors } from '@/composables/useFieldErrors';
+import { useErrorStore } from '@/stores/errors';
+import { useRequirementsStore } from '@/stores/requirements';
 import { useTrainingAssignmentsStore } from '@/stores/trainingAssignments';
 import type { TrainingAssignmentRow } from '@/stores/trainingAssignments';
-import { useErrorStore } from '@/stores/errors';
 
 const FORM_CTX = 'form:training-assignment';
 
@@ -40,6 +41,7 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
 
 const taStore = useTrainingAssignmentsStore();
+const requirementsStore = useRequirementsStore();
 const errorStore = useErrorStore();
 const fieldErrors = useFieldErrors(FORM_CTX);
 
@@ -49,6 +51,7 @@ const form = reactive({
 });
 const submitting = ref(false);
 const deleting = ref(false);
+const breaking = ref(false);
 
 const isCreate = computed(() => props.mode === 'create');
 const isView = computed(() => props.mode === 'view');
@@ -56,6 +59,23 @@ const title = computed(() =>
     isCreate.value ? 'Assign training' : props.target?.name ?? 'Training assignment',
 );
 const canDelete = computed(() => isView.value && props.target?.can_delete === true);
+
+const REQUIREMENT_CLASS = 'App\\Models\\Requirement';
+
+const requirementSources = computed(() =>
+    (props.target?.active_sources ?? []).filter(
+        (s) => s.sourceable_type === REQUIREMENT_CLASS && s.sourceable_id !== null,
+    ),
+);
+
+const canBreakFromRequirement = computed(
+    () => isView.value && props.target?.can_delete === true && requirementSources.value.length > 0,
+);
+
+function requirementName(id: string | null): string {
+    if (!id) return 'this requirement';
+    return requirementsStore.library.find((r) => r.id === id)?.name ?? 'this requirement';
+}
 
 watch(
     () => props.open,
@@ -93,6 +113,24 @@ const submit = async () => {
         });
     } finally {
         submitting.value = false;
+    }
+};
+
+const breakFromReq = async (requirementId: string) => {
+    if (!props.target) return;
+
+    breaking.value = true;
+    errorStore.clear(FORM_CTX);
+
+    try {
+        await taStore.breakFromRequirement(props.target.id, requirementId);
+        emit('update:open', false);
+    } catch (e) {
+        errorStore.reportFromAxios(e, FORM_CTX, {
+            fallback: 'Failed to remove training from requirement',
+        });
+    } finally {
+        breaking.value = false;
     }
 };
 
@@ -162,10 +200,38 @@ const remove = async () => {
                         <p class="mb-1 font-medium">Assigned via</p>
                         <ul class="space-y-0.5">
                             <li v-for="s in target.active_sources" :key="s.id">
-                                {{ s.sourceable_type ? 'Requirement' : 'Direct assignment' }}
+                                {{
+                                    s.sourceable_type
+                                        ? requirementName(s.sourceable_id)
+                                        : 'Direct assignment'
+                                }}
                             </li>
                         </ul>
                     </div>
+
+                    <template v-if="canBreakFromRequirement">
+                        <div
+                            v-for="reqSrc in requirementSources"
+                            :key="reqSrc.id"
+                            class="rounded border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-800 dark:bg-amber-950/30"
+                        >
+                            <p class="mb-2 text-muted-foreground">
+                                Removing this training will convert the other trainings from
+                                <strong>{{ requirementName(reqSrc.sourceable_id) }}</strong>
+                                to standalone assignments.
+                            </p>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                :disabled="breaking"
+                                data-testid="break-from-requirement-btn"
+                                @click="breakFromReq(reqSrc.sourceable_id!)"
+                            >
+                                {{ breaking ? 'Removing…' : 'Remove from requirement' }}
+                            </Button>
+                        </div>
+                    </template>
                 </div>
 
                 <DialogFooter class="mt-6 sm:justify-between">

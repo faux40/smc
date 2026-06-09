@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TrainingAssignmentFormModal from '@/pages/assignments/Partials/TrainingAssignmentFormModal.vue';
+import { useRequirementsStore } from '@/stores/requirements';
 import type { TrainingAssignmentRow } from '@/stores/trainingAssignments';
 
 vi.mock('axios');
@@ -163,5 +164,71 @@ describe('TrainingAssignmentFormModal', () => {
         await flushPromises();
 
         expect(axios.delete).not.toHaveBeenCalled();
+    });
+
+    // -- view mode: break from requirement --------------------------------
+
+    const REQ_SOURCE = {
+        id: 'src-1',
+        sourceable_type: 'App\\Models\\Requirement',
+        sourceable_id: 'r1',
+        added_at: '2026-01-01T00:00:00.000Z',
+    };
+
+    it('shows "Remove from requirement" button when TA has a requirement source and can_delete', async () => {
+        const wrapper = await mountModal({
+            mode: 'view',
+            target: ta({ can_delete: true, active_sources: [REQ_SOURCE] }),
+        });
+        expect(wrapper.find('[data-testid="break-from-requirement-btn"]').exists()).toBe(true);
+    });
+
+    it('does not show "Remove from requirement" when TA has only direct sources', async () => {
+        const wrapper = await mountModal({
+            mode: 'view',
+            target: ta({
+                can_delete: true,
+                active_sources: [{ id: 'src-d', sourceable_type: null, sourceable_id: null, added_at: '' }],
+            }),
+        });
+        expect(wrapper.find('[data-testid="break-from-requirement-btn"]').exists()).toBe(false);
+    });
+
+    it('does not show "Remove from requirement" when can_delete is false', async () => {
+        const wrapper = await mountModal({
+            mode: 'view',
+            target: ta({ can_delete: false, active_sources: [REQ_SOURCE] }),
+        });
+        expect(wrapper.find('[data-testid="break-from-requirement-btn"]').exists()).toBe(false);
+    });
+
+    it('shows the requirement name in the explanation text', async () => {
+        useRequirementsStore().library = [
+            { id: 'r1', name: 'Forklift Safety', description: null, elements_count: 4, can_edit: true, can_delete: true },
+        ];
+        const wrapper = await mountModal({
+            mode: 'view',
+            target: ta({ can_delete: true, active_sources: [REQ_SOURCE] }),
+        });
+        expect(wrapper.text()).toContain('Forklift Safety');
+    });
+
+    it('calls breakFromRequirement and closes on success', async () => {
+        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { deleted_id: 'ta-1', updated_ids: [] },
+        });
+
+        const wrapper = await mountModal({
+            mode: 'view',
+            target: ta({ id: 'ta-1', can_delete: true, active_sources: [REQ_SOURCE] }),
+        });
+        await wrapper.find('[data-testid="break-from-requirement-btn"]').trigger('click');
+        await flushPromises();
+
+        expect(axios.delete).toHaveBeenCalledWith(
+            '/api/training-assignments/ta-1/from-requirement',
+            expect.objectContaining({ data: { requirement_id: 'r1' } }),
+        );
+        expect(wrapper.emitted('update:open')).toEqual([[false]]);
     });
 });
