@@ -42,9 +42,9 @@ const swatchColor = computed(() => props.tag.color ?? '#6b7280');
 const textColor = computed(() => props.tag.font_color ?? swatchColor.value);
 
 const pillStyle = computed<Record<string, string>>(() => ({
-    backgroundColor: `${swatchColor.value}1f`,
+    backgroundColor: swatchColor.value,
     color: textColor.value,
-    boxShadow: `inset 0 0 0 1px ${swatchColor.value}40`,
+    boxShadow: `inset 0 0 0 1px ${swatchColor.value}`,
 }));
 
 const countBadgeStyle = computed<Record<string, string>>(() => ({
