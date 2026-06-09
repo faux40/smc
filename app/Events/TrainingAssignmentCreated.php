@@ -29,6 +29,10 @@ class TrainingAssignmentCreated implements ShouldBroadcast
     {
         $ta = $this->trainingAssignment;
 
+        $sources = $ta->relationLoaded('activeSources')
+            ? $ta->activeSources
+            : $ta->activeSources()->get();
+
         return [
             'id' => $ta->id,
             'user_id' => $ta->user_id,
@@ -36,6 +40,12 @@ class TrainingAssignmentCreated implements ShouldBroadcast
             'name' => $ta->name,
             'expires_at' => $ta->expires_at?->toDateString(),
             'last_completed_at' => $ta->last_completed_at?->toDateString(),
+            'active_sources' => $sources->map(fn ($s) => [
+                'id' => $s->id,
+                'sourceable_type' => $s->sourceable_type,
+                'sourceable_id' => $s->sourceable_id,
+                'added_at' => $s->added_at->toISOString(),
+            ])->values()->all(),
             'origin_tab' => RealtimeOrigin::tab(),
         ];
     }

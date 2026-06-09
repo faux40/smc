@@ -219,6 +219,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::post('api/training-assignments', [TrainingAssignmentsController::class, 'store'])->name('training-assignments.store');
     // Static segment must precede the parameterised route so 'by-requirement' is not treated as an ID.
     Route::delete('api/training-assignments/by-requirement', [TrainingAssignmentsController::class, 'destroyByRequirement'])->name('training-assignments.destroy-by-requirement');
+    Route::delete('api/training-assignments/{trainingAssignment}/from-requirement', [TrainingAssignmentsController::class, 'breakFromRequirement'])->name('training-assignments.break-from-requirement');
     Route::delete('api/training-assignments/{trainingAssignment}', [TrainingAssignmentsController::class, 'destroy'])->name('training-assignments.destroy');
     Route::post('api/bulk-training-assignments', [BulkTrainingAssignmentsController::class, 'store'])->name('bulk-training-assignments.store');
 

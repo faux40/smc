@@ -57,6 +57,24 @@ class TrainingAssignmentsController extends Controller
         );
     }
 
+    public function breakFromRequirement(Request $request, TrainingAssignment $trainingAssignment): JsonResponse
+    {
+        Gate::authorize('delete', $trainingAssignment);
+
+        $orgId = $request->user()->org_id;
+
+        $data = $request->validate([
+            'requirement_id' => [
+                'required', 'string',
+                Rule::exists('requirements', 'id')->where('org_id', $orgId)->whereNull('deleted_at'),
+            ],
+        ]);
+
+        $result = $this->service->breakFromRequirement($orgId, $trainingAssignment, $data['requirement_id']);
+
+        return response()->json($result);
+    }
+
     public function destroyByRequirement(Request $request): JsonResponse
     {
         Gate::authorize('deleteAny', TrainingAssignment::class);
