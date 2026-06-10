@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Events\CompletionCreated;
+use App\Events\CompletionDeleted;
 use App\Models\ClassEnrollment;
 use App\Models\ClassTraining;
 use App\Models\Completion;
@@ -11,6 +13,7 @@ use App\Models\TrainingClass;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 /**
@@ -225,5 +228,100 @@ class ClassCompletionTest extends TestCase
                 'enrollments' => [],
             ])
             ->assertForbidden();
+    }
+
+    public function test_completing_broadcasts_completion_created_for_each_issued_cert(): void
+    {
+        Event::fake([CompletionCreated::class]);
+
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $t1 = Training::factory()->for($org, 'organization')->create();
+        $t2 = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ct1 = ClassTraining::factory()->for($class, 'trainingClass')->create(['training_id' => $t1->id]);
+        $ct2 = ClassTraining::factory()->for($class, 'trainingClass')->create(['training_id' => $t2->id]);
+        $alice = User::factory()->for($org, 'organization')->create();
+        $bob = User::factory()->for($org, 'organization')->create();
+        $eAlice = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $alice->id]);
+        $eBob   = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $bob->id]);
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/complete", [
+                'completion_date' => '2026-06-01',
+                'enrollments' => [
+                    ['id' => $eAlice->id, 'results' => [
+                        ['class_training_id' => $ct1->id, 'passed' => true],
+                        ['class_training_id' => $ct2->id, 'passed' => true],
+                    ]],
+                    ['id' => $eBob->id, 'results' => [
+                        ['class_training_id' => $ct1->id, 'passed' => true],
+                        ['class_training_id' => $ct2->id, 'passed' => false],
+                    ]],
+                ],
+            ])
+            ->assertOk();
+
+        // Alice passes both topics (2 certs) + Bob passes only t1 (1 cert) = 3 total.
+        Event::assertDispatched(CompletionCreated::class, 3);
+
+        Event::assertDispatched(CompletionCreated::class,
+            fn ($e) => $e->completion->user_id === $alice->id && $e->completion->module_id === $t1->id);
+        Event::assertDispatched(CompletionCreated::class,
+            fn ($e) => $e->completion->user_id === $alice->id && $e->completion->module_id === $t2->id);
+        Event::assertDispatched(CompletionCreated::class,
+            fn ($e) => $e->completion->user_id === $bob->id && $e->completion->module_id === $t1->id);
+    }
+
+    public function test_reclosing_with_failed_mark_broadcasts_completion_deleted(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create(['training_id' => $training->id]);
+        $alice = User::factory()->for($org, 'organization')->create();
+        $enrollment = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $alice->id]);
+
+        // First close-out issues the cert.
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/complete", [
+                'completion_date' => '2026-06-01',
+                'enrollments' => [
+                    ['id' => $enrollment->id, 'results' => [
+                        ['class_training_id' => $ct->id, 'passed' => true],
+                    ]],
+                ],
+            ])
+            ->assertOk();
+
+        $completion = Completion::query()
+            ->where('class_training_id', $ct->id)
+            ->where('user_id', $alice->id)
+            ->firstOrFail();
+
+        Event::fake([CompletionDeleted::class]);
+
+        // Reopen, then re-close marking the topic failed → de-issue + broadcast.
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/reopen")
+            ->assertOk();
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/complete", [
+                'completion_date' => '2026-06-01',
+                'enrollments' => [
+                    ['id' => $enrollment->id, 'results' => [
+                        ['class_training_id' => $ct->id, 'passed' => false],
+                    ]],
+                ],
+            ])
+            ->assertOk();
+
+        Event::assertDispatched(CompletionDeleted::class, 1);
+        Event::assertDispatched(CompletionDeleted::class,
+            fn ($e) => $e->completionId === $completion->id
+                && $e->userId === $alice->id
+                && $e->orgId === $org->id);
     }
 }

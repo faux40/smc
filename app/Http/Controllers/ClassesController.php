@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Events\ClassChanged;
+use App\Events\CompletionCreated;
+use App\Events\CompletionDeleted;
 use App\Http\Requests\ClassRequest;
 use App\Models\ClassEnrollment;
 use App\Models\ClassTraining;
@@ -248,7 +250,12 @@ class ClassesController extends Controller
         $expireOverrides = collect($data['trainings'] ?? [])->pluck('expire_date', 'id');
         $marks = collect($data['enrollments'] ?? [])->keyBy('id');
 
-        DB::transaction(function () use ($class, $marks, $completionDate, $expireOverrides) {
+        // Completion broadcasts are collected inside the transaction and
+        // dispatched after commit, so peer tabs never see uncommitted state.
+        $issued = [];
+        $deIssued = [];
+
+        DB::transaction(function () use ($class, $marks, $completionDate, $expireOverrides, &$issued, &$deIssued) {
             $class->load(['enrollments', 'classTrainings']);
             $totalTopics = $class->classTrainings->count();
 
@@ -292,7 +299,11 @@ class ClassesController extends Controller
                         ->first();
 
                     if ($decision === false) {
-                        $existing?->delete(); // explicitly failed → de-issue.
+                        if ($existing !== null) {
+                            // Explicitly failed → de-issue.
+                            $deIssued[] = ['id' => $existing->id, 'user_id' => $existing->user_id];
+                            $existing->delete();
+                        }
 
                         continue;
                     }
@@ -319,7 +330,7 @@ class ClassesController extends Controller
                         : 'CERT';
                     $certId = sprintf('%s%s-%03d', $code, $dateStr, $certSeq);
 
-                    Completion::create([
+                    $issued[] = Completion::create([
                         'org_id' => $class->org_id,
                         'user_id' => $enrollment->user_id,
                         'module_type' => Training::class,
@@ -343,6 +354,14 @@ class ClassesController extends Controller
                 'completed_at' => now(),
             ]);
         });
+
+        foreach ($issued as $completion) {
+            event(new CompletionCreated($completion->fresh(), actorId: $request->user()->id));
+        }
+
+        foreach ($deIssued as $gone) {
+            event(new CompletionDeleted($gone['id'], $gone['user_id'], $class->org_id));
+        }
 
         event(new ClassChanged($class->id, $class->org_id, 'completed'));
 
