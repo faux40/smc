@@ -35,7 +35,7 @@ function makeWrapper(
             viewId: 'test',
             defaultColumns: COLS,
             rows: ROWS,
-            rowKey: (row: Record<string, unknown>) => row.id as string,
+            rowKey: (row: object) => (row as { id: string }).id,
             ...propsOverride,
         },
         slots,
