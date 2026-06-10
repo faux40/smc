@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -34,10 +35,19 @@ return new class extends Migration
             $table->index(['module_type', 'module_id']);
             $table->index('requirement_id');
         });
+
+        // Block binding the same module to a requirement twice. Partial unique
+        // on (requirement_id, module_type, module_id) for non-deleted rows, so
+        // soft-deleting a binding frees it to be re-added. Works on Postgres
+        // (prod) + SQLite (tests).
+        DB::statement(
+            'CREATE UNIQUE INDEX rqmt_elements_module_unique ON rqmt_elements (requirement_id, module_type, module_id) WHERE deleted_at IS NULL'
+        );
     }
 
     public function down(): void
     {
+        DB::statement('DROP INDEX IF EXISTS rqmt_elements_module_unique');
         Schema::dropIfExists('rqmt_elements');
     }
 };

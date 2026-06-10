@@ -24,6 +24,13 @@ return new class extends Migration
             $table->date('expire_date')->nullable();
             // External cert/license number (e.g., a forklift cert serial).
             $table->string('cert_ident')->nullable();
+            // Class close-out cert fields. cert_id = issued certificate id;
+            // class_training_id links back to the snapshot (and through it the
+            // class) for cert content. Plain indexed UUID, not a constrained FK
+            // — a constrained FK forces a SQLite table rebuild in tests;
+            // integrity is enforced in the close-out logic.
+            $table->string('cert_id')->nullable();
+            $table->uuid('class_training_id')->nullable();
             $table->text('notes')->nullable();
             $table->timestamps();
             $table->softDeletes();
@@ -31,6 +38,7 @@ return new class extends Migration
             $table->index('org_id');
             $table->index('user_id');
             $table->index(['module_type', 'module_id']);
+            $table->index('class_training_id');
         });
     }
 

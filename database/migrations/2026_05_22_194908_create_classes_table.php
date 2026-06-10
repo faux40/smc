@@ -18,8 +18,16 @@ return new class extends Migration
             $table->foreignUuid('org_id')->constrained('organizations')->cascadeOnDelete();
             $table->string('name');
             $table->date('scheduled_date');
+            // Event-level details, shown on certificates and sheets.
+            // start_time/end_time are optional "HH:MM" strings; address is
+            // pre-filled from a training's default when the first topic is
+            // attached; show_signature toggles the script-font signature.
+            $table->string('start_time', 5)->nullable();
+            $table->string('end_time', 5)->nullable();
             $table->string('location')->nullable();
+            $table->text('address')->nullable();
             $table->string('instructor')->nullable();
+            $table->boolean('show_signature')->default(false);
             $table->decimal('total_hours', 6, 2)->nullable();
             $table->text('notes')->nullable();
             // 'scheduled' until the instructor closes it out (Phase B), then

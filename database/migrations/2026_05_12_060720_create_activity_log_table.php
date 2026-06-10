@@ -16,8 +16,10 @@ class CreateActivityLogTable extends Migration
             // default nullableMorphs (bigint) with UUID morphs. The poly id
             // columns end up as nullable uuid + nullable string type.
             $table->nullableUuidMorphs('subject', 'subject');
+            $table->string('event')->nullable();
             $table->nullableUuidMorphs('causer', 'causer');
             $table->json('properties')->nullable();
+            $table->uuid('batch_uuid')->nullable();
             $table->timestamps();
             $table->index('log_name');
         });

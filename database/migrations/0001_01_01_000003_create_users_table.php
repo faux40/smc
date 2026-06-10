@@ -36,6 +36,24 @@ return new class extends Migration
             $table->timestamp('two_factor_confirmed_at')->nullable();
             // active / disabled — admin-disable without delete.
             $table->string('status')->default('active');
+            // Optional profile / org-chart metadata — all nullable. Visibility
+            // gating off these is deferred; for now they're just stored.
+            $table->string('department')->nullable();
+            $table->string('location')->nullable();
+            $table->string('job_title')->nullable();
+            // Optional employee/badge number (shown in the class summary).
+            $table->string('employee_number', 64)->nullable();
+            // Self-referential supervisor (another user in the same org).
+            // Indexed nullable UUID rather than a DB-level FK: a constrained FK
+            // to users forces a full SQLite table rebuild (which clobbers the
+            // partial-unique email index). Same-org integrity is enforced in
+            // validation; users soft-delete, so a hard-delete orphan isn't live.
+            $table->uuid('supervisor_id')->nullable()->index();
+            $table->date('start_date')->nullable();
+            $table->date('end_date')->nullable();
+            // Per-user UI preferences (column visibility/order + filter
+            // defaults) — opaque JSON the frontend owns; null until customized.
+            $table->json('preferences')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

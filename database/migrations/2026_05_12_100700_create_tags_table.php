@@ -15,6 +15,9 @@ return new class extends Migration
             // Optional hex color (e.g. #FF8800). No palette enum — caller's
             // choice. Nullable so blank tags work.
             $table->string('color')->nullable();
+            // Optional hex #RRGGBB overriding the derived text color used by
+            // <TagPill>. Nullable so tags keep the pre-feature render.
+            $table->string('font_color')->nullable();
             $table->timestamps();
             $table->softDeletes();
 

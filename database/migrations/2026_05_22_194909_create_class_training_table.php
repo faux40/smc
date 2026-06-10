@@ -29,6 +29,14 @@ return new class extends Migration
             $table->integer('repeat_days')->nullable();
             $table->string('std_freq_name')->nullable();
 
+            // Cert content snapshot at attach time, so a later edit to the
+            // training (or its deletion) never rewrites certs an issued class
+            // already produced.
+            $table->string('cert_title')->nullable();
+            $table->text('cert_text')->nullable();
+            $table->unsignedSmallInteger('lifespan_months')->nullable();
+            $table->string('cert_code', 32)->nullable();
+
             // Allocated class hours for this training (no sum validation).
             $table->decimal('hours', 6, 2)->nullable();
             // Set at close (Phase B): the expiry shared by completions for this
