@@ -57,10 +57,16 @@ const userRows = [
     },
 ];
 
-type DetailItem = { name?: string; days_until_due?: number | null };
+type DetailItem = {
+    requirement_name?: string | null;
+    status?: string;
+    next_due_date?: string | null;
+    last_completion_date?: string | null;
+    days_until_due?: number | null;
+};
 
 function mockGet(
-    detail: { groups: { overdue: DetailItem[]; due_soon: DetailItem[] } } = {
+    detail: { groups: Record<string, DetailItem[]> } = {
         groups: { overdue: [], due_soon: [] },
     },
 ) {
@@ -160,7 +166,15 @@ describe('AllUsersComplianceWidget', () => {
     it('lazy-loads detail from /api/users/{id}/compliance on expand', async () => {
         mockGet({
             groups: {
-                overdue: [{ name: 'Fall Protection', days_until_due: -5 }],
+                overdue: [
+                    {
+                        requirement_name: 'Fall Protection',
+                        status: 'overdue',
+                        next_due_date: '2026-06-05',
+                        last_completion_date: '2025-06-05',
+                        days_until_due: -5,
+                    },
+                ],
                 due_soon: [],
             },
         });
@@ -176,5 +190,80 @@ describe('AllUsersComplianceWidget', () => {
             expect.anything(),
         );
         expect(wrapper.text()).toContain('Fall Protection');
+    });
+
+    it('renders status, due date, last completion and days in the detail row', async () => {
+        mockGet({
+            groups: {
+                overdue: [
+                    {
+                        requirement_name: 'Fall Protection',
+                        status: 'overdue',
+                        next_due_date: '2026-06-05',
+                        last_completion_date: '2025-06-05',
+                        days_until_due: -5,
+                    },
+                ],
+            },
+        });
+        const wrapper = await mountWidget();
+
+        await wrapper.find('tbody tr td:last-child button').trigger('click');
+        await flushPromises();
+
+        const detailRow = wrapper.find('tbody tr.bg-muted\\/20');
+        expect(detailRow.text()).toContain('Fall Protection');
+        expect(detailRow.text()).toContain('Overdue');
+        expect(detailRow.text()).toContain('2026-06-05');
+        expect(detailRow.text()).toContain('2025-06-05');
+        expect(detailRow.text()).toContain('-5');
+    });
+
+    it('includes every status group in the detail, worst first', async () => {
+        mockGet({
+            groups: {
+                due_soon: [
+                    {
+                        requirement_name: 'Forklift',
+                        status: 'due_soon',
+                        next_due_date: '2026-07-01',
+                        last_completion_date: '2025-07-01',
+                        days_until_due: 21,
+                    },
+                ],
+                current: [
+                    {
+                        requirement_name: 'OSHA General',
+                        status: 'current',
+                        next_due_date: '2027-01-01',
+                        last_completion_date: '2026-01-01',
+                        days_until_due: 205,
+                    },
+                ],
+                never_started: [
+                    {
+                        requirement_name: 'Confined Space',
+                        status: 'never_started',
+                        next_due_date: null,
+                        last_completion_date: null,
+                        days_until_due: null,
+                    },
+                ],
+            },
+        });
+        const wrapper = await mountWidget();
+
+        await wrapper.find('tbody tr td:last-child button').trigger('click');
+        await flushPromises();
+
+        const items = wrapper
+            .findAll('tbody tr.bg-muted\\/20 li')
+            .map((li) => li.text());
+        expect(items).toHaveLength(3);
+        expect(items[0]).toContain('Forklift');
+        expect(items[1]).toContain('Confined Space');
+        expect(items[2]).toContain('OSHA General');
+        // Items without a completion render a "never" hint, not a blank.
+        expect(items[1].toLowerCase()).toContain('not started');
     });
 });

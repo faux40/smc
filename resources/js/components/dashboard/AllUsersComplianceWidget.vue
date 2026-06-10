@@ -29,8 +29,12 @@ interface UserRow {
     tag_ids: string[];
 }
 
+// Mirrors UserComplianceCalculator::row() — the fields the drill-down shows.
 interface DetailItem {
-    name?: string;
+    requirement_name?: string | null;
+    status?: ComplianceStatus;
+    next_due_date?: string | null;
+    last_completion_date?: string | null;
     days_until_due?: number | null;
 }
 
@@ -54,6 +58,15 @@ const STATUS_ORDER: Record<OverallStatus, number> = {
     inactive: 4,
     none: 5,
 };
+
+// Drill-down group ordering — worst first, matching STATUS_ORDER above.
+const DETAIL_GROUP_ORDER = [
+    'overdue',
+    'due_soon',
+    'never_started',
+    'current',
+    'inactive',
+] as const;
 
 // Drill-down state, keyed by user id.
 const expanded = ref<string | null>(null);
@@ -164,13 +177,13 @@ async function toggleExpand(row: UserRow): Promise<void> {
         }>(`/api/users/${row.user_id}/compliance`, {
             headers: defaultHeaders(),
         });
-        // Surface the actionable buckets: overdue first, then due-soon.
+        // Every status group, worst first — the drill-down is the full
+        // picture for the user, not just the actionable buckets.
         detail.value = {
             ...detail.value,
-            [row.user_id]: [
-                ...(data.groups.overdue ?? []),
-                ...(data.groups.due_soon ?? []),
-            ],
+            [row.user_id]: DETAIL_GROUP_ORDER.flatMap(
+                (group) => data.groups[group] ?? [],
+            ),
         };
     } catch (e) {
         detailError.value = {
@@ -350,20 +363,41 @@ function defaultHeaders(): Record<string, string> {
                                     "
                                     class="text-xs text-muted-foreground"
                                 >
-                                    Nothing overdue or due soon.
+                                    No assignments.
                                 </p>
                                 <ul v-else class="space-y-1 text-xs">
                                     <li
                                         v-for="(item, i) in detail[row.user_id]"
                                         :key="i"
-                                        class="flex justify-between gap-3"
+                                        class="flex items-center justify-between gap-3"
                                     >
-                                        <span>{{ item.name ?? 'Item' }}</span>
                                         <span
-                                            v-if="item.days_until_due != null"
-                                            class="text-muted-foreground"
+                                            class="flex items-center gap-2 font-medium"
                                         >
-                                            {{ item.days_until_due }}d
+                                            <ComplianceStatusBadge
+                                                v-if="item.status"
+                                                :status="item.status"
+                                            />
+                                            {{ item.requirement_name ?? '—' }}
+                                        </span>
+                                        <span class="text-muted-foreground">
+                                            <template v-if="item.next_due_date">
+                                                due {{ item.next_due_date
+                                                }}<template
+                                                    v-if="
+                                                        item.days_until_due !=
+                                                        null
+                                                    "
+                                                >
+                                                    ({{ item.days_until_due }}d)</template
+                                                >
+                                                ·
+                                            </template>
+                                            last completed
+                                            {{
+                                                item.last_completion_date ??
+                                                'never'
+                                            }}
                                         </span>
                                     </li>
                                 </ul>
