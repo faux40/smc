@@ -114,6 +114,39 @@ class RecalculateTrainingStatusTest extends TestCase
         $this->assertNull($assignment->expires_at);
     }
 
+    public function test_trashed_std_frequency_falls_back_to_no_expiry(): void
+    {
+        $org = Organization::factory()->create();
+        $user = User::factory()->for($org, 'organization')->create();
+        $freq = StdFrequency::factory()->for($org, 'organization')->create(['repeat_days' => 365]);
+        $training = Training::factory()->for($org, 'organization')->create([
+            'repeating' => true,
+            'std_freq_id' => $freq->id,
+        ]);
+        $assignment = TrainingAssignment::factory()->create([
+            'org_id' => $org->id,
+            'user_id' => $user->id,
+            'training_id' => $training->id,
+        ]);
+
+        Completion::factory()->create([
+            'org_id' => $org->id,
+            'user_id' => $user->id,
+            'module_type' => Training::class,
+            'module_id' => $training->id,
+            'completion_date' => '2026-01-01',
+            'expire_date' => null,
+        ]);
+
+        $freq->delete();
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+
+        $assignment->refresh();
+        $this->assertEquals('2026-01-01', $assignment->last_completed_at->toDateString());
+        $this->assertNull($assignment->expires_at);
+    }
+
     public function test_uses_most_recent_completion_when_multiple_exist(): void
     {
         ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $assignment]
