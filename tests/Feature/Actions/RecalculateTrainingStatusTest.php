@@ -3,8 +3,11 @@
 namespace Tests\Feature\Actions;
 
 use App\Actions\RecalculateTrainingStatus;
+use App\Models\AssignmentSource;
 use App\Models\Completion;
 use App\Models\Organization;
+use App\Models\Requirement;
+use App\Models\RqmtElement;
 use App\Models\StdFrequency;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
@@ -28,6 +31,206 @@ class RecalculateTrainingStatusTest extends TestCase
         ]);
 
         return compact('org', 'user', 'training', 'assignment');
+    }
+
+    private function freq(Organization $org, int $days): StdFrequency
+    {
+        return StdFrequency::factory()->for($org, 'organization')->create(['repeat_days' => $days]);
+    }
+
+    private function addDirectSource(TrainingAssignment $ta): AssignmentSource
+    {
+        return AssignmentSource::create([
+            'training_assignment_id' => $ta->id,
+            'sourceable_type' => null,
+            'sourceable_id' => null,
+            'added_at' => now(),
+        ]);
+    }
+
+    /**
+     * Creates a requirement + a Training-typed element with the given timing
+     * and attaches the requirement as a source on the TA. Returns the element.
+     */
+    private function addRequirementSource(
+        TrainingAssignment $ta,
+        Training $training,
+        array $elementTiming,
+    ): RqmtElement {
+        $requirement = Requirement::factory()->create(['org_id' => $ta->org_id]);
+
+        $element = RqmtElement::factory()->create(array_merge([
+            'org_id' => $ta->org_id,
+            'requirement_id' => $requirement->id,
+            'module_type' => Training::class,
+            'module_id' => $training->id,
+            'initial_only' => false,
+            'repeating' => false,
+            'std_freq_id' => null,
+            'as_needed' => false,
+        ], $elementTiming));
+
+        AssignmentSource::create([
+            'training_assignment_id' => $ta->id,
+            'sourceable_type' => Requirement::class,
+            'sourceable_id' => $requirement->id,
+            'added_at' => now(),
+        ]);
+
+        return $element;
+    }
+
+    private function complete(TrainingAssignment $ta, string $date, ?string $expireDate = null): Completion
+    {
+        return Completion::factory()->create([
+            'org_id' => $ta->org_id,
+            'user_id' => $ta->user_id,
+            'module_type' => Training::class,
+            'module_id' => $ta->training_id,
+            'completion_date' => $date,
+            'expire_date' => $expireDate,
+        ]);
+    }
+
+    public function test_requirement_source_uses_element_timing_over_training_timing(): void
+    {
+        ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $training->update(['repeating' => true, 'std_freq_id' => $this->freq($org, 365)->id]);
+        $this->addRequirementSource($ta, $training, [
+            'repeating' => true,
+            'std_freq_id' => $this->freq($org, 182)->id,
+        ]);
+        $this->complete($ta, '2026-01-01');
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+
+        // Only source is the requirement → its element's 182-day cycle, not the
+        // training template's 365 days.
+        $ta->refresh();
+        $this->assertEquals('2026-07-02', $ta->expires_at->toDateString());
+    }
+
+    public function test_strictest_source_wins_across_requirements_and_direct(): void
+    {
+        ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $training->update(['repeating' => true, 'std_freq_id' => $this->freq($org, 365)->id]);
+        $this->addDirectSource($ta); // training template: 365d
+        $this->addRequirementSource($ta, $training, [
+            'repeating' => true,
+            'std_freq_id' => $this->freq($org, 730)->id,
+        ]);
+        $this->addRequirementSource($ta, $training, [
+            'repeating' => true,
+            'std_freq_id' => $this->freq($org, 90)->id,
+        ]);
+        $this->complete($ta, '2026-01-01');
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+
+        // Earliest expiry across direct(365) / req(730) / req(90) wins.
+        $ta->refresh();
+        $this->assertEquals('2026-04-01', $ta->expires_at->toDateString());
+    }
+
+    public function test_initial_only_element_contributes_no_expiry(): void
+    {
+        ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $training->update(['repeating' => true, 'std_freq_id' => $this->freq($org, 365)->id]);
+        $this->addRequirementSource($ta, $training, ['initial_only' => true]);
+        $this->complete($ta, '2026-01-01');
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+
+        // The only source's element is initial-only → satisfied forever, even
+        // though the training template repeats annually.
+        $ta->refresh();
+        $this->assertNull($ta->expires_at);
+        $this->assertEquals('2026-01-01', $ta->last_completed_at->toDateString());
+    }
+
+    public function test_as_needed_element_contributes_no_expiry(): void
+    {
+        ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $training->update(['repeating' => true, 'std_freq_id' => $this->freq($org, 365)->id]);
+        $this->addRequirementSource($ta, $training, ['as_needed' => true]);
+        $this->complete($ta, '2026-01-01');
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+
+        $ta->refresh();
+        $this->assertNull($ta->expires_at);
+    }
+
+    public function test_removed_sources_are_ignored_for_timing(): void
+    {
+        ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $training->update(['repeating' => true, 'std_freq_id' => $this->freq($org, 365)->id]);
+        $this->addDirectSource($ta);
+        $this->addRequirementSource($ta, $training, [
+            'repeating' => true,
+            'std_freq_id' => $this->freq($org, 90)->id,
+        ]);
+        AssignmentSource::where('sourceable_type', Requirement::class)
+            ->where('training_assignment_id', $ta->id)
+            ->update(['removed_at' => now()]);
+        $this->complete($ta, '2026-01-01');
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+
+        // The stricter 90-day requirement source is removed → direct 365 applies.
+        $ta->refresh();
+        $this->assertEquals('2027-01-01', $ta->expires_at->toDateString());
+    }
+
+    public function test_soft_deleted_element_falls_back_to_training_timing(): void
+    {
+        ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $training->update(['repeating' => true, 'std_freq_id' => $this->freq($org, 365)->id]);
+        $element = $this->addRequirementSource($ta, $training, [
+            'repeating' => true,
+            'std_freq_id' => $this->freq($org, 90)->id,
+        ]);
+        $element->delete();
+        $this->complete($ta, '2026-01-01');
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+
+        // Element gone from the requirement → source falls back to template.
+        $ta->refresh();
+        $this->assertEquals('2027-01-01', $ta->expires_at->toDateString());
+    }
+
+    public function test_element_with_trashed_frequency_contributes_no_expiry(): void
+    {
+        ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $elementFreq = $this->freq($org, 90);
+        $this->addRequirementSource($ta, $training, [
+            'repeating' => true,
+            'std_freq_id' => $elementFreq->id,
+        ]);
+        $elementFreq->delete();
+        $this->complete($ta, '2026-01-01');
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+
+        $ta->refresh();
+        $this->assertNull($ta->expires_at);
+    }
+
+    public function test_completion_expire_date_overrides_source_timing(): void
+    {
+        ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $this->addRequirementSource($ta, $training, [
+            'repeating' => true,
+            'std_freq_id' => $this->freq($org, 90)->id,
+        ]);
+        $this->complete($ta, '2026-01-01', '2028-12-31');
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+
+        // Explicit cert expiry beats every computed source cycle.
+        $ta->refresh();
+        $this->assertEquals('2028-12-31', $ta->expires_at->toDateString());
     }
 
     public function test_leaves_both_null_when_no_completions_exist(): void

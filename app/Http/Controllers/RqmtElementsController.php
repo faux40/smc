@@ -9,6 +9,8 @@ use App\Http\Requests\CompletionRequest;
 use App\Http\Requests\RqmtElementRequest;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
+use App\Models\Training;
+use App\Services\TrainingAssignmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -113,8 +115,11 @@ class RqmtElementsController extends Controller
         ], 201);
     }
 
-    public function update(RqmtElementRequest $request, RqmtElement $rqmtElement): JsonResponse
-    {
+    public function update(
+        RqmtElementRequest $request,
+        RqmtElement $rqmtElement,
+        TrainingAssignmentService $assignments,
+    ): JsonResponse {
         Gate::authorize('update', $rqmtElement);
 
         $data = $request->validated();
@@ -127,6 +132,15 @@ class RqmtElementsController extends Controller
             'as_needed' => (bool) $data['as_needed'],
         ]);
 
+        // Timing changes flow into every TA sourced by this requirement (J2).
+        if ($rqmtElement->module_type === Training::class
+            && $rqmtElement->wasChanged(['initial_only', 'repeating', 'std_freq_id', 'as_needed'])) {
+            $assignments->refreshForRequirementTraining(
+                $rqmtElement->requirement_id,
+                $rqmtElement->module_id,
+            );
+        }
+
         event(new RqmtElementUpdated($rqmtElement->fresh()));
 
         return response()->json([
@@ -135,14 +149,23 @@ class RqmtElementsController extends Controller
         ]);
     }
 
-    public function destroy(RqmtElement $rqmtElement): JsonResponse
-    {
+    public function destroy(
+        RqmtElement $rqmtElement,
+        TrainingAssignmentService $assignments,
+    ): JsonResponse {
         Gate::authorize('delete', $rqmtElement);
 
         $id = $rqmtElement->id;
         $reqId = $rqmtElement->requirement_id;
         $orgId = $rqmtElement->org_id;
+        $moduleType = $rqmtElement->module_type;
+        $moduleId = $rqmtElement->module_id;
         $rqmtElement->delete();
+
+        // Requirement-sourced TAs fall back to the training template (J2).
+        if ($moduleType === Training::class) {
+            $assignments->refreshForRequirementTraining($reqId, $moduleId);
+        }
 
         event(new RqmtElementDeleted($id, $reqId, $orgId));
 

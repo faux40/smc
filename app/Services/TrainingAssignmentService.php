@@ -125,7 +125,9 @@ class TrainingAssignmentService
                 'sourceable_id' => null,
                 'added_at' => now(),
             ]);
-            event(new TrainingAssignmentCreated($siblingTa->load('activeSources')));
+            // Requirement→direct swap changes the timing source (J2).
+            $this->recalculate->handle($siblingTa->user_id, $siblingTa->training_id);
+            event(new TrainingAssignmentCreated($siblingTa->refresh()->load('activeSources')));
             $updatedIds[] = $siblingTa->id;
         }
 
@@ -139,8 +141,10 @@ class TrainingAssignmentService
             return ['deleted_id' => $ta->id, 'updated_ids' => $updatedIds];
         }
 
-        // TA has another source (e.g. direct) — keep it but broadcast updated sources.
-        event(new TrainingAssignmentCreated($ta->load('activeSources')));
+        // TA has another source (e.g. direct) — keep it; its expiry may loosen
+        // now that the requirement's element no longer applies (J2).
+        $this->recalculate->handle($ta->user_id, $ta->training_id);
+        event(new TrainingAssignmentCreated($ta->refresh()->load('activeSources')));
         $updatedIds[] = $ta->id;
 
         return ['deleted_id' => null, 'updated_ids' => $updatedIds];
@@ -172,11 +176,48 @@ class TrainingAssignmentService
                 $ta->delete();
                 $deletedIds[] = $ta->id;
             } else {
+                // Surviving sources may carry looser timing than the removed
+                // requirement's element did (J2) — recompute and tell peers.
+                $this->recalculate->handle($ta->user_id, $ta->training_id);
+                event(new TrainingAssignmentCreated($ta->refresh()->load('activeSources')));
                 $updatedIds[] = $ta->id;
             }
         }
 
         return ['deleted_ids' => $deletedIds, 'updated_ids' => $updatedIds];
+    }
+
+    /**
+     * Recompute every TA affected by a timing change on a requirement's
+     * training element (element edited or soft-deleted) and broadcast the
+     * ones whose dates moved so open tabs refresh their pills.
+     */
+    public function refreshForRequirementTraining(string $requirementId, string $trainingId): void
+    {
+        $this->broadcastRefreshed(
+            $this->recalculate->handleForRequirementTraining($requirementId, $trainingId),
+        );
+    }
+
+    /**
+     * Recompute every TA affected by a StdFrequency change (repeat_days
+     * edited or the frequency deleted) and broadcast the changed ones.
+     */
+    public function refreshForStdFrequency(string $orgId, string $stdFreqId): void
+    {
+        $this->broadcastRefreshed(
+            $this->recalculate->handleForStdFrequency($orgId, $stdFreqId),
+        );
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, TrainingAssignment>  $assignments
+     */
+    private function broadcastRefreshed($assignments): void
+    {
+        foreach ($assignments as $ta) {
+            event(new TrainingAssignmentCreated($ta->load('activeSources'), actorId: Auth::id()));
+        }
     }
 
     private function findOrCreate(string $orgId, string $userId, string $trainingId): TrainingAssignment

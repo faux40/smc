@@ -6,6 +6,7 @@ use App\Events\StdFrequencyCreated;
 use App\Events\StdFrequencyDeleted;
 use App\Events\StdFrequencyUpdated;
 use App\Models\StdFrequency;
+use App\Services\TrainingAssignmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -54,8 +55,11 @@ class StdFrequenciesController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, StdFrequency $stdFrequency): JsonResponse
-    {
+    public function update(
+        Request $request,
+        StdFrequency $stdFrequency,
+        TrainingAssignmentService $assignments,
+    ): JsonResponse {
         Gate::authorize('update', $stdFrequency);
 
         $data = $request->validate([
@@ -64,6 +68,11 @@ class StdFrequenciesController extends Controller
         ]);
 
         $stdFrequency->update($data);
+
+        // A new cycle length moves every TA timed by this frequency (J2).
+        if ($stdFrequency->wasChanged('repeat_days')) {
+            $assignments->refreshForStdFrequency($stdFrequency->org_id, $stdFrequency->id);
+        }
 
         event(new StdFrequencyUpdated($stdFrequency->fresh()));
 
@@ -74,13 +83,18 @@ class StdFrequenciesController extends Controller
         ]);
     }
 
-    public function destroy(StdFrequency $stdFrequency): JsonResponse
-    {
+    public function destroy(
+        StdFrequency $stdFrequency,
+        TrainingAssignmentService $assignments,
+    ): JsonResponse {
         Gate::authorize('delete', $stdFrequency);
 
         $id = $stdFrequency->id;
         $orgId = $stdFrequency->org_id;
         $stdFrequency->delete();
+
+        // Trashed frequency → affected TAs fall back to no computed expiry (J2).
+        $assignments->refreshForStdFrequency($orgId, $id);
 
         event(new StdFrequencyDeleted($id, $orgId));
 

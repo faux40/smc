@@ -3,8 +3,12 @@
 namespace App\Actions;
 
 use App\Models\Completion;
+use App\Models\Requirement;
+use App\Models\RqmtElement;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 
 class RecalculateTrainingStatus
 {
@@ -31,16 +35,24 @@ class RecalculateTrainingStatus
     /**
      * Recompute expires_at and last_completed_at on every TrainingAssignment
      * for the given (user, training) pair, based on the user's completion
-     * history. Called by the CompletionObserver on every save/delete.
+     * history and the timing of each active source (J0.1: strictest wins).
+     * Called by the CompletionObserver on every save/delete and by every
+     * source add/remove.
+     *
+     * Returns the affected assignments so callers can broadcast the ones
+     * whose dates actually changed (->wasChanged()).
+     *
+     * @return Collection<int, TrainingAssignment>
      */
-    public function handle(string $userId, string $trainingId): void
+    public function handle(string $userId, string $trainingId): Collection
     {
         $assignments = TrainingAssignment::where('user_id', $userId)
             ->where('training_id', $trainingId)
+            ->with('activeSources')
             ->get();
 
         if ($assignments->isEmpty()) {
-            return;
+            return $assignments;
         }
 
         $latest = Completion::where('user_id', $userId)
@@ -49,21 +61,90 @@ class RecalculateTrainingStatus
             ->orderByDesc('completion_date')
             ->first();
 
-        [$expiresAt, $lastCompletedAt] = $this->computeStatus($latest, $trainingId);
+        $training = Training::with('stdFrequency')->find($trainingId);
 
         foreach ($assignments as $assignment) {
+            [$expiresAt, $lastCompletedAt] = $this->computeStatus($latest, $training, $assignment);
+
             $assignment->update([
                 'expires_at' => $expiresAt,
                 'last_completed_at' => $lastCompletedAt,
             ]);
         }
+
+        return $assignments;
     }
 
     /**
-     * @return array{0: \Carbon\CarbonInterface|null, 1: \Carbon\CarbonInterface|null}
+     * Recompute every TA in the org affected by a timing change on the given
+     * requirement's training element (element edited or deleted).
+     *
+     * @return Collection<int, TrainingAssignment> assignments whose dates changed
      */
-    private function computeStatus(?Completion $latest, string $trainingId): array
+    public function handleForRequirementTraining(string $requirementId, string $trainingId): Collection
     {
+        $pairs = TrainingAssignment::where('training_id', $trainingId)
+            ->whereHas('activeSources', fn ($q) => $q
+                ->where('sourceable_type', Requirement::class)
+                ->where('sourceable_id', $requirementId))
+            ->get(['user_id', 'training_id'])
+            ->unique(fn ($ta) => $ta->user_id.'|'.$ta->training_id);
+
+        return $this->recalcPairs($pairs);
+    }
+
+    /**
+     * Recompute every TA in the org affected by a StdFrequency change
+     * (repeat_days edited or the frequency deleted) — trainings using it as
+     * template timing plus training-typed elements using it.
+     *
+     * @return Collection<int, TrainingAssignment> assignments whose dates changed
+     */
+    public function handleForStdFrequency(string $orgId, string $stdFreqId): Collection
+    {
+        $trainingIds = Training::where('org_id', $orgId)
+            ->where('std_freq_id', $stdFreqId)
+            ->pluck('id')
+            ->merge(
+                RqmtElement::where('org_id', $orgId)
+                    ->where('std_freq_id', $stdFreqId)
+                    ->where('module_type', Training::class)
+                    ->pluck('module_id'),
+            )
+            ->unique();
+
+        if ($trainingIds->isEmpty()) {
+            return collect();
+        }
+
+        $pairs = TrainingAssignment::where('org_id', $orgId)
+            ->whereIn('training_id', $trainingIds)
+            ->get(['user_id', 'training_id'])
+            ->unique(fn ($ta) => $ta->user_id.'|'.$ta->training_id);
+
+        return $this->recalcPairs($pairs);
+    }
+
+    /**
+     * @param  Collection<int, TrainingAssignment>  $pairs
+     * @return Collection<int, TrainingAssignment> assignments whose dates changed
+     */
+    private function recalcPairs(Collection $pairs): Collection
+    {
+        return $pairs
+            ->flatMap(fn ($pair) => $this->handle($pair->user_id, $pair->training_id))
+            ->filter(fn (TrainingAssignment $ta) => $ta->wasChanged(['expires_at', 'last_completed_at']))
+            ->values();
+    }
+
+    /**
+     * @return array{0: CarbonInterface|null, 1: CarbonInterface|null}
+     */
+    private function computeStatus(
+        ?Completion $latest,
+        ?Training $training,
+        TrainingAssignment $assignment,
+    ): array {
         if ($latest === null) {
             return [null, null];
         }
@@ -75,16 +156,67 @@ class RecalculateTrainingStatus
             return [$latest->expire_date, $lastCompletedAt];
         }
 
-        // Fall back to training frequency when the completion has no expiry.
-        $training = Training::with('stdFrequency')->find($trainingId);
+        // One candidate expiry per active source; the earliest wins because
+        // satisfying the strictest source satisfies all of them (J0.1).
+        // Sources whose timing is initial-only / as-needed / missing a
+        // frequency contribute no expiry.
+        $expiries = $this->sourceTimings($training, $assignment)
+            ->map(fn (array $timing) => $timing['repeating'] && $timing['repeat_days'] !== null
+                ? $lastCompletedAt->addDays($timing['repeat_days'])
+                : null)
+            ->filter();
 
-        if ($training?->repeating && $training->stdFrequency) {
-            $expiresAt = $lastCompletedAt->addDays($training->stdFrequency->repeat_days);
+        return [$expiries->min(), $lastCompletedAt];
+    }
 
-            return [$expiresAt, $lastCompletedAt];
+    /**
+     * Resolve the timing of each active source: requirement sources use their
+     * requirement's element for this training (per-case adjusted timing);
+     * direct sources use the training template. A source whose element no
+     * longer exists — and a TA with no sources at all — falls back to the
+     * template so it keeps behaving like a direct assignment.
+     *
+     * @return Collection<int, array{repeating: bool, repeat_days: int|null}>
+     */
+    private function sourceTimings(?Training $training, TrainingAssignment $assignment): Collection
+    {
+        $template = [
+            'repeating' => (bool) $training?->repeating,
+            'repeat_days' => $training?->stdFrequency?->repeat_days,
+        ];
+
+        $sources = $assignment->activeSources;
+
+        if ($sources->isEmpty()) {
+            return collect([$template]);
         }
 
-        // initial_only or as_needed — completed forever / no automatic expiry.
-        return [null, $lastCompletedAt];
+        $requirementIds = $sources
+            ->where('sourceable_type', Requirement::class)
+            ->pluck('sourceable_id');
+
+        $elements = RqmtElement::whereIn('requirement_id', $requirementIds)
+            ->where('module_type', Training::class)
+            ->where('module_id', $assignment->training_id)
+            ->with('stdFrequency')
+            ->get()
+            ->keyBy('requirement_id');
+
+        return $sources->map(function ($source) use ($template, $elements) {
+            if ($source->sourceable_type !== Requirement::class) {
+                return $template;
+            }
+
+            $element = $elements->get($source->sourceable_id);
+
+            if ($element === null) {
+                return $template;
+            }
+
+            return [
+                'repeating' => $element->repeating,
+                'repeat_days' => $element->stdFrequency?->repeat_days,
+            ];
+        });
     }
 }

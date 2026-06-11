@@ -5,11 +5,15 @@ namespace Tests\Feature\Tenancy;
 use App\Events\RqmtElementCreated;
 use App\Events\RqmtElementDeleted;
 use App\Events\RqmtElementUpdated;
+use App\Events\TrainingAssignmentCreated;
+use App\Models\AssignmentSource;
+use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
 use App\Models\StdFrequency;
 use App\Models\Training;
+use App\Models\TrainingAssignment;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -434,5 +438,106 @@ class RqmtElementsApiTest extends TestCase
         Event::assertDispatched(RqmtElementCreated::class);
         Event::assertDispatched(RqmtElementUpdated::class);
         Event::assertDispatched(RqmtElementDeleted::class);
+    }
+
+    /**
+     * Scenario for the J2 recalc triggers: training template repeats every
+     * 365 days, the requirement's element every 90; the user's TA is sourced
+     * by the requirement only and was completed 2026-01-01, so its expiry
+     * follows the element cycle (2026-04-01) until the element changes.
+     *
+     * @return array{admin: User, ta: TrainingAssignment, element: RqmtElement, freq365: StdFrequency}
+     */
+    private function makeRecalcScenario(): array
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $user = User::factory()->for($org, 'organization')->create();
+        $freq365 = StdFrequency::factory()->for($org, 'organization')->create(['repeat_days' => 365]);
+        $freq90 = StdFrequency::factory()->for($org, 'organization')->create(['repeat_days' => 90]);
+        $training = Training::factory()->for($org, 'organization')->create([
+            'repeating' => true,
+            'std_freq_id' => $freq365->id,
+        ]);
+        $req = Requirement::factory()->for($org, 'organization')->create();
+        $element = RqmtElement::factory()
+            ->for($org, 'organization')->for($req, 'requirement')
+            ->state([
+                'module_type' => Training::class,
+                'module_id' => $training->id,
+                'initial_only' => false,
+                'repeating' => true,
+                'std_freq_id' => $freq90->id,
+                'as_needed' => false,
+            ])
+            ->create();
+        $ta = TrainingAssignment::factory()->create([
+            'org_id' => $org->id,
+            'user_id' => $user->id,
+            'training_id' => $training->id,
+        ]);
+        AssignmentSource::create([
+            'training_assignment_id' => $ta->id,
+            'sourceable_type' => Requirement::class,
+            'sourceable_id' => $req->id,
+            'added_at' => now(),
+        ]);
+        Completion::factory()->create([
+            'org_id' => $org->id,
+            'user_id' => $user->id,
+            'module_type' => Training::class,
+            'module_id' => $training->id,
+            'completion_date' => '2026-01-01',
+            'expire_date' => null,
+        ]);
+
+        $this->assertEquals('2026-04-01', $ta->refresh()->expires_at->toDateString());
+
+        return compact('admin', 'ta', 'element', 'freq365');
+    }
+
+    public function test_updating_element_timing_recalculates_affected_assignments(): void
+    {
+        ['admin' => $admin, 'ta' => $ta, 'element' => $element, 'freq365' => $freq365]
+            = $this->makeRecalcScenario();
+
+        Event::fake([TrainingAssignmentCreated::class]);
+
+        $this->actingAs($admin)
+            ->patchJson("/api/rqmt-elements/{$element->id}", [
+                'name' => $element->name,
+                'initial_only' => false,
+                'repeating' => true,
+                'std_freq_id' => $freq365->id,
+                'as_needed' => false,
+            ])
+            ->assertOk();
+
+        // Element cycle loosened 90 → 365 days; the TA follows and the change
+        // is broadcast so open tabs refresh the pill.
+        $this->assertEquals('2027-01-01', $ta->refresh()->expires_at->toDateString());
+        Event::assertDispatched(
+            TrainingAssignmentCreated::class,
+            fn ($e) => $e->trainingAssignment->id === $ta->id,
+        );
+    }
+
+    public function test_deleting_element_recalculates_affected_assignments(): void
+    {
+        ['admin' => $admin, 'ta' => $ta, 'element' => $element] = $this->makeRecalcScenario();
+
+        Event::fake([TrainingAssignmentCreated::class]);
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/rqmt-elements/{$element->id}")
+            ->assertOk();
+
+        // Element gone → the requirement source falls back to the training
+        // template's 365-day cycle.
+        $this->assertEquals('2027-01-01', $ta->refresh()->expires_at->toDateString());
+        Event::assertDispatched(
+            TrainingAssignmentCreated::class,
+            fn ($e) => $e->trainingAssignment->id === $ta->id,
+        );
     }
 }

@@ -5,9 +5,11 @@ namespace Tests\Feature\Tenancy;
 use App\Events\TrainingAssignmentCreated;
 use App\Events\TrainingAssignmentDeleted;
 use App\Models\AssignmentSource;
+use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
+use App\Models\StdFrequency;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Models\User;
@@ -840,5 +842,101 @@ class TrainingAssignmentsApiTest extends TestCase
                 'requirement_id' => $reqA->id,
             ])
             ->assertUnprocessable();
+    }
+
+    // ------------------------------------------------------------------
+    // J2 — source removal recalculates surviving TAs
+    // ------------------------------------------------------------------
+
+    /**
+     * Direct + requirement sources on one TA: template 365d, element 90d,
+     * completed 2026-01-01 → expiry follows the stricter element (2026-04-01)
+     * until the requirement source goes away.
+     *
+     * @return array{admin: User, user: User, ta: TrainingAssignment, req: Requirement}
+     */
+    private function makeSourceRemovalScenario(): array
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $user = User::factory()->for($org, 'organization')->create();
+        $freq365 = StdFrequency::factory()->for($org, 'organization')->create(['repeat_days' => 365]);
+        $freq90 = StdFrequency::factory()->for($org, 'organization')->create(['repeat_days' => 90]);
+        $training = Training::factory()->for($org, 'organization')->create([
+            'repeating' => true,
+            'std_freq_id' => $freq365->id,
+        ]);
+        $req = Requirement::factory()->for($org, 'organization')->create();
+        RqmtElement::factory()
+            ->for($org, 'organization')->for($req, 'requirement')
+            ->state([
+                'module_type' => Training::class,
+                'module_id' => $training->id,
+                'initial_only' => false,
+                'repeating' => true,
+                'std_freq_id' => $freq90->id,
+                'as_needed' => false,
+            ])
+            ->create();
+        $ta = TrainingAssignment::factory()->create([
+            'org_id' => $org->id,
+            'user_id' => $user->id,
+            'training_id' => $training->id,
+        ]);
+        AssignmentSource::create([
+            'training_assignment_id' => $ta->id,
+            'sourceable_type' => null,
+            'sourceable_id' => null,
+            'added_at' => now(),
+        ]);
+        AssignmentSource::create([
+            'training_assignment_id' => $ta->id,
+            'sourceable_type' => Requirement::class,
+            'sourceable_id' => $req->id,
+            'added_at' => now(),
+        ]);
+        Completion::factory()->create([
+            'org_id' => $org->id,
+            'user_id' => $user->id,
+            'module_type' => Training::class,
+            'module_id' => $training->id,
+            'completion_date' => '2026-01-01',
+            'expire_date' => null,
+        ]);
+
+        $this->assertEquals('2026-04-01', $ta->refresh()->expires_at->toDateString());
+
+        return compact('admin', 'user', 'ta', 'req');
+    }
+
+    public function test_break_from_requirement_recalculates_surviving_ta(): void
+    {
+        ['admin' => $admin, 'ta' => $ta, 'req' => $req] = $this->makeSourceRemovalScenario();
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/training-assignments/{$ta->id}/from-requirement", [
+                'requirement_id' => $req->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('deleted_id', null);
+
+        // Only the direct source remains → expiry loosens to the template.
+        $this->assertEquals('2027-01-01', $ta->refresh()->expires_at->toDateString());
+    }
+
+    public function test_destroy_by_requirement_recalculates_surviving_ta(): void
+    {
+        ['admin' => $admin, 'user' => $user, 'ta' => $ta, 'req' => $req]
+            = $this->makeSourceRemovalScenario();
+
+        $this->actingAs($admin)
+            ->deleteJson('/api/training-assignments/by-requirement', [
+                'user_id' => $user->id,
+                'requirement_id' => $req->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('updated_ids.0', $ta->id);
+
+        $this->assertEquals('2027-01-01', $ta->refresh()->expires_at->toDateString());
     }
 }
