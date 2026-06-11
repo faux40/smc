@@ -8,7 +8,13 @@ use App\Events\UserStatusChanged;
 use App\Events\UserUpdated;
 use App\Http\Requests\CreateUserRequest;
 use App\Http\Requests\UpdateUserRequest;
+use App\Models\AssignmentSource;
+use App\Models\Completion;
+use App\Models\Requirement;
+use App\Models\Training;
+use App\Models\TrainingAssignment;
 use App\Models\User;
+use App\Services\TrainingStatusService;
 use App\Services\UserComplianceCalculator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -246,6 +252,111 @@ class UsersController extends Controller
         $payload = $calculator->compute($user);
 
         return response()->json($payload);
+    }
+
+    /**
+     * J3 — TA-engine compliance payload: every training assignment grouped
+     * into exactly one status bucket, plus the user's full completion
+     * history. Replaces the legacy compliance() payload as consumers move
+     * over (Phases K/L).
+     */
+    public function trainingCompliance(User $user, TrainingStatusService $status): JsonResponse
+    {
+        Gate::authorize('viewDetail', $user);
+
+        $window = $user->organization->expiringSoonDays();
+
+        $tas = TrainingAssignment::query()
+            ->where('user_id', $user->id)
+            ->with('activeSources')
+            ->orderBy('name')
+            ->get();
+
+        $requirementNames = Requirement::query()
+            ->whereIn('id', $tas->flatMap(
+                fn (TrainingAssignment $ta) => $ta->activeSources->pluck('sourceable_id'),
+            )->filter()->unique())
+            ->pluck('name', 'id');
+
+        $grouped = $tas->groupBy(fn (TrainingAssignment $ta) => $status->statusFor($ta, $window));
+
+        $groups = collect(TrainingStatusService::STATUSES)
+            ->mapWithKeys(fn (string $bucket) => [
+                $bucket => ($grouped->get($bucket) ?? collect())
+                    ->map(fn (TrainingAssignment $ta) => $this->complianceRow($ta, $status, $window, $requirementNames))
+                    ->values()
+                    ->all(),
+            ])
+            ->all();
+
+        return response()->json([
+            'groups' => $groups,
+            'completions' => $this->completionHistory($user),
+        ]);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<string, string>  $requirementNames
+     * @return array<string, mixed>
+     */
+    private function complianceRow(
+        TrainingAssignment $ta,
+        TrainingStatusService $status,
+        int $window,
+        $requirementNames,
+    ): array {
+        return [
+            'id' => $ta->id,
+            'training_id' => $ta->training_id,
+            'training_name' => $ta->name,
+            'status' => $status->statusFor($ta, $window),
+            'expires_at' => $ta->expires_at?->toDateString(),
+            'last_completed_at' => $ta->last_completed_at?->toDateString(),
+            'days_until_due' => $status->daysUntilDue($ta),
+            'sources' => $ta->activeSources->map(fn (AssignmentSource $s) => $s->sourceable_type === Requirement::class
+                ? ['type' => 'requirement', 'id' => $s->sourceable_id, 'name' => $requirementNames[$s->sourceable_id] ?? null]
+                : ['type' => 'direct', 'id' => null, 'name' => null],
+            )->values()->all(),
+        ];
+    }
+
+    /**
+     * Full completion history with training names resolved (incl. trashed
+     * trainings, so old credit stays legible). M1 will fold this into the
+     * shared completion serializer.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function completionHistory(User $user): array
+    {
+        $completions = Completion::query()
+            ->where('user_id', $user->id)
+            ->with('rqmtElements')
+            ->orderByDesc('completion_date')
+            ->get();
+
+        $trainingNames = Training::withTrashed()
+            ->whereIn('id', $completions
+                ->where('module_type', Training::class)
+                ->pluck('module_id')
+                ->unique())
+            ->pluck('name', 'id');
+
+        return $completions->map(fn (Completion $c) => [
+            'id' => $c->id,
+            'module_type' => $c->module_type,
+            'module_id' => $c->module_id,
+            'training_name' => $c->module_type === Training::class
+                ? ($trainingNames[$c->module_id] ?? null)
+                : null,
+            'completion_date' => $c->completion_date?->toDateString(),
+            'certification_date' => $c->certification_date?->toDateString(),
+            'expire_date' => $c->expire_date?->toDateString(),
+            'cert_ident' => $c->cert_ident,
+            'class_training_id' => $c->class_training_id,
+            'notes' => $c->notes,
+            'rqmt_element_ids' => $c->rqmtElements->pluck('id')->all(),
+        ])->values()->all();
     }
 
     public function store(CreateUserRequest $request): RedirectResponse

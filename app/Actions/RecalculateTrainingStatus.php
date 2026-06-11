@@ -64,11 +64,16 @@ class RecalculateTrainingStatus
         $training = Training::with('stdFrequency')->find($trainingId);
 
         foreach ($assignments as $assignment) {
-            [$expiresAt, $lastCompletedAt] = $this->computeStatus($latest, $training, $assignment);
+            $timings = $this->sourceTimings($training, $assignment);
+            [$expiresAt, $lastCompletedAt] = $this->computeStatus($latest, $timings);
 
             $assignment->update([
                 'expires_at' => $expiresAt,
                 'last_completed_at' => $lastCompletedAt,
+                // As-needed-only TAs are visible but never scheduled (J3).
+                'as_needed_only' => $timings->every(
+                    fn (array $t) => $t['as_needed'] && ! $t['repeating'] && ! $t['initial_only'],
+                ),
             ]);
         }
 
@@ -133,18 +138,16 @@ class RecalculateTrainingStatus
     {
         return $pairs
             ->flatMap(fn ($pair) => $this->handle($pair->user_id, $pair->training_id))
-            ->filter(fn (TrainingAssignment $ta) => $ta->wasChanged(['expires_at', 'last_completed_at']))
+            ->filter(fn (TrainingAssignment $ta) => $ta->wasChanged(['expires_at', 'last_completed_at', 'as_needed_only']))
             ->values();
     }
 
     /**
+     * @param  Collection<int, array{repeating: bool, repeat_days: int|null, initial_only: bool, as_needed: bool}>  $timings
      * @return array{0: CarbonInterface|null, 1: CarbonInterface|null}
      */
-    private function computeStatus(
-        ?Completion $latest,
-        ?Training $training,
-        TrainingAssignment $assignment,
-    ): array {
+    private function computeStatus(?Completion $latest, Collection $timings): array
+    {
         if ($latest === null) {
             return [null, null];
         }
@@ -160,7 +163,7 @@ class RecalculateTrainingStatus
         // satisfying the strictest source satisfies all of them (J0.1).
         // Sources whose timing is initial-only / as-needed / missing a
         // frequency contribute no expiry.
-        $expiries = $this->sourceTimings($training, $assignment)
+        $expiries = $timings
             ->map(fn (array $timing) => $timing['repeating'] && $timing['repeat_days'] !== null
                 ? $lastCompletedAt->addDays($timing['repeat_days'])
                 : null)
@@ -176,13 +179,15 @@ class RecalculateTrainingStatus
      * longer exists — and a TA with no sources at all — falls back to the
      * template so it keeps behaving like a direct assignment.
      *
-     * @return Collection<int, array{repeating: bool, repeat_days: int|null}>
+     * @return Collection<int, array{repeating: bool, repeat_days: int|null, initial_only: bool, as_needed: bool}>
      */
     private function sourceTimings(?Training $training, TrainingAssignment $assignment): Collection
     {
         $template = [
             'repeating' => (bool) $training?->repeating,
             'repeat_days' => $training?->stdFrequency?->repeat_days,
+            'initial_only' => (bool) $training?->initial_only,
+            'as_needed' => (bool) $training?->as_needed,
         ];
 
         $sources = $assignment->activeSources;
@@ -216,6 +221,8 @@ class RecalculateTrainingStatus
             return [
                 'repeating' => $element->repeating,
                 'repeat_days' => $element->stdFrequency?->repeat_days,
+                'initial_only' => $element->initial_only,
+                'as_needed' => $element->as_needed,
             ];
         });
     }

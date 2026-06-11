@@ -7,6 +7,7 @@ use App\Http\Requests\TrainingAssignmentRequest;
 use App\Models\AssignmentSource;
 use App\Models\TrainingAssignment;
 use App\Services\TrainingAssignmentService;
+use App\Services\TrainingStatusService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +18,16 @@ class TrainingAssignmentsController extends Controller
 {
     public function __construct(
         private TrainingAssignmentService $service,
+        private TrainingStatusService $status,
     ) {}
+
+    /** Memoised org amber window for status computation in serialize(). */
+    private ?int $dueSoonDays = null;
+
+    private function dueSoonDays(): int
+    {
+        return $this->dueSoonDays ??= Auth::user()->organization->expiringSoonDays();
+    }
 
     public function index(Request $request): JsonResponse
     {
@@ -126,6 +136,9 @@ class TrainingAssignmentsController extends Controller
             'name' => $ta->name,
             'expires_at' => $ta->expires_at?->toDateString(),
             'last_completed_at' => $ta->last_completed_at?->toDateString(),
+            'status' => $this->status->statusFor($ta, $this->dueSoonDays()),
+            'days_until_due' => $this->status->daysUntilDue($ta),
+            'as_needed_only' => $ta->as_needed_only,
             'active_sources' => $sources->map(fn (AssignmentSource $s) => [
                 'id' => $s->id,
                 'sourceable_type' => $s->sourceable_type,

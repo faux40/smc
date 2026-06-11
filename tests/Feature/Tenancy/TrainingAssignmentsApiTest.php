@@ -52,6 +52,31 @@ class TrainingAssignmentsApiTest extends TestCase
             ->assertJsonCount(1);
     }
 
+    public function test_index_rows_include_canonical_status_and_days(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $member = User::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+
+        $ta = TrainingAssignment::factory()->create([
+            'org_id' => $org->id,
+            'user_id' => $member->id,
+            'training_id' => $training->id,
+            'last_completed_at' => now()->subYear(),
+            'expires_at' => now()->subDays(10),
+        ]);
+        AssignmentSource::factory()->create(['training_assignment_id' => $ta->id]);
+
+        $row = $this->actingAs($admin)
+            ->getJson('/api/training-assignments')
+            ->assertOk()
+            ->json('0');
+
+        $this->assertSame('overdue', $row['status']);
+        $this->assertSame(-10, $row['days_until_due']);
+    }
+
     public function test_list_filters_by_user_id(): void
     {
         $org = Organization::factory()->create();

@@ -217,6 +217,47 @@ class RecalculateTrainingStatusTest extends TestCase
         $this->assertNull($ta->expires_at);
     }
 
+    public function test_flags_as_needed_only_when_every_source_is_as_needed(): void
+    {
+        ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $training->update(['repeating' => true, 'std_freq_id' => $this->freq($org, 365)->id]);
+        $this->addRequirementSource($ta, $training, ['as_needed' => true]);
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+
+        $this->assertTrue($ta->refresh()->as_needed_only);
+    }
+
+    public function test_as_needed_only_is_false_when_any_source_requires_completion(): void
+    {
+        ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $training->update(['repeating' => true, 'std_freq_id' => $this->freq($org, 365)->id]);
+        $this->addRequirementSource($ta, $training, ['as_needed' => true]);
+        $this->addDirectSource($ta); // template repeats → required
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+
+        $this->assertFalse($ta->refresh()->as_needed_only);
+    }
+
+    public function test_as_needed_only_clears_when_a_required_source_is_added(): void
+    {
+        ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $training->update(['as_needed' => true, 'repeating' => false, 'initial_only' => false]);
+        $this->addDirectSource($ta); // template is as-needed
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+        $this->assertTrue($ta->refresh()->as_needed_only);
+
+        $this->addRequirementSource($ta, $training, [
+            'repeating' => true,
+            'std_freq_id' => $this->freq($org, 90)->id,
+        ]);
+
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+        $this->assertFalse($ta->refresh()->as_needed_only);
+    }
+
     public function test_completion_expire_date_overrides_source_timing(): void
     {
         ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();

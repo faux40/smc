@@ -22,11 +22,13 @@ class TrainingAssignment extends Model
         'name',
         'expires_at',
         'last_completed_at',
+        'as_needed_only',
     ];
 
     protected $casts = [
         'expires_at' => 'date',
         'last_completed_at' => 'date',
+        'as_needed_only' => 'boolean',
     ];
 
     public function user(): BelongsTo

@@ -95,6 +95,9 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // JSON endpoint applies the same gate before computing.
     Route::get('users/{user}', [UsersController::class, 'show'])->name('users.show');
     Route::get('api/users/{user}/compliance', [UsersController::class, 'compliance'])->name('users.compliance');
+    // J3 TA-engine compliance payload (same viewDetail gate); K/L consumers
+    // migrate here, then the legacy endpoint above goes away with J5.
+    Route::get('api/users/{user}/training-compliance', [UsersController::class, 'trainingCompliance'])->name('users.training-compliance');
     Route::patch('users/{user}', [UsersController::class, 'update'])->name('users.update');
     Route::post('users/{user}/disable', [UsersController::class, 'disable'])->name('users.disable');
     Route::post('users/{user}/enable', [UsersController::class, 'enable'])->name('users.enable');
