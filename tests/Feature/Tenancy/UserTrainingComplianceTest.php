@@ -165,6 +165,37 @@ class UserTrainingComplianceTest extends TestCase
         $this->assertSame('2026-03-01', $completions[0]['completion_date']);
         $this->assertSame('2027-03-01', $completions[0]['expire_date']);
         $this->assertSame('CPR-123', $completions[0]['cert_ident']);
+        // Manual completion → no source class.
+        $this->assertNull($completions[0]['class_id']);
+        $this->assertNull($completions[0]['class_name']);
+    }
+
+    public function test_class_issued_completion_carries_class_link(): void
+    {
+        ['org' => $org, 'manager' => $manager, 'subject' => $subject] = $this->makeScenario();
+
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'Forklift Cert']);
+        $class = \App\Models\TrainingClass::factory()->for($org, 'organization')
+            ->create(['name' => 'June Safety Day']);
+        $ct = \App\Models\ClassTraining::factory()->for($class, 'trainingClass')
+            ->create(['training_id' => $training->id]);
+        Completion::factory()->create([
+            'org_id' => $org->id,
+            'user_id' => $subject->id,
+            'module_type' => Training::class,
+            'module_id' => $training->id,
+            'completion_date' => '2026-05-01',
+            'class_training_id' => $ct->id,
+        ]);
+
+        $completions = $this->actingAs($manager)
+            ->getJson("/api/users/{$subject->id}/training-compliance")
+            ->assertOk()
+            ->json('completions');
+
+        $row = collect($completions)->firstWhere('class_training_id', $ct->id);
+        $this->assertSame($class->id, $row['class_id']);
+        $this->assertSame('June Safety Day', $row['class_name']);
     }
 
     public function test_user_can_view_their_own_compliance(): void

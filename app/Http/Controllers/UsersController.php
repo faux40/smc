@@ -8,6 +8,7 @@ use App\Events\UserStatusChanged;
 use App\Events\UserUpdated;
 use App\Http\Requests\CreateUserRequest;
 use App\Http\Requests\UpdateUserRequest;
+use App\Models\ClassTraining;
 use App\Models\Completion;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
@@ -334,21 +335,37 @@ class UsersController extends Controller
                 ->unique())
             ->pluck('name', 'id');
 
-        return $completions->map(fn (Completion $c) => [
-            'id' => $c->id,
-            'module_type' => $c->module_type,
-            'module_id' => $c->module_id,
-            'training_name' => $c->module_type === Training::class
-                ? ($trainingNames[$c->module_id] ?? null)
-                : null,
-            'completion_date' => $c->completion_date?->toDateString(),
-            'certification_date' => $c->certification_date?->toDateString(),
-            'expire_date' => $c->expire_date?->toDateString(),
-            'cert_ident' => $c->cert_ident,
-            'class_training_id' => $c->class_training_id,
-            'notes' => $c->notes,
-            'rqmt_element_ids' => $c->rqmtElements->pluck('id')->all(),
-        ])->values()->all();
+        // Class-issued completions link back to their class via the
+        // class_training snapshot row.
+        $classTrainings = ClassTraining::query()
+            ->whereIn('id', $completions->pluck('class_training_id')->filter()->unique())
+            ->with('trainingClass:id,name')
+            ->get()
+            ->keyBy('id');
+
+        return $completions->map(function (Completion $c) use ($trainingNames, $classTrainings) {
+            $sourceClass = $c->class_training_id !== null
+                ? $classTrainings[$c->class_training_id]?->trainingClass
+                : null;
+
+            return [
+                'id' => $c->id,
+                'module_type' => $c->module_type,
+                'module_id' => $c->module_id,
+                'training_name' => $c->module_type === Training::class
+                    ? ($trainingNames[$c->module_id] ?? null)
+                    : null,
+                'completion_date' => $c->completion_date?->toDateString(),
+                'certification_date' => $c->certification_date?->toDateString(),
+                'expire_date' => $c->expire_date?->toDateString(),
+                'cert_ident' => $c->cert_ident,
+                'class_training_id' => $c->class_training_id,
+                'class_id' => $sourceClass?->id,
+                'class_name' => $sourceClass?->name,
+                'notes' => $c->notes,
+                'rqmt_element_ids' => $c->rqmtElements->pluck('id')->all(),
+            ];
+        })->values()->all();
     }
 
     public function store(CreateUserRequest $request): RedirectResponse

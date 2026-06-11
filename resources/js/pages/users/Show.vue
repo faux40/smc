@@ -1,12 +1,14 @@
 <script setup lang="ts">
 /*
- * User detail page (Phase 13.3).
+ * User detail page (Phase 13.3; lists rewired to the TA engine in L1/L2).
  *
- * Renders the user's compliance posture grouped by status (Overdue /
- * Due soon / Current / Not started / Inactive) plus the full completion
- * history. The Inertia render carries the user-header subject; the
- * compliance + completion data streams in via /api/users/{user}/compliance
- * so the page can refresh without an Inertia round-trip.
+ * Renders the user's training assignments grouped by canonical status
+ * (Overdue / Due soon / Not started / Current / As needed — mutually
+ * exclusive and complete, same engine as the pills) plus the full
+ * completion history. The Inertia render carries the user-header subject;
+ * the compliance + completion data streams in via
+ * /api/users/{user}/training-compliance so the page can refresh without
+ * an Inertia round-trip.
  */
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
@@ -49,37 +51,49 @@ interface Subject {
 
 interface CompliancePayload {
     groups: {
-        overdue: AssignmentStatusRow[];
-        due_soon: AssignmentStatusRow[];
-        current: AssignmentStatusRow[];
-        never_started: AssignmentStatusRow[];
-        inactive: AssignmentStatusRow[];
+        overdue: TrainingComplianceRow[];
+        due_soon: TrainingComplianceRow[];
+        not_started: TrainingComplianceRow[];
+        current: TrainingComplianceRow[];
+        as_needed: TrainingComplianceRow[];
     };
     completions: CompletionHistoryRow[];
 }
 
-interface AssignmentStatusRow {
-    assignment_id: string;
-    requirement_id: string;
-    requirement_name: string;
-    assignment_name: string;
-    timing: string;
-    start_date: string | null;
-    end_date: string | null;
-    status: 'overdue' | 'due_soon' | 'current' | 'never_started' | 'inactive';
-    last_completion_date: string | null;
-    next_due_date: string | null;
+interface SourceChip {
+    type: 'direct' | 'requirement';
+    id: string | null;
+    name: string | null;
+}
+
+interface TrainingComplianceRow {
+    id: string;
+    training_id: string;
+    training_name: string;
+    status:
+        | 'overdue'
+        | 'due_soon'
+        | 'not_started'
+        | 'current'
+        | 'as_needed';
+    expires_at: string | null;
+    last_completed_at: string | null;
     days_until_due: number | null;
+    sources: SourceChip[];
 }
 
 interface CompletionHistoryRow {
     id: string;
     module_type: string;
     module_id: string;
+    training_name: string | null;
     completion_date: string | null;
     certification_date: string | null;
     expire_date: string | null;
     cert_ident: string | null;
+    class_training_id: string | null;
+    class_id: string | null;
+    class_name: string | null;
     notes: string | null;
     rqmt_element_ids: string[];
 }
@@ -162,7 +176,7 @@ async function load(): Promise<void> {
 
     try {
         const { data: resp } = await axios.get<CompliancePayload>(
-            `/api/users/${props.subject.id}/compliance`,
+            `/api/users/${props.subject.id}/training-compliance`,
             { headers: defaultHeaders() },
         );
         data.value = resp;
@@ -200,42 +214,42 @@ const ORDER: Array<{
     {
         key: 'due_soon',
         label: 'Due soon',
-        description: 'Within the next 60 days.',
+        description: "Expiring within the org's amber window.",
+    },
+    {
+        key: 'not_started',
+        label: 'Not started',
+        description: 'Assigned, never completed.',
     },
     { key: 'current', label: 'Current', description: 'Satisfied for now.' },
     {
-        key: 'never_started',
-        label: 'Not started',
-        description: 'Future start_date or no clock yet.',
-    },
-    {
-        key: 'inactive',
-        label: 'Inactive',
-        description: 'end_date has passed — deactivated.',
+        key: 'as_needed',
+        label: 'As needed',
+        description: 'Visible on the user; not scheduled or required.',
     },
 ];
 
 const groupCount = (key: keyof CompliancePayload['groups']): number =>
     data.value?.groups[key].length ?? 0;
 
-const formatDueLabel = (row: AssignmentStatusRow): string => {
-    if (row.next_due_date === null) {
+const formatDueLabel = (row: TrainingComplianceRow): string => {
+    if (row.expires_at === null) {
         return '—';
     }
 
     if (row.days_until_due === null) {
-        return row.next_due_date;
+        return row.expires_at;
     }
 
     if (row.days_until_due < 0) {
-        return `${row.next_due_date} (${Math.abs(row.days_until_due)}d overdue)`;
+        return `${row.expires_at} (${Math.abs(row.days_until_due)}d overdue)`;
     }
 
     if (row.days_until_due === 0) {
-        return `${row.next_due_date} (today)`;
+        return `${row.expires_at} (today)`;
     }
 
-    return `${row.next_due_date} (${row.days_until_due}d)`;
+    return `${row.expires_at} (${row.days_until_due}d)`;
 };
 
 function defaultHeaders(): Record<string, string> {
@@ -416,16 +430,16 @@ function defaultHeaders(): Record<string, string> {
                         <thead class="bg-muted/40">
                             <tr>
                                 <th class="px-3 py-2 text-left font-medium">
-                                    Requirement
+                                    Training
                                 </th>
                                 <th class="px-3 py-2 text-left font-medium">
-                                    Timing
+                                    Source
                                 </th>
                                 <th class="px-3 py-2 text-left font-medium">
-                                    Last completion
+                                    Last completed
                                 </th>
                                 <th class="px-3 py-2 text-left font-medium">
-                                    Next due
+                                    Due
                                 </th>
                                 <th class="px-3 py-2 text-left font-medium">
                                     Status
@@ -435,25 +449,29 @@ function defaultHeaders(): Record<string, string> {
                         <tbody class="divide-y divide-border">
                             <tr
                                 v-for="row in data.groups[group.key]"
-                                :key="row.assignment_id"
+                                :key="row.id"
                             >
-                                <td class="px-3 py-2">
-                                    {{ row.requirement_name }}
-                                    <div
-                                        v-if="row.start_date || row.end_date"
-                                        class="text-xs text-muted-foreground"
-                                    >
-                                        {{ row.start_date ?? '—' }}
-                                        <template v-if="row.end_date">
-                                            → {{ row.end_date }}</template
+                                <td class="px-3 py-2 font-medium">
+                                    {{ row.training_name }}
+                                </td>
+                                <td class="px-3 py-2 text-xs">
+                                    <span class="flex flex-wrap gap-1">
+                                        <span
+                                            v-for="(chip, i) in row.sources"
+                                            :key="i"
+                                            class="rounded-full border border-border px-1.5 py-0.5 text-muted-foreground"
                                         >
-                                    </div>
+                                            {{
+                                                chip.type === 'requirement'
+                                                    ? (chip.name ??
+                                                      'Requirement')
+                                                    : 'Direct'
+                                            }}
+                                        </span>
+                                    </span>
                                 </td>
                                 <td class="px-3 py-2 text-xs">
-                                    {{ row.timing }}
-                                </td>
-                                <td class="px-3 py-2 text-xs">
-                                    {{ row.last_completion_date ?? '—' }}
+                                    {{ row.last_completed_at ?? '—' }}
                                 </td>
                                 <td class="px-3 py-2 text-xs">
                                     {{ formatDueLabel(row) }}
@@ -490,13 +508,17 @@ function defaultHeaders(): Record<string, string> {
 
                 <div
                     v-else
+                    data-testid="completion-history"
                     class="overflow-hidden rounded-md border border-border"
                 >
                     <table class="min-w-full divide-y divide-border text-sm">
                         <thead class="bg-muted/40">
                             <tr>
                                 <th class="px-3 py-2 text-left font-medium">
-                                    Completion date
+                                    Training
+                                </th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    Completed
                                 </th>
                                 <th class="px-3 py-2 text-left font-medium">
                                     Expires
@@ -505,7 +527,7 @@ function defaultHeaders(): Record<string, string> {
                                     Cert
                                 </th>
                                 <th class="px-3 py-2 text-left font-medium">
-                                    Credits
+                                    Source
                                 </th>
                                 <th class="px-3 py-2 text-left font-medium">
                                     Notes
@@ -514,6 +536,9 @@ function defaultHeaders(): Record<string, string> {
                         </thead>
                         <tbody class="divide-y divide-border">
                             <tr v-for="c in data.completions" :key="c.id">
+                                <td class="px-3 py-2 font-medium">
+                                    {{ c.training_name ?? '—' }}
+                                </td>
                                 <td class="px-3 py-2 text-xs">
                                     {{ c.completion_date ?? '—' }}
                                 </td>
@@ -524,7 +549,16 @@ function defaultHeaders(): Record<string, string> {
                                     {{ c.cert_ident ?? '—' }}
                                 </td>
                                 <td class="px-3 py-2 text-xs">
-                                    {{ c.rqmt_element_ids.length }} element(s)
+                                    <a
+                                        v-if="c.class_id"
+                                        :href="`/classes/${c.class_id}`"
+                                        class="text-primary hover:underline"
+                                    >
+                                        {{ c.class_name ?? 'Class' }}
+                                    </a>
+                                    <span v-else class="text-muted-foreground">
+                                        Manual entry
+                                    </span>
                                 </td>
                                 <td
                                     class="px-3 py-2 text-xs text-muted-foreground"
