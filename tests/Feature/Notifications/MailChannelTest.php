@@ -70,8 +70,8 @@ class MailChannelTest extends TestCase
         return [
             new AssignmentCreatedForYou($assignment),
             new CompletionRecordedForYou($this->completion()),
-            new AssignmentDueSoon($assignment, '2026-07-01', 30),
-            new AssignmentOverdue($assignment, '2026-04-01', -20),
+            new AssignmentDueSoon('ta-1', 'tr-1', 'Fall Protection', '2026-07-01', 30),
+            new AssignmentOverdue('ta-1', 'tr-1', 'Fall Protection', '2026-04-01', -20),
         ];
     }
 
@@ -79,7 +79,7 @@ class MailChannelTest extends TestCase
     {
         config(['notifications.mail_enabled' => false]);
 
-        $via = (new AssignmentDueSoon($this->assignment(), '2026-07-01', 30))->via($this->user);
+        $via = (new AssignmentDueSoon('ta-1', 'tr-1', 'Fall Protection', '2026-07-01', 30))->via($this->user);
 
         $this->assertSame(['database', 'broadcast'], $via);
     }
@@ -88,7 +88,7 @@ class MailChannelTest extends TestCase
     {
         config(['notifications.mail_enabled' => true]);
 
-        $via = (new AssignmentDueSoon($this->assignment(), '2026-07-01', 30))->via($this->user);
+        $via = (new AssignmentDueSoon('ta-1', 'tr-1', 'Fall Protection', '2026-07-01', 30))->via($this->user);
 
         $this->assertContains('mail', $via);
         $this->assertContains('database', $via);
@@ -102,7 +102,7 @@ class MailChannelTest extends TestCase
         $noLogin = User::factory()->for($this->org, 'organization')->noLogin()->create();
         $this->assertNull($noLogin->email);
 
-        $via = (new AssignmentDueSoon($this->assignment(), '2026-07-01', 30))->via($noLogin);
+        $via = (new AssignmentDueSoon('ta-1', 'tr-1', 'Fall Protection', '2026-07-01', 30))->via($noLogin);
 
         $this->assertNotContains('mail', $via);
         $this->assertSame(['database', 'broadcast'], $via);
@@ -163,24 +163,22 @@ class MailChannelTest extends TestCase
 
     public function test_assignment_due_soon_to_mail(): void
     {
-        $assignment = $this->assignment();
-        $mail = (new AssignmentDueSoon($assignment, '2026-07-01', 30))->toMail($this->user);
+        $mail = (new AssignmentDueSoon('ta-1', 'tr-1', 'Fall Protection', '2026-07-01', 30))->toMail($this->user);
 
         $this->assertInstanceOf(MailMessage::class, $mail);
         $this->assertStringContainsStringIgnoringCase('due', $mail->subject);
-        $this->assertStringContainsString($assignment->name, $mail->subject);
+        $this->assertStringContainsString('Fall Protection', $mail->subject);
         $bodyText = implode(' ', $mail->introLines);
         $this->assertStringContainsString('2026-07-01', $bodyText);
     }
 
     public function test_assignment_overdue_to_mail(): void
     {
-        $assignment = $this->assignment();
-        $mail = (new AssignmentOverdue($assignment, '2026-04-01', -20))->toMail($this->user);
+        $mail = (new AssignmentOverdue('ta-1', 'tr-1', 'Fall Protection', '2026-04-01', -20))->toMail($this->user);
 
         $this->assertInstanceOf(MailMessage::class, $mail);
         $this->assertStringContainsStringIgnoringCase('overdue', $mail->subject);
-        $this->assertStringContainsString($assignment->name, $mail->subject);
+        $this->assertStringContainsString('Fall Protection', $mail->subject);
         $bodyText = implode(' ', $mail->introLines);
         $this->assertStringContainsString('20', $bodyText);
     }
@@ -190,7 +188,7 @@ class MailChannelTest extends TestCase
         config(['notifications.mail_enabled' => true]);
         NotificationFacade::fake();
 
-        $this->user->notify(new AssignmentDueSoon($this->assignment(), '2026-07-01', 30));
+        $this->user->notify(new AssignmentDueSoon('ta-1', 'tr-1', 'Fall Protection', '2026-07-01', 30));
 
         NotificationFacade::assertSentTo(
             $this->user,
@@ -206,7 +204,7 @@ class MailChannelTest extends TestCase
         config(['notifications.mail_enabled' => false]);
         NotificationFacade::fake();
 
-        $this->user->notify(new AssignmentDueSoon($this->assignment(), '2026-07-01', 30));
+        $this->user->notify(new AssignmentDueSoon('ta-1', 'tr-1', 'Fall Protection', '2026-07-01', 30));
 
         NotificationFacade::assertSentTo(
             $this->user,

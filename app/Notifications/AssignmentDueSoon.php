@@ -2,7 +2,6 @@
 
 namespace App\Notifications;
 
-use App\Models\Assignment;
 use App\Notifications\Concerns\ChannelsWithGatedMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -12,8 +11,13 @@ use Illuminate\Notifications\Notification;
 
 /**
  * Sent to a User when the daily watchdog (`assignments:scan-due-states`)
- * sees one of their assignments cross *into* `due_soon`. Edge-triggered:
- * fires once on the transition, not every day the assignment stays due.
+ * sees one of their training assignments cross *into* `due_soon`.
+ * Edge-triggered: fires once on the transition, not every day the
+ * training stays due.
+ *
+ * Carries plain values, never models — training assignments hard-delete,
+ * and a serialized model reference would fail in the queue worker if the
+ * TA vanished before the job ran (J6).
  *
  * Delivers to the in-app inbox (`database`) + realtime bell
  * (`broadcast`); the `mail` channel is added by ChannelsWithGatedMail
@@ -27,8 +31,10 @@ class AssignmentDueSoon extends Notification implements ShouldBroadcast, ShouldQ
     public const TYPE = 'assignment_due_soon';
 
     public function __construct(
-        public readonly Assignment $assignment,
-        public readonly ?string $nextDueDate,
+        public readonly string $trainingAssignmentId,
+        public readonly string $trainingId,
+        public readonly string $name,
+        public readonly ?string $expiresAt,
         public readonly ?int $daysUntilDue,
     ) {}
 
@@ -39,10 +45,10 @@ class AssignmentDueSoon extends Notification implements ShouldBroadcast, ShouldQ
     {
         return [
             'kind' => self::TYPE,
-            'assignment_id' => $this->assignment->id,
-            'requirement_id' => $this->assignment->requirement_id,
-            'name' => $this->assignment->name,
-            'next_due_date' => $this->nextDueDate,
+            'training_assignment_id' => $this->trainingAssignmentId,
+            'training_id' => $this->trainingId,
+            'name' => $this->name,
+            'next_due_date' => $this->expiresAt,
             'days_until_due' => $this->daysUntilDue,
         ];
     }
@@ -50,19 +56,19 @@ class AssignmentDueSoon extends Notification implements ShouldBroadcast, ShouldQ
     public function toMail(object $notifiable): MailMessage
     {
         $mail = (new MailMessage)
-            ->subject('Requirement due soon: '.$this->assignment->name)
+            ->subject('Training due soon: '.$this->name)
             ->greeting('Hello '.$notifiable->name.',')
-            ->line('Your requirement "'.$this->assignment->name.'" is coming due.');
+            ->line('Your training "'.$this->name.'" is coming due.');
 
-        if ($this->nextDueDate !== null) {
+        if ($this->expiresAt !== null) {
             $window = $this->daysUntilDue !== null
                 ? ' (in '.$this->daysUntilDue.' day'.($this->daysUntilDue === 1 ? '' : 's').')'
                 : '';
-            $mail->line('Due date: '.$this->nextDueDate.$window.'.');
+            $mail->line('Due date: '.$this->expiresAt.$window.'.');
         }
 
         return $mail
-            ->action('View your requirements', route('users.show', $notifiable))
+            ->action('View your trainings', route('users.show', $notifiable))
             ->line('Log a completion before the due date to stay current.');
     }
 }

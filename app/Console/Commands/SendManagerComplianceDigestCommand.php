@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Organization;
 use App\Models\User;
 use App\Notifications\ManagerComplianceDigest;
-use App\Services\UserComplianceCalculator;
+use App\Services\TrainingStatusService;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Notification;
@@ -36,11 +36,11 @@ class SendManagerComplianceDigestCommand extends Command
 
     private const ROLLUP_LIMIT = 10;
 
-    public function handle(UserComplianceCalculator $calculator): int
+    public function handle(TrainingStatusService $status): int
     {
         $sent = 0;
 
-        Organization::query()->each(function (Organization $org) use ($calculator, &$sent): void {
+        Organization::query()->each(function (Organization $org) use ($status, &$sent): void {
             $now = CarbonImmutable::now($org->timezone);
 
             if (! $now->isMonday() || $now->hour !== 8) {
@@ -64,9 +64,9 @@ class SendManagerComplianceDigestCommand extends Command
 
             $digest = new ManagerComplianceDigest(
                 orgName: $org->name,
-                summary: $calculator->summarizeOrg($org),
-                topOverdue: $calculator->topOverdueUsers($org, self::ROLLUP_LIMIT),
-                topDueSoon: $calculator->topDueSoon($org, self::ROLLUP_LIMIT),
+                summary: $status->orgSummary($org),
+                topOverdue: $status->topOverdueUsers($org, self::ROLLUP_LIMIT),
+                topDueSoon: $status->topDueSoon($org, self::ROLLUP_LIMIT),
             );
 
             Notification::send($recipients, $digest);

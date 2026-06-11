@@ -30,21 +30,21 @@ class ManagerComplianceDigestTest extends TestCase
                     'overdue' => 3,
                     'due_soon' => 2,
                     'current' => 10,
-                    'never_started' => 1,
-                    'inactive' => 0,
+                    'not_started' => 1,
+                    'as_needed' => 0,
                 ],
                 'total_assignments' => 16,
                 'total_users' => 8,
                 'users_with_overdue' => 2,
             ],
             topOverdue: [
-                ['user_id' => 'u1', 'name' => 'Jane Doe', 'email' => 'jane@x.test', 'overdue_count' => 2],
+                ['user_id' => 'u1', 'name' => 'Jane Doe', 'overdue_count' => 2],
             ],
             topDueSoon: [
                 [
                     'user_id' => 'u2',
                     'user_name' => 'John Roe',
-                    'requirement_name' => 'Fall Protection',
+                    'training_name' => 'Fall Protection',
                     'next_due_date' => '2026-06-01',
                     'days_until_due' => 18,
                 ],
@@ -63,7 +63,7 @@ class ManagerComplianceDigestTest extends TestCase
         $this->assertCount(1, $payload['top_overdue']);
         $this->assertSame('Jane Doe', $payload['top_overdue'][0]['name']);
         $this->assertCount(1, $payload['top_due_soon']);
-        $this->assertSame('Fall Protection', $payload['top_due_soon'][0]['requirement_name']);
+        $this->assertSame('Fall Protection', $payload['top_due_soon'][0]['training_name']);
     }
 
     public function test_to_mail_renders_org_counts_and_rollups(): void

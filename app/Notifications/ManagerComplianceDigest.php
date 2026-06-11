@@ -16,8 +16,8 @@ use Illuminate\Notifications\Notification;
  *
  * The payload is computed once per org and fanned out, so the
  * constructor takes plain arrays (queue-serializable — no models). It
- * reuses `UserComplianceCalculator::summarizeOrg()` for the headline
- * counts plus `topOverdueUsers()` / `topDueSoon()` for the rollups.
+ * uses `TrainingStatusService::orgSummary()` for the headline counts
+ * plus `topOverdueUsers()` / `topDueSoon()` for the rollups (J4).
  *
  * Preference-gated like the other per-user notifications (`TYPE` =
  * `manager_digest`); the preferences UI only surfaces the toggle to
@@ -71,7 +71,7 @@ class ManagerComplianceDigest extends Notification implements ShouldBroadcast, S
                 $counts['current'],
             ))
             ->line(sprintf(
-                '%d of %d users have at least one overdue requirement.',
+                '%d of %d users have at least one overdue training.',
                 $this->summary['users_with_overdue'],
                 $this->summary['total_users'],
             ));
@@ -89,7 +89,7 @@ class ManagerComplianceDigest extends Notification implements ShouldBroadcast, S
                 $mail->line(sprintf(
                     '- %s — %s (due %s)',
                     $row['user_name'],
-                    $row['requirement_name'],
+                    $row['training_name'],
                     $row['next_due_date'] ?? 'soon',
                 ));
             }

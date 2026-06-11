@@ -2,7 +2,6 @@
 
 namespace App\Notifications;
 
-use App\Models\Assignment;
 use App\Notifications\Concerns\ChannelsWithGatedMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -12,10 +11,14 @@ use Illuminate\Notifications\Notification;
 
 /**
  * Sent to a User when the daily watchdog (`assignments:scan-due-states`)
- * sees one of their assignments cross *into* `overdue`. Edge-triggered:
- * fires once on the transition. An assignment that goes straight from
- * `current` to `overdue` (watchdog missed the `due_soon` window) fires
- * only this, not `AssignmentDueSoon`.
+ * sees one of their training assignments cross *into* `overdue`.
+ * Edge-triggered: fires once on the transition. A training that goes
+ * straight from `current` to `overdue` (watchdog missed the `due_soon`
+ * window) fires only this, not `AssignmentDueSoon`.
+ *
+ * Carries plain values, never models — training assignments hard-delete,
+ * and a serialized model reference would fail in the queue worker if the
+ * TA vanished before the job ran (J6).
  *
  * Delivers to the in-app inbox (`database`) + realtime bell
  * (`broadcast`); the `mail` channel is added by ChannelsWithGatedMail
@@ -29,8 +32,10 @@ class AssignmentOverdue extends Notification implements ShouldBroadcast, ShouldQ
     public const TYPE = 'assignment_overdue';
 
     public function __construct(
-        public readonly Assignment $assignment,
-        public readonly ?string $nextDueDate,
+        public readonly string $trainingAssignmentId,
+        public readonly string $trainingId,
+        public readonly string $name,
+        public readonly ?string $expiresAt,
         public readonly ?int $daysUntilDue,
     ) {}
 
@@ -41,10 +46,10 @@ class AssignmentOverdue extends Notification implements ShouldBroadcast, ShouldQ
     {
         return [
             'kind' => self::TYPE,
-            'assignment_id' => $this->assignment->id,
-            'requirement_id' => $this->assignment->requirement_id,
-            'name' => $this->assignment->name,
-            'next_due_date' => $this->nextDueDate,
+            'training_assignment_id' => $this->trainingAssignmentId,
+            'training_id' => $this->trainingId,
+            'name' => $this->name,
+            'next_due_date' => $this->expiresAt,
             'days_until_due' => $this->daysUntilDue,
         ];
     }
@@ -53,20 +58,20 @@ class AssignmentOverdue extends Notification implements ShouldBroadcast, ShouldQ
     {
         $mail = (new MailMessage)
             ->error()
-            ->subject('Requirement overdue: '.$this->assignment->name)
+            ->subject('Training overdue: '.$this->name)
             ->greeting('Hello '.$notifiable->name.',')
-            ->line('Your requirement "'.$this->assignment->name.'" is now overdue.');
+            ->line('Your training "'.$this->name.'" is now overdue.');
 
-        if ($this->nextDueDate !== null) {
+        if ($this->expiresAt !== null) {
             // daysUntilDue is negative once overdue — report the magnitude.
             $overdueBy = $this->daysUntilDue !== null
                 ? ' ('.abs($this->daysUntilDue).' day'.(abs($this->daysUntilDue) === 1 ? '' : 's').' overdue)'
                 : '';
-            $mail->line('Due date was: '.$this->nextDueDate.$overdueBy.'.');
+            $mail->line('Due date was: '.$this->expiresAt.$overdueBy.'.');
         }
 
         return $mail
-            ->action('View your requirements', route('users.show', $notifiable))
+            ->action('View your trainings', route('users.show', $notifiable))
             ->line('Please log a completion as soon as possible to return to compliance.');
     }
 }

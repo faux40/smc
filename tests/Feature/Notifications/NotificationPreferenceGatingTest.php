@@ -60,7 +60,7 @@ class NotificationPreferenceGatingTest extends TestCase
 
     private function dueSoonVia(): array
     {
-        return (new AssignmentDueSoon($this->assignment(), '2026-07-01', 30))->via($this->user);
+        return (new AssignmentDueSoon('ta-1', 'tr-1', 'Fall Protection', '2026-07-01', 30))->via($this->user);
     }
 
     public function test_default_with_no_rows_is_inapp_only_when_mail_flag_off(): void
@@ -116,7 +116,7 @@ class NotificationPreferenceGatingTest extends TestCase
 
         $this->assertSame([], $this->dueSoonVia());
 
-        $overdueVia = (new AssignmentOverdue($this->assignment(), '2026-04-01', -10))->via($this->user);
+        $overdueVia = (new AssignmentOverdue('ta-1', 'tr-1', 'Fall Protection', '2026-04-01', -10))->via($this->user);
         $this->assertContains('database', $overdueVia);
         $this->assertContains('broadcast', $overdueVia);
         $this->assertContains('mail', $overdueVia);
