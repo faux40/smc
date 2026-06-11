@@ -73,11 +73,10 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // user-prefs phase can add / remove / re-order them without
     // backend surgery. Manager+ via inline role gate in the controller.
     Route::get('api/dashboard/summary', [DashboardController::class, 'summary'])->name('dashboard.summary');
-    Route::get('api/dashboard/overdue-users', [DashboardController::class, 'overdueUsers'])->name('dashboard.overdue-users');
-    Route::get('api/dashboard/due-soon', [DashboardController::class, 'dueSoon'])->name('dashboard.due-soon');
+    // K2 consolidated actionable-rows feed (replaced due-soon + training-due-soon + overdue-users).
+    Route::get('api/dashboard/needs-action', [DashboardController::class, 'needsAction'])->name('dashboard.needs-action');
     Route::get('api/dashboard/recent-completions', [DashboardController::class, 'recentCompletions'])->name('dashboard.recent-completions');
     Route::get('api/dashboard/users-compliance', [DashboardController::class, 'usersCompliance'])->name('dashboard.users-compliance');
-    Route::get('api/dashboard/training-due-soon', [DashboardController::class, 'trainingSoon'])->name('dashboard.training-due-soon');
 
     Route::get('users', [UsersController::class, 'index'])->name('users.index');
     Route::post('users', [UsersController::class, 'store'])->name('users.store');

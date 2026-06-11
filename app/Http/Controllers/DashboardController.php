@@ -6,8 +6,9 @@ use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
-use App\Models\User;
+use App\Services\TrainingStatusService;
 use App\Services\UserComplianceCalculator;
+use App\Support\SourceChips;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,11 +25,14 @@ class DashboardController extends Controller
 {
     private const MANAGER_PLUS_ROLES = ['Owner', 'SuperAdmin', 'Admin', 'Manager'];
 
-    private const DUE_SOON_LIMIT = 50;
-
-    private const OVERDUE_USERS_LIMIT = 10;
-
     private const RECENT_COMPLETIONS_LIMIT = 10;
+
+    /** Worst-first ordering for the needs-action rows (K2). */
+    private const ACTION_RANK = [
+        TrainingStatusService::STATUS_OVERDUE => 0,
+        TrainingStatusService::STATUS_NOT_STARTED => 1,
+        TrainingStatusService::STATUS_DUE_SOON => 2,
+    ];
 
     public function __construct(private readonly UserComplianceCalculator $calculator) {}
 
@@ -50,22 +54,51 @@ class DashboardController extends Controller
         );
     }
 
-    public function overdueUsers(Request $request): JsonResponse
+    /**
+     * K2 — flat actionable rows for the "Needs action" widget: every TA
+     * whose canonical status is overdue / not_started / due_soon, with
+     * user name + source chips, worst first (most-overdue at the top).
+     * Grouping/filtering happens client-side.
+     */
+    public function needsAction(Request $request, TrainingStatusService $status): JsonResponse
     {
         $this->authorize($request);
 
-        return response()->json(
-            $this->calculator->topOverdueUsers($this->orgFor($request), self::OVERDUE_USERS_LIMIT),
-        );
-    }
+        $org = $this->orgFor($request);
+        $window = $org->expiringSoonDays();
 
-    public function dueSoon(Request $request): JsonResponse
-    {
-        $this->authorize($request);
+        $tas = TrainingAssignment::query()
+            ->where('org_id', $org->id)
+            ->with(['user:id,f_name,m_name,l_name,email', 'activeSources'])
+            ->get();
 
-        return response()->json(
-            $this->calculator->topDueSoon($this->orgFor($request), self::DUE_SOON_LIMIT),
-        );
+        $names = SourceChips::names($tas);
+
+        $rows = $tas
+            ->map(fn (TrainingAssignment $ta) => [
+                'ta' => $ta,
+                'status' => $status->statusFor($ta, $window),
+            ])
+            ->filter(fn (array $x) => isset(self::ACTION_RANK[$x['status']]))
+            ->map(fn (array $x) => [
+                'id' => $x['ta']->id,
+                'user_id' => $x['ta']->user_id,
+                'user_name' => $x['ta']->user?->name,
+                'training_id' => $x['ta']->training_id,
+                'training_name' => $x['ta']->name,
+                'status' => $x['status'],
+                'expires_at' => $x['ta']->expires_at?->toDateString(),
+                'days_until_due' => $status->daysUntilDue($x['ta']),
+                'sources' => SourceChips::for($x['ta'], $names),
+            ])
+            ->sortBy([
+                fn (array $a, array $b) => self::ACTION_RANK[$a['status']] <=> self::ACTION_RANK[$b['status']],
+                fn (array $a, array $b) => ($a['days_until_due'] ?? PHP_INT_MAX) <=> ($b['days_until_due'] ?? PHP_INT_MAX),
+                fn (array $a, array $b) => strcasecmp((string) $a['user_name'], (string) $b['user_name']),
+            ])
+            ->values();
+
+        return response()->json($rows);
     }
 
     public function recentCompletions(Request $request): JsonResponse
@@ -109,58 +142,6 @@ class DashboardController extends Controller
                 'credits_count' => $c->rqmtElements->count(),
             ];
         }));
-    }
-
-    public function trainingSoon(Request $request): JsonResponse
-    {
-        $this->authorize($request);
-
-        $org = $this->orgFor($request);
-        $window = $org->dueSoonDays();
-        $today = now()->toDateString();
-        $windowEnd = now()->addDays($window)->toDateString();
-
-        // Overdue: never started (null last_completed_at) OR already expired.
-        $overdueRows = TrainingAssignment::query()
-            ->where('org_id', $org->id)
-            ->where(function ($q) use ($today) {
-                $q->whereNull('last_completed_at')
-                    ->orWhere(function ($q2) use ($today) {
-                        $q2->whereNotNull('last_completed_at')
-                            ->whereNotNull('expires_at')
-                            ->where('expires_at', '<', $today);
-                    });
-            })
-            ->orderBy('name', 'asc')
-            ->get();
-
-        // Due soon: completed, not yet expired, within the org threshold window.
-        $dueSoonRows = TrainingAssignment::query()
-            ->where('org_id', $org->id)
-            ->whereNotNull('last_completed_at')
-            ->whereBetween('expires_at', [$today, $windowEnd])
-            ->orderBy('expires_at', 'asc')
-            ->get();
-
-        $allRows = $overdueRows->merge($dueSoonRows);
-        $userIds = $allRows->pluck('user_id')->unique()->all();
-        $users = User::query()
-            ->whereIn('id', $userIds)
-            ->get()
-            ->keyBy('id');
-
-        $toShape = fn (TrainingAssignment $ta) => [
-            'id' => $ta->id,
-            'user_id' => $ta->user_id,
-            'user_name' => $users[$ta->user_id]?->name ?? 'Unknown',
-            'training_name' => $ta->name,
-            'expires_at' => $ta->expires_at?->toDateString(),
-        ];
-
-        return response()->json([
-            'overdue' => $overdueRows->map($toShape)->values(),
-            'due_soon' => $dueSoonRows->map($toShape)->values(),
-        ]);
     }
 
     private function authorize(Request $request): void

@@ -8,14 +8,13 @@ use App\Events\UserStatusChanged;
 use App\Events\UserUpdated;
 use App\Http\Requests\CreateUserRequest;
 use App\Http\Requests\UpdateUserRequest;
-use App\Models\AssignmentSource;
 use App\Models\Completion;
-use App\Models\Requirement;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Models\User;
 use App\Services\TrainingStatusService;
 use App\Services\UserComplianceCalculator;
+use App\Support\SourceChips;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -272,11 +271,7 @@ class UsersController extends Controller
             ->orderBy('name')
             ->get();
 
-        $requirementNames = Requirement::query()
-            ->whereIn('id', $tas->flatMap(
-                fn (TrainingAssignment $ta) => $ta->activeSources->pluck('sourceable_id'),
-            )->filter()->unique())
-            ->pluck('name', 'id');
+        $requirementNames = SourceChips::names($tas);
 
         $grouped = $tas->groupBy(fn (TrainingAssignment $ta) => $status->statusFor($ta, $window));
 
@@ -313,10 +308,7 @@ class UsersController extends Controller
             'expires_at' => $ta->expires_at?->toDateString(),
             'last_completed_at' => $ta->last_completed_at?->toDateString(),
             'days_until_due' => $status->daysUntilDue($ta),
-            'sources' => $ta->activeSources->map(fn (AssignmentSource $s) => $s->sourceable_type === Requirement::class
-                ? ['type' => 'requirement', 'id' => $s->sourceable_id, 'name' => $requirementNames[$s->sourceable_id] ?? null]
-                : ['type' => 'direct', 'id' => null, 'name' => null],
-            )->values()->all(),
+            'sources' => SourceChips::for($ta, $requirementNames),
         ];
     }
 

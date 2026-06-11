@@ -54,7 +54,9 @@ const STATUS_ORDER: Record<OverallStatus, number> = {
     overdue: 0,
     due_soon: 1,
     never_started: 2,
+    not_started: 2, // canonical alias of never_started (K3 port pending)
     current: 3,
+    as_needed: 4,
     inactive: 4,
     none: 5,
 };

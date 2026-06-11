@@ -11,6 +11,8 @@ export type ComplianceStatus =
     | 'due_soon'
     | 'current'
     | 'never_started'
+    | 'not_started'
+    | 'as_needed'
     | 'inactive';
 
 // Optional count rendered inside the pill (e.g. "Overdue · 3") — used by the
@@ -38,9 +40,16 @@ const presentation = computed(() => {
                     'bg-emerald-100 text-emerald-900 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-100 dark:ring-emerald-800',
             };
         case 'never_started':
+        case 'not_started':
             return {
                 label: 'Not started',
                 classes: 'bg-muted text-muted-foreground ring-border',
+            };
+        case 'as_needed':
+            return {
+                label: 'As needed',
+                classes:
+                    'bg-sky-100 text-sky-900 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-100 dark:ring-sky-800',
             };
         case 'inactive':
             return {
