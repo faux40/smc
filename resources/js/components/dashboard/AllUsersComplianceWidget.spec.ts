@@ -21,8 +21,8 @@ const userRows = [
             overdue: 3,
             due_soon: 1,
             current: 0,
-            never_started: 0,
-            inactive: 0,
+            not_started: 0,
+            as_needed: 0,
         },
         overall_status: 'overdue',
         tag_ids: [],
@@ -35,8 +35,8 @@ const userRows = [
             overdue: 0,
             due_soon: 2,
             current: 1,
-            never_started: 0,
-            inactive: 0,
+            not_started: 0,
+            as_needed: 0,
         },
         overall_status: 'due_soon',
         tag_ids: [],
@@ -49,8 +49,8 @@ const userRows = [
             overdue: 1,
             due_soon: 0,
             current: 0,
-            never_started: 0,
-            inactive: 0,
+            not_started: 0,
+            as_needed: 0,
         },
         overall_status: 'overdue',
         tag_ids: [],
@@ -58,11 +58,12 @@ const userRows = [
 ];
 
 type DetailItem = {
-    requirement_name?: string | null;
+    training_name?: string | null;
     status?: string;
-    next_due_date?: string | null;
-    last_completion_date?: string | null;
+    expires_at?: string | null;
+    last_completed_at?: string | null;
     days_until_due?: number | null;
+    sources?: Array<{ type: string; id: string | null; name: string | null }>;
 };
 
 function mockGet(
@@ -80,7 +81,7 @@ function mockGet(
                 return Promise.resolve({ data: [] });
             }
 
-            if (url.endsWith('/compliance')) {
+            if (url.endsWith('/training-compliance')) {
                 return Promise.resolve({ data: detail });
             }
 
@@ -163,15 +164,15 @@ describe('AllUsersComplianceWidget', () => {
         expect(dataRowNames(wrapper)[0]).toContain('Bob');
     });
 
-    it('lazy-loads detail from /api/users/{id}/compliance on expand', async () => {
+    it('lazy-loads detail from /api/users/{id}/training-compliance on expand', async () => {
         mockGet({
             groups: {
                 overdue: [
                     {
-                        requirement_name: 'Fall Protection',
+                        training_name: 'Fall Protection',
                         status: 'overdue',
-                        next_due_date: '2026-06-05',
-                        last_completion_date: '2025-06-05',
+                        expires_at: '2026-06-05',
+                        last_completed_at: '2025-06-05',
                         days_until_due: -5,
                     },
                 ],
@@ -186,7 +187,7 @@ describe('AllUsersComplianceWidget', () => {
         await flushPromises();
 
         expect(axios.get).toHaveBeenCalledWith(
-            '/api/users/u1/compliance',
+            '/api/users/u1/training-compliance',
             expect.anything(),
         );
         expect(wrapper.text()).toContain('Fall Protection');
@@ -197,11 +198,14 @@ describe('AllUsersComplianceWidget', () => {
             groups: {
                 overdue: [
                     {
-                        requirement_name: 'Fall Protection',
+                        training_name: 'Fall Protection',
                         status: 'overdue',
-                        next_due_date: '2026-06-05',
-                        last_completion_date: '2025-06-05',
+                        expires_at: '2026-06-05',
+                        last_completed_at: '2025-06-05',
                         days_until_due: -5,
+                        sources: [
+                            { type: 'requirement', id: 'r1', name: 'OSHA General' },
+                        ],
                     },
                 ],
             },
@@ -217,6 +221,7 @@ describe('AllUsersComplianceWidget', () => {
         expect(detailRow.text()).toContain('2026-06-05');
         expect(detailRow.text()).toContain('2025-06-05');
         expect(detailRow.text()).toContain('-5');
+        expect(detailRow.text()).toContain('OSHA General');
     });
 
     it('includes every status group in the detail, worst first', async () => {
@@ -224,28 +229,28 @@ describe('AllUsersComplianceWidget', () => {
             groups: {
                 due_soon: [
                     {
-                        requirement_name: 'Forklift',
+                        training_name: 'Forklift',
                         status: 'due_soon',
-                        next_due_date: '2026-07-01',
-                        last_completion_date: '2025-07-01',
+                        expires_at: '2026-07-01',
+                        last_completed_at: '2025-07-01',
                         days_until_due: 21,
                     },
                 ],
                 current: [
                     {
-                        requirement_name: 'OSHA General',
+                        training_name: 'OSHA General',
                         status: 'current',
-                        next_due_date: '2027-01-01',
-                        last_completion_date: '2026-01-01',
+                        expires_at: '2027-01-01',
+                        last_completed_at: '2026-01-01',
                         days_until_due: 205,
                     },
                 ],
-                never_started: [
+                not_started: [
                     {
-                        requirement_name: 'Confined Space',
-                        status: 'never_started',
-                        next_due_date: null,
-                        last_completion_date: null,
+                        training_name: 'Confined Space',
+                        status: 'not_started',
+                        expires_at: null,
+                        last_completed_at: null,
                         days_until_due: null,
                     },
                 ],

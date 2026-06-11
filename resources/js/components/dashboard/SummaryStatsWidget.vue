@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /*
- * Five at-a-glance count cards: overdue / due-soon / current / never-
- * started / inactive. Owns its own fetch so widgets stay portable when
- * the future user-prefs phase lets people re-order / add / remove them.
+ * Five at-a-glance count cards over the canonical TA statuses: overdue /
+ * due-soon / current / not-started / as-needed (K4 — same engine as the
+ * pills and the needs-action widget). Owns its own fetch so widgets stay
+ * portable when the future user-prefs phase lets people re-order / add /
+ * remove them.
  */
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
@@ -14,8 +16,8 @@ interface SummaryPayload {
         overdue: number;
         due_soon: number;
         current: number;
-        never_started: number;
-        inactive: number;
+        not_started: number;
+        as_needed: number;
     };
     total_assignments: number;
     total_users: number;
@@ -64,14 +66,15 @@ const CARDS: Array<{
             'bg-emerald-50 text-emerald-900 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-100 dark:ring-emerald-800',
     },
     {
-        key: 'never_started',
+        key: 'not_started',
         label: 'Not started',
         classes: 'bg-muted text-muted-foreground ring-border',
     },
     {
-        key: 'inactive',
-        label: 'Inactive',
-        classes: 'bg-muted text-muted-foreground ring-border',
+        key: 'as_needed',
+        label: 'As needed',
+        classes:
+            'bg-sky-50 text-sky-900 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-100 dark:ring-sky-800',
     },
 ];
 

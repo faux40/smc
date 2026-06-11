@@ -2,12 +2,11 @@
 
 namespace Tests\Feature\Tenancy;
 
-use App\Models\Assignment;
+use App\Models\AssignmentSource;
 use App\Models\Organization;
-use App\Models\Requirement;
-use App\Models\RqmtElement;
 use App\Models\Tag;
 use App\Models\Training;
+use App\Models\TrainingAssignment;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -34,27 +33,23 @@ class DashboardUsersComplianceTest extends TestCase
         return User::factory()->for($org, 'organization')->withRole('Manager')->create();
     }
 
-    /** Give $user one initial-only, uncompleted, past-start assignment → overdue. */
+    /** Give $user one expired training assignment → overdue. */
     private function makeOverdue(Organization $org, User $user): void
     {
         $training = Training::factory()->for($org, 'organization')->create();
-        $req = Requirement::factory()->for($org, 'organization')->create();
-        RqmtElement::factory()
-            ->for($org, 'organization')
-            ->for($req, 'requirement')
-            ->state([
-                'module_type' => Training::class,
-                'module_id' => $training->id,
-                'initial_only' => true,
-                'repeating' => false,
-                'as_needed' => false,
-            ])
-            ->create();
-        Assignment::factory()
-            ->for($org, 'organization')
-            ->for($user, 'user')
-            ->for($req, 'requirement')
-            ->create(['start_date' => now()->subMonths(2)->toDateString(), 'end_date' => null]);
+        $ta = TrainingAssignment::factory()->create([
+            'org_id' => $org->id,
+            'user_id' => $user->id,
+            'training_id' => $training->id,
+            'last_completed_at' => now()->subYear(),
+            'expires_at' => now()->subDays(10),
+        ]);
+        AssignmentSource::create([
+            'training_assignment_id' => $ta->id,
+            'sourceable_type' => null,
+            'sourceable_id' => null,
+            'added_at' => now(),
+        ]);
     }
 
     public function test_returns_a_row_per_org_user_with_counts_and_overall_status(): void

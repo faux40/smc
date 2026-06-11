@@ -51,7 +51,7 @@ class DashboardApiTest extends TestCase
         $this->assertArrayHasKey('total_assignments', $response);
         $this->assertArrayHasKey('total_users', $response);
         $this->assertArrayHasKey('users_with_overdue', $response);
-        foreach (['overdue', 'due_soon', 'current', 'never_started', 'inactive'] as $bucket) {
+        foreach (['overdue', 'due_soon', 'current', 'not_started', 'as_needed'] as $bucket) {
             $this->assertArrayHasKey($bucket, $response['counts']);
         }
     }

@@ -29,13 +29,18 @@ interface UserRow {
     tag_ids: string[];
 }
 
-// Mirrors UserComplianceCalculator::row() — the fields the drill-down shows.
+// Mirrors the J3 training-compliance row — the fields the drill-down shows.
 interface DetailItem {
-    requirement_name?: string | null;
+    training_name?: string | null;
     status?: ComplianceStatus;
-    next_due_date?: string | null;
-    last_completion_date?: string | null;
+    expires_at?: string | null;
+    last_completed_at?: string | null;
     days_until_due?: number | null;
+    sources?: Array<{
+        type: 'direct' | 'requirement';
+        id: string | null;
+        name: string | null;
+    }>;
 }
 
 type SortKey = 'name' | 'status' | 'overdue' | 'due_soon';
@@ -65,9 +70,9 @@ const STATUS_ORDER: Record<OverallStatus, number> = {
 const DETAIL_GROUP_ORDER = [
     'overdue',
     'due_soon',
-    'never_started',
+    'not_started',
     'current',
-    'inactive',
+    'as_needed',
 ] as const;
 
 // Drill-down state, keyed by user id.
@@ -176,7 +181,7 @@ async function toggleExpand(row: UserRow): Promise<void> {
     try {
         const { data } = await axios.get<{
             groups: Record<string, DetailItem[]>;
-        }>(`/api/users/${row.user_id}/compliance`, {
+        }>(`/api/users/${row.user_id}/training-compliance`, {
             headers: defaultHeaders(),
         });
         // Every status group, worst first — the drill-down is the full
@@ -371,7 +376,7 @@ function defaultHeaders(): Record<string, string> {
                                     <li
                                         v-for="(item, i) in detail[row.user_id]"
                                         :key="i"
-                                        class="flex items-center justify-between gap-3"
+                                        class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
                                     >
                                         <span
                                             class="flex items-center gap-2 font-medium"
@@ -380,11 +385,24 @@ function defaultHeaders(): Record<string, string> {
                                                 v-if="item.status"
                                                 :status="item.status"
                                             />
-                                            {{ item.requirement_name ?? '—' }}
+                                            {{ item.training_name ?? '—' }}
+                                            <span
+                                                v-for="(chip, ci) in item.sources ??
+                                                []"
+                                                :key="ci"
+                                                class="rounded-full border border-border px-1.5 py-0.5 font-normal text-muted-foreground"
+                                            >
+                                                {{
+                                                    chip.type === 'requirement'
+                                                        ? (chip.name ??
+                                                          'Requirement')
+                                                        : 'Direct'
+                                                }}
+                                            </span>
                                         </span>
                                         <span class="text-muted-foreground">
-                                            <template v-if="item.next_due_date">
-                                                due {{ item.next_due_date
+                                            <template v-if="item.expires_at">
+                                                due {{ item.expires_at
                                                 }}<template
                                                     v-if="
                                                         item.days_until_due !=
@@ -397,7 +415,7 @@ function defaultHeaders(): Record<string, string> {
                                             </template>
                                             last completed
                                             {{
-                                                item.last_completion_date ??
+                                                item.last_completed_at ??
                                                 'never'
                                             }}
                                         </span>

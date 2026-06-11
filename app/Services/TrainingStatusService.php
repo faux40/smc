@@ -169,6 +169,63 @@ class TrainingStatusService
     }
 
     /**
+     * One row per org user: per-bucket counts, worst non-empty bucket as
+     * overall_status ('none' when the user has no TAs), and tag ids for
+     * the dashboard's tag chips. Feeds the all-users compliance table (K3).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function usersComplianceSummary(Organization $org): array
+    {
+        $window = $org->expiringSoonDays();
+
+        $tasByUser = TrainingAssignment::query()
+            ->where('org_id', $org->id)
+            ->get()
+            ->groupBy('user_id');
+
+        return User::query()
+            ->where('org_id', $org->id)
+            ->with('tags:id')
+            ->get()
+            ->map(function (User $user) use ($tasByUser, $window) {
+                $counts = array_fill_keys(self::STATUSES, 0);
+
+                foreach ($tasByUser->get($user->id, collect()) as $ta) {
+                    $counts[$this->statusFor($ta, $window)]++;
+                }
+
+                return [
+                    'user_id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'counts' => $counts,
+                    'overall_status' => $this->overallStatus($counts),
+                    'tag_ids' => $user->tags->pluck('id')->all(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Worst non-empty bucket by STATUSES precedence (overdue first); 'none'
+     * when the user has no assignments at all.
+     *
+     * @param  array<string, int>  $counts
+     */
+    private function overallStatus(array $counts): string
+    {
+        foreach (self::STATUSES as $bucket) {
+            if (($counts[$bucket] ?? 0) > 0) {
+                return $bucket;
+            }
+        }
+
+        return 'none';
+    }
+
+    /**
      * @return Collection<int, TrainingAssignment>
      */
     private function orgAssignments(Organization $org): Collection

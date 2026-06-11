@@ -7,7 +7,6 @@ use App\Models\Organization;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Services\TrainingStatusService;
-use App\Services\UserComplianceCalculator;
 use App\Support\SourceChips;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,15 +33,15 @@ class DashboardController extends Controller
         TrainingStatusService::STATUS_DUE_SOON => 2,
     ];
 
-    public function __construct(private readonly UserComplianceCalculator $calculator) {}
+    public function __construct(private readonly TrainingStatusService $status) {}
 
     public function summary(Request $request): JsonResponse
     {
         $this->authorize($request);
 
-        $summary = $this->calculator->summarizeOrg($this->orgFor($request));
-
-        return response()->json($summary);
+        return response()->json(
+            $this->status->orgSummary($this->orgFor($request)),
+        );
     }
 
     public function usersCompliance(Request $request): JsonResponse
@@ -50,7 +49,7 @@ class DashboardController extends Controller
         $this->authorize($request);
 
         return response()->json(
-            $this->calculator->usersComplianceSummary($this->orgFor($request)),
+            $this->status->usersComplianceSummary($this->orgFor($request)),
         );
     }
 
@@ -60,7 +59,7 @@ class DashboardController extends Controller
      * user name + source chips, worst first (most-overdue at the top).
      * Grouping/filtering happens client-side.
      */
-    public function needsAction(Request $request, TrainingStatusService $status): JsonResponse
+    public function needsAction(Request $request): JsonResponse
     {
         $this->authorize($request);
 
@@ -77,7 +76,7 @@ class DashboardController extends Controller
         $rows = $tas
             ->map(fn (TrainingAssignment $ta) => [
                 'ta' => $ta,
-                'status' => $status->statusFor($ta, $window),
+                'status' => $this->status->statusFor($ta, $window),
             ])
             ->filter(fn (array $x) => isset(self::ACTION_RANK[$x['status']]))
             ->map(fn (array $x) => [
@@ -88,7 +87,7 @@ class DashboardController extends Controller
                 'training_name' => $x['ta']->name,
                 'status' => $x['status'],
                 'expires_at' => $x['ta']->expires_at?->toDateString(),
-                'days_until_due' => $status->daysUntilDue($x['ta']),
+                'days_until_due' => $this->status->daysUntilDue($x['ta']),
                 'sources' => SourceChips::for($x['ta'], $names),
             ])
             ->sortBy([
