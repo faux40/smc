@@ -14,7 +14,13 @@ class CommentCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Comment $comment) {}
+    /** Captured at construct — the X-Origin-Tab header doesn't exist in the queue worker (O3). */
+    public readonly ?string $originTab;
+
+    public function __construct(public readonly Comment $comment)
+    {
+        $this->originTab = RealtimeOrigin::tab();
+    }
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
@@ -32,7 +38,7 @@ class CommentCreated implements ShouldBroadcast
             'author_id' => $this->comment->author_id,
             'parent_id' => $this->comment->parent_id,
             'body' => $this->comment->body,
-            'origin_tab' => RealtimeOrigin::tab(),
+            'origin_tab' => $this->originTab,
         ];
     }
 }

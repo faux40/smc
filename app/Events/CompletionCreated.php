@@ -20,10 +20,15 @@ class CompletionCreated implements ShouldBroadcast
      *                                self-actions (don't notify yourself
      *                                about your own completion record).
      */
+    /** Captured at construct — the X-Origin-Tab header doesn't exist in the queue worker (O3). */
+    public readonly ?string $originTab;
+
     public function __construct(
         public readonly Completion $completion,
         public readonly ?string $actorId = null,
-    ) {}
+    ) {
+        $this->originTab = RealtimeOrigin::tab();
+    }
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
@@ -44,7 +49,7 @@ class CompletionCreated implements ShouldBroadcast
             'cert_ident' => $this->completion->cert_ident,
             'notes' => $this->completion->notes,
             'rqmt_element_ids' => $this->completion->rqmtElements()->pluck('rqmt_elements.id')->all(),
-            'origin_tab' => RealtimeOrigin::tab(),
+            'origin_tab' => $this->originTab,
         ];
     }
 }

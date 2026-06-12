@@ -13,10 +13,15 @@ class RequirementDeleted implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    /** Captured at construct — the X-Origin-Tab header doesn't exist in the queue worker (O3). */
+    public readonly ?string $originTab;
+
     public function __construct(
         public readonly string $requirementId,
         public readonly string $orgId,
-    ) {}
+    ) {
+        $this->originTab = RealtimeOrigin::tab();
+    }
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
@@ -28,7 +33,7 @@ class RequirementDeleted implements ShouldBroadcast
     {
         return [
             'id' => $this->requirementId,
-            'origin_tab' => RealtimeOrigin::tab(),
+            'origin_tab' => $this->originTab,
         ];
     }
 }

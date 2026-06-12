@@ -164,6 +164,48 @@ class BulkTrainingAssignmentsApiTest extends TestCase
             ->assertJsonValidationErrors('requirement_id');
     }
 
+    public function test_cross_org_training_id_fails_validation(): void
+    {
+        $org = Organization::factory()->create();
+        $otherOrg = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $u = User::factory()->for($org, 'organization')->create();
+        $foreignTraining = Training::factory()->for($otherOrg, 'organization')->create();
+
+        // O1: org-scoped Rule::exists() rejects the foreign id at validation
+        // (422) — independent of the service-layer findOrFail guard.
+        $this->actingAs($admin)
+            ->postJson('/api/bulk-training-assignments', [
+                'user_ids' => [$u->id],
+                'source_type' => 'direct',
+                'training_id' => $foreignTraining->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('training_id');
+
+        $this->assertDatabaseCount('training_assignments', 0);
+    }
+
+    public function test_cross_org_requirement_id_fails_validation(): void
+    {
+        $org = Organization::factory()->create();
+        $otherOrg = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $u = User::factory()->for($org, 'organization')->create();
+        $foreignReq = Requirement::factory()->for($otherOrg, 'organization')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/bulk-training-assignments', [
+                'user_ids' => [$u->id],
+                'source_type' => 'requirement',
+                'requirement_id' => $foreignReq->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('requirement_id');
+
+        $this->assertDatabaseCount('training_assignments', 0);
+    }
+
     public function test_user_ids_must_not_be_empty(): void
     {
         $org = Organization::factory()->create();

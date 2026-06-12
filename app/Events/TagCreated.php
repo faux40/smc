@@ -14,7 +14,13 @@ class TagCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Tag $tag) {}
+    /** Captured at construct — the X-Origin-Tab header doesn't exist in the queue worker (O3). */
+    public readonly ?string $originTab;
+
+    public function __construct(public readonly Tag $tag)
+    {
+        $this->originTab = RealtimeOrigin::tab();
+    }
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
@@ -30,7 +36,7 @@ class TagCreated implements ShouldBroadcast
             'name' => $this->tag->name,
             'color' => $this->tag->color,
             'font_color' => $this->tag->font_color,
-            'origin_tab' => RealtimeOrigin::tab(),
+            'origin_tab' => $this->originTab,
         ];
     }
 }

@@ -14,7 +14,13 @@ class TrainingUpdated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Training $training) {}
+    /** Captured at construct — the X-Origin-Tab header doesn't exist in the queue worker (O3). */
+    public readonly ?string $originTab;
+
+    public function __construct(public readonly Training $training)
+    {
+        $this->originTab = RealtimeOrigin::tab();
+    }
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
@@ -32,7 +38,7 @@ class TrainingUpdated implements ShouldBroadcast
             'repeating' => $this->training->repeating,
             'std_freq_id' => $this->training->std_freq_id,
             'as_needed' => $this->training->as_needed,
-            'origin_tab' => RealtimeOrigin::tab(),
+            'origin_tab' => $this->originTab,
         ];
     }
 }

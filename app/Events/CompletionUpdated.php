@@ -14,7 +14,13 @@ class CompletionUpdated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Completion $completion) {}
+    /** Captured at construct — the X-Origin-Tab header doesn't exist in the queue worker (O3). */
+    public readonly ?string $originTab;
+
+    public function __construct(public readonly Completion $completion)
+    {
+        $this->originTab = RealtimeOrigin::tab();
+    }
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
@@ -35,7 +41,7 @@ class CompletionUpdated implements ShouldBroadcast
             'cert_ident' => $this->completion->cert_ident,
             'notes' => $this->completion->notes,
             'rqmt_element_ids' => $this->completion->rqmtElements()->pluck('rqmt_elements.id')->all(),
-            'origin_tab' => RealtimeOrigin::tab(),
+            'origin_tab' => $this->originTab,
         ];
     }
 }

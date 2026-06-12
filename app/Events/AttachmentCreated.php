@@ -14,7 +14,13 @@ class AttachmentCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly Attachment $attachment) {}
+    /** Captured at construct — the X-Origin-Tab header doesn't exist in the queue worker (O3). */
+    public readonly ?string $originTab;
+
+    public function __construct(public readonly Attachment $attachment)
+    {
+        $this->originTab = RealtimeOrigin::tab();
+    }
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
@@ -33,7 +39,7 @@ class AttachmentCreated implements ShouldBroadcast
             'mime' => $this->attachment->mime,
             'size' => $this->attachment->size,
             'uploaded_by_user_id' => $this->attachment->uploaded_by_user_id,
-            'origin_tab' => RealtimeOrigin::tab(),
+            'origin_tab' => $this->originTab,
         ];
     }
 }

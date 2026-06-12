@@ -14,7 +14,13 @@ class StdFrequencyCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly StdFrequency $frequency) {}
+    /** Captured at construct — the X-Origin-Tab header doesn't exist in the queue worker (O3). */
+    public readonly ?string $originTab;
+
+    public function __construct(public readonly StdFrequency $frequency)
+    {
+        $this->originTab = RealtimeOrigin::tab();
+    }
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
@@ -29,7 +35,7 @@ class StdFrequencyCreated implements ShouldBroadcast
             'id' => $this->frequency->id,
             'name' => $this->frequency->name,
             'repeat_days' => $this->frequency->repeat_days,
-            'origin_tab' => RealtimeOrigin::tab(),
+            'origin_tab' => $this->originTab,
         ];
     }
 }

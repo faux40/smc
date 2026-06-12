@@ -14,7 +14,13 @@ class RqmtElementUpdated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly RqmtElement $element) {}
+    /** Captured at construct — the X-Origin-Tab header doesn't exist in the queue worker (O3). */
+    public readonly ?string $originTab;
+
+    public function __construct(public readonly RqmtElement $element)
+    {
+        $this->originTab = RealtimeOrigin::tab();
+    }
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
@@ -33,7 +39,7 @@ class RqmtElementUpdated implements ShouldBroadcast
             'repeating' => $this->element->repeating,
             'std_freq_id' => $this->element->std_freq_id,
             'as_needed' => $this->element->as_needed,
-            'origin_tab' => RealtimeOrigin::tab(),
+            'origin_tab' => $this->originTab,
         ];
     }
 }

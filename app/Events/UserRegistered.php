@@ -14,7 +14,13 @@ class UserRegistered implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public readonly User $user) {}
+    /** Captured at construct — the X-Origin-Tab header doesn't exist in the queue worker (O3). */
+    public readonly ?string $originTab;
+
+    public function __construct(public readonly User $user)
+    {
+        $this->originTab = RealtimeOrigin::tab();
+    }
 
     /**
      * @return array<int, PrivateChannel>
@@ -33,7 +39,7 @@ class UserRegistered implements ShouldBroadcast
             'id' => $this->user->id,
             'name' => $this->user->name,
             'email' => $this->user->email,
-            'origin_tab' => RealtimeOrigin::tab(),
+            'origin_tab' => $this->originTab,
         ];
     }
 }
