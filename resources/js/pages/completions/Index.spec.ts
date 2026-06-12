@@ -33,9 +33,16 @@ const COMPLETIONS = [
         user_id: 'u1',
         module_type: 'App\\Models\\Training',
         module_id: 't1',
+        training_name: 'Fire Safety',
         completion_date: '2026-03-10',
         expire_date: '2027-03-10',
+        hours: 4.5,
+        cert_id: 'CERT20260310-001',
+        class_training_id: 'ct1',
+        class_id: 'cl1',
+        class_name: 'June Safety Day',
         rqmt_element_ids: ['e1', 'e2'],
+        effective_element_ids: ['e1', 'e2', 'e9'],
         can_edit: true,
         can_delete: true,
         certification_date: null,
@@ -47,9 +54,16 @@ const COMPLETIONS = [
         user_id: 'u2',
         module_type: 'App\\Models\\Training',
         module_id: 't1',
+        training_name: 'Fire Safety',
         completion_date: '2026-01-15',
         expire_date: null,
+        hours: null,
+        cert_id: null,
+        class_training_id: null,
+        class_id: null,
+        class_name: null,
         rqmt_element_ids: ['e3'],
+        effective_element_ids: ['e3'],
         can_edit: false,
         can_delete: false,
         certification_date: null,
@@ -86,14 +100,35 @@ describe('completions/Index — column control, sorting, filter persistence', ()
         authUser.value = { id: 'me', org_id: 'org1' };
     });
 
-    it('renders all 5 column headers by default', async () => {
+    it('renders all 7 column headers by default', async () => {
         const wrapper = await mountPage();
         const headers = wrapper.findAll('thead th').map((th) => th.text());
         expect(headers.some((h) => h.includes('User'))).toBe(true);
-        expect(headers.some((h) => h.includes('Module'))).toBe(true);
+        expect(headers.some((h) => h.includes('Training'))).toBe(true);
         expect(headers.some((h) => h.includes('Date'))).toBe(true);
         expect(headers.some((h) => h.includes('Expires'))).toBe(true);
+        expect(headers.some((h) => h.includes('Hours'))).toBe(true);
+        expect(headers.some((h) => h.includes('Source'))).toBe(true);
         expect(headers.some((h) => h.includes('Credits'))).toBe(true);
+    });
+
+    it('renders the server-resolved training name, hours, source and effective credits', async () => {
+        const wrapper = await mountPage();
+        const text = wrapper.text();
+
+        // Name comes straight from the payload — no client-side lookup.
+        expect(text).toContain('Fire Safety');
+        expect(text).toContain('4.5');
+
+        // Class-issued row links to its class; manual row is labeled.
+        const classLink = wrapper.find('a[href="/classes/cl1"]');
+        expect(classLink.exists()).toBe(true);
+        expect(classLink.text()).toContain('June Safety Day');
+        expect(text).toContain('Manual');
+
+        // Credits badge counts EFFECTIVE credits (pivot + module identity).
+        expect(text).toContain('3 element(s)');
+        expect(text).toContain('1 element(s)');
     });
 
     it('hides a column when the user has turned it off in preferences', async () => {

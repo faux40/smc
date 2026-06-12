@@ -91,6 +91,7 @@ interface CompletionHistoryRow {
     certification_date: string | null;
     expire_date: string | null;
     cert_ident: string | null;
+    hours: number | null;
     class_training_id: string | null;
     class_id: string | null;
     class_name: string | null;
@@ -527,6 +528,9 @@ function defaultHeaders(): Record<string, string> {
                                     Cert
                                 </th>
                                 <th class="px-3 py-2 text-left font-medium">
+                                    Hours
+                                </th>
+                                <th class="px-3 py-2 text-left font-medium">
                                     Source
                                 </th>
                                 <th class="px-3 py-2 text-left font-medium">
@@ -547,6 +551,9 @@ function defaultHeaders(): Record<string, string> {
                                 </td>
                                 <td class="px-3 py-2 text-xs">
                                     {{ c.cert_ident ?? '—' }}
+                                </td>
+                                <td class="px-3 py-2 text-xs">
+                                    {{ c.hours ?? '—' }}
                                 </td>
                                 <td class="px-3 py-2 text-xs">
                                     <a

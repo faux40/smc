@@ -33,9 +33,11 @@ interface UserPickerRow {
 
 const COMPLETIONS_COLUMNS = [
     { key: 'user', label: 'User', sortable: true },
-    { key: 'module', label: 'Module', sortable: true },
+    { key: 'module', label: 'Training', sortable: true },
     { key: 'date', label: 'Date', sortable: true },
     { key: 'expires', label: 'Expires', sortable: true },
+    { key: 'hours', label: 'Hours', sortable: true },
+    { key: 'source', label: 'Source', sortable: true },
     { key: 'credits', label: 'Credits', sortable: true },
 ];
 
@@ -81,7 +83,11 @@ const filteredRows = computed(() =>
 const userById = (id: string) => userPicker.value.find((u) => u.id === id);
 const trainingById = (id: string) => trainings.library.find((t) => t.id === id);
 
+// Server-resolved (M1); the lookup is only a fallback for stale rows.
 const moduleLabel = (row: CompletionRow): string => {
+    if (row.training_name) {
+        return row.training_name;
+    }
     if (row.module_type === 'App\\Models\\Training') {
         return trainingById(row.module_id)?.name ?? 'Training';
     }
@@ -95,7 +101,9 @@ const { sortKey, sortDir, toggleSort, sorted } = useTableSort<CompletionRow>(
         module: (r) => moduleLabel(r),
         date: (r) => r.completion_date ?? '',
         expires: (r) => r.expire_date ?? '',
-        credits: (r) => r.rqmt_element_ids.length,
+        hours: (r) => r.hours,
+        source: (r) => r.class_name ?? '',
+        credits: (r) => r.effective_element_ids.length,
     },
     { key: 'user', dir: 'asc' },
 );
@@ -282,9 +290,26 @@ function defaultHeaders(): Record<string, string> {
                     <span class="text-xs">{{ row.expire_date ?? '—' }}</span>
                 </template>
 
+                <template #col-hours="{ row }">
+                    <span class="text-xs">{{ row.hours ?? '—' }}</span>
+                </template>
+
+                <template #col-source="{ row }">
+                    <a
+                        v-if="row.class_id"
+                        :href="`/classes/${row.class_id}`"
+                        class="text-xs text-primary hover:underline"
+                    >
+                        {{ row.class_name ?? 'Class' }}
+                    </a>
+                    <span v-else class="text-xs text-muted-foreground">
+                        Manual
+                    </span>
+                </template>
+
                 <template #col-credits="{ row }">
                     <Badge variant="secondary">
-                        {{ row.rqmt_element_ids.length }} element(s)
+                        {{ row.effective_element_ids.length }} element(s)
                     </Badge>
                 </template>
 

@@ -69,6 +69,7 @@ class CompletionRequest extends FormRequest
             'certification_date' => ['nullable', 'date'],
             'expire_date' => ['nullable', 'date'],
             'cert_ident' => ['nullable', 'string', 'max:255'],
+            'hours' => ['nullable', 'numeric', 'min:0', 'max:9999'],
             'notes' => ['nullable', 'string'],
             'rqmt_element_ids' => ['required', 'array', 'min:1'],
             'rqmt_element_ids.*' => ['string', 'distinct'],

@@ -28,6 +28,7 @@ class Completion extends Model
         'cert_ident',
         'cert_id',
         'class_training_id',
+        'hours',
         'notes',
     ];
 
@@ -35,6 +36,7 @@ class Completion extends Model
         'completion_date' => 'date',
         'certification_date' => 'date',
         'expire_date' => 'date',
+        'hours' => 'float',
     ];
 
     public function user(): BelongsTo

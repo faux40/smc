@@ -4,9 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Completion;
 use App\Models\Organization;
-use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Services\TrainingStatusService;
+use App\Support\CompletionSerializer;
 use App\Support\SourceChips;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -114,33 +114,22 @@ class DashboardController extends Controller
             ->limit(self::RECENT_COMPLETIONS_LIMIT)
             ->get();
 
-        // Cache training names so we can label the module identity per
-        // row without N+1 lookups.
-        $trainingIds = $completions
-            ->where('module_type', Training::class)
-            ->pluck('module_id')
-            ->unique()
-            ->all();
-        $trainings = Training::query()
-            ->whereIn('id', $trainingIds)
-            ->get()
-            ->keyBy('id');
+        // Shared M1 serializer + the user name; credits_count is the
+        // effective credit (pivot ∪ module identity), so class-issued
+        // completions no longer read as zero credits.
+        $names = $completions->pluck('user', 'user_id')->map(fn ($u) => $u?->name);
+        $rows = collect(CompletionSerializer::collection($completions))
+            ->map(fn (array $row) => [
+                'id' => $row['id'],
+                'user_id' => $row['user_id'],
+                'user_name' => $names[$row['user_id']] ?? null,
+                'module_label' => $row['training_name'] ?? $row['module_type'],
+                'completion_date' => $row['completion_date'],
+                'expire_date' => $row['expire_date'],
+                'credits_count' => count($row['effective_element_ids']),
+            ]);
 
-        return response()->json($completions->map(function (Completion $c) use ($trainings) {
-            $moduleLabel = $c->module_type === Training::class
-                ? ($trainings[$c->module_id]->name ?? 'Training')
-                : $c->module_type;
-
-            return [
-                'id' => $c->id,
-                'user_id' => $c->user_id,
-                'user_name' => $c->user?->name,
-                'module_label' => $moduleLabel,
-                'completion_date' => optional($c->completion_date)->toDateString(),
-                'expire_date' => optional($c->expire_date)->toDateString(),
-                'credits_count' => $c->rqmtElements->count(),
-            ];
-        }));
+        return response()->json($rows);
     }
 
     private function authorize(Request $request): void

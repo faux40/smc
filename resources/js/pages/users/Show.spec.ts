@@ -83,6 +83,7 @@ const richCompliance = {
             certification_date: null,
             expire_date: '2026-06-01',
             cert_ident: 'CERT-1',
+            hours: 4.5,
             class_training_id: 'ct1',
             class_id: 'cl1',
             class_name: 'June Safety Day',
@@ -233,6 +234,7 @@ describe('users/Show — status lists + completion history (J3 payload)', () => 
         expect(history.exists()).toBe(true);
         expect(history.text()).toContain('Fall Protection');
         expect(history.text()).toContain('CERT-1');
+        expect(history.text()).toContain('4.5');
 
         const classLink = history.find('a[href="/classes/cl1"]');
         expect(classLink.exists()).toBe(true);

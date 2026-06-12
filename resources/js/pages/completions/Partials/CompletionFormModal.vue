@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/select';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import { realtimeTabId } from '@/echo';
+import { optionalNumber } from '@/lib/forms';
 import { useCompletionsStore } from '@/stores/completions';
 import type { CompletionRow } from '@/stores/completions';
 import { useErrorStore } from '@/stores/errors';
@@ -97,6 +98,7 @@ const form = reactive({
     certification_date: '' as string,
     expire_date: '' as string,
     cert_ident: '' as string,
+    hours: '' as string | number,
     notes: '' as string,
 });
 const submitting = ref(false);
@@ -184,6 +186,7 @@ watch(
             form.certification_date = props.target.certification_date ?? '';
             form.expire_date = props.target.expire_date ?? '';
             form.cert_ident = props.target.cert_ident ?? '';
+            form.hours = props.target.hours ?? '';
             form.notes = props.target.notes ?? '';
             await loadCandidates();
         } else {
@@ -195,6 +198,7 @@ watch(
             form.certification_date = '';
             form.expire_date = '';
             form.cert_ident = '';
+            form.hours = '';
             form.notes = '';
             candidates.value = [];
         }
@@ -244,6 +248,7 @@ const submit = async () => {
                 form.certification_date === '' ? null : form.certification_date,
             expire_date: form.expire_date === '' ? null : form.expire_date,
             cert_ident: form.cert_ident.trim() === '' ? null : form.cert_ident,
+            hours: optionalNumber(form.hours),
             notes: form.notes.trim() === '' ? null : form.notes,
         };
 
@@ -448,7 +453,7 @@ function defaultHeaders(): Record<string, string> {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-3 gap-3">
                     <div class="grid gap-2">
                         <Label for="c_expire">Expire date</Label>
                         <Input
@@ -470,6 +475,17 @@ function defaultHeaders(): Record<string, string> {
                         <InputError
                             :message="fieldErrors.message('cert_ident')"
                         />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="c_hours">Hours (optional)</Label>
+                        <Input
+                            id="c_hours"
+                            type="number"
+                            min="0"
+                            step="0.25"
+                            v-model="form.hours"
+                        />
+                        <InputError :message="fieldErrors.message('hours')" />
                     </div>
                 </div>
 

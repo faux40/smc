@@ -455,4 +455,140 @@ class CompletionsApiTest extends TestCase
         Event::assertDispatched(CompletionUpdated::class);
         Event::assertDispatched(CompletionDeleted::class);
     }
+
+    // ------------------------------------------------------------------
+    // M1 — enriched serialization: training name, hours, source class,
+    // effective credits (pivot ∪ module-identity).
+    // ------------------------------------------------------------------
+
+    public function test_index_rows_carry_training_name_hours_class_and_effective_credits(): void
+    {
+        ['admin' => $admin, 'user' => $user, 'training' => $training, 'element' => $elementA, 'org' => $org]
+            = $this->scaffold();
+        $training->update(['name' => 'CPR']);
+
+        // A second requirement binds the same training — its element is
+        // credited by module identity even though it's not pivot-linked.
+        $reqB = Requirement::factory()->for($org, 'organization')->create();
+        $elementB = RqmtElement::factory()
+            ->for($org, 'organization')
+            ->for($reqB, 'requirement')
+            ->state(['module_type' => Training::class, 'module_id' => $training->id])
+            ->create();
+
+        $class = \App\Models\TrainingClass::factory()->for($org, 'organization')
+            ->create(['name' => 'June Safety Day']);
+        $ct = \App\Models\ClassTraining::factory()->for($class, 'trainingClass')
+            ->create(['training_id' => $training->id, 'hours' => 4.5]);
+
+        $completion = Completion::factory()
+            ->for($org, 'organization')
+            ->for($user, 'user')
+            ->state([
+                'module_type' => Training::class,
+                'module_id' => $training->id,
+                'class_training_id' => $ct->id,
+                'hours' => 4.5,
+            ])
+            ->create();
+        $completion->rqmtElements()->sync([$elementA->id]);
+
+        $row = $this->actingAs($admin)
+            ->getJson('/api/completions')
+            ->assertOk()
+            ->json('0');
+
+        $this->assertSame('CPR', $row['training_name']);
+        $this->assertEquals(4.5, $row['hours']);
+        $this->assertSame($class->id, $row['class_id']);
+        $this->assertSame('June Safety Day', $row['class_name']);
+        // Pivot links stay as-entered (form prefill)…
+        $this->assertSame([$elementA->id], $row['rqmt_element_ids']);
+        // …while effective credits add every module-identity match.
+        $this->assertEqualsCanonicalizing(
+            [$elementA->id, $elementB->id],
+            $row['effective_element_ids'],
+        );
+    }
+
+    public function test_manual_completion_without_class_has_null_class_and_hours(): void
+    {
+        ['admin' => $admin, 'user' => $user, 'training' => $training, 'element' => $element, 'org' => $org]
+            = $this->scaffold();
+
+        $completion = Completion::factory()
+            ->for($org, 'organization')
+            ->for($user, 'user')
+            ->state(['module_type' => Training::class, 'module_id' => $training->id])
+            ->create();
+        $completion->rqmtElements()->sync([$element->id]);
+
+        $row = $this->actingAs($admin)
+            ->getJson('/api/completions')
+            ->assertOk()
+            ->json('0');
+
+        $this->assertNull($row['class_id']);
+        $this->assertNull($row['class_name']);
+        $this->assertNull($row['hours']);
+    }
+
+    public function test_store_accepts_optional_hours(): void
+    {
+        ['admin' => $admin, 'user' => $user, 'training' => $training, 'element' => $element] = $this->scaffold();
+
+        $row = $this->actingAs($admin)
+            ->postJson('/api/completions', [
+                'user_id' => $user->id,
+                'module_type' => Training::class,
+                'module_id' => $training->id,
+                'completion_date' => '2026-05-10',
+                'hours' => 2.5,
+                'rqmt_element_ids' => [$element->id],
+            ])
+            ->assertCreated()
+            ->json();
+
+        $this->assertEquals(2.5, $row['hours']);
+        $this->assertDatabaseHas('completions', ['id' => $row['id'], 'hours' => 2.5]);
+    }
+
+    public function test_store_rejects_negative_hours(): void
+    {
+        ['admin' => $admin, 'user' => $user, 'training' => $training, 'element' => $element] = $this->scaffold();
+
+        $this->actingAs($admin)
+            ->postJson('/api/completions', [
+                'user_id' => $user->id,
+                'module_type' => Training::class,
+                'module_id' => $training->id,
+                'completion_date' => '2026-05-10',
+                'hours' => -1,
+                'rqmt_element_ids' => [$element->id],
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_training_name_resolves_for_trashed_training(): void
+    {
+        ['admin' => $admin, 'user' => $user, 'training' => $training, 'element' => $element, 'org' => $org]
+            = $this->scaffold();
+        $training->update(['name' => 'Retired Course']);
+
+        $completion = Completion::factory()
+            ->for($org, 'organization')
+            ->for($user, 'user')
+            ->state(['module_type' => Training::class, 'module_id' => $training->id])
+            ->create();
+        $completion->rqmtElements()->sync([$element->id]);
+
+        $training->delete();
+
+        $row = $this->actingAs($admin)
+            ->getJson('/api/completions')
+            ->assertOk()
+            ->json('0');
+
+        $this->assertSame('Retired Course', $row['training_name']);
+    }
 }

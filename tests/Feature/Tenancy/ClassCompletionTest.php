@@ -273,6 +273,37 @@ class ClassCompletionTest extends TestCase
             fn ($e) => $e->completion->user_id === $bob->id && $e->completion->module_id === $t1->id);
     }
 
+    public function test_close_out_stamps_hours_from_the_class_training_snapshot(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $training->id,
+            'hours' => 6.5,
+        ]);
+        $alice = User::factory()->for($org, 'organization')->create();
+        $enrollment = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $alice->id]);
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/complete", [
+                'completion_date' => '2026-06-01',
+                'enrollments' => [
+                    ['id' => $enrollment->id, 'results' => [
+                        ['class_training_id' => $ct->id, 'passed' => true],
+                    ]],
+                ],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('completions', [
+            'user_id' => $alice->id,
+            'class_training_id' => $ct->id,
+            'hours' => 6.5,
+        ]);
+    }
+
     public function test_reclosing_with_failed_mark_broadcasts_completion_deleted(): void
     {
         $org = Organization::factory()->create();

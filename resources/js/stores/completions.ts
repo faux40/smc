@@ -22,12 +22,20 @@ export interface CompletionRow {
     user_id: string;
     module_type: string;
     module_id: string;
+    training_name: string | null;
     completion_date: string | null;
     certification_date: string | null;
     expire_date: string | null;
     cert_ident: string | null;
+    cert_id: string | null;
+    hours: number | null;
+    class_training_id: string | null;
+    class_id: string | null;
+    class_name: string | null;
     notes: string | null;
     rqmt_element_ids: string[];
+    /** Pivot links ∪ module-identity matches — what the credit really satisfies. */
+    effective_element_ids: string[];
     can_edit: boolean;
     can_delete: boolean;
 }
@@ -40,6 +48,7 @@ export interface CompletionCreatePayload {
     certification_date: string | null;
     expire_date: string | null;
     cert_ident: string | null;
+    hours: number | null;
     notes: string | null;
     rqmt_element_ids: string[];
 }

@@ -7,6 +7,7 @@ use App\Events\CompletionDeleted;
 use App\Events\CompletionUpdated;
 use App\Http\Requests\CompletionRequest;
 use App\Models\Completion;
+use App\Support\CompletionSerializer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,7 +30,7 @@ class CompletionsController extends Controller
 
         $rows = $query->orderBy('completion_date', 'desc')->get();
 
-        return response()->json($rows->map(fn (Completion $c) => $this->serialize($c)));
+        return response()->json(CompletionSerializer::collection($rows, withPermissions: true));
     }
 
     public function store(CompletionRequest $request): JsonResponse
@@ -47,6 +48,7 @@ class CompletionsController extends Controller
                 'certification_date' => $data['certification_date'] ?? null,
                 'expire_date' => $data['expire_date'] ?? null,
                 'cert_ident' => $data['cert_ident'] ?? null,
+                'hours' => $data['hours'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);
             $c->rqmtElements()->sync($data['rqmt_element_ids']);
@@ -56,7 +58,10 @@ class CompletionsController extends Controller
 
         event(new CompletionCreated($completion->fresh(), actorId: Auth::id()));
 
-        return response()->json($this->serialize($completion->fresh()->load('rqmtElements:id')), 201);
+        return response()->json(
+            CompletionSerializer::one($completion->fresh()->load('rqmtElements:id'), withPermissions: true),
+            201,
+        );
     }
 
     public function update(CompletionRequest $request, Completion $completion): JsonResponse
@@ -70,6 +75,7 @@ class CompletionsController extends Controller
                 'certification_date' => $data['certification_date'] ?? null,
                 'expire_date' => $data['expire_date'] ?? null,
                 'cert_ident' => $data['cert_ident'] ?? null,
+                'hours' => $data['hours'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);
             $completion->rqmtElements()->sync($data['rqmt_element_ids']);
@@ -77,7 +83,9 @@ class CompletionsController extends Controller
 
         event(new CompletionUpdated($completion->fresh()));
 
-        return response()->json($this->serialize($completion->fresh()->load('rqmtElements:id')));
+        return response()->json(
+            CompletionSerializer::one($completion->fresh()->load('rqmtElements:id'), withPermissions: true),
+        );
     }
 
     public function destroy(Completion $completion): JsonResponse
@@ -94,21 +102,4 @@ class CompletionsController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    private function serialize(Completion $c): array
-    {
-        return [
-            'id' => $c->id,
-            'user_id' => $c->user_id,
-            'module_type' => $c->module_type,
-            'module_id' => $c->module_id,
-            'completion_date' => optional($c->completion_date)->toDateString(),
-            'certification_date' => optional($c->certification_date)->toDateString(),
-            'expire_date' => optional($c->expire_date)->toDateString(),
-            'cert_ident' => $c->cert_ident,
-            'notes' => $c->notes,
-            'rqmt_element_ids' => $c->rqmtElements->pluck('id')->all(),
-            'can_edit' => Gate::check('update', $c),
-            'can_delete' => Gate::check('delete', $c),
-        ];
-    }
 }

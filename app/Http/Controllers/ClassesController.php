@@ -339,6 +339,7 @@ class ClassesController extends Controller
                         'expire_date' => $expiryFor[$ct->id],
                         'cert_id' => $certId,
                         'class_training_id' => $ct->id,
+                        'hours' => $ct->hours,
                     ]);
                 }
 

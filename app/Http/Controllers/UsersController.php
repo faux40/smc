@@ -8,12 +8,11 @@ use App\Events\UserStatusChanged;
 use App\Events\UserUpdated;
 use App\Http\Requests\CreateUserRequest;
 use App\Http\Requests\UpdateUserRequest;
-use App\Models\ClassTraining;
 use App\Models\Completion;
-use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Models\User;
 use App\Services\TrainingStatusService;
+use App\Support\CompletionSerializer;
 use App\Support\SourceChips;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -303,9 +302,8 @@ class UsersController extends Controller
     }
 
     /**
-     * Full completion history with training names resolved (incl. trashed
-     * trainings, so old credit stays legible). M1 will fold this into the
-     * shared completion serializer.
+     * Full completion history through the shared serializer (M1):
+     * training names (trashed incl.), hours, class links, effective credits.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -313,48 +311,11 @@ class UsersController extends Controller
     {
         $completions = Completion::query()
             ->where('user_id', $user->id)
-            ->with('rqmtElements')
+            ->with('rqmtElements:id')
             ->orderByDesc('completion_date')
             ->get();
 
-        $trainingNames = Training::withTrashed()
-            ->whereIn('id', $completions
-                ->where('module_type', Training::class)
-                ->pluck('module_id')
-                ->unique())
-            ->pluck('name', 'id');
-
-        // Class-issued completions link back to their class via the
-        // class_training snapshot row.
-        $classTrainings = ClassTraining::query()
-            ->whereIn('id', $completions->pluck('class_training_id')->filter()->unique())
-            ->with('trainingClass:id,name')
-            ->get()
-            ->keyBy('id');
-
-        return $completions->map(function (Completion $c) use ($trainingNames, $classTrainings) {
-            $sourceClass = $c->class_training_id !== null
-                ? $classTrainings[$c->class_training_id]?->trainingClass
-                : null;
-
-            return [
-                'id' => $c->id,
-                'module_type' => $c->module_type,
-                'module_id' => $c->module_id,
-                'training_name' => $c->module_type === Training::class
-                    ? ($trainingNames[$c->module_id] ?? null)
-                    : null,
-                'completion_date' => $c->completion_date?->toDateString(),
-                'certification_date' => $c->certification_date?->toDateString(),
-                'expire_date' => $c->expire_date?->toDateString(),
-                'cert_ident' => $c->cert_ident,
-                'class_training_id' => $c->class_training_id,
-                'class_id' => $sourceClass?->id,
-                'class_name' => $sourceClass?->name,
-                'notes' => $c->notes,
-                'rqmt_element_ids' => $c->rqmtElements->pluck('id')->all(),
-            ];
-        })->values()->all();
+        return CompletionSerializer::collection($completions);
     }
 
     public function store(CreateUserRequest $request): RedirectResponse
