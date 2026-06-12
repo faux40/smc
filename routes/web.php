@@ -1,8 +1,6 @@
 <?php
 
-use App\Http\Controllers\AssignmentsController;
 use App\Http\Controllers\AttachmentsController;
-use App\Http\Controllers\BulkAssignmentsController;
 use App\Http\Controllers\BulkTrainingAssignmentsController;
 use App\Http\Controllers\ClassDocumentsController;
 use App\Http\Controllers\ClassesController;
@@ -93,9 +91,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // is gated to admin/manager (any user) or self (own user); the
     // JSON endpoint applies the same gate before computing.
     Route::get('users/{user}', [UsersController::class, 'show'])->name('users.show');
-    Route::get('api/users/{user}/compliance', [UsersController::class, 'compliance'])->name('users.compliance');
-    // J3 TA-engine compliance payload (same viewDetail gate); K/L consumers
-    // migrate here, then the legacy endpoint above goes away with J5.
+    // J3 TA-engine compliance payload (same viewDetail gate as the page).
     Route::get('api/users/{user}/training-compliance', [UsersController::class, 'trainingCompliance'])->name('users.training-compliance');
     Route::patch('users/{user}', [UsersController::class, 'update'])->name('users.update');
     Route::post('users/{user}/disable', [UsersController::class, 'disable'])->name('users.disable');
@@ -115,19 +111,6 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // Tags library admin page. Read open to any org member (the page
     // hides write UI for non-admins); write API enforces role via policy.
     Route::inertia('tags', 'tags/Index')->name('tags.page');
-
-    // Tag-driven bulk assignment (Phase 13.1 flagship). preview returns
-    // the user × requirement cross-product for a chosen tag plus the
-    // already-assigned pairs so the matrix UI can pre-lock cells. store
-    // takes a hand-picked pairs[] list and creates the missing
-    // assignments in one transaction. Manager+ gated via AssignmentPolicy.
-    Route::get('api/bulk-assignments/preview', [BulkAssignmentsController::class, 'preview'])->name('bulk-assignments.preview');
-    Route::post('api/bulk-assignments', [BulkAssignmentsController::class, 'store'])->name('bulk-assignments.store');
-    // Bulk de-assign (Admin+): remove (soft-delete) or end (set end_date) the
-    // active assignment for each (user, requirement) pair.
-    Route::post('api/bulk-assignments/detach', [BulkAssignmentsController::class, 'detach'])->name('bulk-assignments.detach');
-
-    Route::inertia('workflows/bulk-assignment', 'workflows/BulkAssignment')->name('workflows.bulk-assignment');
 
     // Polymorphic comment API — consumed by <CommentsList>. Anyone in the
     // org can read/post; author-only edit; author OR admin+ delete.
@@ -207,15 +190,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // element in the org that points at the chosen module.
     Route::get('api/rqmt-elements/candidates', [RqmtElementsController::class, 'candidates'])->name('rqmt-elements.candidates');
 
-    // Assignments — flat API with query filters (?user_id=…, ?requirement_id=…).
-    // All gated Owner/SA/Admin in Phase 10; self-view added in 12.3.
-    // No UI yet — store is consumed by upcoming Phase 11/12 pages.
-    Route::get('api/assignments', [AssignmentsController::class, 'index'])->name('assignments.index');
-    Route::post('api/assignments', [AssignmentsController::class, 'store'])->name('assignments.store');
-    Route::patch('api/assignments/{assignment}', [AssignmentsController::class, 'update'])->name('assignments.update');
-    Route::delete('api/assignments/{assignment}', [AssignmentsController::class, 'destroy'])->name('assignments.destroy');
-
-    // Training assignments (redesign) — training-as-atom model.
+    // Training assignments — training-as-atom model.
     // store handles both direct (training_id) and requirement-exploded (requirement_id) sources.
     Route::get('api/training-assignments', [TrainingAssignmentsController::class, 'index'])->name('training-assignments.index');
     Route::post('api/training-assignments', [TrainingAssignmentsController::class, 'store'])->name('training-assignments.store');
@@ -235,7 +210,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::delete('api/completions/{completion}', [CompletionsController::class, 'destroy'])->name('completions.destroy');
 
     // Phase 13.2 admin pages for manual single-record entry. Lists +
-    // create / edit modal; the bulk flow lives at /workflows/bulk-assignment.
+    // create / edit modal; bulk assign lives in the assignments page modal.
     Route::inertia('assignments', 'assignments/Index')->name('assignments.page');
     Route::inertia('completions', 'completions/Index')->name('completions.page');
 

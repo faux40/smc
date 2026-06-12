@@ -2,9 +2,7 @@
 
 namespace Tests\Feature\Tenancy;
 
-use App\Models\Assignment;
 use App\Models\Organization;
-use App\Models\Requirement;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -117,37 +115,8 @@ class UserDetailPageTest extends TestCase
             ->assertNotFound();
     }
 
-    public function test_compliance_endpoint_returns_expected_shape(): void
-    {
-        $org = Organization::factory()->create();
-        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
-        $target = User::factory()->for($org, 'organization')->create();
-        // One assignment so the response isn't trivially empty.
-        $req = Requirement::factory()->for($org, 'organization')->create();
-        Assignment::factory()->for($org, 'organization')->for($target, 'user')->for($req, 'requirement')->create();
-
-        $response = $this->actingAs($admin)
-            ->getJson("/api/users/{$target->id}/compliance")
-            ->assertOk()
-            ->json();
-
-        $this->assertArrayHasKey('groups', $response);
-        $this->assertArrayHasKey('completions', $response);
-        foreach (['overdue', 'due_soon', 'current', 'never_started', 'inactive'] as $bucket) {
-            $this->assertArrayHasKey($bucket, $response['groups']);
-        }
-    }
-
-    public function test_compliance_endpoint_is_authz_gated(): void
-    {
-        $org = Organization::factory()->create();
-        $a = User::factory()->for($org, 'organization')->withRole('SelfEdit')->create();
-        $b = User::factory()->for($org, 'organization')->create();
-
-        $this->actingAs($a)
-            ->getJson("/api/users/{$b->id}/compliance")
-            ->assertForbidden();
-    }
+    // The compliance payload + its authz now live on the TA-engine
+    // endpoint — covered by UserTrainingComplianceTest (J5).
 
     public function test_guest_redirected_from_detail_page(): void
     {

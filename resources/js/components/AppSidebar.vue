@@ -9,7 +9,6 @@ import {
     LayoutGrid,
     Tags as TagsIcon,
     Users,
-    Workflow,
 } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
@@ -32,7 +31,6 @@ import { page as requirementsPage } from '@/routes/requirements';
 import { page as tagsPage } from '@/routes/tags';
 import { page as trainingsPage } from '@/routes/trainings';
 import { index as usersIndex } from '@/routes/users';
-import { bulkAssignment as bulkAssignmentPage } from '@/routes/workflows';
 import type { NavItem } from '@/types';
 
 const page = usePage();
@@ -89,11 +87,6 @@ const mainNavItems = computed<NavItem[]>(() => {
             title: 'Completions',
             href: completionsPage(),
             icon: CheckCircle2,
-        });
-        items.push({
-            title: 'Bulk assign',
-            href: bulkAssignmentPage(),
-            icon: Workflow,
         });
         items.push({
             title: 'Classes',

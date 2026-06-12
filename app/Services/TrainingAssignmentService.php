@@ -9,6 +9,8 @@ use App\Models\AssignmentSource;
 use App\Models\Requirement;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
+use App\Models\User;
+use App\Notifications\AssignmentCreatedForYou;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -42,6 +44,10 @@ class TrainingAssignmentService
 
         event(new TrainingAssignmentCreated($ta->fresh(), actorId: Auth::id()));
 
+        if ($ta->wasRecentlyCreated) {
+            $this->notifyAssigned($userId, $ta->name, trainingId: $trainingId);
+        }
+
         return $ta->fresh();
     }
 
@@ -58,8 +64,10 @@ class TrainingAssignmentService
             ->findOrFail($requirementId);
 
         $created = [];
+        $anyNew = false;
         foreach ($requirement->elements as $element) {
             $ta = $this->findOrCreate($orgId, $userId, $element->module_id);
+            $anyNew = $anyNew || $ta->wasRecentlyCreated;
 
             AssignmentSource::create([
                 'training_assignment_id' => $ta->id,
@@ -73,6 +81,11 @@ class TrainingAssignmentService
             event(new TrainingAssignmentCreated($ta->fresh(), actorId: Auth::id()));
 
             $created[] = $ta->fresh();
+        }
+
+        // One inbox nudge per requirement set, not one per exploded training.
+        if ($anyNew) {
+            $this->notifyAssigned($userId, $requirement->name, requirementId: $requirement->id);
         }
 
         return $created;
@@ -218,6 +231,26 @@ class TrainingAssignmentService
         foreach ($assignments as $ta) {
             event(new TrainingAssignmentCreated($ta->load('activeSources'), actorId: Auth::id()));
         }
+    }
+
+    /**
+     * "Assigned to you" inbox nudge. Self-actions are suppressed — the
+     * actor just clicked Save; pinging them is noise.
+     */
+    private function notifyAssigned(
+        string $userId,
+        string $name,
+        ?string $trainingId = null,
+        ?string $requirementId = null,
+    ): void {
+        if (Auth::id() === $userId) {
+            return;
+        }
+
+        User::query()
+            ->withoutGlobalScope('organization')
+            ->find($userId)
+            ?->notify(new AssignmentCreatedForYou($name, $trainingId, $requirementId));
     }
 
     private function findOrCreate(string $orgId, string $userId, string $trainingId): TrainingAssignment

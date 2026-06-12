@@ -14,7 +14,6 @@ use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Models\User;
 use App\Services\TrainingStatusService;
-use App\Services\UserComplianceCalculator;
 use App\Support\SourceChips;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -207,7 +206,7 @@ class UsersController extends Controller
     /**
      * Per-user detail page (Phase 13.3). Renders the Inertia shell with
      * the basic user header; compliance + completion timelines stream
-     * in via the JSON `compliance()` endpoint on mount.
+     * in via the JSON `trainingCompliance()` endpoint on mount.
      */
     public function show(User $user): Response
     {
@@ -245,20 +244,10 @@ class UsersController extends Controller
      * never_started / inactive) and returns the full completion
      * history (per the v15 "credit for unassigned" path stays visible).
      */
-    public function compliance(User $user, UserComplianceCalculator $calculator): JsonResponse
-    {
-        Gate::authorize('viewDetail', $user);
-
-        $payload = $calculator->compute($user);
-
-        return response()->json($payload);
-    }
-
     /**
      * J3 — TA-engine compliance payload: every training assignment grouped
      * into exactly one status bucket, plus the user's full completion
-     * history. Replaces the legacy compliance() payload as consumers move
-     * over (Phases K/L).
+     * history.
      */
     public function trainingCompliance(User $user, TrainingStatusService $status): JsonResponse
     {

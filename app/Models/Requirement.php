@@ -25,11 +25,6 @@ class Requirement extends Model
         return $this->hasMany(RqmtElement::class, 'requirement_id');
     }
 
-    public function assignments(): HasMany
-    {
-        return $this->hasMany(Assignment::class, 'requirement_id');
-    }
-
     /**
      * Count this requirement's elements by their timing type. Drives the
      * element-timing summary shown on assignment pills (a requirement can

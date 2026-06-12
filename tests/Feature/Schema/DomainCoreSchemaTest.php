@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Schema;
 
-use App\Models\Assignment;
 use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
@@ -90,32 +89,12 @@ class DomainCoreSchemaTest extends TestCase
         $this->assertSame($training->id, $element->module_id);
     }
 
-    public function test_assignments_table_shape(): void
+    public function test_legacy_assignments_table_is_gone(): void
     {
-        $this->assertTrue(Schema::hasColumns('assignments', [
-            'id', 'org_id', 'user_id', 'requirement_id',
-            'name', 'description',
-            'start_date', 'end_date',
-            'created_at', 'updated_at', 'deleted_at',
-        ]));
-        // Timing was dropped — it lives on the requirement's elements now,
-        // not flattened onto the assignment. Assert it's gone so we can't
-        // regress.
-        $this->assertFalse(Schema::hasColumn('assignments', 'initial_only'));
-        $this->assertFalse(Schema::hasColumn('assignments', 'std_freq_id'));
-
-        $org = Organization::factory()->create();
-        $user = User::factory()->for($org, 'organization')->create();
-        $req = Requirement::factory()->for($org, 'organization')->create();
-
-        $assignment = Assignment::factory()
-            ->for($org, 'organization')
-            ->for($user, 'user')
-            ->for($req, 'requirement')
-            ->create();
-
-        $this->assertSame($user->id, $assignment->user_id);
-        $this->assertSame($req->id, $assignment->requirement_id);
+        // J5: the legacy user×requirement assignments table was retired —
+        // training_assignments + assignment_sources are the only persisted
+        // assignment shape. Assert the drop so it can't quietly come back.
+        $this->assertFalse(Schema::hasTable('assignments'));
     }
 
     public function test_completions_table_shape(): void
@@ -214,8 +193,8 @@ class DomainCoreSchemaTest extends TestCase
             ])
             ->create();
 
-        // No Assignment row exists for this user×requirement pair.
-        $this->assertSame(0, Assignment::query()->where('user_id', $user->id)->count());
+        // The user has no training assignment for this module.
+        $this->assertSame(0, \App\Models\TrainingAssignment::query()->where('user_id', $user->id)->count());
 
         $completion = Completion::factory()
             ->for($org, 'organization')

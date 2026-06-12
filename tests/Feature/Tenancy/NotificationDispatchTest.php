@@ -5,7 +5,6 @@ namespace Tests\Feature\Tenancy;
 use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
-use App\Models\Tag;
 use App\Models\Training;
 use App\Models\User;
 use App\Notifications\AssignmentCreatedForYou;
@@ -16,9 +15,10 @@ use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
- * Phase 15.1 dispatch coverage: the two listener-driven notifications
- * fire on Created events, persist DB rows for the recipient, and
- * respect both suppression rules (self-action and bulk-fanout).
+ * Phase 15.1 dispatch coverage, repointed to the TA engine (J5):
+ * AssignmentCreatedForYou fires when a training assignment is genuinely
+ * new for the user (one per requirement set, none for extra sources,
+ * none for self-actions); CompletionRecordedForYou is unchanged.
  *
  * Uses Notification::fake() to inspect dispatch shape; pairs with a
  * non-fake assertion that database rows actually persist via the
@@ -50,62 +50,106 @@ class NotificationDispatchTest extends TestCase
         return [$org, $admin, $member, $req, $training, $element];
     }
 
-    public function test_assignment_created_notifies_the_assigned_user(): void
+    public function test_requirement_assignment_notifies_the_assigned_user_once(): void
     {
         Notification::fake();
         [, $admin, $member, $req] = $this->scaffoldOrg();
 
         $this->actingAs($admin)
-            ->postJson('/api/assignments', [
+            ->postJson('/api/training-assignments', [
+                'source_type' => 'requirement',
                 'user_id' => $member->id,
                 'requirement_id' => $req->id,
-                'start_date' => '2026-05-12',
             ])
             ->assertCreated();
 
-        // Name is the requirement snapshot the server copies in.
+        // One nudge per requirement set, named after the requirement.
+        Notification::assertSentToTimes($member, AssignmentCreatedForYou::class, 1);
         Notification::assertSentTo($member, AssignmentCreatedForYou::class, function ($n) use ($req) {
-            return $n->assignment->name === $req->name;
+            return $n->name === $req->name && $n->requirementId === $req->id;
         });
         Notification::assertNotSentTo($admin, AssignmentCreatedForYou::class);
     }
 
-    public function test_assignment_created_via_bulk_does_not_notify(): void
+    public function test_direct_assignment_notifies_with_the_training_name(): void
     {
         Notification::fake();
-        [$org, $admin, $member, $req] = $this->scaffoldOrg();
-        $tag = Tag::factory()->for($org, 'organization')->create();
-        $member->tags()->attach($tag->id);
-        $req->tags()->attach($tag->id);
+        [, $admin, $member, , $training] = $this->scaffoldOrg();
 
         $this->actingAs($admin)
-            ->postJson('/api/bulk-assignments', [
-                'pairs' => [
-                    ['user_id' => $member->id, 'requirement_id' => $req->id],
-                ],
-                'start_date' => '2026-05-12',
+            ->postJson('/api/training-assignments', [
+                'source_type' => 'direct',
+                'user_id' => $member->id,
+                'training_id' => $training->id,
             ])
             ->assertCreated();
 
-        // The bulk path sets fromBulk=true; the listener must skip even
-        // though the underlying AssignmentCreated event still fires for
-        // the realtime store consumer.
-        Notification::assertNotSentTo($member, AssignmentCreatedForYou::class);
+        Notification::assertSentTo($member, AssignmentCreatedForYou::class, function ($n) use ($training) {
+            return $n->name === $training->name && $n->trainingId === $training->id;
+        });
+    }
+
+    public function test_adding_a_second_source_does_not_renotify(): void
+    {
+        Notification::fake();
+        [, $admin, $member, $req, $training] = $this->scaffoldOrg();
+
+        // First assignment creates the TA and notifies.
+        $this->actingAs($admin)
+            ->postJson('/api/training-assignments', [
+                'source_type' => 'direct',
+                'user_id' => $member->id,
+                'training_id' => $training->id,
+            ])
+            ->assertCreated();
+
+        // The requirement covers the same training — TA already exists, so
+        // the user gains a source but no new obligation: stay silent.
+        $this->actingAs($admin)
+            ->postJson('/api/training-assignments', [
+                'source_type' => 'requirement',
+                'user_id' => $member->id,
+                'requirement_id' => $req->id,
+            ])
+            ->assertCreated();
+
+        Notification::assertSentToTimes($member, AssignmentCreatedForYou::class, 1);
+    }
+
+    public function test_bulk_assignment_notifies_each_user_once(): void
+    {
+        // J5 semantics change: the legacy tag-matrix bulk suppressed
+        // notifications (50 pairs per user); the TA bulk assigns one
+        // training/requirement to many users — one nudge each is signal,
+        // not noise.
+        Notification::fake();
+        [$org, $admin, $member, $req] = $this->scaffoldOrg();
+        $second = User::factory()->for($org, 'organization')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/bulk-training-assignments', [
+                'source_type' => 'requirement',
+                'user_ids' => [$member->id, $second->id],
+                'requirement_id' => $req->id,
+            ])
+            ->assertCreated();
+
+        Notification::assertSentToTimes($member, AssignmentCreatedForYou::class, 1);
+        Notification::assertSentToTimes($second, AssignmentCreatedForYou::class, 1);
     }
 
     public function test_assignment_created_for_self_does_not_notify(): void
     {
-        // Self-action: admin assigning a requirement to themselves
-        // doesn't generate a notification (they just clicked Save).
+        // Self-action: admin assigning a training to themselves doesn't
+        // generate a notification (they just clicked Save).
         Notification::fake();
-        [$org, $admin] = $this->scaffoldOrg();
-        $req = Requirement::factory()->for($org, 'organization')->create();
+        [, $admin, , , $training] = $this->scaffoldOrg();
 
         $this->actingAs($admin)
-            ->postJson('/api/assignments', [
+            ->postJson('/api/training-assignments', [
+                'source_type' => 'direct',
                 'user_id' => $admin->id,
-                'requirement_id' => $req->id,
-                'start_date' => '2026-05-12',
+                'training_id' => $training->id,
             ])
             ->assertCreated();
 
@@ -157,10 +201,10 @@ class NotificationDispatchTest extends TestCase
         [, $admin, $member, $req] = $this->scaffoldOrg();
 
         $this->actingAs($admin)
-            ->postJson('/api/assignments', [
+            ->postJson('/api/training-assignments', [
+                'source_type' => 'requirement',
                 'user_id' => $member->id,
                 'requirement_id' => $req->id,
-                'start_date' => '2026-05-12',
             ])
             ->assertCreated();
 

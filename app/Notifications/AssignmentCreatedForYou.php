@@ -2,7 +2,6 @@
 
 namespace App\Notifications;
 
-use App\Models\Assignment;
 use App\Notifications\Concerns\ChannelsWithGatedMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -11,8 +10,17 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
- * Sent to a User when an admin / manager creates an assignment for
- * them. Delivers to the in-app inbox (`database`) + realtime bell
+ * Sent to a User when an admin / manager assigns them a training —
+ * directly (name = the training) or via a requirement set (name = the
+ * requirement; one notification per set, not one per exploded
+ * training). Fires only when the assignment is genuinely new for the
+ * user, not when an existing training gains an extra source.
+ *
+ * Carries plain values, never models — training assignments
+ * hard-delete, and a serialized model reference would fail in the queue
+ * worker if the TA vanished before the job ran (J6).
+ *
+ * Delivers to the in-app inbox (`database`) + realtime bell
  * (`broadcast`); the `mail` channel is added by ChannelsWithGatedMail
  * when the deployment flag is on (Phase 15.4).
  */
@@ -23,7 +31,11 @@ class AssignmentCreatedForYou extends Notification implements ShouldBroadcast, S
     /** Preference key — see NotificationPreference::TYPES. */
     public const TYPE = 'assignment_created';
 
-    public function __construct(public readonly Assignment $assignment) {}
+    public function __construct(
+        public readonly string $name,
+        public readonly ?string $trainingId = null,
+        public readonly ?string $requirementId = null,
+    ) {}
 
     /**
      * Payload persisted into notifications.data + delivered to the
@@ -36,32 +48,19 @@ class AssignmentCreatedForYou extends Notification implements ShouldBroadcast, S
     {
         return [
             'kind' => self::TYPE,
-            'assignment_id' => $this->assignment->id,
-            'requirement_id' => $this->assignment->requirement_id,
-            'name' => $this->assignment->name,
-            'description' => $this->assignment->description,
-            'start_date' => optional($this->assignment->start_date)->toDateString(),
-            'end_date' => optional($this->assignment->end_date)->toDateString(),
+            'name' => $this->name,
+            'training_id' => $this->trainingId,
+            'requirement_id' => $this->requirementId,
         ];
     }
 
     public function toMail(object $notifiable): MailMessage
     {
-        $mail = (new MailMessage)
-            ->subject('New requirement assigned: '.$this->assignment->name)
+        return (new MailMessage)
+            ->subject('New assignment: '.$this->name)
             ->greeting('Hello '.$notifiable->name.',')
-            ->line('A new requirement has been assigned to you: '.$this->assignment->name.'.');
-
-        if ($this->assignment->description) {
-            $mail->line($this->assignment->description);
-        }
-
-        if ($this->assignment->start_date) {
-            $mail->line('Start date: '.$this->assignment->start_date->toDateString());
-        }
-
-        return $mail
-            ->action('View your requirements', route('users.show', $notifiable))
-            ->line('Log your completion once the requirement is met.');
+            ->line('A new training assignment has been added for you: '.$this->name.'.')
+            ->action('View your trainings', route('users.show', $notifiable))
+            ->line('Check your detail page for the due date and current status.');
     }
 }

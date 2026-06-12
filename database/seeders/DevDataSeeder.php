@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Assignment;
 use App\Models\AssignmentSource;
 use App\Models\Completion;
 use App\Models\Organization;
@@ -167,10 +166,10 @@ class DevDataSeeder extends Seeder
             $users = $this->seedUsers($org);
             $trainings = $this->seedTrainings($org, $freqByName);
             $requirements = $this->seedRequirements($org, $trainings);
-            $this->seedAssignments($org, $users, $requirements);
+            $pairs = $this->pickAssignmentPairs($users, $requirements);
             $this->seedUserProfiles($users);
             $this->seedTags($org, $users, $trainings, $requirements);
-            $this->seedTrainingAssignments($org, $trainings);
+            $this->seedTrainingAssignments($org, $trainings, $pairs);
         });
     }
 
@@ -279,42 +278,39 @@ class DevDataSeeder extends Seeder
      * @param  Collection<int, User>  $users
      * @param  Collection<int, Requirement>  $requirements
      */
-    private function seedAssignments(
-        Organization $org,
+    /**
+     * Pick which (user, requirement) combinations get assigned (J5: an
+     * in-memory list — the legacy assignments table is gone; TAs are the
+     * only persisted assignment shape).
+     *
+     * @return Collection<int, array{user: User, requirement: Requirement}>
+     */
+    private function pickAssignmentPairs(
         Collection $users,
         Collection $requirements,
-    ): void {
+    ): Collection {
         $shuffled = $users->shuffle();
 
         $fullyCovered = $shuffled->take(2);
         $partial = $shuffled->slice(2, 12);
         // The remainder (~6 users) get no assignments.
 
+        $pairs = collect();
+
         foreach ($fullyCovered as $user) {
             foreach ($requirements as $req) {
-                $this->createAssignment($org->id, $user, $req);
+                $pairs->push(['user' => $user, 'requirement' => $req]);
             }
         }
 
         foreach ($partial as $user) {
             $count = random_int(1, 3);
             foreach ($requirements->shuffle()->take($count) as $req) {
-                $this->createAssignment($org->id, $user, $req);
+                $pairs->push(['user' => $user, 'requirement' => $req]);
             }
         }
-    }
 
-    private function createAssignment(string $orgId, User $user, Requirement $req): void
-    {
-        Assignment::create([
-            'org_id' => $orgId,
-            'user_id' => $user->id,
-            'requirement_id' => $req->id,
-            'name' => $req->name,
-            'description' => $req->description,
-            'start_date' => now()->subDays(random_int(30, 365))->toDateString(),
-            'end_date' => null,
-        ]);
+        return $pairs;
     }
 
     /**
@@ -414,21 +410,17 @@ class DevDataSeeder extends Seeder
     private function seedTrainingAssignments(
         Organization $org,
         Collection $trainings,
+        Collection $pairs,
     ): void {
         $reqToTrainings = collect(self::REQUIREMENT_MAP)
             ->mapWithKeys(fn ($rm) => [$rm['name'] => $rm['trainings']]);
-
-        $assignments = Assignment::withoutGlobalScope('organization')
-            ->where('org_id', $org->id)
-            ->with('requirement')
-            ->get();
 
         // Maps "user_id|training_id" → training_assignment_id for dedup + multi-source linking.
         $seen = [];
         $index = 0;
 
-        foreach ($assignments as $assignment) {
-            $trainingNames = $reqToTrainings->get($assignment->requirement->name, []);
+        foreach ($pairs as $pair) {
+            $trainingNames = $reqToTrainings->get($pair['requirement']->name, []);
 
             foreach ($trainingNames as $trainingName) {
                 $training = $trainings->get($trainingName);
@@ -436,14 +428,14 @@ class DevDataSeeder extends Seeder
                     continue;
                 }
 
-                $key = $assignment->user_id . '|' . $training->id;
+                $key = $pair['user']->id . '|' . $training->id;
 
                 if (isset($seen[$key])) {
                     // TA exists from another requirement — add a second source row.
                     AssignmentSource::create([
                         'training_assignment_id' => $seen[$key],
                         'sourceable_type'        => Requirement::class,
-                        'sourceable_id'          => $assignment->requirement_id,
+                        'sourceable_id'          => $pair['requirement']->id,
                         'added_at'               => now(),
                     ]);
                     continue;
@@ -451,7 +443,7 @@ class DevDataSeeder extends Seeder
 
                 $ta = TrainingAssignment::create([
                     'org_id'            => $org->id,
-                    'user_id'           => $assignment->user_id,
+                    'user_id'           => $pair['user']->id,
                     'training_id'       => $training->id,
                     'name'              => $trainingName,
                     'last_completed_at' => null,
@@ -461,7 +453,7 @@ class DevDataSeeder extends Seeder
                 AssignmentSource::create([
                     'training_assignment_id' => $ta->id,
                     'sourceable_type'        => Requirement::class,
-                    'sourceable_id'          => $assignment->requirement_id,
+                    'sourceable_id'          => $pair['requirement']->id,
                     'added_at'               => now(),
                 ]);
 
@@ -475,7 +467,7 @@ class DevDataSeeder extends Seeder
                     // and expires_at on the TrainingAssignment using expire_date.
                     Completion::create([
                         'org_id' => $org->id,
-                        'user_id' => $assignment->user_id,
+                        'user_id' => $pair['user']->id,
                         'module_type' => Training::class,
                         'module_id' => $training->id,
                         'completion_date' => $completionDate,

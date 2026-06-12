@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Notifications;
 
-use App\Models\Assignment;
 use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\User;
@@ -42,14 +41,6 @@ class MailChannelTest extends TestCase
         $this->user = User::factory()->for($this->org, 'organization')->create();
     }
 
-    private function assignment(): Assignment
-    {
-        return Assignment::factory()
-            ->for($this->org, 'organization')
-            ->for($this->user, 'user')
-            ->create();
-    }
-
     private function completion(): Completion
     {
         return Completion::factory()
@@ -65,10 +56,8 @@ class MailChannelTest extends TestCase
      */
     private function allNotifications(): array
     {
-        $assignment = $this->assignment();
-
         return [
-            new AssignmentCreatedForYou($assignment),
+            new AssignmentCreatedForYou('Fall Protection', 'tr-1', null),
             new CompletionRecordedForYou($this->completion()),
             new AssignmentDueSoon('ta-1', 'tr-1', 'Fall Protection', '2026-07-01', 30),
             new AssignmentOverdue('ta-1', 'tr-1', 'Fall Protection', '2026-04-01', -20),
@@ -144,11 +133,10 @@ class MailChannelTest extends TestCase
 
     public function test_assignment_created_to_mail(): void
     {
-        $assignment = $this->assignment();
-        $mail = (new AssignmentCreatedForYou($assignment))->toMail($this->user);
+        $mail = (new AssignmentCreatedForYou('Fall Protection', 'tr-1', null))->toMail($this->user);
 
         $this->assertInstanceOf(MailMessage::class, $mail);
-        $this->assertStringContainsString($assignment->name, $mail->subject);
+        $this->assertStringContainsString('Fall Protection', $mail->subject);
         $this->assertSame(route('users.show', $this->user), $mail->actionUrl);
     }
 

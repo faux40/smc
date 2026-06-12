@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Seeding;
 
-use App\Models\Assignment;
+use App\Models\AssignmentSource;
 use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
@@ -153,13 +153,17 @@ class DevDataSeederTest extends TestCase
             ->get()
             ->filter(fn (User $u) => $u->email !== 'john@barrittgroup.com');
 
-        // Count assignments per user.
-        $perUser = Assignment::query()
-            ->withoutGlobalScope('organization')
-            ->where('org_id', $org->id)
-            ->get()
+        // Count distinct assigned requirements per user via the TA sources
+        // (J5: the legacy assignments table is gone — requirement sources on
+        // training assignments are the persisted record of the fan-out).
+        $perUser = AssignmentSource::query()
+            ->where('sourceable_type', Requirement::class)
+            ->whereNull('removed_at')
+            ->join('training_assignments', 'training_assignments.id', '=', 'assignment_sources.training_assignment_id')
+            ->where('training_assignments.org_id', $org->id)
+            ->get(['training_assignments.user_id as user_id', 'assignment_sources.sourceable_id as sourceable_id'])
             ->groupBy('user_id')
-            ->map(fn ($rows) => $rows->count());
+            ->map(fn ($rows) => $rows->pluck('sourceable_id')->unique()->count());
 
         // Two users are fully covered (4 requirements each).
         $fullyCovered = $perUser->filter(fn ($n) => $n === 4);

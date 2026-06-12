@@ -3,9 +3,7 @@
 namespace App\Providers;
 
 use App\Auth\SafeEloquentUserProvider;
-use App\Events\AssignmentCreated;
 use App\Events\CompletionCreated;
-use App\Listeners\NotifyAssignmentCreated;
 use App\Listeners\NotifyCompletionRecorded;
 use App\Models\Completion;
 use App\Observers\CompletionObserver;
@@ -59,7 +57,8 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function registerEventListeners(): void
     {
-        Event::listen(AssignmentCreated::class, NotifyAssignmentCreated::class);
+        // AssignmentCreatedForYou is dispatched directly by
+        // TrainingAssignmentService (J5) — no event indirection needed.
         Event::listen(CompletionCreated::class, NotifyCompletionRecorded::class);
     }
 

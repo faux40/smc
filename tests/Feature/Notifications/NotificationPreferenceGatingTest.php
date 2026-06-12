@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Notifications;
 
-use App\Models\Assignment;
 use App\Models\NotificationPreference;
 use App\Models\Organization;
 use App\Models\User;
@@ -38,14 +37,6 @@ class NotificationPreferenceGatingTest extends TestCase
 
         $this->org = Organization::factory()->create();
         $this->user = User::factory()->for($this->org, 'organization')->create();
-    }
-
-    private function assignment(): Assignment
-    {
-        return Assignment::factory()
-            ->for($this->org, 'organization')
-            ->for($this->user, 'user')
-            ->create();
     }
 
     private function optOut(string $type, string $channel): void
