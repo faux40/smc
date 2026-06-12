@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\CompleteClass;
 use App\Events\ClassChanged;
 use App\Events\CompletionCreated;
 use App\Events\CompletionDeleted;
@@ -14,7 +15,6 @@ use App\Models\TrainingClass;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -219,7 +219,7 @@ class ClassesController extends Controller
      * dates, and lock the class to view-only. Idempotent: a completed class
      * can't be re-closed.
      */
-    public function complete(Request $request, TrainingClass $class): JsonResponse
+    public function complete(Request $request, TrainingClass $class, CompleteClass $action): JsonResponse
     {
         Gate::authorize('update', $class);
         abort_if($class->status === 'completed', 422, 'This class is already completed.');
@@ -246,115 +246,16 @@ class ClassesController extends Controller
             'trainings.*.expire_date' => ['nullable', 'date'],
         ]);
 
-        $completionDate = CarbonImmutable::parse($data['completion_date']);
-        $expireOverrides = collect($data['trainings'] ?? [])->pluck('expire_date', 'id');
-        $marks = collect($data['enrollments'] ?? [])->keyBy('id');
-
-        // Completion broadcasts are collected inside the transaction and
-        // dispatched after commit, so peer tabs never see uncommitted state.
-        $issued = [];
-        $deIssued = [];
-
-        DB::transaction(function () use ($class, $marks, $completionDate, $expireOverrides, &$issued, &$deIssued) {
-            $class->load(['enrollments', 'classTrainings']);
-            $totalTopics = $class->classTrainings->count();
-
-            // Per-training expiry: instructor override, else computed from the
-            // snapshot freq (class date + repeat_days; none for initial/as-needed).
-            $expiryFor = [];
-
-            foreach ($class->classTrainings as $ct) {
-                $expire = $expireOverrides->has($ct->id)
-                    ? $expireOverrides->get($ct->id)
-                    : ($ct->repeating && $ct->repeat_days
-                        ? $completionDate->addDays($ct->repeat_days)->toDateString()
-                        : null);
-                $ct->update(['expire_date' => $expire]);
-                $expiryFor[$ct->id] = $expire;
-            }
-
-            // Reconcile completions against the per-topic decisions, per
-            // enrollee × training pair. Each topic is tri-state:
-            //   passed   + no cert → issue one;  passed + has cert → keep it;
-            //   failed   + has cert → de-issue it;
-            //   UNMARKED → leave as-is (preserve any existing cert).
-            // So a re-close only applies the topics actually marked, and the
-            // attendees you didn't touch keep their original certificates. New
-            // cert ids continue after the highest suffix used on this date.
-            $ctIds = $class->classTrainings->pluck('id');
-            $dateStr = $completionDate->format('Ymd');
-            $certSeq = $this->maxCertSeqForDate($ctIds, $dateStr);
-
-            foreach ($class->enrollments as $enrollment) {
-                $enrollMark = $marks->get($enrollment->id) ?? [];
-                $results = collect($enrollMark['results'] ?? [])->pluck('passed', 'class_training_id');
-
-                $passedCount = 0;
-
-                foreach ($class->classTrainings as $ct) {
-                    $decision = $results->get($ct->id); // true | false | null (unmarked)
-                    $existing = Completion::query()
-                        ->where('class_training_id', $ct->id)
-                        ->where('user_id', $enrollment->user_id)
-                        ->first();
-
-                    if ($decision === false) {
-                        if ($existing !== null) {
-                            // Explicitly failed → de-issue.
-                            $deIssued[] = ['id' => $existing->id, 'user_id' => $existing->user_id];
-                            $existing->delete();
-                        }
-
-                        continue;
-                    }
-
-                    if ($decision === null) {
-                        // Unmarked → leave untouched; a preserved cert still counts.
-                        if ($existing !== null) {
-                            $passedCount++;
-                        }
-
-                        continue;
-                    }
-
-                    // Passed.
-                    $passedCount++;
-
-                    if ($ct->training_id === null || $existing !== null) {
-                        continue; // snapshot-only (deleted training), or already credited — preserve.
-                    }
-
-                    $certSeq++;
-                    $code = $ct->cert_code !== null && $ct->cert_code !== ''
-                        ? $ct->cert_code
-                        : 'CERT';
-                    $certId = sprintf('%s%s-%03d', $code, $dateStr, $certSeq);
-
-                    $issued[] = Completion::create([
-                        'org_id' => $class->org_id,
-                        'user_id' => $enrollment->user_id,
-                        'module_type' => Training::class,
-                        'module_id' => $ct->training_id,
-                        'completion_date' => $completionDate->toDateString(),
-                        'expire_date' => $expiryFor[$ct->id],
-                        'cert_id' => $certId,
-                        'class_training_id' => $ct->id,
-                        'hours' => $ct->hours,
-                    ]);
-                }
-
-                $enrollment->update([
-                    'status' => $this->rollUpStatus($passedCount, $totalTopics),
-                    'notes' => $enrollMark['notes'] ?? $enrollment->notes,
-                ]);
-            }
-
-            $class->update([
-                'status' => 'completed',
-                'completion_date' => $completionDate->toDateString(),
-                'completed_at' => now(),
-            ]);
-        });
+        // The reconcile/issue/lock transaction lives in the CompleteClass
+        // action (shared with the dev seeders). Completion broadcasts are
+        // collected inside the transaction and dispatched after commit, so
+        // peer tabs never see uncommitted state.
+        ['issued' => $issued, 'deIssued' => $deIssued] = $action->handle(
+            $class,
+            CarbonImmutable::parse($data['completion_date']),
+            collect($data['enrollments'] ?? [])->keyBy('id'),
+            collect($data['trainings'] ?? [])->pluck('expire_date', 'id'),
+        );
 
         foreach ($issued as $completion) {
             event(new CompletionCreated($completion->fresh(), actorId: $request->user()->id));
@@ -392,43 +293,6 @@ class ClassesController extends Controller
         event(new ClassChanged($class->id, $class->org_id, 'reopened'));
 
         return response()->json($this->detail($class->fresh()));
-    }
-
-    /** Roll an enrollee's per-topic pass count up to a single status. */
-    private function rollUpStatus(int $passedCount, int $totalTopics): string
-    {
-        return match (true) {
-            $totalTopics > 0 && $passedCount >= $totalTopics => 'passed',
-            $passedCount > 0 => 'partial',
-            default => 'incomplete',
-        };
-    }
-
-    /**
-     * Highest `-NNN` suffix already used on this date across the class's certs
-     * (incl. soft-deleted), so newly-issued ids on a re-close never collide
-     * with preserved or previously-issued ones. cert id = `{code}{YYYYMMDD}-{NNN}`.
-     *
-     * @param  Collection<int, string>  $ctIds
-     */
-    private function maxCertSeqForDate(Collection $ctIds, string $dateStr): int
-    {
-        $max = 0;
-        $needle = $dateStr.'-';
-
-        Completion::withTrashed()
-            ->whereIn('class_training_id', $ctIds)
-            ->whereNotNull('cert_id')
-            ->pluck('cert_id')
-            ->each(function (string $certId) use (&$max, $needle): void {
-                $pos = strpos($certId, $needle);
-
-                if ($pos !== false) {
-                    $max = max($max, (int) substr($certId, $pos + strlen($needle)));
-                }
-            });
-
-        return $max;
     }
 
     /**
