@@ -276,11 +276,11 @@ class StdFrequenciesApiTest extends TestCase
         $this->assertEquals('2026-01-31', $taViaReq->refresh()->expires_at->toDateString());
         Event::assertDispatched(
             TrainingAssignmentCreated::class,
-            fn ($e) => $e->trainingAssignment->id === $taDirect->id,
+            fn ($e) => $e->trainingAssignmentId === $taDirect->id,
         );
         Event::assertDispatched(
             TrainingAssignmentCreated::class,
-            fn ($e) => $e->trainingAssignment->id === $taViaReq->id,
+            fn ($e) => $e->trainingAssignmentId === $taViaReq->id,
         );
     }
 
@@ -298,7 +298,7 @@ class StdFrequenciesApiTest extends TestCase
         $this->assertNull($taDirect->refresh()->expires_at);
         Event::assertDispatched(
             TrainingAssignmentCreated::class,
-            fn ($e) => $e->trainingAssignment->id === $taDirect->id,
+            fn ($e) => $e->trainingAssignmentId === $taDirect->id,
         );
     }
 }

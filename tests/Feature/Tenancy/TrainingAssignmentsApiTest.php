@@ -693,7 +693,7 @@ class TrainingAssignmentsApiTest extends TestCase
 
         // Created event for each converted sibling (peer-tab source sync)
         Event::assertDispatched(TrainingAssignmentCreated::class,
-            fn (TrainingAssignmentCreated $e) => $e->trainingAssignment->id === $ta2->id,
+            fn (TrainingAssignmentCreated $e) => $e->trainingAssignmentId === $ta2->id,
         );
     }
 

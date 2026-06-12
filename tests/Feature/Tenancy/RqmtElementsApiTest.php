@@ -518,7 +518,7 @@ class RqmtElementsApiTest extends TestCase
         $this->assertEquals('2027-01-01', $ta->refresh()->expires_at->toDateString());
         Event::assertDispatched(
             TrainingAssignmentCreated::class,
-            fn ($e) => $e->trainingAssignment->id === $ta->id,
+            fn ($e) => $e->trainingAssignmentId === $ta->id,
         );
     }
 
@@ -537,7 +537,7 @@ class RqmtElementsApiTest extends TestCase
         $this->assertEquals('2027-01-01', $ta->refresh()->expires_at->toDateString());
         Event::assertDispatched(
             TrainingAssignmentCreated::class,
-            fn ($e) => $e->trainingAssignment->id === $ta->id,
+            fn ($e) => $e->trainingAssignmentId === $ta->id,
         );
     }
 }
