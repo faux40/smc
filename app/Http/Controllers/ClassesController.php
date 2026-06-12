@@ -529,12 +529,18 @@ class ClassesController extends Controller
 
         // Per-enrollee credit: which of this class's topics each user already
         // holds a (live) completion for — drives the close-out modal's
-        // per-topic defaults so re-completing preserves existing credit.
-        $creditByUser = Completion::query()
+        // per-topic defaults so re-completing preserves existing credit, and
+        // (M3) the per-training credit lists on the completed-class view.
+        $creditRows = Completion::query()
             ->whereIn('class_training_id', $c->classTrainings->pluck('id'))
-            ->get(['user_id', 'class_training_id'])
+            ->with('user:id,prefix_name,f_name,m_name,l_name,suffix_name')
+            ->get();
+
+        $creditByUser = $creditRows
             ->groupBy('user_id')
             ->map(fn ($rows) => $rows->pluck('class_training_id')->all());
+
+        $creditsByTopic = $creditRows->groupBy('class_training_id');
 
         return [
             'id' => $c->id,
@@ -561,6 +567,19 @@ class ClassesController extends Controller
                 'std_freq_name' => $ct->std_freq_name,
                 'repeat_days' => $ct->repeat_days,
                 'hours' => $ct->hours,
+                // M3 — who earned this topic's credit (completed classes).
+                'credits' => ($creditsByTopic[$ct->id] ?? collect())
+                    ->map(fn (Completion $comp) => [
+                        'completion_id' => $comp->id,
+                        'user_id' => $comp->user_id,
+                        'user_name' => $comp->user?->name,
+                        'cert_id' => $comp->cert_id,
+                        'expire_date' => $comp->expire_date?->toDateString(),
+                        'hours' => $comp->hours,
+                    ])
+                    ->sortBy('user_name', SORT_NATURAL | SORT_FLAG_CASE)
+                    ->values()
+                    ->all(),
             ])->all(),
             'enrollments' => $c->enrollments->map(fn (ClassEnrollment $e) => [
                 'id' => $e->id,

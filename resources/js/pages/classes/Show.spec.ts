@@ -42,10 +42,10 @@ const detail: ClassDetail = {
     ],
 };
 
-function mockGet() {
+function mockGet(detailOverride: ClassDetail = detail) {
     (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
         if (url === '/api/classes/c1') {
-            return Promise.resolve({ data: detail });
+            return Promise.resolve({ data: detailOverride });
         }
 
         if (
@@ -161,11 +161,120 @@ describe('classes/Show inline edit', () => {
                 std_freq_name: 'Annual',
                 repeat_days: 365,
                 hours: '4.00',
+                credits: [],
             },
         ];
         const wrapper = await mountShow();
         expect(wrapper.text()).toContain('Fall Protection');
         expect(wrapper.text()).toContain('(4h)');
         detail.trainings = []; // restore for other tests
+    });
+});
+
+// M3 — completed-class view: per-training credit lists + per-topic roster.
+const completedDetail: ClassDetail = {
+    ...detail,
+    status: 'completed',
+    completion_date: '2026-06-01',
+    can_edit: false,
+    trainings: [
+        {
+            id: 'ct1',
+            training_id: 't1',
+            training_name: 'Fall Protection Basics',
+            initial_only: false,
+            repeating: true,
+            as_needed: false,
+            std_freq_name: 'Annual',
+            repeat_days: 365,
+            hours: '4.00',
+            credits: [
+                {
+                    completion_id: 'cp1',
+                    user_id: 'u1',
+                    user_name: 'Dana Reed',
+                    cert_id: 'CERT20260601-001',
+                    expire_date: '2027-06-01',
+                    hours: 4,
+                },
+            ],
+        },
+        {
+            id: 'ct2',
+            training_id: 't2',
+            training_name: 'Harness Inspection',
+            initial_only: true,
+            repeating: false,
+            as_needed: false,
+            std_freq_name: null,
+            repeat_days: null,
+            hours: '2.00',
+            credits: [],
+        },
+    ],
+    enrollments: [
+        {
+            id: 'e1',
+            user_id: 'u1',
+            user_name: 'Dana Reed',
+            user_email: 'dana.reed@demo.local',
+            status: 'partial',
+            notes: null,
+            credited_training_ids: ['ct1'],
+        },
+        {
+            id: 'e2',
+            user_id: 'u2',
+            user_name: 'Sam Lee',
+            user_email: 'sam.lee@demo.local',
+            status: 'incomplete',
+            notes: null,
+            credited_training_ids: [],
+        },
+    ],
+};
+
+describe('classes/Show — completed class (M3)', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+        mockGet(completedDetail);
+    });
+
+    it('lists who earned each training credit, with cert and expiry', async () => {
+        const wrapper = await mountShow();
+
+        const credits = wrapper.find('[data-testid="credits-awarded"]');
+        expect(credits.exists()).toBe(true);
+        expect(credits.text()).toContain('Fall Protection Basics');
+        expect(credits.text()).toContain('Dana Reed');
+        expect(credits.text()).toContain('CERT20260601-001');
+        expect(credits.text()).toContain('2027-06-01');
+        // A topic nobody passed says so instead of rendering an empty list.
+        expect(credits.text()).toContain('Harness Inspection');
+        expect(credits.text()).toContain('No credit issued');
+    });
+
+    it('moves the roster below the credits and details per-topic status', async () => {
+        const wrapper = await mountShow();
+
+        const roster = wrapper.find('[data-testid="enrollee-roster"]');
+        expect(roster.exists()).toBe(true);
+
+        // Roster renders after the credit lists.
+        const html = wrapper.html();
+        expect(html.indexOf('data-testid="credits-awarded"')).toBeLessThan(
+            html.indexOf('data-testid="enrollee-roster"'),
+        );
+
+        // Per-student per-topic detail, not just a roll-up badge.
+        const rows = roster.findAll('[data-testid="roster-row"]');
+        expect(rows).toHaveLength(2);
+        const dana = rows[0].text();
+        expect(dana).toContain('Dana Reed');
+        expect(dana).toContain('✓ Fall Protection Basics');
+        expect(dana).toContain('✗ Harness Inspection');
+        const sam = rows[1].text();
+        expect(sam).toContain('✗ Fall Protection Basics');
     });
 });

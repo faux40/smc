@@ -273,6 +273,49 @@ class ClassCompletionTest extends TestCase
             fn ($e) => $e->completion->user_id === $bob->id && $e->completion->module_id === $t1->id);
     }
 
+    public function test_detail_lists_per_training_credits_after_close_out(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $training->id,
+            'hours' => 6.5,
+        ]);
+        $alice = User::factory()->for($org, 'organization')->create(['f_name' => 'Alice', 'l_name' => 'Ant']);
+        $bob = User::factory()->for($org, 'organization')->create(['f_name' => 'Bob', 'l_name' => 'Bee']);
+        $eAlice = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $alice->id]);
+        $eBob = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $bob->id]);
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/complete", [
+                'completion_date' => '2026-06-01',
+                'enrollments' => [
+                    ['id' => $eAlice->id, 'results' => [
+                        ['class_training_id' => $ct->id, 'passed' => true],
+                    ]],
+                    ['id' => $eBob->id, 'results' => [
+                        ['class_training_id' => $ct->id, 'passed' => false],
+                    ]],
+                ],
+            ])
+            ->assertOk();
+
+        $detail = $this->actingAs($manager)
+            ->getJson("/api/classes/{$class->id}")
+            ->assertOk()
+            ->json();
+
+        $credits = collect($detail['trainings'])->firstWhere('id', $ct->id)['credits'];
+        $this->assertCount(1, $credits);
+        $this->assertSame($alice->id, $credits[0]['user_id']);
+        $this->assertStringContainsString('Alice', $credits[0]['user_name']);
+        $this->assertStringStartsWith('CERT', $credits[0]['cert_id']);
+        $this->assertEquals(6.5, $credits[0]['hours']);
+        $this->assertArrayHasKey('expire_date', $credits[0]);
+    }
+
     public function test_close_out_stamps_hours_from_the_class_training_snapshot(): void
     {
         $org = Organization::factory()->create();

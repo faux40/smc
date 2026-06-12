@@ -24,6 +24,15 @@ export interface ClassRow {
     can_delete: boolean;
 }
 
+export interface TopicCredit {
+    completion_id: string;
+    user_id: string;
+    user_name: string | null;
+    cert_id: string | null;
+    expire_date: string | null;
+    hours: number | null;
+}
+
 export interface ClassTrainingRow {
     id: string;
     training_id: string | null;
@@ -34,6 +43,8 @@ export interface ClassTrainingRow {
     std_freq_name: string | null;
     repeat_days: number | null;
     hours: string | null;
+    /** M3 — who earned this topic's credit (populated after close-out). */
+    credits: TopicCredit[];
 }
 
 export interface EnrollmentRow {

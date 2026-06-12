@@ -361,6 +361,63 @@ const totalHoursLabel = computed(
                             </template>
                         </section>
 
+                        <!-- M3: completed class — who earned each credit -->
+                        <section
+                            v-if="detail.status === 'completed'"
+                            data-testid="credits-awarded"
+                            class="space-y-3 rounded-md border border-border p-4"
+                        >
+                            <h2 class="text-sm font-semibold">
+                                Credits awarded
+                            </h2>
+                            <div
+                                v-for="t in detail.trainings"
+                                :key="t.id"
+                                class="space-y-1"
+                            >
+                                <h3 class="text-xs font-semibold">
+                                    {{ t.training_name }}
+                                    <span
+                                        v-if="t.hours"
+                                        class="font-normal text-muted-foreground"
+                                    >
+                                        · {{ t.hours }}h
+                                    </span>
+                                </h3>
+                                <ul
+                                    v-if="t.credits.length"
+                                    class="divide-y divide-border rounded border border-border text-sm"
+                                >
+                                    <li
+                                        v-for="cr in t.credits"
+                                        :key="cr.completion_id"
+                                        class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-1.5"
+                                    >
+                                        <a
+                                            :href="`/users/${cr.user_id}`"
+                                            class="font-medium text-primary hover:underline"
+                                        >
+                                            {{ cr.user_name ?? 'Unknown user' }}
+                                        </a>
+                                        <span
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            {{ cr.cert_id ?? '—' }}
+                                            <template v-if="cr.expire_date">
+                                                · expires {{ cr.expire_date }}
+                                            </template>
+                                        </span>
+                                    </li>
+                                </ul>
+                                <p
+                                    v-else
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    No credit issued.
+                                </p>
+                            </div>
+                        </section>
+
                         <!-- Documents -->
                         <section class="space-y-2">
                             <h2 class="text-sm font-semibold">Documents</h2>
@@ -413,8 +470,13 @@ const totalHoursLabel = computed(
                         </section>
                     </div>
 
-                    <!-- Right column: enrolled students (names only, scrollable) -->
-                    <aside class="space-y-2">
+                    <!-- Right column: enrolled students (names only, scrollable).
+                         Completed classes show the per-topic roster below the
+                         credit lists instead (M3). -->
+                    <aside
+                        v-if="detail.status !== 'completed'"
+                        class="space-y-2"
+                    >
                         <div class="flex items-center justify-between">
                             <h2 class="text-sm font-semibold">
                                 Enrolled ({{ detail.enrollments.length }})
@@ -459,6 +521,58 @@ const totalHoursLabel = computed(
                         </div>
                     </aside>
                 </div>
+
+                <!-- M3: completed class — per-student per-topic roster, below
+                     the credit lists -->
+                <section
+                    v-if="detail.status === 'completed'"
+                    data-testid="enrollee-roster"
+                    class="space-y-2"
+                >
+                    <h2 class="text-sm font-semibold">
+                        Enrolled ({{ detail.enrollments.length }})
+                    </h2>
+                    <ul
+                        v-if="detail.enrollments.length"
+                        class="divide-y divide-border rounded-md border border-border text-sm"
+                    >
+                        <li
+                            v-for="e in detail.enrollments"
+                            :key="e.id"
+                            data-testid="roster-row"
+                            class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
+                        >
+                            <span class="min-w-40 font-medium">
+                                {{ e.user_name }}
+                            </span>
+                            <Badge variant="secondary" class="text-[10px]">
+                                {{ e.status }}
+                            </Badge>
+                            <span class="flex flex-wrap gap-1 text-xs">
+                                <span
+                                    v-for="t in detail.trainings"
+                                    :key="t.id"
+                                    class="rounded-full border px-1.5 py-0.5"
+                                    :class="
+                                        e.credited_training_ids.includes(t.id)
+                                            ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
+                                            : 'border-border text-muted-foreground'
+                                    "
+                                >
+                                    {{
+                                        e.credited_training_ids.includes(t.id)
+                                            ? '✓'
+                                            : '✗'
+                                    }}
+                                    {{ t.training_name }}
+                                </span>
+                            </span>
+                        </li>
+                    </ul>
+                    <p v-else class="text-sm text-muted-foreground">
+                        Nobody was enrolled.
+                    </p>
+                </section>
 
                 <ManageTopicsModal
                     v-model:open="topicsOpen"
