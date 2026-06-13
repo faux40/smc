@@ -21,6 +21,7 @@ import {
 import { useTableFilter } from '@/composables/useTableFilter';
 import { useTableSort } from '@/composables/useTableSort';
 import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
+import UserRowActions from '@/pages/users/Partials/UserRowActions.vue';
 import UsersBulkAddGrid from '@/pages/users/Partials/UsersBulkAddGrid.vue';
 import { index, show as userShow } from '@/routes/users';
 import { usePreferencesStore } from '@/stores/preferences';
@@ -385,31 +386,14 @@ const remove = (row: UserRow) => {
             </template>
 
             <template #trail-cells="{ row }">
-                <td class="space-x-3 px-4 py-2 text-right">
-                    <button
-                        v-if="row.can_edit"
-                        type="button"
-                        class="text-xs text-primary hover:underline"
-                        @click="openEdit(row)"
-                    >
-                        Edit
-                    </button>
-                    <button
-                        v-if="row.can_disable && !isSelf(row)"
-                        type="button"
-                        class="text-xs text-amber-700 hover:underline dark:text-amber-400"
-                        @click="toggleStatus(row)"
-                    >
-                        {{ row.status === 'active' ? 'Disable' : 'Enable' }}
-                    </button>
-                    <button
-                        v-if="row.can_delete && !isSelf(row)"
-                        type="button"
-                        class="text-xs text-destructive hover:underline"
-                        @click="remove(row)"
-                    >
-                        Delete
-                    </button>
+                <td class="px-4 py-2 text-right">
+                    <UserRowActions
+                        :row="row"
+                        :is-self="isSelf(row)"
+                        @edit="openEdit(row)"
+                        @toggle-status="toggleStatus(row)"
+                        @delete="remove(row)"
+                    />
                 </td>
                 <td class="px-4 py-2 text-right">
                     <TagsListCell
