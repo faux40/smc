@@ -76,6 +76,11 @@
             "@lint:check",
             "@php artisan test"
         ],
+        "test:personas": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan test --group=persona",
+            "npm run test:personas"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"

@@ -12,7 +12,11 @@
         "lint:check": "eslint .",
         "types:check": "vue-tsc --noEmit",
         "test:unit": "vitest run",
-        "test:unit:watch": "vitest"
+        "test:unit:watch": "vitest",
+        "test:personas": "vitest run resources/js/personas",
+        "test:persona:user": "vitest run resources/js/personas/user.persona.spec.ts",
+        "test:persona:manager": "vitest run resources/js/personas/manager.persona.spec.ts",
+        "test:persona:owner": "vitest run resources/js/personas/owner.persona.spec.ts"
     },
     "devDependencies": {
         "@eslint/js": "^9.19.0",
