@@ -28,7 +28,42 @@ class CompletionsController extends Controller
             $query->where('user_id', (string) $request->query('user_id'));
         }
 
-        $rows = $query->orderBy('completion_date', 'desc')->get();
+        // Free-text search across DB-backed completion fields (cert id / notes).
+        // Case-insensitive + portable (LOWER on both sides).
+        if ($request->filled('q')) {
+            $term = '%'.mb_strtolower((string) $request->query('q')).'%';
+            $query->where(function ($w) use ($term) {
+                $w->whereRaw('LOWER(cert_id) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(cert_ident) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(notes) LIKE ?', [$term]);
+            });
+        }
+
+        // Server-side sort, restricted to a safe DB-column allowlist.
+        $sortable = ['completion_date', 'expire_date', 'certification_date', 'hours', 'cert_id', 'created_at'];
+        $sort = in_array($request->query('sort'), $sortable, true) ? $request->query('sort') : 'completion_date';
+        $dir = $request->query('dir') === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sort, $dir)->orderBy('id');
+
+        // Paginated mode (?page=…) returns {data, meta}; without it the legacy
+        // flat array is preserved so existing consumers keep working until they
+        // migrate to the paged contract.
+        if ($request->filled('page')) {
+            $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
+            $page = $query->paginate($perPage);
+
+            return response()->json([
+                'data' => CompletionSerializer::collection(collect($page->items()), withPermissions: true),
+                'meta' => [
+                    'current_page' => $page->currentPage(),
+                    'last_page' => $page->lastPage(),
+                    'per_page' => $page->perPage(),
+                    'total' => $page->total(),
+                ],
+            ]);
+        }
+
+        $rows = $query->get();
 
         return response()->json(CompletionSerializer::collection($rows, withPermissions: true));
     }
@@ -101,5 +136,4 @@ class CompletionsController extends Controller
 
         return response()->json(['ok' => true]);
     }
-
 }

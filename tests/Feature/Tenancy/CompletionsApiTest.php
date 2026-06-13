@@ -5,11 +5,13 @@ namespace Tests\Feature\Tenancy;
 use App\Events\CompletionCreated;
 use App\Events\CompletionDeleted;
 use App\Events\CompletionUpdated;
+use App\Models\ClassTraining;
 use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
 use App\Models\Training;
+use App\Models\TrainingClass;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -128,6 +130,94 @@ class CompletionsApiTest extends TestCase
             ->getJson('/api/completions')
             ->assertOk()
             ->assertJsonCount(0);
+    }
+
+    /** Make N completions for the scaffold user, dated N..1 days ago. */
+    private function seedCompletions(array $s, int $n): void
+    {
+        for ($i = 1; $i <= $n; $i++) {
+            Completion::factory()
+                ->for($s['org'], 'organization')
+                ->for($s['user'], 'user')
+                ->state([
+                    'module_type' => Training::class,
+                    'module_id' => $s['training']->id,
+                    'completion_date' => now()->subDays($i)->toDateString(),
+                    'cert_id' => 'CERT-'.str_pad((string) $i, 3, '0', STR_PAD_LEFT),
+                ])
+                ->create();
+        }
+    }
+
+    public function test_paginated_mode_returns_data_and_meta(): void
+    {
+        $s = $this->scaffold();
+        $this->seedCompletions($s, 7);
+
+        $res = $this->actingAs($s['admin'])
+            ->getJson('/api/completions?page=1&per_page=3')
+            ->assertOk();
+
+        $res->assertJsonCount(3, 'data');
+        $res->assertJsonPath('meta.current_page', 1);
+        $res->assertJsonPath('meta.per_page', 3);
+        $res->assertJsonPath('meta.total', 7);
+        $res->assertJsonPath('meta.last_page', 3);
+    }
+
+    public function test_pagination_second_page_has_the_remainder(): void
+    {
+        $s = $this->scaffold();
+        $this->seedCompletions($s, 7);
+
+        $this->actingAs($s['admin'])
+            ->getJson('/api/completions?page=3&per_page=3')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.current_page', 3);
+    }
+
+    public function test_legacy_flat_array_when_no_page_param(): void
+    {
+        $s = $this->scaffold();
+        $this->seedCompletions($s, 4);
+
+        // No ?page → unchanged flat-array contract (no meta wrapper).
+        $this->actingAs($s['admin'])
+            ->getJson('/api/completions')
+            ->assertOk()
+            ->assertJsonCount(4)
+            ->assertJsonMissingPath('meta');
+    }
+
+    public function test_paginated_q_filters_by_cert_id(): void
+    {
+        $s = $this->scaffold();
+        $this->seedCompletions($s, 5); // CERT-001..CERT-005
+
+        $res = $this->actingAs($s['admin'])
+            ->getJson('/api/completions?page=1&q=CERT-002')
+            ->assertOk();
+
+        $res->assertJsonPath('meta.total', 1);
+        $res->assertJsonPath('data.0.cert_id', 'CERT-002');
+    }
+
+    public function test_paginated_sort_dir_is_respected(): void
+    {
+        $s = $this->scaffold();
+        $this->seedCompletions($s, 3); // dates: 1,2,3 days ago
+
+        $asc = $this->actingAs($s['admin'])
+            ->getJson('/api/completions?page=1&sort=completion_date&dir=asc')
+            ->assertOk();
+        $desc = $this->actingAs($s['admin'])
+            ->getJson('/api/completions?page=1&sort=completion_date&dir=desc')
+            ->assertOk();
+
+        // asc → oldest first (3 days ago); desc → newest first (1 day ago).
+        $this->assertSame(now()->subDays(3)->toDateString(), $asc->json('data.0.completion_date'));
+        $this->assertSame(now()->subDays(1)->toDateString(), $desc->json('data.0.completion_date'));
     }
 
     public function test_admin_can_create_completion_with_one_element(): void
@@ -476,9 +566,9 @@ class CompletionsApiTest extends TestCase
             ->state(['module_type' => Training::class, 'module_id' => $training->id])
             ->create();
 
-        $class = \App\Models\TrainingClass::factory()->for($org, 'organization')
+        $class = TrainingClass::factory()->for($org, 'organization')
             ->create(['name' => 'June Safety Day']);
-        $ct = \App\Models\ClassTraining::factory()->for($class, 'trainingClass')
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')
             ->create(['training_id' => $training->id, 'hours' => 4.5]);
 
         $completion = Completion::factory()
