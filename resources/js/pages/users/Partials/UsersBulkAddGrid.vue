@@ -30,7 +30,7 @@ const props = defineProps<{
     fieldOptions: FieldOptions;
 }>();
 
-const emit = defineEmits<{ (e: 'done'): void }>();
+const emit = defineEmits<{ (e: 'done'): void; (e: 'close'): void }>();
 
 const store = useUsersStore();
 
@@ -189,6 +189,12 @@ async function submit(): Promise<void> {
         rows.value = kept.length > 0 ? kept : [emptyRow()];
         serverErrors.value = remapped;
         emit('done');
+
+        // Everything was accepted → close the grid. If any row was skipped,
+        // stay open so those rows can be fixed and resubmitted.
+        if (res.skipped === 0) {
+            emit('close');
+        }
     } finally {
         submitting.value = false;
     }

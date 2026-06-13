@@ -289,6 +289,7 @@ const remove = (row: UserRow) => {
             :supervisors="bulkSupervisors"
             :field-options="store.fieldOptions"
             @done="onBulkDone"
+            @close="showBulk = false"
         />
 
         <DataTable

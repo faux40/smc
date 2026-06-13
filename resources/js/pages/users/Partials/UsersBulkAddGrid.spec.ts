@@ -108,6 +108,28 @@ describe('UsersBulkAddGrid', () => {
         // Created row removed; the skipped row remains showing its server error.
         expect(wrapper.text()).toContain('Already in use');
         expect(wrapper.emitted('done')).toBeTruthy();
+        // Something was skipped → grid stays open (no close).
+        expect(wrapper.emitted('close')).toBeFalsy();
+    });
+
+    it('emits close when every row is accepted', async () => {
+        const wrapper = mountGrid();
+        const store = useUsersStore();
+        vi.spyOn(store, 'bulkCreate').mockResolvedValue({
+            created: 1,
+            skipped: 0,
+            results: [{ index: 0, status: 'created', user_id: 'u1' }],
+        });
+
+        await setCell(wrapper, 'First * row 1', 'Ada');
+        await setCell(wrapper, 'Last * row 1', 'Lovelace');
+        await setCell(wrapper, 'Email row 1', 'ada@x.com');
+
+        await wrapper.findAll('button').at(-1)!.trigger('click');
+        await flushPromises();
+
+        expect(wrapper.emitted('done')).toBeTruthy();
+        expect(wrapper.emitted('close')).toBeTruthy();
     });
 
     it('does not call the store when nothing is filled in', async () => {
