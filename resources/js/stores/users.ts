@@ -16,6 +16,7 @@ import axios from 'axios';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useRealtime } from '@/composables/useRealtime';
+import { realtimeTabId } from '@/echo';
 import {
     destroy as usersDestroy,
     disable as usersDisable,
@@ -57,6 +58,49 @@ export interface FieldOptions {
     department: string[];
     location: string[];
     job_title: string[];
+}
+
+/** One row submitted by the BULK USER ADD grid. */
+export interface BulkUserRow {
+    f_name: string;
+    m_name?: string | null;
+    l_name: string;
+    email?: string | null;
+    role?: string;
+    department?: string | null;
+    location?: string | null;
+    job_title?: string | null;
+    employee_number?: string | null;
+    supervisor_id?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+}
+
+export interface BulkRowResult {
+    index: number;
+    status: 'created' | 'skipped';
+    user_id?: string;
+    errors?: Record<string, string[]>;
+}
+
+export interface BulkCreateResponse {
+    created: number;
+    skipped: number;
+    results: BulkRowResult[];
+}
+
+/** CSRF + origin-tab headers for axios writes to web routes (mirrors classes store). */
+function writeHeaders(): Record<string, string> {
+    const csrf = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
+    return {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Origin-Tab': realtimeTabId(),
+        ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
+    };
 }
 
 interface BroadcastUser {
@@ -286,6 +330,25 @@ export const useUsersStore = defineStore('users', () => {
         );
     }
 
+    /**
+     * BULK USER ADD — submit many rows to POST /users/bulk and return the
+     * per-row report ({created, skipped, results}). Created users stream back
+     * into the table via the org-channel UserRegistered sub (applyAdded), so
+     * we only refresh the type-ahead options here.
+     */
+    async function bulkCreate(
+        rows: BulkUserRow[],
+    ): Promise<BulkCreateResponse> {
+        const { data } = await axios.post<BulkCreateResponse>(
+            '/users/bulk',
+            { users: rows },
+            { headers: writeHeaders() },
+        );
+        invalidateFieldOptions();
+
+        return data;
+    }
+
     function disable(id: string, opts: { onSuccess?: () => void } = {}): void {
         router.post(
             usersDisable(id).url,
@@ -326,6 +389,7 @@ export const useUsersStore = defineStore('users', () => {
         applyUpdated,
         applySoftDeleted,
         create,
+        bulkCreate,
         update,
         disable,
         enable,

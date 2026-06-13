@@ -7,8 +7,6 @@ import Heading from '@/components/Heading.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
-import { useTableFilter } from '@/composables/useTableFilter';
-import { useTableSort } from '@/composables/useTableSort';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,9 +18,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useTableFilter } from '@/composables/useTableFilter';
+import { useTableSort } from '@/composables/useTableSort';
 import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
+import UsersBulkAddGrid from '@/pages/users/Partials/UsersBulkAddGrid.vue';
 import { index, show as userShow } from '@/routes/users';
-import { usePreferencesStore, type PrefsBlob } from '@/stores/preferences';
+import { usePreferencesStore } from '@/stores/preferences';
+import type { PrefsBlob } from '@/stores/preferences';
 import { useTagsStore } from '@/stores/tags';
 import { useUsersStore } from '@/stores/users';
 import type { UserRow } from '@/stores/users';
@@ -109,7 +111,11 @@ type UserFilters = {
     tags_mode: TagFilterMode;
 };
 
-const { params: filters, commit, restoreSaved } = useTableFilter<UserFilters>(
+const {
+    params: filters,
+    commit,
+    restoreSaved,
+} = useTableFilter<UserFilters>(
     'users',
     {
         q: props.filters.q,
@@ -163,7 +169,9 @@ onMounted(() => {
         tagsStore.subscribe(authUser.org_id);
     }
 
-    tagsStore.loadLibrary().catch(() => { /* surfaced through store */ });
+    tagsStore.loadLibrary().catch(() => {
+        /* surfaced through store */
+    });
 });
 
 watch(
@@ -175,10 +183,43 @@ watch(
 );
 
 const roles = [
-    'Owner', 'SuperAdmin', 'Admin', 'Manager', 'SelfEdit', 'SelfView', 'None',
+    'Owner',
+    'SuperAdmin',
+    'Admin',
+    'Manager',
+    'SelfEdit',
+    'SelfView',
+    'None',
 ];
 
 const isSelf = (row: UserRow): boolean => row.id === authUser?.id;
+
+// BULK USER ADD — spreadsheet-style grid above the table.
+const showBulk = ref(false);
+// Assignable roles for new users (never Owner); None first as the default.
+const bulkRoles = [
+    'None',
+    'SelfView',
+    'SelfEdit',
+    'Manager',
+    'Admin',
+    'SuperAdmin',
+];
+const existingEmails = computed(() =>
+    store.users
+        .map((u) => u.email)
+        .filter((e): e is string => typeof e === 'string' && e !== ''),
+);
+const bulkSupervisors = computed(() =>
+    store.users.map((u) => ({ id: u.id, name: u.name })),
+);
+const toggleBulk = () => {
+    showBulk.value = !showBulk.value;
+
+    if (showBulk.value) {
+        void store.loadFieldOptions();
+    }
+};
 
 const modalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
@@ -205,9 +246,14 @@ const toggleStatus = (row: UserRow) => {
 };
 
 const remove = (row: UserRow) => {
-    if (!window.confirm(`Delete ${row.name}? This soft-deletes the user — they can no longer log in.`)) {
+    if (
+        !window.confirm(
+            `Delete ${row.name}? This soft-deletes the user — they can no longer log in.`,
+        )
+    ) {
         return;
     }
+
     store.destroy(row.id);
 };
 </script>
@@ -221,8 +267,21 @@ const remove = (row: UserRow) => {
                 title="Users"
                 description="Manage members of your organization."
             />
-            <Button v-if="can_create" @click="openCreate"> + Add user </Button>
+            <div v-if="can_create" class="flex items-center gap-2">
+                <Button variant="outline" @click="toggleBulk">
+                    {{ showBulk ? 'Close bulk add' : 'Bulk add' }}
+                </Button>
+                <Button @click="openCreate"> + Add user </Button>
+            </div>
         </div>
+
+        <UsersBulkAddGrid
+            v-if="can_create && showBulk"
+            :existing-emails="existingEmails"
+            :roles="bulkRoles"
+            :supervisors="bulkSupervisors"
+            :field-options="store.fieldOptions"
+        />
 
         <DataTable
             view-id="users"
@@ -272,18 +331,27 @@ const remove = (row: UserRow) => {
                 >
                     {{ row.name }}
                 </Link>
-                <span v-if="isSelf(row)" class="ml-1 text-xs text-muted-foreground">
+                <span
+                    v-if="isSelf(row)"
+                    class="ml-1 text-xs text-muted-foreground"
+                >
                     (you)
                 </span>
             </template>
 
             <template #col-role="{ row }">
-                <Badge variant="secondary" v-if="row.role">{{ row.role }}</Badge>
+                <Badge variant="secondary" v-if="row.role">{{
+                    row.role
+                }}</Badge>
                 <span v-else class="text-muted-foreground">—</span>
             </template>
 
             <template #col-status="{ row }">
-                <Badge :variant="row.status === 'active' ? 'default' : 'destructive'">
+                <Badge
+                    :variant="
+                        row.status === 'active' ? 'default' : 'destructive'
+                    "
+                >
                     {{ row.status }}
                 </Badge>
             </template>
