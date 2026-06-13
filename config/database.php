@@ -84,6 +84,26 @@ return [
             ]) : [],
         ],
 
+        // One-off: read-only source for the TrainingWise data migration
+        // (legacy MariaDB loaded into a local throwaway container). Defaults
+        // match the `tw_temp` Docker container on host port 3307 so it works
+        // without .env edits; override via TW_DB_* if needed. See the
+        // tw:migrate command. Safe to remove once the migration is done.
+        'trainingwise' => [
+            'driver' => 'mysql',
+            'host' => env('TW_DB_HOST', '127.0.0.1'),
+            'port' => env('TW_DB_PORT', '3307'),
+            'database' => env('TW_DB_DATABASE', 'trainingwise'),
+            'username' => env('TW_DB_USERNAME', 'root'),
+            'password' => env('TW_DB_PASSWORD', 'twtemp'),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => false,
+            'engine' => null,
+        ],
+
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DB_URL'),
