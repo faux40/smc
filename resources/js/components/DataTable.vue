@@ -3,9 +3,9 @@ import { computed } from 'vue';
 import SortableHeader from '@/components/SortableHeader.vue';
 import TableColumnsMenu from '@/components/TableColumnsMenu.vue';
 import { useColumnDrag } from '@/composables/useColumnDrag';
+import type { SortDir } from '@/composables/useTableSort';
 import { useTableView } from '@/composables/useTableView';
 import type { ColumnDef } from '@/composables/useTableView';
-import type { SortDir } from '@/composables/useTableSort';
 
 const props = withDefaults(
     defineProps<{
@@ -70,7 +70,7 @@ const colspanTotal = computed(() => previewVisibleColumns.value.length);
                 </thead>
                 <tbody class="divide-y divide-border">
                     <tr v-for="(row, idx) in rows" :key="rowKey ? rowKey(row) : idx">
-                        <slot name="lead-cells" :row="row" />
+                        <slot name="lead-cells" :row="row" :index="idx" />
                         <td
                             v-for="col in previewVisibleColumns"
                             :key="col.key"

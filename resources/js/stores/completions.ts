@@ -15,6 +15,10 @@ import axios from 'axios';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useRealtime } from '@/composables/useRealtime';
+import type {
+    ServerTableQuery,
+    ServerTableResponse,
+} from '@/composables/useServerTable';
 import { realtimeTabId } from '@/echo';
 
 export interface CompletionRow {
@@ -83,6 +87,9 @@ export const useCompletionsStore = defineStore('completions', () => {
     const rows = ref<CompletionRow[]>([]);
     const loadedFilters = ref<Set<string>>(new Set());
     const subscribedOrgId = ref<string | null>(null);
+    // Bumped on every completion broadcast — the paged Index watches it and
+    // refetches its current page (we can't patch a server-paged set).
+    const revision = ref(0);
 
     const forUser = computed(
         () => (userId: string) =>
@@ -124,6 +131,40 @@ export const useCompletionsStore = defineStore('completions', () => {
         });
         data.forEach((r) => upsert(r));
         loadedFilters.value = new Set([...loadedFilters.value, key]);
+    }
+
+    /**
+     * Server-paged fetch for the completions table (the paged {data, meta}
+     * contract). Does NOT touch the cache rows — the Index drives it through
+     * useServerTable and renders the returned page directly.
+     */
+    async function fetchPage(
+        params: ServerTableQuery & { user_id?: string },
+    ): Promise<ServerTableResponse<CompletionRow>> {
+        const query: Record<string, string | number> = {
+            page: params.page,
+            per_page: params.per_page,
+            dir: params.dir,
+        };
+
+        if (params.sort) {
+            query.sort = params.sort;
+        }
+
+        if (params.q) {
+            query.q = params.q;
+        }
+
+        if (params.user_id) {
+            query.user_id = params.user_id;
+        }
+
+        const { data } = await axios.get<ServerTableResponse<CompletionRow>>(
+            '/api/completions',
+            { headers: defaultHeaders(), params: query },
+        );
+
+        return data;
     }
 
     async function create(
@@ -169,9 +210,11 @@ export const useCompletionsStore = defineStore('completions', () => {
 
         bind('CompletionCreated', (p: CompletionRow) => {
             upsert({ ...p, can_edit: false, can_delete: false });
+            revision.value++;
         });
         bind('CompletionUpdated', (p: CompletionRow) => {
             const existing = rows.value.find((c) => c.id === p.id);
+            revision.value++;
 
             if (!existing) {
                 return;
@@ -181,15 +224,18 @@ export const useCompletionsStore = defineStore('completions', () => {
         });
         bind('CompletionDeleted', (p: { id: string }) => {
             rows.value = rows.value.filter((c) => c.id !== p.id);
+            revision.value++;
         });
     }
 
     return {
         rows,
         loadedFilters,
+        revision,
         forUser,
         forElement,
         loadFor,
+        fetchPage,
         create,
         update,
         destroy,

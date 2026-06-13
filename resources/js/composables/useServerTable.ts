@@ -103,6 +103,14 @@ export function useServerTable<T>(
         void fetchPage();
     }, 300);
 
+    // Reset to page 1 and refetch — for external filter changes the fetcher
+    // reads itself (e.g. a user-id dropdown), where the params didn't change
+    // on this composable but the result set did.
+    function reload(): void {
+        page.value = 1;
+        void fetchPage();
+    }
+
     // Realtime: re-pull the current page after a broadcast (debounced so a
     // burst of events collapses into one refetch).
     const refetchSoon = useDebounceFn((): void => {
@@ -126,6 +134,7 @@ export function useServerTable<T>(
         setPerPage,
         setSort,
         setQuery,
+        reload,
         refetchSoon,
     };
 }

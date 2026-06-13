@@ -22,11 +22,6 @@ const USERS = [
     { id: 'u2', f_name: 'Bob', l_name: 'Baker', email: 'b@test.com' },
 ];
 
-// Date order is intentionally reversed vs alphabetical order so sort tests
-// can verify that clicking a header actually changes row order:
-//   default (user asc, last name): Adams → Baker
-//   date asc:                      Baker → Adams  (2026-01-15 < 2026-03-10)
-//   date desc:                     Adams → Baker  (2026-03-10 > 2026-01-15)
 const COMPLETIONS = [
     {
         id: 'c1',
@@ -81,57 +76,137 @@ const STUBS = {
     TableColumnsMenu: true,
 };
 
+// Captured params from each GET /api/completions call (the paged contract).
+let completionsParams: Array<Record<string, unknown>> = [];
+const lastParams = () => completionsParams.at(-1) ?? {};
+
+function mockAxios() {
+    (axios.get as ReturnType<typeof vi.fn>).mockImplementation(
+        (url: string, config?: { params?: Record<string, unknown> }) => {
+            if (url === '/api/users') {
+                return Promise.resolve({ data: USERS });
+            }
+
+            if (url === '/api/trainings') {
+                return Promise.resolve({ data: TRAININGS });
+            }
+
+            if (url === '/api/completions') {
+                completionsParams.push(config?.params ?? {});
+
+                return Promise.resolve({
+                    data: {
+                        data: COMPLETIONS,
+                        meta: {
+                            current_page: Number(config?.params?.page ?? 1),
+                            last_page: 2,
+                            per_page: Number(config?.params?.per_page ?? 25),
+                            total: 30,
+                        },
+                    },
+                });
+            }
+
+            return Promise.resolve({ data: [] });
+        },
+    );
+}
+
 async function mountPage() {
-    (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
-        if (url === '/api/users') return Promise.resolve({ data: USERS });
-        if (url === '/api/completions') return Promise.resolve({ data: COMPLETIONS });
-        if (url === '/api/trainings') return Promise.resolve({ data: TRAININGS });
-        return Promise.resolve({ data: [] });
-    });
+    mockAxios();
     const wrapper = mount(CompletionsIndex, { global: { stubs: STUBS } });
     await flushPromises();
+
     return wrapper;
 }
 
-describe('completions/Index — column control, sorting, filter persistence', () => {
+describe('completions/Index — server-paged table', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        completionsParams = [];
         authUser.value = { id: 'me', org_id: 'org1' };
     });
 
-    it('renders all 7 column headers by default', async () => {
+    it('renders the column headers (incl. the row-# lead column)', async () => {
         const wrapper = await mountPage();
         const headers = wrapper.findAll('thead th').map((th) => th.text());
-        expect(headers.some((h) => h.includes('User'))).toBe(true);
-        expect(headers.some((h) => h.includes('Training'))).toBe(true);
-        expect(headers.some((h) => h.includes('Date'))).toBe(true);
-        expect(headers.some((h) => h.includes('Expires'))).toBe(true);
-        expect(headers.some((h) => h.includes('Hours'))).toBe(true);
-        expect(headers.some((h) => h.includes('Source'))).toBe(true);
-        expect(headers.some((h) => h.includes('Credits'))).toBe(true);
+
+        for (const h of [
+            'User',
+            'Training',
+            'Date',
+            'Expires',
+            'Hours',
+            'Source',
+            'Credits',
+        ]) {
+            expect(headers.some((x) => x.includes(h))).toBe(true);
+        }
+
+        expect(headers.some((x) => x.trim() === '#')).toBe(true);
     });
 
-    it('renders the server-resolved training name, hours, source and effective credits', async () => {
+    it('renders server-resolved fields, source link, and effective credits', async () => {
         const wrapper = await mountPage();
         const text = wrapper.text();
-
-        // Name comes straight from the payload — no client-side lookup.
         expect(text).toContain('Fire Safety');
         expect(text).toContain('4.5');
-
-        // Class-issued row links to its class; manual row is labeled.
         const classLink = wrapper.find('a[href="/classes/cl1"]');
         expect(classLink.exists()).toBe(true);
-        expect(classLink.text()).toContain('June Safety Day');
         expect(text).toContain('Manual');
-
-        // Credits badge counts EFFECTIVE credits (pivot + module identity).
         expect(text).toContain('3 element(s)');
-        expect(text).toContain('1 element(s)');
     });
 
-    it('hides a column when the user has turned it off in preferences', async () => {
+    it('requests page 1 sorted by completion_date desc on mount', async () => {
+        await mountPage();
+        const p = completionsParams[0];
+        expect(p.page).toBe(1);
+        expect(p.sort).toBe('completion_date');
+        expect(p.dir).toBe('desc');
+    });
+
+    it('asks the server for the sort when a sortable header is clicked', async () => {
+        const wrapper = await mountPage();
+        const dateBtn = wrapper
+            .findAll('thead button')
+            .find((b) => b.text().includes('Date'));
+        await dateBtn!.trigger('click');
+        await flushPromises();
+        expect(lastParams().sort).toBe('completion_date');
+        expect(lastParams().dir).toBe('asc'); // new direction served by the server
+
+        await dateBtn!.trigger('click');
+        await flushPromises();
+        expect(lastParams().dir).toBe('desc');
+    });
+
+    it('sends user_id to the server when the user filter changes', async () => {
+        const wrapper = await mountPage();
+        await wrapper.find('#filter_user').setValue('u1');
+        await flushPromises();
+        expect(lastParams().user_id).toBe('u1');
+        expect(lastParams().page).toBe(1);
+    });
+
+    it('debounces the search box into a server q', async () => {
+        const wrapper = await mountPage();
+        vi.useFakeTimers();
+        await wrapper.find('#filter_q').setValue('cert');
+        await vi.advanceTimersByTimeAsync(300);
+        vi.useRealTimers();
+        await flushPromises();
+        expect(lastParams().q).toBe('cert');
+    });
+
+    it('requests the next page from the server', async () => {
+        const wrapper = await mountPage();
+        await wrapper.find('button[aria-label="Next page"]').trigger('click');
+        await flushPromises();
+        expect(lastParams().page).toBe(2);
+    });
+
+    it('hides a column the user turned off in preferences', async () => {
         authUser.value = {
             id: 'me',
             org_id: 'org1',
@@ -145,47 +220,23 @@ describe('completions/Index — column control, sorting, filter persistence', ()
         expect(headers.some((h) => h.includes('User'))).toBe(true);
     });
 
-    it('sorts rows by date ascending on first header click', async () => {
+    it('restores the saved user filter and applies it to the first fetch', async () => {
+        authUser.value = {
+            id: 'me',
+            org_id: 'org1',
+            preferences: { completions: { filters: { user_id: 'u1' } } },
+        };
         const wrapper = await mountPage();
-        const dateBtn = wrapper
-            .findAll('thead button')
-            .find((b) => b.text().includes('Date'));
-        await dateBtn!.trigger('click');
-        await flushPromises();
-
-        const rows = wrapper.findAll('tbody tr');
-        // Baker (2026-01-15) before Adams (2026-03-10)
-        expect(rows[0].text()).toContain('Bob');
-        expect(rows[1].text()).toContain('Alice');
+        expect(
+            (wrapper.find('#filter_user').element as HTMLSelectElement).value,
+        ).toBe('u1');
+        expect(completionsParams.some((p) => p.user_id === 'u1')).toBe(true);
     });
 
-    it('reverses sort direction on second click of the same header', async () => {
-        const wrapper = await mountPage();
-        const dateBtn = wrapper
-            .findAll('thead button')
-            .find((b) => b.text().includes('Date'));
-        await dateBtn!.trigger('click');
-        await dateBtn!.trigger('click');
-        await flushPromises();
-
-        const rows = wrapper.findAll('tbody tr');
-        // Adams (2026-03-10) before Baker (2026-01-15)
-        expect(rows[0].text()).toContain('Alice');
-        expect(rows[1].text()).toContain('Bob');
-    });
-
-    it('filters displayed rows by the selected user', async () => {
-        const wrapper = await mountPage();
-        await wrapper.find('#filter_user').setValue('u1');
-        await flushPromises();
-
-        const rows = wrapper.findAll('tbody tr');
-        expect(rows).toHaveLength(1);
-        expect(rows[0].text()).toContain('Alice');
-    });
-
-    it('persists the user filter selection to the prefs store (debounced)', async () => {
-        (axios.patch as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} });
+    it('persists the user filter to prefs (debounced)', async () => {
+        (axios.patch as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: {},
+        });
         const wrapper = await mountPage();
 
         vi.useFakeTimers();
@@ -204,18 +255,5 @@ describe('completions/Index — column control, sorting, filter persistence', ()
             }),
             expect.anything(),
         );
-    });
-
-    it('restores the saved user filter from preferences on mount', async () => {
-        authUser.value = {
-            id: 'me',
-            org_id: 'org1',
-            preferences: {
-                completions: { filters: { user_id: 'u1' } },
-            },
-        };
-        const wrapper = await mountPage();
-        const select = wrapper.find('#filter_user');
-        expect((select.element as HTMLSelectElement).value).toBe('u1');
     });
 });

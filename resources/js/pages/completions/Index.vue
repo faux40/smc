@@ -5,10 +5,12 @@ import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
+import Pagination from '@/components/Pagination.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useTableSort } from '@/composables/useTableSort';
+import { useServerTable } from '@/composables/useServerTable';
 import { realtimeTabId } from '@/echo';
 import CompletionFormModal from '@/pages/completions/Partials/CompletionFormModal.vue';
 import { page as completionsPage } from '@/routes/completions';
@@ -31,15 +33,29 @@ interface UserPickerRow {
     email: string | null;
 }
 
+// Only DB-backed columns can be server-sorted. User / training-name / source /
+// credits aren't (they'd need joins / are computed) — left non-sortable for now.
 const COMPLETIONS_COLUMNS = [
-    { key: 'user', label: 'User', sortable: true },
-    { key: 'module', label: 'Training', sortable: true },
+    { key: 'user', label: 'User' },
+    { key: 'module', label: 'Training' },
     { key: 'date', label: 'Date', sortable: true },
     { key: 'expires', label: 'Expires', sortable: true },
     { key: 'hours', label: 'Hours', sortable: true },
-    { key: 'source', label: 'Source', sortable: true },
-    { key: 'credits', label: 'Credits', sortable: true },
+    { key: 'source', label: 'Source' },
+    { key: 'credits', label: 'Credits' },
 ];
+
+// Column key ⇄ server sort column.
+const COLUMN_SORT: Record<string, string> = {
+    date: 'completion_date',
+    expires: 'expire_date',
+    hours: 'hours',
+};
+const SORT_COLUMN: Record<string, string> = {
+    completion_date: 'date',
+    expire_date: 'expires',
+    hours: 'hours',
+};
 
 const store = useCompletionsStore();
 const trainings = useTrainingsStore();
@@ -60,25 +76,41 @@ const authUser = computed(
 const canCreate = computed(() =>
     Boolean(
         authUser.value?.isOwner ||
-            authUser.value?.isSuperAdmin ||
-            authUser.value?.isAdmin ||
-            authUser.value?.isManager,
+        authUser.value?.isSuperAdmin ||
+        authUser.value?.isAdmin ||
+        authUser.value?.isManager,
     ),
 );
 
 const userPicker = ref<UserPickerRow[]>([]);
 const userFilter = ref('');
+const search = ref('');
 
 const modalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
 const editing = ref<CompletionRow | null>(null);
 const error = ref<string | null>(null);
-const loading = ref(true);
+const initialLoading = ref(true);
 
-// ── Filtering + sorting ───────────────────────────────────────────────────────
-const filteredRows = computed(() =>
-    store.rows.filter((c) => !userFilter.value || c.user_id === userFilter.value),
+// Server-paged table — the store relay owns the fetch; userFilter is folded in
+// here (the composable's own params are page/sort/dir/q).
+const table = useServerTable<CompletionRow>(
+    (params) =>
+        store.fetchPage({ ...params, user_id: userFilter.value || undefined }),
+    { perPage: 25, sort: 'completion_date', dir: 'desc' },
 );
+
+const activeColumnKey = computed(() =>
+    table.sort.value ? (SORT_COLUMN[table.sort.value] ?? null) : null,
+);
+
+function onSort(columnKey: string): void {
+    const serverKey = COLUMN_SORT[columnKey];
+
+    if (serverKey) {
+        table.setSort(serverKey);
+    }
+}
 
 const userById = (id: string) => userPicker.value.find((u) => u.id === id);
 const trainingById = (id: string) => trainings.library.find((t) => t.id === id);
@@ -88,41 +120,39 @@ const moduleLabel = (row: CompletionRow): string => {
     if (row.training_name) {
         return row.training_name;
     }
+
     if (row.module_type === 'App\\Models\\Training') {
         return trainingById(row.module_id)?.name ?? 'Training';
     }
+
     return row.module_type;
 };
 
-const { sortKey, sortDir, toggleSort, sorted } = useTableSort<CompletionRow>(
-    filteredRows,
-    {
-        user: (r) => userById(r.user_id)?.l_name ?? '',
-        module: (r) => moduleLabel(r),
-        date: (r) => r.completion_date ?? '',
-        expires: (r) => r.expire_date ?? '',
-        hours: (r) => r.hours,
-        source: (r) => r.class_name ?? '',
-        credits: (r) => r.effective_element_ids.length,
-    },
-    { key: 'user', dir: 'asc' },
-);
-
 // ── Filter persistence ────────────────────────────────────────────────────────
-function snapshotFilters() {
-    return { user_id: userFilter.value };
-}
-
 function restoreSavedFilters(): void {
     const saved = prefs.view('completions').filters as
-        | Partial<ReturnType<typeof snapshotFilters>>
+        | { user_id?: string }
         | undefined;
-    if (!saved) return;
-    if (saved.user_id !== undefined) userFilter.value = saved.user_id;
+
+    if (saved?.user_id !== undefined) {
+        userFilter.value = saved.user_id;
+    }
 }
 
-watch(userFilter, () =>
-    prefs.update('completions', { filters: snapshotFilters() }),
+watch(userFilter, () => {
+    prefs.update('completions', { filters: { user_id: userFilter.value } });
+    table.reload();
+});
+
+function onSearch(value: string | number): void {
+    search.value = String(value);
+    table.setQuery(search.value);
+}
+
+// Realtime: a completion broadcast just re-pulls the current page.
+watch(
+    () => store.revision,
+    () => table.refetchSoon(),
 );
 
 onMounted(async () => {
@@ -134,11 +164,11 @@ onMounted(async () => {
     }
 
     try {
-        await Promise.all([store.loadFor({}), trainings.load(), loadUsers()]);
+        await Promise.all([table.fetchPage(), trainings.load(), loadUsers()]);
     } catch (e) {
         error.value = (e as Error).message;
     } finally {
-        loading.value = false;
+        initialLoading.value = false;
     }
 });
 
@@ -168,10 +198,10 @@ const openEdit = (row: CompletionRow) => {
 };
 
 const remove = async (row: CompletionRow) => {
-    const userName = (() => {
-        const u = userById(row.user_id);
-        return u ? [u.f_name, u.l_name].filter(Boolean).join(' ') : 'user';
-    })();
+    const u = userById(row.user_id);
+    const userName = u
+        ? [u.f_name, u.l_name].filter(Boolean).join(' ')
+        : 'user';
 
     if (!window.confirm(`Soft-delete this completion for ${userName}?`)) {
         return;
@@ -181,6 +211,7 @@ const remove = async (row: CompletionRow) => {
 
     try {
         await store.destroy(row.id);
+        table.refetchSoon();
     } catch (e) {
         error.value = (e as Error).message;
     }
@@ -209,55 +240,91 @@ function defaultHeaders(): Record<string, string> {
                 title="Completions"
                 description="Record that a user satisfied one or more rqmt_elements on a date. One completion can credit several Requirements at once."
             />
-            <Button v-if="canCreate" @click="openCreate">+ New completion</Button>
+            <Button v-if="canCreate" @click="openCreate"
+                >+ New completion</Button
+            >
         </div>
 
         <AsyncState
-            :loading="loading"
+            :loading="initialLoading"
             :error="error"
-            :empty="sorted.length === 0"
+            :empty="table.total.value === 0"
         >
             <template #empty>
                 <div
                     class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
                 >
                     No completions match the current filter.
-                    <span v-if="canCreate && store.rows.length === 0">
-                        Click "+ New completion" to record one.
-                    </span>
+                    <span v-if="canCreate">
+                        Click "+ New completion" to record one.</span
+                    >
                 </div>
             </template>
 
             <DataTable
                 view-id="completions"
                 :default-columns="COMPLETIONS_COLUMNS"
-                :rows="sorted"
-                :sort-key="sortKey"
-                :sort-dir="sortDir"
+                :rows="table.rows.value"
+                :sort-key="activeColumnKey"
+                :sort-dir="table.dir.value"
                 :row-key="(row) => row.id"
-                @sort="toggleSort"
+                @sort="onSort"
             >
                 <template #filters>
                     <div class="grid gap-1">
-                        <Label for="filter_user" class="text-xs">Filter by user</Label>
+                        <Label for="filter_user" class="text-xs"
+                            >Filter by user</Label
+                        >
                         <select
                             id="filter_user"
                             v-model="userFilter"
                             class="rounded border border-input bg-background px-2 py-1 text-sm"
                         >
                             <option value="">All users</option>
-                            <option v-for="u in sortedUsers" :key="u.id" :value="u.id">
+                            <option
+                                v-for="u in sortedUsers"
+                                :key="u.id"
+                                :value="u.id"
+                            >
                                 {{
-                                    [u.f_name, u.l_name].filter(Boolean).join(' ') ||
+                                    [u.f_name, u.l_name]
+                                        .filter(Boolean)
+                                        .join(' ') ||
                                     u.email ||
                                     u.id
                                 }}
                             </option>
                         </select>
                     </div>
-                    <span class="text-xs text-muted-foreground">
-                        {{ sorted.length }} of {{ store.rows.length }}
-                    </span>
+                    <div class="grid gap-1">
+                        <Label for="filter_q" class="text-xs">Search</Label>
+                        <Input
+                            id="filter_q"
+                            :model-value="search"
+                            placeholder="Cert # or notes"
+                            class="h-8 w-48"
+                            @update:model-value="onSearch"
+                        />
+                    </div>
+                </template>
+
+                <template #lead-header>
+                    <th
+                        class="w-10 px-2 py-2 text-right font-medium text-muted-foreground"
+                    >
+                        #
+                    </th>
+                </template>
+                <template #lead-cells="{ index }">
+                    <td
+                        class="w-10 px-2 py-2 text-right text-xs text-muted-foreground"
+                    >
+                        {{
+                            (table.page.value - 1) * table.perPage.value +
+                            index +
+                            1
+                        }}
+                    </td>
                 </template>
 
                 <template #col-user="{ row }">
@@ -280,10 +347,14 @@ function defaultHeaders(): Record<string, string> {
                     <span v-else class="text-muted-foreground">—</span>
                 </template>
 
-                <template #col-module="{ row }">{{ moduleLabel(row) }}</template>
+                <template #col-module="{ row }">{{
+                    moduleLabel(row)
+                }}</template>
 
                 <template #col-date="{ row }">
-                    <span class="text-xs">{{ row.completion_date ?? '—' }}</span>
+                    <span class="text-xs">{{
+                        row.completion_date ?? '—'
+                    }}</span>
                 </template>
 
                 <template #col-expires="{ row }">
@@ -302,9 +373,9 @@ function defaultHeaders(): Record<string, string> {
                     >
                         {{ row.class_name ?? 'Class' }}
                     </a>
-                    <span v-else class="text-xs text-muted-foreground">
-                        Manual
-                    </span>
+                    <span v-else class="text-xs text-muted-foreground"
+                        >Manual</span
+                    >
                 </template>
 
                 <template #col-credits="{ row }">
@@ -338,6 +409,16 @@ function defaultHeaders(): Record<string, string> {
                     </td>
                 </template>
             </DataTable>
+
+            <Pagination
+                :page="table.page.value"
+                :last-page="table.lastPage.value"
+                :total="table.total.value"
+                :per-page="table.perPage.value"
+                :loading="table.loading.value"
+                @update:page="table.setPage"
+                @update:per-page="table.setPerPage"
+            />
         </AsyncState>
 
         <CompletionFormModal

@@ -124,4 +124,18 @@ describe('useServerTable', () => {
         await flushPromises();
         expect(fetcher).toHaveBeenCalledTimes(1);
     });
+
+    it('reload resets to page 1 and refetches', async () => {
+        const fetcher = fakeFetcher();
+        const t = useServerTable<Row>(fetcher, { perPage: 3 });
+        await t.fetchPage();
+        t.setPage(2);
+        await flushPromises();
+        fetcher.mockClear();
+
+        t.reload();
+        await flushPromises();
+        expect(t.page.value).toBe(1);
+        expect(fetcher).toHaveBeenCalledTimes(1);
+    });
 });
