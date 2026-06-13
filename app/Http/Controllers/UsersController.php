@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Events\UserRegistered;
+use App\Actions\CreateUser;
 use App\Events\UserSoftDeleted;
 use App\Events\UserStatusChanged;
 use App\Events\UserUpdated;
@@ -17,9 +17,12 @@ use App\Support\SourceChips;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -280,7 +283,7 @@ class UsersController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<string, string>  $requirementNames
+     * @param  Collection<string, string>  $requirementNames
      * @return array<string, mixed>
      */
     private function complianceRow(
@@ -318,31 +321,95 @@ class UsersController extends Controller
         return CompletionSerializer::collection($completions);
     }
 
-    public function store(CreateUserRequest $request): RedirectResponse
+    public function store(CreateUserRequest $request, CreateUser $creator): RedirectResponse
     {
-        $user = User::create([
-            'org_id' => $request->user()->org_id,
-            'f_name' => $request->validated('f_name'),
-            'm_name' => $request->validated('m_name'),
-            'l_name' => $request->validated('l_name'),
-            'prefix_name' => $request->validated('prefix_name'),
-            'suffix_name' => $request->validated('suffix_name'),
-            'email' => $request->validated('email'),
-            'password' => null,
-            'department' => $request->validated('department'),
-            'location' => $request->validated('location'),
-            'job_title' => $request->validated('job_title'),
-            'employee_number' => $request->validated('employee_number'),
-            'supervisor_id' => $request->validated('supervisor_id'),
-            'start_date' => $request->validated('start_date'),
-            'end_date' => $request->validated('end_date'),
-        ]);
-
-        $user->assignRole('None');
-
-        event(new UserRegistered($user->fresh()));
+        // New single-add users land as role None (role is set later via edit).
+        $creator->handle($request->user()->org_id, $request->validated(), 'None');
 
         return Redirect::route('users.index');
+    }
+
+    /**
+     * BULK USER ADD — create many users from a spreadsheet-style grid.
+     * Per-row best-effort: valid rows are created, invalid rows are skipped
+     * (never blocking the batch) and reported with their field errors. Role
+     * is settable per row (never Owner); email is unique globally and within
+     * the batch. Shares CreateUser with the single-add path.
+     */
+    public function bulkStore(Request $request, CreateUser $creator): JsonResponse
+    {
+        Gate::authorize('create', User::class);
+
+        $request->validate([
+            'users' => ['required', 'array', 'min:1', 'max:500'],
+        ]);
+
+        $orgId = $request->user()->org_id;
+        $rules = $this->bulkRowRules($orgId);
+
+        $created = 0;
+        $skipped = 0;
+        $results = [];
+        $claimedEmails = [];
+
+        foreach ($request->input('users') as $i => $row) {
+            $validator = Validator::make(is_array($row) ? $row : [], $rules);
+
+            if ($validator->fails()) {
+                $results[] = ['index' => $i, 'status' => 'skipped', 'errors' => $validator->errors()->toArray()];
+                $skipped++;
+
+                continue;
+            }
+
+            $data = $validator->validated();
+            $emailKey = isset($data['email']) ? strtolower((string) $data['email']) : null;
+
+            // Within-batch dedup (DB uniqueness is enforced by the rules; this
+            // also catches two new identical emails in the same submission).
+            if ($emailKey !== null && isset($claimedEmails[$emailKey])) {
+                $results[] = ['index' => $i, 'status' => 'skipped', 'errors' => ['email' => ['Duplicate email within this batch.']]];
+                $skipped++;
+
+                continue;
+            }
+
+            $user = $creator->handle($orgId, $data, $data['role'] ?? 'None');
+
+            if ($emailKey !== null) {
+                $claimedEmails[$emailKey] = true;
+            }
+            $results[] = ['index' => $i, 'status' => 'created', 'user_id' => $user->id];
+            $created++;
+        }
+
+        return response()->json(['created' => $created, 'skipped' => $skipped, 'results' => $results]);
+    }
+
+    /**
+     * Per-row validation for bulk add — mirrors CreateUserRequest plus a
+     * per-row Role (never Owner; default None applied at create).
+     *
+     * @return array<string, array<int, mixed>>
+     */
+    private function bulkRowRules(string $orgId): array
+    {
+        return [
+            'f_name' => ['required', 'string', 'max:255'],
+            'm_name' => ['nullable', 'string', 'max:255'],
+            'l_name' => ['required', 'string', 'max:255'],
+            'prefix_name' => ['nullable', 'string', 'max:32'],
+            'suffix_name' => ['nullable', 'string', 'max:32'],
+            'email' => ['nullable', 'string', 'email', 'max:255', Rule::unique('users', 'email')->whereNull('deleted_at')],
+            'role' => ['nullable', Rule::in(UpdateUserRequest::ASSIGNABLE_ROLES)],
+            'department' => ['nullable', 'string', 'max:255'],
+            'location' => ['nullable', 'string', 'max:255'],
+            'job_title' => ['nullable', 'string', 'max:255'],
+            'employee_number' => ['nullable', 'string', 'max:64'],
+            'supervisor_id' => ['nullable', 'string', Rule::exists('users', 'id')->where('org_id', $orgId)->whereNull('deleted_at')],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+        ];
     }
 
     public function update(UpdateUserRequest $request, User $user): RedirectResponse

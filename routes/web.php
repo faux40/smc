@@ -78,6 +78,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
 
     Route::get('users', [UsersController::class, 'index'])->name('users.index');
     Route::post('users', [UsersController::class, 'store'])->name('users.store');
+    Route::post('users/bulk', [UsersController::class, 'bulkStore'])->name('users.bulk');
 
     // Lean JSON user list for downstream picker UX (assignment +
     // completion form modals). Manager+ via inline role gate; UsersController
