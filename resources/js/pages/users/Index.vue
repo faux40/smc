@@ -221,6 +221,13 @@ const toggleBulk = () => {
     }
 };
 
+// After a bulk add, the submitting tab's own UserRegistered broadcasts are
+// self-echo-filtered, so reload the server-filtered users prop to surface the
+// new rows (only those matching the current filter, like single-add does).
+const onBulkDone = () => {
+    router.reload({ only: ['users'] });
+};
+
 const modalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
 const editingUser = ref<UserRow | null>(null);
@@ -281,6 +288,7 @@ const remove = (row: UserRow) => {
             :roles="bulkRoles"
             :supervisors="bulkSupervisors"
             :field-options="store.fieldOptions"
+            @done="onBulkDone"
         />
 
         <DataTable

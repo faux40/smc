@@ -1,11 +1,14 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import UsersIndex from '@/pages/users/Index.vue';
+import UsersBulkAddGrid from '@/pages/users/Partials/UsersBulkAddGrid.vue';
 import type { UserRow } from '@/stores/users';
 
-const { routerGet, authUser } = vi.hoisted(() => ({
+const { routerGet, routerReload, authUser } = vi.hoisted(() => ({
     routerGet: vi.fn(),
+    routerReload: vi.fn(),
     authUser: {
         value: { id: 'me', org_id: 'org1' } as Record<string, unknown>,
     },
@@ -15,7 +18,7 @@ vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
     Link: { template: '<a><slot /></a>' },
-    router: { get: routerGet },
+    router: { get: routerGet, reload: routerReload },
     usePage: () => ({ props: { auth: { user: authUser.value } } }),
 }));
 vi.mock('@/routes/users', () => ({
@@ -53,16 +56,40 @@ function user(overrides: Partial<UserRow>): UserRow {
 }
 
 const users: UserRow[] = [
-    user({ id: 'u1', name: 'Zoe Charlie', f_name: 'Zoe', l_name: 'Charlie', department: 'Ops' }),
-    user({ id: 'u2', name: 'Amy Adams', f_name: 'Amy', l_name: 'Adams', department: 'Admin' }),
-    user({ id: 'u3', name: 'Bob Baker', f_name: 'Bob', l_name: 'Baker', department: null }),
+    user({
+        id: 'u1',
+        name: 'Zoe Charlie',
+        f_name: 'Zoe',
+        l_name: 'Charlie',
+        department: 'Ops',
+    }),
+    user({
+        id: 'u2',
+        name: 'Amy Adams',
+        f_name: 'Amy',
+        l_name: 'Adams',
+        department: 'Admin',
+    }),
+    user({
+        id: 'u3',
+        name: 'Bob Baker',
+        f_name: 'Bob',
+        l_name: 'Baker',
+        department: null,
+    }),
 ];
 
 function mountIndex() {
     return mount(UsersIndex, {
         props: {
             users,
-            filters: { q: '', role: '', include_disabled: false, tags: [], tags_mode: 'and' },
+            filters: {
+                q: '',
+                role: '',
+                include_disabled: false,
+                tags: [],
+                tags_mode: 'and',
+            },
             can_create: false,
         },
         global: {
@@ -72,15 +99,14 @@ function mountIndex() {
 }
 
 function nameColumn(wrapper: ReturnType<typeof mountIndex>): string[] {
-    return wrapper
-        .findAll('tbody tr')
-        .map((tr) => tr.find('td').text().trim());
+    return wrapper.findAll('tbody tr').map((tr) => tr.find('td').text().trim());
 }
 
 function clickHeader(wrapper: ReturnType<typeof mountIndex>, label: string) {
     const btn = wrapper
         .findAll('thead button')
         .find((b) => b.text().includes(label));
+
     return btn!.trigger('click');
 }
 
@@ -102,7 +128,7 @@ describe('users/Index — sortable columns', () => {
         expect(headers.some((h) => h.includes('Supervisor'))).toBe(true);
     });
 
-    it('shows each user\'s supervisor name in the Supervisor column', async () => {
+    it("shows each user's supervisor name in the Supervisor column", async () => {
         const withBoss = [
             user({
                 id: 'u9',
@@ -115,11 +141,21 @@ describe('users/Index — sortable columns', () => {
         const wrapper = mount(UsersIndex, {
             props: {
                 users: withBoss,
-                filters: { q: '', role: '', include_disabled: false, tags: [], tags_mode: 'and' },
+                filters: {
+                    q: '',
+                    role: '',
+                    include_disabled: false,
+                    tags: [],
+                    tags_mode: 'and',
+                },
                 can_create: false,
             },
             global: {
-                stubs: { TagFilter: true, TagsListCell: true, UserFormModal: true },
+                stubs: {
+                    TagFilter: true,
+                    TagsListCell: true,
+                    UserFormModal: true,
+                },
             },
         });
         await flushPromises();
@@ -172,7 +208,7 @@ describe('users/Index — live filtering', () => {
         authUser.value = { id: 'me', org_id: 'org1' };
     });
 
-    it('restores the user\'s saved filters on a clean (unfiltered) visit', async () => {
+    it("restores the user's saved filters on a clean (unfiltered) visit", async () => {
         authUser.value = {
             id: 'me',
             org_id: 'org1',
@@ -218,5 +254,48 @@ describe('users/Index — live filtering', () => {
             expect.objectContaining({ q: 'dana' }),
             expect.objectContaining({ preserveState: true }),
         );
+    });
+
+    it('reloads the users list after a bulk add completes', async () => {
+        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { department: [], location: [], job_title: [] },
+        });
+
+        const wrapper = mount(UsersIndex, {
+            props: {
+                users,
+                filters: {
+                    q: '',
+                    role: '',
+                    include_disabled: false,
+                    tags: [],
+                    tags_mode: 'and',
+                },
+                can_create: true,
+            },
+            global: {
+                stubs: {
+                    TagFilter: true,
+                    TagsListCell: true,
+                    UserFormModal: true,
+                    UsersBulkAddGrid: true,
+                },
+            },
+        });
+        await flushPromises();
+
+        const bulkBtn = wrapper
+            .findAll('button')
+            .find((b) => b.text() === 'Bulk add')!;
+        await bulkBtn.trigger('click');
+        await flushPromises();
+
+        const grid = wrapper.findComponent(UsersBulkAddGrid);
+        expect(grid.exists()).toBe(true);
+
+        grid.vm.$emit('done');
+        await flushPromises();
+
+        expect(routerReload).toHaveBeenCalledWith({ only: ['users'] });
     });
 });
