@@ -45,27 +45,20 @@ class CompletionsController extends Controller
         $dir = $request->query('dir') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sort, $dir)->orderBy('id');
 
-        // Paginated mode (?page=…) returns {data, meta}; without it the legacy
-        // flat array is preserved so existing consumers keep working until they
-        // migrate to the paged contract.
-        if ($request->filled('page')) {
-            $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
-            $page = $query->paginate($perPage);
+        // Always paginated ({data, meta}); the completions Pinia store is the
+        // only consumer and drives it via useServerTable.
+        $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
+        $page = $query->paginate($perPage);
 
-            return response()->json([
-                'data' => CompletionSerializer::collection(collect($page->items()), withPermissions: true),
-                'meta' => [
-                    'current_page' => $page->currentPage(),
-                    'last_page' => $page->lastPage(),
-                    'per_page' => $page->perPage(),
-                    'total' => $page->total(),
-                ],
-            ]);
-        }
-
-        $rows = $query->get();
-
-        return response()->json(CompletionSerializer::collection($rows, withPermissions: true));
+        return response()->json([
+            'data' => CompletionSerializer::collection(collect($page->items()), withPermissions: true),
+            'meta' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+            ],
+        ]);
     }
 
     public function store(CompletionRequest $request): JsonResponse

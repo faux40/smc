@@ -2,18 +2,17 @@
  * Completions store — records that a user satisfied one or more
  * rqmt_elements (and therefore one or more Requirements) on a date.
  *
- * Backend API is flat (`/api/completions`) with an optional ?user_id
- * filter; the store mirrors that. Rows live in a flat array keyed by id
- * with `forUser` / `forElement` computed selectors. The pivot links to
- * rqmt_elements are carried in `rqmt_element_ids` and updated via
- * sync() server-side on every create/update.
- *
- * Phase 10 ships the store with no UI; Phases 11/12 consume it.
+ * The table is server-paged: the Index drives `fetchPage()` through
+ * useServerTable and renders the returned page directly (no client cache).
+ * Mutations (create/update/destroy) round-trip to the API; realtime
+ * broadcasts just bump `revision` so the open page refetches itself.
+ * Pivot links to rqmt_elements ride in `rqmt_element_ids`, synced
+ * server-side on every create/update.
  */
 
 import axios from 'axios';
 import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useRealtime } from '@/composables/useRealtime';
 import type {
     ServerTableQuery,
@@ -62,10 +61,6 @@ export type CompletionUpdatePayload = Omit<
     'user_id' | 'module_type' | 'module_id'
 >;
 
-export interface CompletionFilter {
-    user_id?: string;
-}
-
 function defaultHeaders(): Record<string, string> {
     const csrf = document.querySelector<HTMLMetaElement>(
         'meta[name="csrf-token"]',
@@ -79,59 +74,11 @@ function defaultHeaders(): Record<string, string> {
     };
 }
 
-function filterKey(filter: CompletionFilter): string {
-    return `u:${filter.user_id ?? ''}`;
-}
-
 export const useCompletionsStore = defineStore('completions', () => {
-    const rows = ref<CompletionRow[]>([]);
-    const loadedFilters = ref<Set<string>>(new Set());
     const subscribedOrgId = ref<string | null>(null);
     // Bumped on every completion broadcast — the paged Index watches it and
     // refetches its current page (we can't patch a server-paged set).
     const revision = ref(0);
-
-    const forUser = computed(
-        () => (userId: string) =>
-            rows.value.filter((c) => c.user_id === userId),
-    );
-    const forElement = computed(
-        () => (elementId: string) =>
-            rows.value.filter((c) => c.rqmt_element_ids.includes(elementId)),
-    );
-
-    function upsert(row: CompletionRow): void {
-        const idx = rows.value.findIndex((c) => c.id === row.id);
-
-        if (idx === -1) {
-            rows.value = [...rows.value, row];
-        } else {
-            const next = rows.value.slice();
-            next[idx] = { ...next[idx], ...row };
-            rows.value = next;
-        }
-    }
-
-    async function loadFor(filter: CompletionFilter = {}): Promise<void> {
-        const key = filterKey(filter);
-
-        if (loadedFilters.value.has(key)) {
-            return;
-        }
-
-        const params: Record<string, string> = {};
-
-        if (filter.user_id) {
-            params.user_id = filter.user_id;
-        }
-
-        const { data } = await axios.get<CompletionRow[]>('/api/completions', {
-            headers: defaultHeaders(),
-            params,
-        });
-        data.forEach((r) => upsert(r));
-        loadedFilters.value = new Set([...loadedFilters.value, key]);
-    }
 
     /**
      * Server-paged fetch for the completions table (the paged {data, meta}
@@ -175,7 +122,6 @@ export const useCompletionsStore = defineStore('completions', () => {
             payload,
             { headers: defaultHeaders() },
         );
-        upsert(data);
 
         return data;
     }
@@ -183,20 +129,20 @@ export const useCompletionsStore = defineStore('completions', () => {
     async function update(
         id: string,
         payload: CompletionUpdatePayload,
-    ): Promise<void> {
+    ): Promise<CompletionRow> {
         const { data } = await axios.patch<CompletionRow>(
             `/api/completions/${id}`,
             payload,
             { headers: defaultHeaders() },
         );
-        upsert(data);
+
+        return data;
     }
 
     async function destroy(id: string): Promise<void> {
         await axios.delete(`/api/completions/${id}`, {
             headers: defaultHeaders(),
         });
-        rows.value = rows.value.filter((c) => c.id !== id);
     }
 
     function subscribe(orgId: string): void {
@@ -208,33 +154,15 @@ export const useCompletionsStore = defineStore('completions', () => {
 
         const { bind } = useRealtime(`org.${orgId}`);
 
-        bind('CompletionCreated', (p: CompletionRow) => {
-            upsert({ ...p, can_edit: false, can_delete: false });
-            revision.value++;
-        });
-        bind('CompletionUpdated', (p: CompletionRow) => {
-            const existing = rows.value.find((c) => c.id === p.id);
-            revision.value++;
-
-            if (!existing) {
-                return;
-            }
-
-            upsert({ ...existing, ...p });
-        });
-        bind('CompletionDeleted', (p: { id: string }) => {
-            rows.value = rows.value.filter((c) => c.id !== p.id);
-            revision.value++;
-        });
+        // The table is server-paged, so we can't patch a row in place — each
+        // broadcast just nudges the open page to refetch itself.
+        bind('CompletionCreated', () => revision.value++);
+        bind('CompletionUpdated', () => revision.value++);
+        bind('CompletionDeleted', () => revision.value++);
     }
 
     return {
-        rows,
-        loadedFilters,
         revision,
-        forUser,
-        forElement,
-        loadFor,
         fetchPage,
         create,
         update,

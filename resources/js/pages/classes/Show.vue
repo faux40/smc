@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
@@ -65,7 +65,8 @@ const { form, setFrom, validate, payload } = useClassForm(FORM_CTX);
 const saving = ref(false);
 
 const canEditDetails = computed(
-    () => detail.value?.can_edit === true && detail.value?.status === 'scheduled',
+    () =>
+        detail.value?.can_edit === true && detail.value?.status === 'scheduled',
 );
 
 const canComplete = computed(
@@ -76,7 +77,8 @@ const canComplete = computed(
 );
 
 const canReopen = computed(
-    () => detail.value?.can_edit === true && detail.value?.status === 'completed',
+    () =>
+        detail.value?.can_edit === true && detail.value?.status === 'completed',
 );
 
 async function reopen(): Promise<void> {
@@ -198,6 +200,13 @@ const totalHoursLabel = computed(
     <div class="flex flex-col gap-6 p-4">
         <AsyncState :loading="loading" :error="error">
             <template v-if="detail">
+                <Link
+                    :href="classesPage()"
+                    class="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                >
+                    <span aria-hidden="true">&larr;</span> Back to class list
+                </Link>
+
                 <div class="flex items-center justify-end gap-2">
                     <Badge
                         :variant="
@@ -237,21 +246,30 @@ const totalHoursLabel = computed(
                                             <div
                                                 class="rounded-md border border-border bg-muted/20 p-3"
                                             >
-                                                <div class="mb-1 flex items-center justify-between">
-                                                    <h3 class="text-sm font-semibold">
-                                                        Included training courses
+                                                <div
+                                                    class="mb-1 flex items-center justify-between"
+                                                >
+                                                    <h3
+                                                        class="text-sm font-semibold"
+                                                    >
+                                                        Included training
+                                                        courses
                                                     </h3>
                                                     <Button
                                                         type="button"
                                                         variant="outline"
                                                         size="sm"
-                                                        @click="topicsOpen = true"
+                                                        @click="
+                                                            topicsOpen = true
+                                                        "
                                                     >
                                                         Manage
                                                     </Button>
                                                 </div>
                                                 <ul
-                                                    v-if="detail.trainings.length"
+                                                    v-if="
+                                                        detail.trainings.length
+                                                    "
                                                     class="text-sm"
                                                 >
                                                     <li
@@ -259,8 +277,14 @@ const totalHoursLabel = computed(
                                                         :key="t.id"
                                                     >
                                                         {{ t.training_name }}
-                                                        <span class="text-muted-foreground">
-                                                            ({{ hoursLabel(t.hours) }})
+                                                        <span
+                                                            class="text-muted-foreground"
+                                                        >
+                                                            ({{
+                                                                hoursLabel(
+                                                                    t.hours,
+                                                                )
+                                                            }})
                                                         </span>
                                                     </li>
                                                 </ul>
@@ -268,7 +292,8 @@ const totalHoursLabel = computed(
                                                     v-else
                                                     class="text-sm text-muted-foreground"
                                                 >
-                                                    No courses yet. Use “Manage”.
+                                                    No courses yet. Use
+                                                    “Manage”.
                                                 </p>
                                             </div>
                                         </template>
@@ -320,37 +345,53 @@ const totalHoursLabel = computed(
                                     class="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm"
                                 >
                                     <div>
-                                        <dt class="text-xs text-muted-foreground">
+                                        <dt
+                                            class="text-xs text-muted-foreground"
+                                        >
                                             Scheduled date
                                         </dt>
-                                        <dd>{{ detail.scheduled_date || '—' }}</dd>
+                                        <dd>
+                                            {{ detail.scheduled_date || '—' }}
+                                        </dd>
                                     </div>
                                     <div>
-                                        <dt class="text-xs text-muted-foreground">
+                                        <dt
+                                            class="text-xs text-muted-foreground"
+                                        >
                                             Class Hours
                                         </dt>
                                         <dd>{{ totalHoursLabel }}</dd>
                                     </div>
                                     <div>
-                                        <dt class="text-xs text-muted-foreground">
+                                        <dt
+                                            class="text-xs text-muted-foreground"
+                                        >
                                             Completed
                                         </dt>
-                                        <dd>{{ detail.completion_date || '—' }}</dd>
+                                        <dd>
+                                            {{ detail.completion_date || '—' }}
+                                        </dd>
                                     </div>
                                     <div>
-                                        <dt class="text-xs text-muted-foreground">
+                                        <dt
+                                            class="text-xs text-muted-foreground"
+                                        >
                                             Location
                                         </dt>
                                         <dd>{{ detail.location || '—' }}</dd>
                                     </div>
                                     <div>
-                                        <dt class="text-xs text-muted-foreground">
+                                        <dt
+                                            class="text-xs text-muted-foreground"
+                                        >
                                             Instructor
                                         </dt>
                                         <dd>{{ detail.instructor || '—' }}</dd>
                                     </div>
                                     <div v-if="detail.notes" class="col-span-2">
-                                        <dt class="text-xs text-muted-foreground">
+                                        <dt
+                                            class="text-xs text-muted-foreground"
+                                        >
                                             Notes
                                         </dt>
                                         <dd class="whitespace-pre-line">
@@ -409,10 +450,7 @@ const totalHoursLabel = computed(
                                         </span>
                                     </li>
                                 </ul>
-                                <p
-                                    v-else
-                                    class="text-xs text-muted-foreground"
-                                >
+                                <p v-else class="text-xs text-muted-foreground">
                                     No credit issued.
                                 </p>
                             </div>
@@ -459,7 +497,9 @@ const totalHoursLabel = computed(
 
                             <!-- Uploaded files (distinct from the generated PDFs above) -->
                             <div class="space-y-2 border-t border-border pt-4">
-                                <h3 class="text-xs font-semibold text-muted-foreground">
+                                <h3
+                                    class="text-xs font-semibold text-muted-foreground"
+                                >
                                     Uploaded files
                                 </h3>
                                 <AttachmentsList

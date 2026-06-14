@@ -425,6 +425,7 @@ function defaultHeaders(): Record<string, string> {
             v-model:open="modalOpen"
             :mode="modalMode"
             :target="editing"
+            @saved="table.refetchSoon()"
         />
     </div>
 </template>

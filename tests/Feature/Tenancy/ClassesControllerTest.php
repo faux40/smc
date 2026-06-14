@@ -148,7 +148,7 @@ class ClassesControllerTest extends TestCase
         TrainingClass::factory()->for($orgA, 'organization')->create();
         TrainingClass::factory()->for($orgB, 'organization')->count(2)->create();
 
-        $this->actingAs($managerA)->getJson('/api/classes')->assertOk()->assertJsonCount(1);
+        $this->actingAs($managerA)->getJson('/api/classes')->assertOk()->assertJsonCount(1, 'data');
     }
 
     public function test_index_paginated_returns_data_and_meta(): void
@@ -182,14 +182,15 @@ class ClassesControllerTest extends TestCase
         $res->assertJsonPath('data.0.name', 'Forklift Refresher');
     }
 
-    public function test_index_legacy_flat_array_without_page(): void
+    public function test_index_always_returns_the_paged_envelope(): void
     {
         $org = Organization::factory()->create();
         $manager = $this->manager($org);
         TrainingClass::factory()->for($org, 'organization')->count(2)->create();
 
+        // The flat-array contract is gone — every list response is {data, meta}.
         $this->actingAs($manager)->getJson('/api/classes')
-            ->assertOk()->assertJsonCount(2)->assertJsonMissingPath('meta');
+            ->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('meta.total', 2);
     }
 
     public function test_attaching_a_training_snapshots_its_fields(): void

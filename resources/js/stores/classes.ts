@@ -112,25 +112,11 @@ function defaultHeaders(): Record<string, string> {
 }
 
 export const useClassesStore = defineStore('classes', () => {
-    const library = ref<ClassRow[]>([]);
-    const loaded = ref(false);
     const detail = ref<Record<string, ClassDetail>>({});
     const subscribedOrgId = ref<string | null>(null);
     // Bumped on every ClassChanged broadcast — the paged Index watches it and
     // refetches its current page.
     const revision = ref(0);
-
-    async function load(force = false): Promise<void> {
-        if (loaded.value && !force) {
-            return;
-        }
-
-        const { data } = await axios.get<ClassRow[]>('/api/classes', {
-            headers: defaultHeaders(),
-        });
-        library.value = data;
-        loaded.value = true;
-    }
 
     /**
      * Server-paged fetch for the classes table (paged {data, meta} contract).
@@ -185,7 +171,6 @@ export const useClassesStore = defineStore('classes', () => {
                 headers: defaultHeaders(),
             },
         );
-        await load(true);
 
         return cache(data);
     }
@@ -199,14 +184,12 @@ export const useClassesStore = defineStore('classes', () => {
             payload,
             { headers: defaultHeaders() },
         );
-        await load(true);
 
         return cache(data);
     }
 
     async function destroy(id: string): Promise<void> {
         await axios.delete(`/api/classes/${id}`, { headers: defaultHeaders() });
-        library.value = library.value.filter((c) => c.id !== id);
         const next = { ...detail.value };
         delete next[id];
         detail.value = next;
@@ -289,7 +272,6 @@ export const useClassesStore = defineStore('classes', () => {
             payload,
             { headers: defaultHeaders() },
         );
-        await load(true);
 
         return cache(data);
     }
@@ -304,7 +286,6 @@ export const useClassesStore = defineStore('classes', () => {
             {},
             { headers: defaultHeaders() },
         );
-        await load(true);
 
         return cache(data);
     }
@@ -318,10 +299,10 @@ export const useClassesStore = defineStore('classes', () => {
 
         const { bind } = useRealtime(`org.${orgId}`);
 
-        // Aggregate event: re-sync the list and any cached detail for the
-        // changed class. Self-echoes are filtered by useRealtime.
+        // Aggregate event: nudge the paged list to refetch and re-sync any
+        // cached detail for the changed class. Self-echoes are filtered by
+        // useRealtime.
         bind('ClassChanged', (p: { class_id: string; action: string }) => {
-            void load(true);
             revision.value++;
 
             if (p.action === 'deleted') {
@@ -335,11 +316,8 @@ export const useClassesStore = defineStore('classes', () => {
     }
 
     return {
-        library,
-        loaded,
         detail,
         revision,
-        load,
         fetchPage,
         loadDetail,
         create,

@@ -60,8 +60,8 @@ class CompletionsApiTest extends TestCase
         $this->actingAs($admin)
             ->getJson('/api/completions')
             ->assertOk()
-            ->assertJsonCount(1)
-            ->assertJsonPath('0.rqmt_element_ids.0', $element->id);
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.rqmt_element_ids.0', $element->id);
     }
 
     public function test_manager_can_list(): void
@@ -109,8 +109,8 @@ class CompletionsApiTest extends TestCase
         $this->actingAs($admin)
             ->getJson('/api/completions?user_id='.$userA->id)
             ->assertOk()
-            ->assertJsonCount(1)
-            ->assertJsonPath('0.user_id', $userA->id);
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.user_id', $userA->id);
     }
 
     public function test_list_does_not_leak_cross_org(): void
@@ -129,7 +129,7 @@ class CompletionsApiTest extends TestCase
         $this->actingAs($adminA)
             ->getJson('/api/completions')
             ->assertOk()
-            ->assertJsonCount(0);
+            ->assertJsonCount(0, 'data');
     }
 
     /** Make N completions for the scaffold user, dated N..1 days ago. */
@@ -177,17 +177,17 @@ class CompletionsApiTest extends TestCase
             ->assertJsonPath('meta.current_page', 3);
     }
 
-    public function test_legacy_flat_array_when_no_page_param(): void
+    public function test_index_always_returns_the_paged_envelope(): void
     {
         $s = $this->scaffold();
         $this->seedCompletions($s, 4);
 
-        // No ?page → unchanged flat-array contract (no meta wrapper).
+        // The flat-array contract is gone — every list response is {data, meta}.
         $this->actingAs($s['admin'])
             ->getJson('/api/completions')
             ->assertOk()
-            ->assertJsonCount(4)
-            ->assertJsonMissingPath('meta');
+            ->assertJsonCount(4, 'data')
+            ->assertJsonPath('meta.total', 4);
     }
 
     public function test_paginated_q_filters_by_cert_id(): void
@@ -586,7 +586,7 @@ class CompletionsApiTest extends TestCase
         $row = $this->actingAs($admin)
             ->getJson('/api/completions')
             ->assertOk()
-            ->json('0');
+            ->json('data.0');
 
         $this->assertSame('CPR', $row['training_name']);
         $this->assertEquals(4.5, $row['hours']);
@@ -616,7 +616,7 @@ class CompletionsApiTest extends TestCase
         $row = $this->actingAs($admin)
             ->getJson('/api/completions')
             ->assertOk()
-            ->json('0');
+            ->json('data.0');
 
         $this->assertNull($row['class_id']);
         $this->assertNull($row['class_name']);
@@ -677,7 +677,7 @@ class CompletionsApiTest extends TestCase
         $row = $this->actingAs($admin)
             ->getJson('/api/completions')
             ->assertOk()
-            ->json('0');
+            ->json('data.0');
 
         $this->assertSame('Retired Course', $row['training_name']);
     }

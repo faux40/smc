@@ -31,19 +31,39 @@ describe('useClassesStore', () => {
         vi.clearAllMocks();
     });
 
-    it('load() hydrates the library and is idempotent until forced', async () => {
+    it('fetchPage() requests the paged endpoint and returns {data, meta}', async () => {
         const get = axios.get as ReturnType<typeof vi.fn>;
-        get.mockResolvedValue({ data: [{ id: 'c1', name: 'Class A' }] });
+        const meta = {
+            current_page: 2,
+            last_page: 3,
+            per_page: 25,
+            total: 60,
+        };
+        get.mockResolvedValue({ data: { data: [{ id: 'c1' }], meta } });
         const store = useClassesStore();
 
-        await store.load();
-        await store.load(); // cached — no second call
+        const res = await store.fetchPage({
+            page: 2,
+            per_page: 25,
+            dir: 'asc',
+            sort: 'name',
+            q: 'fire',
+        });
 
-        expect(store.library).toHaveLength(1);
-        expect(get).toHaveBeenCalledTimes(1);
-
-        await store.load(true); // forced refetch
-        expect(get).toHaveBeenCalledTimes(2);
+        expect(get).toHaveBeenCalledWith(
+            '/api/classes',
+            expect.objectContaining({
+                params: expect.objectContaining({
+                    page: 2,
+                    per_page: 25,
+                    dir: 'asc',
+                    sort: 'name',
+                    q: 'fire',
+                }),
+            }),
+        );
+        expect(res.data).toHaveLength(1);
+        expect(res.meta.total).toBe(60);
     });
 
     it('loadDetail() caches the detail keyed by id', async () => {
@@ -57,20 +77,18 @@ describe('useClassesStore', () => {
         expect(store.detail.c1.name).toBe('Class A');
     });
 
-    it('destroy() drops the row from library and detail cache', async () => {
+    it('destroy() drops the detail cache entry', async () => {
         (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({
-            data: [{ id: 'c1' }],
+            data: detailA,
         });
         (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({
             data: { ok: true },
         });
         const store = useClassesStore();
-        await store.load();
-        await store.loadDetail('c1'); // populates detail.c1 via the same mock
+        await store.loadDetail('c1'); // populates detail.c1
 
         await store.destroy('c1');
 
-        expect(store.library.find((c) => c.id === 'c1')).toBeUndefined();
         expect(store.detail.c1).toBeUndefined();
     });
 

@@ -54,26 +54,20 @@ class ClassesController extends Controller
         $dir = $request->query('dir') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sort, $dir)->orderBy('id');
 
-        // Paginated mode (?page=…) returns {data, meta}; without it the legacy
-        // flat array is preserved until consumers migrate.
-        if ($request->filled('page')) {
-            $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
-            $p = $query->paginate($perPage);
+        // Always paginated ({data, meta}); the classes Pinia store is the only
+        // consumer and drives it via useServerTable.
+        $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
+        $p = $query->paginate($perPage);
 
-            return response()->json([
-                'data' => collect($p->items())->map(fn (TrainingClass $c) => $this->summarize($c)),
-                'meta' => [
-                    'current_page' => $p->currentPage(),
-                    'last_page' => $p->lastPage(),
-                    'per_page' => $p->perPage(),
-                    'total' => $p->total(),
-                ],
-            ]);
-        }
-
-        $classes = $query->get();
-
-        return response()->json($classes->map(fn (TrainingClass $c) => $this->summarize($c)));
+        return response()->json([
+            'data' => collect($p->items())->map(fn (TrainingClass $c) => $this->summarize($c)),
+            'meta' => [
+                'current_page' => $p->currentPage(),
+                'last_page' => $p->lastPage(),
+                'per_page' => $p->perPage(),
+                'total' => $p->total(),
+            ],
+        ]);
     }
 
     public function show(TrainingClass $class): JsonResponse

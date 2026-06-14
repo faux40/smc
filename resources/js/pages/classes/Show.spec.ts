@@ -9,6 +9,7 @@ import type { ClassDetail } from '@/stores/classes';
 vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
+    Link: { template: '<a :href="href"><slot /></a>', props: ['href'] },
     usePage: () => ({ props: { auth: { user: { org_id: 'org1' } } } }),
 }));
 vi.mock('@/routes/classes', () => ({ page: () => ({ url: '/classes' }) }));
@@ -43,30 +44,42 @@ const detail: ClassDetail = {
 };
 
 function mockGet(detailOverride: ClassDetail = detail) {
-    (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
-        if (url === '/api/classes/c1') {
-            return Promise.resolve({ data: detailOverride });
-        }
+    (axios.get as ReturnType<typeof vi.fn>).mockImplementation(
+        (url: string) => {
+            if (url === '/api/classes/c1') {
+                return Promise.resolve({ data: detailOverride });
+            }
 
-        if (
-            url === '/api/trainings' ||
-            url === '/api/tags' ||
-            url === '/api/attachments'
-        ) {
-            return Promise.resolve({ data: [] });
-        }
+            if (
+                url === '/api/trainings' ||
+                url === '/api/tags' ||
+                url === '/api/attachments'
+            ) {
+                return Promise.resolve({ data: [] });
+            }
 
-        if (url === '/api/users') {
-            return Promise.resolve({
-                data: [
-                    { id: 'u1', f_name: 'Dana', l_name: 'Reed', email: 'dana.reed@demo.local' },
-                    { id: 'u2', f_name: 'Sam', l_name: 'Lee', email: 'sam.lee@demo.local' },
-                ],
-            });
-        }
+            if (url === '/api/users') {
+                return Promise.resolve({
+                    data: [
+                        {
+                            id: 'u1',
+                            f_name: 'Dana',
+                            l_name: 'Reed',
+                            email: 'dana.reed@demo.local',
+                        },
+                        {
+                            id: 'u2',
+                            f_name: 'Sam',
+                            l_name: 'Lee',
+                            email: 'sam.lee@demo.local',
+                        },
+                    ],
+                });
+            }
 
-        return Promise.reject(new Error(`unexpected GET ${url}`));
-    });
+            return Promise.reject(new Error(`unexpected GET ${url}`));
+        },
+    );
 }
 
 async function mountShow() {

@@ -79,7 +79,10 @@ const props = defineProps<{
     target?: CompletionRow | null;
 }>();
 
-const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
+const emit = defineEmits<{
+    (e: 'update:open', v: boolean): void;
+    (e: 'saved'): void;
+}>();
 
 const store = useCompletionsStore();
 const trainings = useTrainingsStore();
@@ -264,6 +267,7 @@ const submit = async () => {
             await store.create(payload);
         }
 
+        emit('saved');
         emit('update:open', false);
     } catch (e) {
         errorStore.reportFromAxios(e, FORM_CTX, {
