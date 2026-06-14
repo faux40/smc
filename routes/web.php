@@ -172,6 +172,8 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // Requirements library — named groups of rqmt_elements (9.2 adds the
     // nested element API). Anyone can list; CRUD is Owner/SA/Admin.
     Route::get('api/requirements', [RequirementsController::class, 'index'])->name('requirements.index');
+    // Static segment before the {requirement} param routes so it isn't treated as an id.
+    Route::get('api/requirements/paged', [RequirementsController::class, 'paged'])->name('requirements.paged');
     Route::post('api/requirements', [RequirementsController::class, 'store'])->name('requirements.store');
     Route::patch('api/requirements/{requirement}', [RequirementsController::class, 'update'])->name('requirements.update');
     Route::delete('api/requirements/{requirement}', [RequirementsController::class, 'destroy'])->name('requirements.destroy');

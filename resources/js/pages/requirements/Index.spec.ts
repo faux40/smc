@@ -1,0 +1,160 @@
+import { flushPromises, mount } from '@vue/test-utils';
+import axios from 'axios';
+import { createPinia, setActivePinia } from 'pinia';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import RequirementsIndex from '@/pages/requirements/Index.vue';
+
+const { authUser } = vi.hoisted(() => ({
+    authUser: {
+        value: { id: 'me', org_id: 'org1' } as Record<string, unknown>,
+    },
+}));
+
+vi.mock('axios');
+vi.mock('@inertiajs/vue3', () => ({
+    Head: { template: '<div><slot /></div>' },
+    Link: { template: '<a :href="href"><slot /></a>', props: ['href'] },
+    router: { visit: vi.fn() },
+    usePage: () => ({ props: { auth: { user: authUser.value } } }),
+}));
+vi.mock('@/routes/requirements', () => ({
+    page: () => '/requirements',
+    show: (id: string) => `/requirements/${id}`,
+}));
+
+const REQUIREMENTS = [
+    {
+        id: 'r1',
+        name: 'Fall Protection',
+        description: 'roof work',
+        elements_count: 3,
+        can_edit: true,
+        can_delete: true,
+    },
+    {
+        id: 'r2',
+        name: 'Forklift',
+        description: null,
+        elements_count: 0,
+        can_edit: false,
+        can_delete: false,
+    },
+];
+
+const STUBS = {
+    RequirementFormModal: true,
+    Heading: true,
+    AsyncState: { template: '<div><slot /></div>' },
+    TableColumnsMenu: true,
+};
+
+// Captured params from each GET /api/requirements/paged call.
+let pagedParams: Array<Record<string, unknown>> = [];
+const lastParams = () => pagedParams.at(-1) ?? {};
+
+function mockAxios() {
+    (axios.get as ReturnType<typeof vi.fn>).mockImplementation(
+        (url: string, config?: { params?: Record<string, unknown> }) => {
+            if (url === '/api/requirements/paged') {
+                pagedParams.push(config?.params ?? {});
+
+                return Promise.resolve({
+                    data: {
+                        data: REQUIREMENTS,
+                        meta: {
+                            current_page: Number(config?.params?.page ?? 1),
+                            last_page: 2,
+                            per_page: Number(config?.params?.per_page ?? 25),
+                            total: 30,
+                        },
+                    },
+                });
+            }
+
+            return Promise.resolve({ data: [] });
+        },
+    );
+}
+
+async function mountPage() {
+    mockAxios();
+    const wrapper = mount(RequirementsIndex, { global: { stubs: STUBS } });
+    await flushPromises();
+
+    return wrapper;
+}
+
+describe('requirements/Index — server-paged table', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+        pagedParams = [];
+        authUser.value = { id: 'me', org_id: 'org1' };
+    });
+
+    it('renders the column headers (incl. the row-# lead column)', async () => {
+        const wrapper = await mountPage();
+        const headers = wrapper.findAll('thead th').map((th) => th.text());
+
+        for (const h of ['Name', 'Elements']) {
+            expect(headers.some((x) => x.includes(h))).toBe(true);
+        }
+
+        expect(headers.some((x) => x.trim() === '#')).toBe(true);
+    });
+
+    it('renders rows with the detail link and element count', async () => {
+        const wrapper = await mountPage();
+        const text = wrapper.text();
+        expect(text).toContain('Fall Protection');
+        expect(text).toContain('roof work');
+        expect(wrapper.find('a[href="/requirements/r1"]').exists()).toBe(true);
+    });
+
+    it('requests page 1 sorted by name asc on mount', async () => {
+        await mountPage();
+        const p = pagedParams[0];
+        expect(p.page).toBe(1);
+        expect(p.sort).toBe('name');
+        expect(p.dir).toBe('asc');
+    });
+
+    it('asks the server for the sort when the Name header is clicked', async () => {
+        const wrapper = await mountPage();
+        const nameBtn = wrapper
+            .findAll('thead button')
+            .find((b) => b.text().includes('Name'));
+        await nameBtn!.trigger('click');
+        await flushPromises();
+        // name was the default asc → clicking flips to desc
+        expect(lastParams().sort).toBe('name');
+        expect(lastParams().dir).toBe('desc');
+    });
+
+    it('sorts by elements_count when the Elements header is clicked', async () => {
+        const wrapper = await mountPage();
+        const elBtn = wrapper
+            .findAll('thead button')
+            .find((b) => b.text().includes('Elements'));
+        await elBtn!.trigger('click');
+        await flushPromises();
+        expect(lastParams().sort).toBe('elements_count');
+    });
+
+    it('debounces the search box into a server q', async () => {
+        const wrapper = await mountPage();
+        vi.useFakeTimers();
+        await wrapper.find('#filter_q').setValue('forklift');
+        await vi.advanceTimersByTimeAsync(300);
+        vi.useRealTimers();
+        await flushPromises();
+        expect(lastParams().q).toBe('forklift');
+    });
+
+    it('requests the next page from the server', async () => {
+        const wrapper = await mountPage();
+        await wrapper.find('button[aria-label="Next page"]').trigger('click');
+        await flushPromises();
+        expect(lastParams().page).toBe(2);
+    });
+});

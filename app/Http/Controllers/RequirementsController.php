@@ -12,6 +12,12 @@ use Illuminate\Support\Facades\Gate;
 
 class RequirementsController extends Controller
 {
+    /**
+     * Flat full list — the org's whole requirements library. Backs
+     * `store.load()` and every downstream picker (`<select>` dropdowns in the
+     * assignment forms, TrainingOrRequirementPicker), which need every row, not
+     * a page. The admin table uses {@see self::paged()} instead.
+     */
     public function index(Request $request): JsonResponse
     {
         Gate::authorize('viewAny', Requirement::class);
@@ -22,14 +28,50 @@ class RequirementsController extends Controller
             ->orderBy('name')
             ->get();
 
-        return response()->json($rows->map(fn (Requirement $r) => [
-            'id' => $r->id,
-            'name' => $r->name,
-            'description' => $r->description,
-            'elements_count' => $r->elements_count ?? 0,
-            'can_edit' => Gate::check('update', $r),
-            'can_delete' => Gate::check('delete', $r),
-        ]));
+        return response()->json($rows->map(fn (Requirement $r) => $this->summarize($r)));
+    }
+
+    /**
+     * Server-paged slice for the requirements admin table: free-text search
+     * (name + description), header-click sort, pagination. Returns the
+     * {data, meta} envelope consumed by useServerTable.
+     */
+    public function paged(Request $request): JsonResponse
+    {
+        Gate::authorize('viewAny', Requirement::class);
+
+        $query = Requirement::query()
+            ->where('org_id', $request->user()->org_id)
+            ->withCount('elements');
+
+        // Free-text search (case-insensitive, portable).
+        if ($request->filled('q')) {
+            $term = '%'.mb_strtolower((string) $request->query('q')).'%';
+            $query->where(function ($w) use ($term) {
+                $w->whereRaw('LOWER(name) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(description) LIKE ?', [$term]);
+            });
+        }
+
+        // Sort. `elements_count` is the withCount alias (a virtual SELECT
+        // column eligible for ORDER BY); the rest are DB columns.
+        $sortable = ['name', 'elements_count', 'created_at'];
+        $sort = in_array($request->query('sort'), $sortable, true) ? $request->query('sort') : 'name';
+        $dir = $request->query('dir') === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sort, $dir)->orderBy('id');
+
+        $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
+        $p = $query->paginate($perPage);
+
+        return response()->json([
+            'data' => collect($p->items())->map(fn (Requirement $r) => $this->summarize($r)),
+            'meta' => [
+                'current_page' => $p->currentPage(),
+                'last_page' => $p->lastPage(),
+                'per_page' => $p->perPage(),
+                'total' => $p->total(),
+            ],
+        ]);
     }
 
     public function store(Request $request): JsonResponse
@@ -116,6 +158,24 @@ class RequirementsController extends Controller
             'id' => $r->id,
             'name' => $r->name,
             'description' => $r->description,
+        ];
+    }
+
+    /**
+     * Full list/table row: identity + element count + per-row permissions.
+     * Shared by index() (flat library) and paged() (admin table).
+     *
+     * @return array<string, mixed>
+     */
+    private function summarize(Requirement $r): array
+    {
+        return [
+            'id' => $r->id,
+            'name' => $r->name,
+            'description' => $r->description,
+            'elements_count' => $r->elements_count ?? 0,
+            'can_edit' => Gate::check('update', $r),
+            'can_delete' => Gate::check('delete', $r),
         ];
     }
 }

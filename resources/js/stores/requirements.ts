@@ -9,6 +9,10 @@ import axios from 'axios';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useRealtime } from '@/composables/useRealtime';
+import type {
+    ServerTableQuery,
+    ServerTableResponse,
+} from '@/composables/useServerTable';
 import { realtimeTabId } from '@/echo';
 
 export interface RequirementRow {
@@ -42,6 +46,9 @@ export const useRequirementsStore = defineStore('requirements', () => {
     const library = ref<RequirementRow[]>([]);
     const loaded = ref(false);
     const subscribedOrgId = ref<string | null>(null);
+    // Bumped on every requirement broadcast — the paged Index watches it and
+    // refetches its current page.
+    const revision = ref(0);
 
     async function load(): Promise<void> {
         if (loaded.value) {
@@ -56,6 +63,36 @@ export const useRequirementsStore = defineStore('requirements', () => {
         );
         library.value = data;
         loaded.value = true;
+    }
+
+    /**
+     * Server-paged fetch for the requirements admin table ({data, meta}
+     * contract). Does not touch the cached library — the Index drives it via
+     * useServerTable and renders the returned page.
+     */
+    async function fetchPage(
+        params: ServerTableQuery,
+    ): Promise<ServerTableResponse<RequirementRow>> {
+        const query: Record<string, string | number> = {
+            page: params.page,
+            per_page: params.per_page,
+            dir: params.dir,
+        };
+
+        if (params.sort) {
+            query.sort = params.sort;
+        }
+
+        if (params.q) {
+            query.q = params.q;
+        }
+
+        const { data } = await axios.get<ServerTableResponse<RequirementRow>>(
+            '/api/requirements/paged',
+            { headers: defaultHeaders(), params: query },
+        );
+
+        return data;
     }
 
     async function create(
@@ -102,6 +139,8 @@ export const useRequirementsStore = defineStore('requirements', () => {
         bind(
             'RequirementCreated',
             (p: { id: string; name: string; description: string | null }) => {
+                revision.value++;
+
                 if (!library.value.some((r) => r.id === p.id)) {
                     library.value = [
                         ...library.value,
@@ -120,6 +159,7 @@ export const useRequirementsStore = defineStore('requirements', () => {
         bind(
             'RequirementUpdated',
             (p: { id: string; name: string; description: string | null }) => {
+                revision.value++;
                 library.value = library.value.map((r) =>
                     r.id === p.id
                         ? { ...r, name: p.name, description: p.description }
@@ -128,9 +168,20 @@ export const useRequirementsStore = defineStore('requirements', () => {
             },
         );
         bind('RequirementDeleted', (p: { id: string }) => {
+            revision.value++;
             library.value = library.value.filter((r) => r.id !== p.id);
         });
     }
 
-    return { library, loaded, load, create, update, destroy, subscribe };
+    return {
+        library,
+        loaded,
+        revision,
+        load,
+        fetchPage,
+        create,
+        update,
+        destroy,
+        subscribe,
+    };
 });
