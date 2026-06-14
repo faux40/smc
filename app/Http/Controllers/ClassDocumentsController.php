@@ -7,6 +7,7 @@ use App\Support\ClassCertificates;
 use App\Support\ClassSignInSheet;
 use App\Support\ClassSummary;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -24,6 +25,13 @@ class ClassDocumentsController extends Controller
         $certs = ClassCertificates::rows($class);
 
         abort_if($certs === [], 404, 'This class has no issued certificates.');
+
+        // Prod hardening: the certificate is the only PDF using a custom
+        // @font-face (the GreatVibes signature), which DomPDF caches to
+        // storage/fonts on first render — make sure that dir exists. And give
+        // a generous memory ceiling so a large class (many cert pages) can't
+        // exhaust a tight php-fpm limit.
+        $this->prepareDompdfRuntime();
 
         $pdf = Pdf::loadView('pdf.certificate', ['certs' => $certs])
             ->setPaper('letter', 'landscape');
@@ -49,5 +57,38 @@ class ClassDocumentsController extends Controller
             ->setPaper('letter', 'portrait');
 
         return $pdf->stream("class-summary-{$class->id}.pdf");
+    }
+
+    /**
+     * Ensure DomPDF's font cache dir exists and the request has enough memory
+     * to render a multi-page document. Only ever raises the memory limit.
+     */
+    private function prepareDompdfRuntime(): void
+    {
+        File::ensureDirectoryExists(storage_path('fonts'));
+
+        $current = $this->memoryLimitBytes();
+
+        if ($current !== -1 && $current < 512 * 1024 * 1024) {
+            ini_set('memory_limit', '512M');
+        }
+    }
+
+    private function memoryLimitBytes(): int
+    {
+        $raw = trim((string) ini_get('memory_limit'));
+
+        if ($raw === '' || $raw === '-1') {
+            return -1;
+        }
+
+        $value = (int) $raw;
+
+        return match (strtolower(substr($raw, -1))) {
+            'g' => $value * 1024 * 1024 * 1024,
+            'm' => $value * 1024 * 1024,
+            'k' => $value * 1024,
+            default => $value,
+        };
     }
 }
