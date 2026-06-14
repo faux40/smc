@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Actions\BackfillClassEnrollments;
 use App\Models\ClassTraining;
 use App\Models\Completion;
 use App\Models\Organization;
@@ -82,6 +83,10 @@ class MigrateTrainingWise extends Command
                     $this->importEmployees($limit);
                     $this->importClasses();
                     $this->importCertifications($limit);
+                    // TW has no roster table — reconstruct enrollments from the
+                    // certs we just imported so classes show who attended.
+                    $enrolled = app(BackfillClassEnrollments::class)->handle($this->orgId);
+                    $this->info("  enrollments backfilled from completions: {$enrolled}");
 
                     if ($dryRun) {
                         throw new DryRunComplete;
