@@ -46,6 +46,7 @@ function user(overrides: Partial<UserRow>): UserRow {
         supervisor_name: null,
         start_date: null,
         end_date: null,
+        notes: null,
         created_at: null,
         tag_ids: [],
         can_edit: false,

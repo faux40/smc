@@ -79,6 +79,11 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('users', [UsersController::class, 'index'])->name('users.index');
     Route::post('users', [UsersController::class, 'store'])->name('users.store');
     Route::post('users/bulk', [UsersController::class, 'bulkStore'])->name('users.bulk');
+    // Combine-users (de-dup) tool: preview the diff, then merge the duplicate
+    // into the survivor. `users/merge` is declared before the users/{user}
+    // bindings so the literal segment wins over route binding.
+    Route::get('api/users/merge-preview', [UsersController::class, 'mergePreview'])->name('users.merge-preview');
+    Route::post('users/merge', [UsersController::class, 'merge'])->name('users.merge');
 
     // Lean JSON user list for downstream picker UX (assignment +
     // completion form modals). Manager+ via inline role gate; UsersController

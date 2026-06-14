@@ -52,6 +52,7 @@ interface Subject {
     supervisor_name: string | null;
     start_date: string | null;
     end_date: string | null;
+    notes: string | null;
     can_edit: boolean;
 }
 
@@ -168,6 +169,7 @@ const editTarget = computed<UserRow>(() => ({
     supervisor_name: props.subject.supervisor_name,
     start_date: props.subject.start_date,
     end_date: props.subject.end_date,
+    notes: props.subject.notes,
     created_at: null,
     tag_ids: props.tagIds,
     can_edit: props.subject.can_edit,
@@ -383,6 +385,15 @@ function defaultHeaders(): Record<string, string> {
                 <dd>{{ subject.end_date }}</dd>
             </div>
         </dl>
+
+        <div v-if="subject.notes" class="space-y-1">
+            <h2 class="text-xs text-muted-foreground">Notes</h2>
+            <p
+                class="whitespace-pre-line rounded-md border border-border bg-muted/30 p-3 text-sm"
+            >
+                {{ subject.notes }}
+            </p>
+        </div>
 
         <div class="space-y-2">
             <h2 class="text-sm font-semibold">Tags</h2>

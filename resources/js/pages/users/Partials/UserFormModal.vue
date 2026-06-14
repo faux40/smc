@@ -56,6 +56,7 @@ interface FormState {
     supervisor_id: string; // '' = none
     start_date: string;
     end_date: string;
+    notes: string;
 }
 
 // Sentinel for the "no supervisor" Select option (reka-ui rejects empty-string
@@ -87,6 +88,7 @@ const form = reactive<FormState>({
     supervisor_id: '',
     start_date: '',
     end_date: '',
+    notes: '',
 });
 
 // Same-org users eligible as a supervisor — exclude the user being edited so
@@ -148,6 +150,7 @@ watch(
             form.supervisor_id = t.supervisor_id ?? '';
             form.start_date = t.start_date ?? '';
             form.end_date = t.end_date ?? '';
+            form.notes = t.notes ?? '';
         } else {
             form.f_name = '';
             form.m_name = '';
@@ -164,6 +167,7 @@ watch(
             form.supervisor_id = '';
             form.start_date = '';
             form.end_date = '';
+            form.notes = '';
         }
     },
 );
@@ -212,6 +216,7 @@ const submit = () => {
         supervisor_id: form.supervisor_id === '' ? null : form.supervisor_id,
         start_date: blank(form.start_date),
         end_date: blank(form.end_date),
+        notes: blank(form.notes),
     };
 
     if (isEdit.value && props.target) {
@@ -474,6 +479,18 @@ const submit = () => {
                             </SelectContent>
                         </Select>
                         <InputError :message="fieldErrors.message('status')" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="user_notes">Notes</Label>
+                        <textarea
+                            id="user_notes"
+                            v-model="form.notes"
+                            rows="3"
+                            class="w-full rounded border border-input bg-background p-2 text-sm"
+                            placeholder="Free-text notes. The combine-users tool appends discarded values here."
+                        ></textarea>
+                        <InputError :message="fieldErrors.message('notes')" />
                     </div>
                 </template>
 

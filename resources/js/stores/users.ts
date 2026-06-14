@@ -44,6 +44,7 @@ export interface UserRow {
     supervisor_name: string | null;
     start_date: string | null;
     end_date: string | null;
+    notes: string | null;
     created_at: string | null;
     // Tag IDs attached to this user. Used to hydrate the tagsStore
     // `attached` map on first paint so TagsListCell renders without a
@@ -101,6 +102,24 @@ function writeHeaders(): Record<string, string> {
         'X-Origin-Tab': realtimeTabId(),
         ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
     };
+}
+
+/** One profile field in the combine-users diff. */
+export interface MergeFieldRow {
+    key: string;
+    label: string;
+    survivor: string | null;
+    duplicate: string | null;
+    differs: boolean;
+    default: 'survivor' | 'duplicate';
+}
+
+export interface MergePreview {
+    survivor: { id: string; name: string; email: string | null };
+    duplicate: { id: string; name: string; email: string | null };
+    fields: MergeFieldRow[];
+    role: { survivor: string | null; duplicate: string | null };
+    counts: Record<string, number>;
 }
 
 interface BroadcastUser {
@@ -207,6 +226,7 @@ export const useUsersStore = defineStore('users', () => {
             supervisor_name: u.supervisor_name ?? null,
             start_date: null,
             end_date: null,
+            notes: null,
             created_at: null,
             tag_ids: u.tag_ids ?? [],
             can_edit: false,
@@ -266,6 +286,7 @@ export const useUsersStore = defineStore('users', () => {
                 supervisor_name: null,
                 start_date: null,
                 end_date: null,
+                notes: null,
                 created_at: null,
                 // Realtime-created rows arrive without tag attachments; the
                 // tagsStore reconciles via TagAttached broadcasts.
@@ -338,6 +359,7 @@ export const useUsersStore = defineStore('users', () => {
         supervisor_id?: string | null;
         start_date?: string | null;
         end_date?: string | null;
+        notes?: string | null;
     }
 
     function create(
@@ -411,6 +433,45 @@ export const useUsersStore = defineStore('users', () => {
         return data;
     }
 
+    /**
+     * Combine-users preview: the side-by-side profile diff + record counts
+     * the merge modal renders before the user commits.
+     */
+    async function mergePreview(
+        survivorId: string,
+        duplicateId: string,
+    ): Promise<MergePreview> {
+        const { data } = await axios.get<MergePreview>(
+            '/api/users/merge-preview',
+            {
+                headers: writeHeaders(),
+                params: { survivor: survivorId, duplicate: duplicateId },
+            },
+        );
+
+        return data;
+    }
+
+    /**
+     * Fold the duplicate into the survivor. On success patch the local cache
+     * directly — the broadcast self-echo filter skips the originating tab, so
+     * this tab won't get the UserUpdated/UserSoftDeleted it just triggered.
+     */
+    async function merge(payload: {
+        survivor_id: string;
+        duplicate_id: string;
+        fields: Record<string, 'survivor' | 'duplicate'>;
+    }): Promise<void> {
+        const { data } = await axios.post<{
+            survivor: BroadcastUser;
+            duplicate_id: string;
+        }>('/users/merge', payload, { headers: writeHeaders() });
+
+        applySoftDeleted(data.duplicate_id);
+        applyUpdated(data.survivor);
+        invalidateFieldOptions();
+    }
+
     function disable(id: string, opts: { onSuccess?: () => void } = {}): void {
         router.post(
             usersDisable(id).url,
@@ -454,6 +515,8 @@ export const useUsersStore = defineStore('users', () => {
         create,
         bulkCreate,
         update,
+        mergePreview,
+        merge,
         disable,
         enable,
         destroy,

@@ -38,6 +38,7 @@ use Spatie\Permission\Traits\HasRoles;
     'supervisor_id',
     'start_date',
     'end_date',
+    'notes',
 ])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail

@@ -7,6 +7,7 @@ use App\Events\UserSoftDeleted;
 use App\Events\UserStatusChanged;
 use App\Events\UserUpdated;
 use App\Http\Requests\CreateUserRequest;
+use App\Http\Requests\MergeUsersRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\Completion;
 use App\Models\TrainingAssignment;
@@ -14,6 +15,7 @@ use App\Models\User;
 use App\Services\TrainingStatusService;
 use App\Support\CompletionSerializer;
 use App\Support\SourceChips;
+use App\Support\UserMerge;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -234,6 +236,7 @@ class UsersController extends Controller
                 'supervisor_name' => $user->supervisor?->name,
                 'start_date' => $user->start_date?->toDateString(),
                 'end_date' => $user->end_date?->toDateString(),
+                'notes' => $user->notes,
                 // Gates the inline Edit affordance; the same ability the
                 // update endpoint enforces (UpdateUserRequest::authorize).
                 'can_edit' => Gate::allows('update', $user),
@@ -435,6 +438,7 @@ class UsersController extends Controller
             'supervisor_id' => $data['supervisor_id'] ?? null,
             'start_date' => $data['start_date'] ?? null,
             'end_date' => $data['end_date'] ?? null,
+            'notes' => $data['notes'] ?? null,
         ]);
 
         // role is absent from $data for Owner targets (the request
@@ -452,6 +456,51 @@ class UsersController extends Controller
         // user-detail edit modal stays on the detail page. Direct/test
         // requests without a referer fall back to the list.
         return back(fallback: route('users.index'));
+    }
+
+    /**
+     * Combine-users preview: the side-by-side profile diff + counts of the
+     * records that would move, so the modal can show what a merge does
+     * before the user commits.
+     */
+    public function mergePreview(Request $request, UserMerge $merge): JsonResponse
+    {
+        $survivor = User::with('roles:id,name', 'supervisor')->findOrFail($request->query('survivor'));
+        $duplicate = User::with('roles:id,name', 'supervisor')->findOrFail($request->query('duplicate'));
+
+        Gate::authorize('update', $survivor);
+        Gate::authorize('delete', $duplicate);
+        abort_if($survivor->id === $duplicate->id, 422, 'Choose two different users.');
+
+        return response()->json($merge->preview($survivor, $duplicate));
+    }
+
+    /**
+     * Fold the duplicate into the survivor (reassign all records, resolve
+     * conflicts, stash discarded values in notes, soft-delete the duplicate)
+     * then broadcast both the survivor update and the duplicate removal so
+     * every open tab reconciles.
+     */
+    public function merge(MergeUsersRequest $request, UserMerge $merge): JsonResponse
+    {
+        $survivor = $request->survivorUser()->load('roles:id,name', 'supervisor');
+        $duplicate = $request->duplicateUser()->load('roles:id,name', 'supervisor');
+
+        $result = $merge->merge($survivor, $duplicate, $request->validated('fields', []));
+
+        event(new UserUpdated($result));
+        event(new UserSoftDeleted($duplicate));
+
+        return response()->json([
+            'survivor' => [
+                'id' => $result->id,
+                'name' => $result->name,
+                'email' => $result->email,
+                'status' => $result->status,
+                'role' => $result->roles->first()?->name,
+            ],
+            'duplicate_id' => $duplicate->id,
+        ]);
     }
 
     public function disable(User $user): RedirectResponse

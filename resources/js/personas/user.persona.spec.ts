@@ -49,6 +49,7 @@ const subject = {
     supervisor_name: null,
     start_date: null,
     end_date: null,
+    notes: null,
     can_edit: false,
 };
 

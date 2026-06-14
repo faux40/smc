@@ -69,6 +69,25 @@ class UsersUpdateTest extends TestCase
         $this->assertSame('WVSD-002', $target->refresh()->employee_number);
     }
 
+    public function test_admin_can_edit_notes(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->forOrganization($org)->withRole('Admin')->create();
+        $target = User::factory()->forOrganization($org)->withRole('None')->create();
+
+        $this->actingAs($admin)
+            ->patch(route('users.update', $target), [
+                'f_name' => $target->f_name,
+                'l_name' => $target->l_name,
+                'role' => 'None',
+                'status' => 'active',
+                'notes' => 'Prefers night shift.',
+            ])
+            ->assertRedirect(route('users.index'));
+
+        $this->assertSame('Prefers night shift.', $target->refresh()->notes);
+    }
+
     public function test_admin_can_change_role(): void
     {
         $org = Organization::factory()->create();

@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select';
 import { useTableFilter } from '@/composables/useTableFilter';
 import { useTableSort } from '@/composables/useTableSort';
+import MergeUsersModal from '@/pages/users/Partials/MergeUsersModal.vue';
 import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import UserRowActions from '@/pages/users/Partials/UserRowActions.vue';
 import UsersBulkAddGrid from '@/pages/users/Partials/UsersBulkAddGrid.vue';
@@ -255,6 +256,7 @@ const onBulkDone = () => {
 const modalOpen = ref(false);
 const modalMode = ref<'create' | 'edit'>('create');
 const editingUser = ref<UserRow | null>(null);
+const mergeOpen = ref(false);
 
 const openCreate = () => {
     modalMode.value = 'create';
@@ -299,6 +301,13 @@ const remove = (row: UserRow) => {
                 description="Manage members of your organization."
             />
             <div v-if="can_create" class="flex items-center gap-2">
+                <Button
+                    variant="outline"
+                    data-testid="combine-users-btn"
+                    @click="mergeOpen = true"
+                >
+                    Combine users
+                </Button>
                 <Button variant="outline" @click="toggleBulk">
                     {{ showBulk ? 'Close bulk add' : 'Bulk add' }}
                 </Button>
@@ -444,5 +453,7 @@ const remove = (row: UserRow) => {
             :mode="modalMode"
             :target="editingUser"
         />
+
+        <MergeUsersModal v-if="can_create" v-model:open="mergeOpen" />
     </div>
 </template>
