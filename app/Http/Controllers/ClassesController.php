@@ -239,6 +239,62 @@ class ClassesController extends Controller
     }
 
     /**
+     * Apply a roster diff in one request: enroll the given user-ids and
+     * unenroll the given enrollment-ids. Enrolling is idempotent (an
+     * already-enrolled user is skipped, not an error) so the picker can send
+     * its whole selection without pre-diffing. Unenroll de-issues each
+     * dropped user's certs from this class (matters on a re-opened class).
+     */
+    public function bulkEnrollment(Request $request, TrainingClass $class): JsonResponse
+    {
+        Gate::authorize('update', $class);
+        $this->assertEditable($class);
+
+        $data = $request->validate([
+            'enroll' => ['array'],
+            'enroll.*' => [
+                'string',
+                Rule::exists('users', 'id')->where('org_id', $class->org_id)->whereNull('deleted_at'),
+            ],
+            'unenroll' => ['array'],
+            'unenroll.*' => [
+                'string',
+                Rule::exists('class_enrollments', 'id')->where('class_id', $class->id),
+            ],
+        ]);
+
+        $enroll = array_values(array_unique($data['enroll'] ?? []));
+        $unenroll = array_values(array_unique($data['unenroll'] ?? []));
+
+        DB::transaction(function () use ($class, $enroll, $unenroll) {
+            if ($unenroll !== []) {
+                $userIds = $class->enrollments()->whereIn('id', $unenroll)->pluck('user_id');
+
+                // De-issue the dropped users' certs from this class's topics.
+                Completion::query()
+                    ->whereIn('class_training_id', $class->classTrainings()->pluck('id'))
+                    ->whereIn('user_id', $userIds)
+                    ->delete();
+
+                $class->enrollments()->whereIn('id', $unenroll)->delete();
+            }
+
+            foreach ($enroll as $userId) {
+                // firstOrCreate keeps this idempotent — no unique-violation on
+                // a user who's already on the roster.
+                $class->enrollments()->firstOrCreate(
+                    ['user_id' => $userId],
+                    ['status' => 'enrolled'],
+                );
+            }
+        });
+
+        event(new ClassChanged($class->id, $class->org_id, 'updated'));
+
+        return response()->json($this->detail($class->fresh()));
+    }
+
+    /**
      * Close out a class: for each enrollee, record a per-training pass/fail
      * result (+ notes), generate a completion for every PASSED enrollee ×
      * training pair (standalone — credited by module identity), roll the

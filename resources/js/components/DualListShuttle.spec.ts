@@ -125,4 +125,39 @@ describe('DualListShuttle', () => {
         expect(panel(w, 0).findAll('.extra-cell')).toHaveLength(2);
         expect(panel(w, 1).findAll('.extra-cell')).toHaveLength(0);
     });
+
+    it('stacks the lists (no 2-column grid) when layout="stacked"', () => {
+        const split = mountShuttle({ alwaysExpanded: true });
+        expect(split.find('.md\\:grid-cols-2').exists()).toBe(true);
+
+        const stacked = mountShuttle({
+            alwaysExpanded: true,
+            layout: 'stacked',
+        });
+        // Both lists still render, but never as a side-by-side grid.
+        expect(stacked.findAll('table')).toHaveLength(2);
+        expect(stacked.find('.md\\:grid-cols-2').exists()).toBe(false);
+        // Assigned renders before available (roster on top).
+        expect(panel(stacked, 0).text()).toContain('Banana');
+        expect(panel(stacked, 1).text()).toContain('Cherry');
+    });
+
+    it('renders the available-controls slot under the available search box', () => {
+        const w = mount(DualListShuttle, {
+            props: {
+                assigned,
+                available,
+                columns,
+                assignedTitle: 'A',
+                availableTitle: 'B',
+                alwaysExpanded: true,
+                layout: 'stacked',
+            },
+            slots: {
+                'available-controls':
+                    '<div class="avail-filters">filters</div>',
+            },
+        });
+        expect(w.findAll('.avail-filters')).toHaveLength(1);
+    });
 });

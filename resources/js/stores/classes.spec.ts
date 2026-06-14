@@ -160,6 +160,24 @@ describe('useClassesStore', () => {
         expect(store.detail.c1.status).toBe('completed');
     });
 
+    it('bulkEnroll() posts the roster diff and caches the returned detail', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({ data: detailA });
+        const store = useClassesStore();
+
+        await store.bulkEnroll('c1', {
+            enroll: ['u1', 'u2'],
+            unenroll: ['e9'],
+        });
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/classes/c1/enrollments/bulk',
+            { enroll: ['u1', 'u2'], unenroll: ['e9'] },
+            expect.anything(),
+        );
+        expect(store.detail.c1.id).toBe('c1');
+    });
+
     it('reopen() posts and caches the unlocked (scheduled) detail', async () => {
         const post = axios.post as ReturnType<typeof vi.fn>;
         post.mockResolvedValue({ data: { ...detailA, status: 'scheduled' } });

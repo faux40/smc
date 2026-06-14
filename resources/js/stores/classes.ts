@@ -256,6 +256,23 @@ export const useClassesStore = defineStore('classes', () => {
         return cache(data);
     }
 
+    /**
+     * Apply a whole roster diff in one request: `enroll` is a list of
+     * user-ids (idempotent server-side), `unenroll` a list of enrollment-ids.
+     */
+    async function bulkEnroll(
+        id: string,
+        diff: { enroll: string[]; unenroll: string[] },
+    ): Promise<ClassDetail> {
+        const { data } = await axios.post<ClassDetail>(
+            `/api/classes/${id}/enrollments/bulk`,
+            diff,
+            { headers: defaultHeaders() },
+        );
+
+        return cache(data);
+    }
+
     async function complete(
         id: string,
         payload: {
@@ -328,6 +345,7 @@ export const useClassesStore = defineStore('classes', () => {
         detachTraining,
         enroll,
         unenroll,
+        bulkEnroll,
         complete,
         reopen,
         subscribe,

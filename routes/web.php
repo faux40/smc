@@ -161,6 +161,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::patch('api/classes/{class}/trainings/{classTraining}', [ClassesController::class, 'updateTraining'])->name('classes.trainings.update');
     Route::delete('api/classes/{class}/trainings/{classTraining}', [ClassesController::class, 'detachTraining'])->name('classes.trainings.detach');
     Route::post('api/classes/{class}/enrollments', [ClassesController::class, 'enroll'])->name('classes.enrollments.store');
+    Route::post('api/classes/{class}/enrollments/bulk', [ClassesController::class, 'bulkEnrollment'])->name('classes.enrollments.bulk');
     Route::delete('api/classes/{class}/enrollments/{enrollment}', [ClassesController::class, 'unenroll'])->name('classes.enrollments.destroy');
     Route::post('api/classes/{class}/complete', [ClassesController::class, 'complete'])->name('classes.complete');
     Route::post('api/classes/{class}/reopen', [ClassesController::class, 'reopen'])->name('classes.reopen');

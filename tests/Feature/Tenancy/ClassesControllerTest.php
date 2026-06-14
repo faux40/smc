@@ -4,6 +4,7 @@ namespace Tests\Feature\Tenancy;
 
 use App\Models\ClassEnrollment;
 use App\Models\ClassTraining;
+use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Training;
 use App\Models\TrainingClass;
@@ -356,6 +357,128 @@ class ClassesControllerTest extends TestCase
         // Duplicate enrollment rejected.
         $this->actingAs($manager)
             ->postJson("/api/classes/{$class->id}/enrollments", ['user_id' => $student->id])
+            ->assertStatus(422);
+    }
+
+    public function test_bulk_enrollment_adds_and_removes_in_one_request(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $keep = User::factory()->for($org, 'organization')->create();
+        $drop = User::factory()->for($org, 'organization')->create();
+        $addA = User::factory()->for($org, 'organization')->create();
+        $addB = User::factory()->for($org, 'organization')->create();
+
+        // Seed an existing roster: keep + drop.
+        $keepEnrollment = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $keep->id]);
+        $dropEnrollment = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $drop->id]);
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments/bulk", [
+                'enroll' => [$addA->id, $addB->id],
+                'unenroll' => [$dropEnrollment->id],
+            ])
+            ->assertOk()
+            ->assertJsonCount(3, 'enrollments');
+
+        $this->assertDatabaseHas('class_enrollments', ['class_id' => $class->id, 'user_id' => $addA->id]);
+        $this->assertDatabaseHas('class_enrollments', ['class_id' => $class->id, 'user_id' => $addB->id]);
+        $this->assertDatabaseHas('class_enrollments', ['id' => $keepEnrollment->id]);
+        $this->assertDatabaseMissing('class_enrollments', ['id' => $dropEnrollment->id]);
+    }
+
+    public function test_bulk_enroll_is_idempotent_for_already_enrolled_users(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $student = User::factory()->for($org, 'organization')->create();
+        ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $student->id]);
+
+        // Re-enrolling an already-enrolled user is a no-op, not a 422.
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments/bulk", [
+                'enroll' => [$student->id],
+                'unenroll' => [],
+            ])
+            ->assertOk()
+            ->assertJsonCount(1, 'enrollments');
+
+        $this->assertSame(1, ClassEnrollment::where('class_id', $class->id)->where('user_id', $student->id)->count());
+    }
+
+    public function test_bulk_unenroll_deissues_that_users_certs(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $student = User::factory()->for($org, 'organization')->create();
+        $enrollment = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $student->id]);
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create();
+        $completion = Completion::factory()
+            ->for($org, 'organization')
+            ->for($student, 'user')
+            ->create(['class_training_id' => $ct->id]);
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments/bulk", [
+                'enroll' => [],
+                'unenroll' => [$enrollment->id],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseMissing('class_enrollments', ['id' => $enrollment->id]);
+        $this->assertSoftDeleted('completions', ['id' => $completion->id]);
+    }
+
+    public function test_bulk_enrollment_rejects_cross_org_user(): void
+    {
+        $org = Organization::factory()->create();
+        $other = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $outsider = User::factory()->for($other, 'organization')->create();
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments/bulk", [
+                'enroll' => [$outsider->id],
+                'unenroll' => [],
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_bulk_unenroll_rejects_enrollment_from_another_class(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $otherClass = TrainingClass::factory()->for($org, 'organization')->create();
+        $foreign = ClassEnrollment::factory()->for($otherClass, 'trainingClass')
+            ->create(['user_id' => User::factory()->for($org, 'organization')]);
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments/bulk", [
+                'enroll' => [],
+                'unenroll' => [$foreign->id],
+            ])
+            ->assertStatus(422);
+
+        $this->assertDatabaseHas('class_enrollments', ['id' => $foreign->id]);
+    }
+
+    public function test_bulk_enrollment_blocked_on_completed_class(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create(['status' => 'completed']);
+        $student = User::factory()->for($org, 'organization')->create();
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments/bulk", [
+                'enroll' => [$student->id],
+                'unenroll' => [],
+            ])
             ->assertStatus(422);
     }
 

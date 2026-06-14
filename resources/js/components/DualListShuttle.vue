@@ -10,6 +10,13 @@ import { Input } from '@/components/ui/input';
  * box and click-to-sort column headers. The assigned (left) list can render
  * an extra column (e.g. an editable hours input) via the `#extra` slots.
  *
+ * Layout: `'split'` (default) is side-by-side (assigned | available);
+ * `'stacked'` is vertical — assigned on top, available full-width below
+ * (for picking from a long, filtered source list into a roster).
+ *
+ * The available list can host extra filter controls (e.g. dept / tag
+ * filters) below its search box via the `#available-controls` slot.
+ *
  * Consumers pre-shape items so each `column.key` resolves to a displayable
  * string/number on the item — the component renders `item[key]` directly.
  */
@@ -32,6 +39,8 @@ const props = defineProps<{
     addLabel?: string;
     /** Show both lists immediately (no reveal/collapse toggle). */
     alwaysExpanded?: boolean;
+    /** 'split' = side-by-side (default); 'stacked' = assigned over available. */
+    layout?: 'split' | 'stacked';
 }>();
 
 const emit = defineEmits<{
@@ -95,9 +104,13 @@ function view(side: Side): Item[] {
 
             return (
                 factor *
-                cell(a, sort.key!).localeCompare(cell(b, sort.key!), undefined, {
-                    sensitivity: 'base',
-                })
+                cell(a, sort.key!).localeCompare(
+                    cell(b, sort.key!),
+                    undefined,
+                    {
+                        sensitivity: 'base',
+                    },
+                )
             );
         });
     }
@@ -193,7 +206,10 @@ function onDrop(targetSide: Side): void {
 
         <div
             class="grid gap-4"
-            :class="{ 'md:grid-cols-2': sidesShown.length === 2 }"
+            :class="{
+                'md:grid-cols-2':
+                    sidesShown.length === 2 && layout !== 'stacked',
+            }"
         >
             <div
                 v-for="side in sidesShown"
@@ -202,132 +218,154 @@ function onDrop(targetSide: Side): void {
                 @dragover.prevent
                 @drop.prevent="onDrop(side)"
             >
-            <div class="border-b border-border p-2">
-                <p class="mb-2 text-xs font-semibold text-muted-foreground">
-                    {{ side === 'assigned' ? assignedTitle : availableTitle }}
-                    ({{
-                        (side === 'assigned' ? assignedView : availableView)
-                            .length
-                    }})
-                </p>
-                <Input
-                    v-model="queries[side]"
-                    type="search"
-                    :placeholder="searchPlaceholder ?? 'Search…'"
-                    class="h-8 text-xs"
-                />
-            </div>
-
-            <table class="w-full text-sm">
-                <thead class="bg-muted/40 text-xs">
-                    <tr>
-                        <th
-                            v-if="side === 'available'"
-                            class="w-8 px-2 py-1.5"
-                        ></th>
-                        <th
-                            v-for="col in columns"
-                            :key="col.key"
-                            class="cursor-pointer select-none px-3 py-1.5 text-left font-medium"
-                            @click="toggleSort(side, col.key)"
-                        >
-                            <span class="inline-flex items-center gap-1">
-                                {{ col.label }}
-                                <ArrowUp
-                                    v-if="
-                                        sorts[side].key === col.key &&
-                                        sorts[side].dir === 'asc'
-                                    "
-                                    class="size-3"
-                                />
-                                <ArrowDown
-                                    v-else-if="sorts[side].key === col.key"
-                                    class="size-3"
-                                />
-                            </span>
-                        </th>
-                        <th
-                            v-if="side === 'assigned' && $slots['extra-header']"
-                            class="px-3 py-1.5 text-left font-medium"
-                        >
-                            <slot name="extra-header" />
-                        </th>
-                        <th
-                            v-if="side === 'assigned'"
-                            class="w-8 px-2 py-1.5"
-                        ></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-border">
-                    <tr
-                        v-for="item in side === 'assigned'
-                            ? assignedView
-                            : availableView"
-                        :key="item.id"
-                        :draggable="!disabled"
-                        class="hover:bg-muted/30"
-                        :class="{ 'cursor-grab': !disabled }"
-                        @dragstart="onDragStart($event, item, side)"
+                <div class="border-b border-border p-2">
+                    <p class="mb-2 text-xs font-semibold text-muted-foreground">
+                        {{
+                            side === 'assigned' ? assignedTitle : availableTitle
+                        }}
+                        ({{
+                            (side === 'assigned' ? assignedView : availableView)
+                                .length
+                        }})
+                    </p>
+                    <Input
+                        v-model="queries[side]"
+                        type="search"
+                        :placeholder="searchPlaceholder ?? 'Search…'"
+                        class="h-8 text-xs"
+                    />
+                    <div
+                        v-if="
+                            side === 'available' && $slots['available-controls']
+                        "
+                        class="mt-2"
                     >
-                        <td v-if="side === 'available'" class="px-2 py-1.5">
-                            <button
-                                v-if="!disabled"
-                                type="button"
-                                aria-label="Add"
-                                class="rounded p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
-                                @click="emit('assign', item)"
+                        <slot name="available-controls" />
+                    </div>
+                </div>
+
+                <table class="w-full text-sm">
+                    <thead class="bg-muted/40 text-xs">
+                        <tr>
+                            <th
+                                v-if="side === 'available'"
+                                class="w-8 px-2 py-1.5"
+                            ></th>
+                            <th
+                                v-for="col in columns"
+                                :key="col.key"
+                                class="cursor-pointer px-3 py-1.5 text-left font-medium select-none"
+                                @click="toggleSort(side, col.key)"
                             >
-                                <Plus class="size-4" />
-                            </button>
-                        </td>
-                        <td
-                            v-for="col in columns"
-                            :key="col.key"
-                            class="px-3 py-1.5"
-                        >
-                            <slot name="cell" :item="item" :column="col">
-                                {{ cell(item, col.key) || '—' }}
-                            </slot>
-                        </td>
-                        <td
-                            v-if="side === 'assigned' && $slots['extra']"
-                            class="px-3 py-1.5"
-                        >
-                            <slot name="extra" :item="item" :side="side" />
-                        </td>
-                        <td
-                            v-if="side === 'assigned'"
-                            class="px-2 py-1.5 text-right"
-                        >
-                            <button
-                                v-if="!disabled"
-                                type="button"
-                                aria-label="Remove"
-                                class="rounded p-1 text-destructive hover:bg-destructive/10"
-                                @click="emit('unassign', item)"
+                                <span class="inline-flex items-center gap-1">
+                                    {{ col.label }}
+                                    <ArrowUp
+                                        v-if="
+                                            sorts[side].key === col.key &&
+                                            sorts[side].dir === 'asc'
+                                        "
+                                        class="size-3"
+                                    />
+                                    <ArrowDown
+                                        v-else-if="sorts[side].key === col.key"
+                                        class="size-3"
+                                    />
+                                </span>
+                            </th>
+                            <th
+                                v-if="
+                                    side === 'assigned' &&
+                                    $slots['extra-header']
+                                "
+                                class="px-3 py-1.5 text-left font-medium"
                             >
-                                <X class="size-4" />
-                            </button>
-                        </td>
-                    </tr>
-                    <tr v-if="(side === 'assigned' ? assignedView : availableView).length === 0">
-                        <td
-                            :colspan="
-                                columns.length +
-                                (side === 'assigned' && $slots['extra'] ? 1 : 0) +
-                                1
+                                <slot name="extra-header" />
+                            </th>
+                            <th
+                                v-if="side === 'assigned'"
+                                class="w-8 px-2 py-1.5"
+                            ></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border">
+                        <tr
+                            v-for="item in side === 'assigned'
+                                ? assignedView
+                                : availableView"
+                            :key="item.id"
+                            :draggable="!disabled"
+                            class="hover:bg-muted/30"
+                            :class="{ 'cursor-grab': !disabled }"
+                            @dragstart="onDragStart($event, item, side)"
+                        >
+                            <td v-if="side === 'available'" class="px-2 py-1.5">
+                                <button
+                                    v-if="!disabled"
+                                    type="button"
+                                    aria-label="Add"
+                                    class="rounded p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
+                                    @click="emit('assign', item)"
+                                >
+                                    <Plus class="size-4" />
+                                </button>
+                            </td>
+                            <td
+                                v-for="col in columns"
+                                :key="col.key"
+                                class="px-3 py-1.5"
+                            >
+                                <slot name="cell" :item="item" :column="col">
+                                    {{ cell(item, col.key) || '—' }}
+                                </slot>
+                            </td>
+                            <td
+                                v-if="side === 'assigned' && $slots['extra']"
+                                class="px-3 py-1.5"
+                            >
+                                <slot name="extra" :item="item" :side="side" />
+                            </td>
+                            <td
+                                v-if="side === 'assigned'"
+                                class="px-2 py-1.5 text-right"
+                            >
+                                <button
+                                    v-if="!disabled"
+                                    type="button"
+                                    aria-label="Remove"
+                                    class="rounded p-1 text-destructive hover:bg-destructive/10"
+                                    @click="emit('unassign', item)"
+                                >
+                                    <X class="size-4" />
+                                </button>
+                            </td>
+                        </tr>
+                        <tr
+                            v-if="
+                                (side === 'assigned'
+                                    ? assignedView
+                                    : availableView
+                                ).length === 0
                             "
-                            class="px-3 py-4 text-center text-xs text-muted-foreground"
                         >
-                            {{
-                                side === 'assigned'
-                                    ? 'Nothing assigned yet.'
-                                    : 'Nothing available.'
-                            }}
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+                            <td
+                                :colspan="
+                                    columns.length +
+                                    (side === 'assigned' && $slots['extra']
+                                        ? 1
+                                        : 0) +
+                                    1
+                                "
+                                class="px-3 py-4 text-center text-xs text-muted-foreground"
+                            >
+                                {{
+                                    side === 'assigned'
+                                        ? 'Nothing assigned yet.'
+                                        : 'Nothing available.'
+                                }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
