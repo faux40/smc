@@ -230,9 +230,13 @@ class UsersController extends Controller
                 'location' => $user->location,
                 'job_title' => $user->job_title,
                 'employee_number' => $user->employee_number,
+                'supervisor_id' => $user->supervisor_id,
                 'supervisor_name' => $user->supervisor?->name,
                 'start_date' => $user->start_date?->toDateString(),
                 'end_date' => $user->end_date?->toDateString(),
+                // Gates the inline Edit affordance; the same ability the
+                // update endpoint enforces (UpdateUserRequest::authorize).
+                'can_edit' => Gate::allows('update', $user),
             ],
             // TagsField is mounted on the page; hydrate it with the
             // current attachments so it doesn't need a follow-up fetch.
@@ -443,7 +447,11 @@ class UsersController extends Controller
 
         event(new UserUpdated($user->fresh()->load('roles:id,name')));
 
-        return Redirect::route('users.index');
+        // Return to wherever the edit was launched from — the users list
+        // modal (referer = users.index) lands back on the list, while the
+        // user-detail edit modal stays on the detail page. Direct/test
+        // requests without a referer fall back to the list.
+        return back(fallback: route('users.index'));
     }
 
     public function disable(User $user): RedirectResponse

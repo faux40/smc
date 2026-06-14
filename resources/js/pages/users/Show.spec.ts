@@ -31,9 +31,12 @@ const subject = {
     department: null,
     location: null,
     job_title: null,
+    employee_number: null,
+    supervisor_id: null,
     supervisor_name: null,
     start_date: null,
     end_date: null,
+    can_edit: true,
 };
 
 const emptyCompliance = {
@@ -100,24 +103,31 @@ const STUBS = {
     TrainingAssignmentFormModal: true,
     ComplianceStatusBadge: true,
     Heading: true,
+    UserFormModal: true,
 };
 
 async function mountShow(
     mockTas: unknown[] = [],
     compliance: unknown = emptyCompliance,
+    subjectOverride: Record<string, unknown> = {},
 ) {
     (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
-        if (url.includes('/training-compliance'))
+        if (url.includes('/training-compliance')) {
             return Promise.resolve({ data: compliance });
-        if (url === '/api/training-assignments')
+        }
+
+        if (url === '/api/training-assignments') {
             return Promise.resolve({ data: mockTas });
+        }
+
         return Promise.resolve({ data: [] });
     });
     const wrapper = mount(UsersShow, {
-        props: { subject, tagIds: [] },
+        props: { subject: { ...subject, ...subjectOverride }, tagIds: [] },
         global: { stubs: STUBS },
     });
     await flushPromises();
+
     return wrapper;
 }
 
@@ -239,5 +249,38 @@ describe('users/Show — status lists + completion history (J3 payload)', () => 
         const classLink = history.find('a[href="/classes/cl1"]');
         expect(classLink.exists()).toBe(true);
         expect(classLink.text()).toContain('June Safety Day');
+    });
+});
+
+describe('users/Show — profile edit affordance', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+    });
+
+    it('shows the Edit button and loads the supervisor roster when can_edit', async () => {
+        const wrapper = await mountShow([], emptyCompliance, { can_edit: true });
+
+        expect(wrapper.find('[data-testid="edit-user-btn"]').exists()).toBe(true);
+        expect(axios.get).toHaveBeenCalledWith('/api/users', expect.anything());
+    });
+
+    it('hides the Edit button and skips the roster fetch when not can_edit', async () => {
+        const wrapper = await mountShow([], emptyCompliance, { can_edit: false });
+
+        expect(wrapper.find('[data-testid="edit-user-btn"]').exists()).toBe(false);
+        expect(axios.get).not.toHaveBeenCalledWith(
+            '/api/users',
+            expect.anything(),
+        );
+    });
+
+    it('passes the subject through to the edit modal as the target', async () => {
+        const wrapper = await mountShow([], emptyCompliance, { can_edit: true });
+
+        const modal = wrapper.findComponent({ name: 'UserFormModal' });
+        expect(modal.exists()).toBe(true);
+        expect(modal.props('mode')).toBe('edit');
+        expect((modal.props('target') as { id: string }).id).toBe('u1');
     });
 });

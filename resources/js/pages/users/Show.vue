@@ -23,12 +23,15 @@ import { Button } from '@/components/ui/button';
 import { realtimeTabId } from '@/echo';
 import TrainingAssignmentFormModal from '@/pages/assignments/Partials/TrainingAssignmentFormModal.vue';
 import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
+import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import { index as usersIndex } from '@/routes/users';
 import { useOrgSettingsStore } from '@/stores/orgSettings';
 import { useRequirementAssignmentsStore } from '@/stores/requirementAssignments';
 import { useRequirementsStore } from '@/stores/requirements';
 import { useTrainingAssignmentsStore } from '@/stores/trainingAssignments';
 import type { TrainingAssignmentRow } from '@/stores/trainingAssignments';
+import { useUsersStore } from '@/stores/users';
+import type { UserRow } from '@/stores/users';
 
 interface Subject {
     id: string;
@@ -44,9 +47,12 @@ interface Subject {
     department: string | null;
     location: string | null;
     job_title: string | null;
+    employee_number: string | null;
+    supervisor_id: string | null;
     supervisor_name: string | null;
     start_date: string | null;
     end_date: string | null;
+    can_edit: boolean;
 }
 
 interface CompliancePayload {
@@ -105,6 +111,7 @@ const page = usePage();
 const authUser = computed(
     () =>
         page.props.auth.user as {
+            org_id?: string;
             isOwner?: boolean;
             isSuperAdmin?: boolean;
             isAdmin?: boolean;
@@ -131,9 +138,42 @@ const taStore = useTrainingAssignmentsStore();
 const reqAssignStore = useRequirementAssignmentsStore();
 const requirements = useRequirementsStore();
 const orgSettings = useOrgSettingsStore();
+const usersStore = useUsersStore();
 const userTas = computed<TrainingAssignmentRow[]>(() =>
     taStore.forUser(props.subject.id),
 );
+
+// ── Profile edit (reuses the canonical UserFormModal) ──────────────────────
+const editOpen = ref(false);
+
+// The modal populates its form from a UserRow; the detail subject carries
+// every field it reads (name parts, contact, role/status, profile,
+// supervisor_id). Pad the cache-only fields it never touches on edit.
+const editTarget = computed<UserRow>(() => ({
+    id: props.subject.id,
+    name: props.subject.name,
+    f_name: props.subject.f_name ?? '',
+    m_name: props.subject.m_name,
+    l_name: props.subject.l_name ?? '',
+    prefix_name: props.subject.prefix_name,
+    suffix_name: props.subject.suffix_name,
+    email: props.subject.email,
+    status: props.subject.status,
+    role: props.subject.role,
+    department: props.subject.department,
+    location: props.subject.location,
+    job_title: props.subject.job_title,
+    employee_number: props.subject.employee_number,
+    supervisor_id: props.subject.supervisor_id,
+    supervisor_name: props.subject.supervisor_name,
+    start_date: props.subject.start_date,
+    end_date: props.subject.end_date,
+    created_at: null,
+    tag_ids: props.tagIds,
+    can_edit: props.subject.can_edit,
+    can_disable: false,
+    can_delete: false,
+}));
 
 const taModalOpen = ref(false);
 const taModalMode = ref<'create' | 'view'>('create');
@@ -164,10 +204,19 @@ const loading = ref(true);
 const error = ref<string | null>(null);
 
 onMounted(async () => {
+    if (authUser.value?.org_id) {
+        usersStore.subscribe(authUser.value.org_id);
+    }
+
     await Promise.all([
         load(),
         taStore.loadFor({ user_id: props.subject.id }),
         requirements.load(),
+        // Roster for the edit modal's supervisor dropdown (lazy — skipped if
+        // the cache is already warm). Only fetched when the actor can edit.
+        props.subject.can_edit
+            ? usersStore.loadPicker()
+            : Promise.resolve(),
     ]);
 });
 
@@ -271,10 +320,21 @@ function defaultHeaders(): Record<string, string> {
     <Head :title="fullName" />
 
     <div class="flex flex-col gap-6 p-4">
-        <Heading
-            :title="fullName"
-            :description="subject.email ?? 'No email on file.'"
-        />
+        <div class="flex items-start justify-between gap-3">
+            <Heading
+                :title="fullName"
+                :description="subject.email ?? 'No email on file.'"
+            />
+            <Button
+                v-if="subject.can_edit"
+                size="sm"
+                variant="outline"
+                data-testid="edit-user-btn"
+                @click="editOpen = true"
+            >
+                Edit profile
+            </Button>
+        </div>
 
         <div
             class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
@@ -387,6 +447,13 @@ function defaultHeaders(): Record<string, string> {
             :mode="taModalMode"
             :target="taModalTarget"
             :initial-user-id="taModalMode === 'create' ? subject.id : null"
+        />
+
+        <UserFormModal
+            v-if="subject.can_edit"
+            v-model:open="editOpen"
+            mode="edit"
+            :target="editTarget"
         />
 
         <p

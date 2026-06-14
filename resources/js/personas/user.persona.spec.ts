@@ -44,9 +44,12 @@ const subject = {
     department: null,
     location: null,
     job_title: null,
+    employee_number: null,
+    supervisor_id: null,
     supervisor_name: null,
     start_date: null,
     end_date: null,
+    can_edit: false,
 };
 
 const myCompliance = {

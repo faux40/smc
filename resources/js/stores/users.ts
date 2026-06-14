@@ -154,6 +154,68 @@ export const useUsersStore = defineStore('users', () => {
     }
 
     /**
+     * Lazily fill the cache from the picker endpoint (GET /api/users) for
+     * pages that aren't the users Index and so never received the full list
+     * via Inertia hydrate — e.g. the user-detail edit modal needs the org
+     * roster to populate its supervisor dropdown. No-op if the cache is
+     * already populated (navigating in from the Index keeps its richer rows).
+     */
+    async function loadPicker(): Promise<void> {
+        if (users.value.length > 0) {
+            return;
+        }
+
+        const { data } = await axios.get<
+            Array<
+                Pick<
+                    UserRow,
+                    | 'id'
+                    | 'name'
+                    | 'f_name'
+                    | 'l_name'
+                    | 'email'
+                    | 'employee_number'
+                    | 'department'
+                    | 'location'
+                    | 'job_title'
+                    | 'supervisor_id'
+                    | 'supervisor_name'
+                    | 'tag_ids'
+                >
+            >
+        >('/api/users', { headers: writeHeaders() });
+
+        // Picker rows carry only a subset of UserRow; pad the rest with
+        // defaults. These rows back the supervisor dropdown (id + name), not
+        // an edit target, so the missing profile fields are immaterial.
+        users.value = data.map((u) => ({
+            id: u.id,
+            name: u.name,
+            f_name: u.f_name ?? '',
+            m_name: null,
+            l_name: u.l_name ?? '',
+            prefix_name: null,
+            suffix_name: null,
+            email: u.email ?? null,
+            status: 'active',
+            role: null,
+            department: u.department ?? null,
+            location: u.location ?? null,
+            job_title: u.job_title ?? null,
+            employee_number: u.employee_number ?? null,
+            supervisor_id: u.supervisor_id ?? null,
+            supervisor_name: u.supervisor_name ?? null,
+            start_date: null,
+            end_date: null,
+            created_at: null,
+            tag_ids: u.tag_ids ?? [],
+            can_edit: false,
+            can_disable: false,
+            can_delete: false,
+        }));
+    }
+
+    /**
      * Subscribe to `org.{orgId}` so peer tabs see UserRegistered /
      * UserUpdated / UserSoftDeleted broadcasts and patch the cache
      * accordingly. The composable's self-echo filter skips broadcasts
@@ -384,6 +446,7 @@ export const useUsersStore = defineStore('users', () => {
         fieldOptions,
         loadFieldOptions,
         hydrate,
+        loadPicker,
         subscribe,
         applyAdded,
         applyUpdated,

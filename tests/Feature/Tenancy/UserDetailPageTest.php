@@ -65,8 +65,51 @@ class UserDetailPageTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('subject.department', 'Field Ops')
                 ->where('subject.job_title', 'Operator')
+                ->where('subject.supervisor_id', $supervisor->id)
                 ->where('subject.supervisor_name', 'Sue Boss')
             );
+    }
+
+    public function test_detail_page_exposes_can_edit_per_policy(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $target = User::factory()->for($org, 'organization')->withRole('None')->create();
+
+        // Admin viewing another user → editable.
+        $this->actingAs($admin)
+            ->get(route('users.show', $target))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('subject.can_edit', true)
+            );
+
+        // A SelfEdit user can view their own page but not edit it from here
+        // (admin update gate excludes self-service roles).
+        $selfEdit = User::factory()->for($org, 'organization')->withRole('SelfEdit')->create();
+        $this->actingAs($selfEdit)
+            ->get(route('users.show', $selfEdit))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('subject.can_edit', false)
+            );
+    }
+
+    public function test_update_returns_to_the_detail_page_when_launched_from_it(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $target = User::factory()->for($org, 'organization')->withRole('None')->create();
+
+        $this->actingAs($admin)
+            ->from(route('users.show', $target))
+            ->patch(route('users.update', $target), [
+                'f_name' => 'Renamed',
+                'l_name' => $target->l_name,
+                'role' => 'None',
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('users.show', $target));
+
+        $this->assertSame('Renamed', $target->refresh()->f_name);
     }
 
     public function test_manager_can_view_any_org_user_detail_page(): void
