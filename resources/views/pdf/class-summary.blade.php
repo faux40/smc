@@ -113,7 +113,7 @@
     </table>
 
     <div class="foot">
-        {{ now()->format('M j, Y g:i A') }}<span class="r">{{ $title }}</span>
+        {{ $generated_at }}<span class="r">{{ $title }}</span>
     </div>
 </body>
 </html>

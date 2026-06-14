@@ -69,6 +69,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Display Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Timestamps are stored in UTC; this is the zone used when presenting a
+    | wall-clock time to people (e.g. the "generated at" footer on PDF
+    | reports). Override per deployment with APP_DISPLAY_TIMEZONE. A proper
+    | per-organization timezone can replace this later.
+    |
+    */
+
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'America/Los_Angeles'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |

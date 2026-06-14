@@ -34,9 +34,13 @@ class ClassSummary
             $ct = $ctById->get($comp->class_training_id);
             $user = $comp->user;
             $issue = $comp->completion_date;
-            $expires = ($issue && $ct && $ct->lifespan_months)
-                ? Carbon::parse($issue)->addMonths($ct->lifespan_months)
-                : null;
+            // Prefer the completion's own expiry (imported records carry a
+            // real expire_date even when the topic has no lifespan_months);
+            // otherwise derive it from issue date + lifespan.
+            $expires = $comp->expire_date
+                ?: (($issue && $ct && $ct->lifespan_months)
+                    ? Carbon::parse($issue)->addMonths($ct->lifespan_months)
+                    : null);
 
             $name = $user
                 ? trim(($user->l_name ?? '').', '.($user->f_name ?? ''), ', ')
@@ -48,7 +52,7 @@ class ClassSummary
                 'location' => $user?->location ?? '',
                 'cert_id' => $comp->cert_id,
                 'issue_date' => $issue ? Carbon::parse($issue)->format('M j, Y') : '',
-                'expires' => $expires ? $expires->format('M j, Y') : '—',
+                'expires' => $expires ? Carbon::parse($expires)->format('M j, Y') : '—',
             ];
         })->values()->all();
 
@@ -77,6 +81,7 @@ class ClassSummary
             'notes' => $class->notes,
             'certificates' => count($rows),
             'rows' => $rows,
+            'generated_at' => Carbon::now(config('app.display_timezone'))->format('M j, Y g:i A'),
         ];
     }
 }

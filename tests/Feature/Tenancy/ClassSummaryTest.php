@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\ClassSummary;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class ClassSummaryTest extends TestCase
@@ -91,6 +92,77 @@ class ClassSummaryTest extends TestCase
         $this->assertSame('First Aid', $data['trainings'][1]['name']);
         $this->assertSame('2.50 hrs', $data['trainings'][1]['hours']);
         $this->assertNull($data['trainings'][1]['frequency']);
+    }
+
+    public function test_expires_prefers_the_completions_own_expire_date(): void
+    {
+        // Imported classes have no lifespan_months on the topic, so expires
+        // showed "—" even though the completion carries a real expiry.
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+
+        $training = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $training->id,
+            'lifespan_months' => null,
+        ]);
+        $user = User::factory()->for($org, 'organization')->create();
+        Completion::create([
+            'org_id' => $org->id,
+            'user_id' => $user->id,
+            'module_type' => Training::class,
+            'module_id' => $training->id,
+            'completion_date' => '2026-01-10',
+            'expire_date' => '2027-05-01',
+            'cert_id' => 'CERT-1',
+            'class_training_id' => $ct->id,
+        ]);
+
+        $row = ClassSummary::data($class->fresh())['rows'][0];
+        $this->assertSame('May 1, 2027', $row['expires']);
+    }
+
+    public function test_expires_is_dash_when_neither_completion_nor_lifespan_set(): void
+    {
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+
+        $training = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $training->id,
+            'lifespan_months' => null,
+        ]);
+        $user = User::factory()->for($org, 'organization')->create();
+        Completion::create([
+            'org_id' => $org->id,
+            'user_id' => $user->id,
+            'module_type' => Training::class,
+            'module_id' => $training->id,
+            'completion_date' => '2026-01-10',
+            'expire_date' => null,
+            'cert_id' => 'CERT-2',
+            'class_training_id' => $ct->id,
+        ]);
+
+        $row = ClassSummary::data($class->fresh())['rows'][0];
+        $this->assertSame('—', $row['expires']);
+    }
+
+    public function test_generated_at_uses_the_display_timezone(): void
+    {
+        config(['app.display_timezone' => 'America/Los_Angeles']);
+        Carbon::setTestNow(Carbon::parse('2026-06-14 02:00:00', 'UTC'));
+
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+
+        // 02:00 UTC on Jun 14 is 19:00 PDT on Jun 13.
+        $this->assertSame('Jun 13, 2026 7:00 PM', ClassSummary::data($class->fresh())['generated_at']);
+
+        Carbon::setTestNow();
     }
 
     public function test_endpoint_returns_a_pdf(): void
