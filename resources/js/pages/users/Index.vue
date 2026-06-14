@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { useDebounceFn } from '@vueuse/core';
+import { X } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
@@ -112,10 +113,19 @@ type UserFilters = {
     tags_mode: TagFilterMode;
 };
 
+const BLANK_FILTERS: UserFilters = {
+    q: '',
+    role: '',
+    include_disabled: false,
+    tags: [],
+    tags_mode: 'and',
+};
+
 const {
     params: filters,
     commit,
-    restoreSaved,
+    restore,
+    clear,
 } = useTableFilter<UserFilters>(
     'users',
     {
@@ -125,6 +135,7 @@ const {
         tags: props.filters.tags ?? [],
         tags_mode: props.filters.tags_mode ?? 'and',
     },
+    BLANK_FILTERS,
     (p) =>
         router.get(
             index().url,
@@ -137,6 +148,15 @@ const {
             },
             { preserveState: true, replace: true },
         ),
+);
+
+// Drives the visible "Clear" control — shown only when a filter is active.
+const hasActiveFilters = computed(
+    () =>
+        filters.q !== '' ||
+        filters.role !== '' ||
+        filters.include_disabled ||
+        filters.tags.length > 0,
 );
 
 const roleModel = computed({
@@ -158,7 +178,10 @@ onMounted(() => {
     hydrateTagAttachments(props.users);
     prefs.ensureHydrated(authUser?.preferences ?? null);
 
-    restoreSaved(
+    // Re-apply the session filter on every load: when the page arrived without
+    // filter params in the URL (e.g. via the breadcrumb / nav), restore the
+    // session's last filter so the list stays filtered until explicitly cleared.
+    restore(
         !props.filters.q &&
             !props.filters.role &&
             !props.filters.include_disabled &&
@@ -332,6 +355,16 @@ const remove = (row: UserRow) => {
                     />
                     Show disabled
                 </label>
+                <Button
+                    v-if="hasActiveFilters"
+                    variant="ghost"
+                    size="sm"
+                    class="text-muted-foreground"
+                    @click="clear"
+                >
+                    <X class="size-4" />
+                    Clear filters
+                </Button>
             </template>
 
             <template #col-name="{ row }">

@@ -205,15 +205,16 @@ describe('users/Index — live filtering', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        sessionStorage.clear();
         authUser.value = { id: 'me', org_id: 'org1' };
     });
 
-    it("restores the user's saved filters on a clean (unfiltered) visit", async () => {
-        authUser.value = {
-            id: 'me',
-            org_id: 'org1',
-            preferences: { users: { filters: { q: 'saved-term', role: '' } } },
-        };
+    it('restores the session filter on a clean (unfiltered) visit', async () => {
+        // Session-scoped (sessionStorage), NOT the user profile.
+        sessionStorage.setItem(
+            'tableFilters:users',
+            JSON.stringify({ q: 'saved-term', role: '' }),
+        );
         mountIndex(); // props.filters are all default → unfiltered
         await flushPromises();
 
@@ -222,6 +223,32 @@ describe('users/Index — live filtering', () => {
             expect.objectContaining({ q: 'saved-term' }),
             expect.objectContaining({ preserveState: true }),
         );
+    });
+
+    it('shows a Clear control only when a filter is active, and clears it', async () => {
+        sessionStorage.setItem(
+            'tableFilters:users',
+            JSON.stringify({ q: 'dana' }),
+        );
+        const wrapper = mountIndex();
+        await flushPromises();
+        vi.clearAllMocks();
+
+        const clearBtn = wrapper
+            .findAll('button')
+            .find((b) => b.text().includes('Clear filters'));
+        expect(clearBtn).toBeTruthy();
+
+        await clearBtn!.trigger('click');
+        await flushPromises();
+
+        // Clearing re-queries unfiltered and drops the session entry.
+        expect(routerGet).toHaveBeenCalledWith(
+            '/users',
+            expect.objectContaining({ q: undefined }),
+            expect.objectContaining({ preserveState: true }),
+        );
+        expect(sessionStorage.getItem('tableFilters:users')).toBeNull();
     });
 
     it('has no Apply button — filters apply live', async () => {

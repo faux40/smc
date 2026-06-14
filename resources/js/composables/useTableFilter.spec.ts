@@ -1,21 +1,17 @@
-import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import axios from 'axios';
-import { usePreferencesStore } from '@/stores/preferences';
 import { useTableFilter } from '@/composables/useTableFilter';
 
-vi.mock('axios');
+const BLANK = { q: '', role: '' };
+const KEY = 'tableFilters:users';
 
-describe('useTableFilter', () => {
+describe('useTableFilter (session-scoped)', () => {
     beforeEach(() => {
-        setActivePinia(createPinia());
-        vi.clearAllMocks();
-        (axios.patch as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} });
+        sessionStorage.clear();
     });
 
     it('commit applies the current params to the server query', () => {
         const apply = vi.fn();
-        const f = useTableFilter('users', { q: '', role: '' }, apply);
+        const f = useTableFilter('users', { q: '', role: '' }, BLANK, apply);
 
         f.params.q = 'dana';
         f.commit();
@@ -23,60 +19,75 @@ describe('useTableFilter', () => {
         expect(apply).toHaveBeenCalledWith({ q: 'dana', role: '' });
     });
 
-    it('commit persists the params to prefs (debounced)', async () => {
-        vi.useFakeTimers();
-        const f = useTableFilter('users', { q: '', role: '' }, vi.fn());
+    it('commit mirrors the params to sessionStorage (not the profile)', () => {
+        const f = useTableFilter('users', { q: '', role: '' }, BLANK, vi.fn());
 
-        f.params.q = 'a';
-        f.commit();
         f.params.q = 'ab';
+        f.params.role = 'Admin';
         f.commit();
-        expect(axios.patch).not.toHaveBeenCalled();
 
-        await vi.advanceTimersByTimeAsync(700);
-        vi.useRealTimers();
-
-        expect(axios.patch).toHaveBeenCalledTimes(1);
-        expect(axios.patch).toHaveBeenLastCalledWith(
-            '/api/me/preferences',
-            { preferences: { users: { filters: { q: 'ab', role: '' } } } },
-            expect.anything(),
-        );
+        expect(JSON.parse(sessionStorage.getItem(KEY)!)).toEqual({
+            q: 'ab',
+            role: 'Admin',
+        });
     });
 
-    it('restoreSaved applies saved filters only when the page is unfiltered', () => {
-        usePreferencesStore().hydrate({
-            users: { filters: { q: 'saved', role: 'Admin' } },
-        });
+    it('restore applies the session filter only when the page is unfiltered', () => {
+        sessionStorage.setItem(
+            KEY,
+            JSON.stringify({ q: 'saved', role: 'Admin' }),
+        );
         const apply = vi.fn();
-        const f = useTableFilter('users', { q: '', role: '' }, apply);
+        const f = useTableFilter('users', { q: '', role: '' }, BLANK, apply);
 
-        f.restoreSaved(true);
+        f.restore(true);
 
         expect(f.params.q).toBe('saved');
         expect(f.params.role).toBe('Admin');
         expect(apply).toHaveBeenCalledWith({ q: 'saved', role: 'Admin' });
     });
 
-    it('restoreSaved is a no-op when the page already has filters', () => {
-        usePreferencesStore().hydrate({
-            users: { filters: { q: 'saved' } },
-        });
+    it('restore is a no-op when the page already has filters (URL wins)', () => {
+        sessionStorage.setItem(KEY, JSON.stringify({ q: 'saved' }));
         const apply = vi.fn();
-        const f = useTableFilter('users', { q: 'fromUrl', role: '' }, apply);
+        const f = useTableFilter(
+            'users',
+            { q: 'fromUrl', role: '' },
+            BLANK,
+            apply,
+        );
 
-        f.restoreSaved(false);
+        f.restore(false);
 
         expect(f.params.q).toBe('fromUrl');
         expect(apply).not.toHaveBeenCalled();
     });
 
-    it('restoreSaved is a no-op when there are no saved filters', () => {
-        usePreferencesStore().hydrate({});
+    it('restore is a no-op when there is no session filter', () => {
         const apply = vi.fn();
-        const f = useTableFilter('users', { q: '', role: '' }, apply);
+        const f = useTableFilter('users', { q: '', role: '' }, BLANK, apply);
 
-        f.restoreSaved(true);
+        f.restore(true);
         expect(apply).not.toHaveBeenCalled();
+    });
+
+    it('clear resets to blank, drops the session entry, and re-queries unfiltered', () => {
+        sessionStorage.setItem(
+            KEY,
+            JSON.stringify({ q: 'saved', role: 'Admin' }),
+        );
+        const apply = vi.fn();
+        const f = useTableFilter(
+            'users',
+            { q: 'saved', role: 'Admin' },
+            BLANK,
+            apply,
+        );
+
+        f.clear();
+
+        expect(f.params).toEqual({ q: '', role: '' });
+        expect(sessionStorage.getItem(KEY)).toBeNull();
+        expect(apply).toHaveBeenCalledWith({ q: '', role: '' });
     });
 });
