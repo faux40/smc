@@ -154,6 +154,50 @@ describe('classes/Index — server-paged table', () => {
         expect(lastParams().dir).toBe('desc');
     });
 
+    it('Instructor header is sortable and sends sort=instructor', async () => {
+        const wrapper = await mountPage();
+        const btn = wrapper
+            .findAll('thead button')
+            .find((b) => b.text().includes('Instructor'));
+        expect(btn).toBeTruthy();
+        await btn!.trigger('click');
+        await flushPromises();
+        expect(lastParams().sort).toBe('instructor');
+    });
+
+    it('Location header is sortable and sends sort=location', async () => {
+        const wrapper = await mountPage();
+        const btn = wrapper
+            .findAll('thead button')
+            .find((b) => b.text().includes('Location'));
+        expect(btn).toBeTruthy();
+        await btn!.trigger('click');
+        await flushPromises();
+        expect(lastParams().sort).toBe('location');
+    });
+
+    it('Trainings header is sortable and sends sort=class_trainings_count', async () => {
+        const wrapper = await mountPage();
+        const btn = wrapper
+            .findAll('thead button')
+            .find((b) => b.text().includes('Trainings'));
+        expect(btn).toBeTruthy();
+        await btn!.trigger('click');
+        await flushPromises();
+        expect(lastParams().sort).toBe('class_trainings_count');
+    });
+
+    it('Enrolled header is sortable and sends sort=enrollments_count', async () => {
+        const wrapper = await mountPage();
+        const btn = wrapper
+            .findAll('thead button')
+            .find((b) => b.text().includes('Enrolled'));
+        expect(btn).toBeTruthy();
+        await btn!.trigger('click');
+        await flushPromises();
+        expect(lastParams().sort).toBe('enrollments_count');
+    });
+
     it('debounces the search box into a server q', async () => {
         const wrapper = await mountPage();
         vi.useFakeTimers();

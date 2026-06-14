@@ -21,30 +21,36 @@ defineOptions({
     },
 });
 
-// Only DB-backed columns can be server-sorted. Instructor / location / the
-// counts aren't (computed / not indexed) — left non-sortable for now.
 const CLASSES_COLUMNS = [
     { key: 'name', label: 'Name', sortable: true },
-    { key: 'instructor', label: 'Instructor' },
+    { key: 'instructor', label: 'Instructor', sortable: true },
     { key: 'date', label: 'Date', sortable: true },
     { key: 'hours', label: 'Hours', sortable: true },
-    { key: 'location', label: 'Location' },
-    { key: 'trainings', label: 'Trainings' },
-    { key: 'enrolled', label: 'Enrolled' },
+    { key: 'location', label: 'Location', sortable: true },
+    { key: 'trainings', label: 'Trainings', sortable: true },
+    { key: 'enrolled', label: 'Enrolled', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
 ];
 
 // Column key ⇄ server sort column.
 const COLUMN_SORT: Record<string, string> = {
     name: 'name',
+    instructor: 'instructor',
     date: 'scheduled_date',
     hours: 'total_hours',
+    location: 'location',
+    trainings: 'class_trainings_count',
+    enrolled: 'enrollments_count',
     status: 'status',
 };
 const SORT_COLUMN: Record<string, string> = {
     name: 'name',
+    instructor: 'instructor',
     scheduled_date: 'date',
     total_hours: 'hours',
+    location: 'location',
+    class_trainings_count: 'trainings',
+    enrollments_count: 'enrolled',
     status: 'status',
 };
 

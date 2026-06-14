@@ -48,8 +48,12 @@ class ClassesController extends Controller
             });
         }
 
-        // Server-side sort, restricted to a safe DB-column allowlist.
-        $sortable = ['scheduled_date', 'name', 'total_hours', 'status', 'completion_date', 'created_at'];
+        // Server-side sort. DB columns plus withCount aliases (class_trainings_count,
+        // enrollments_count) which are virtual SELECT columns eligible for ORDER BY.
+        $sortable = [
+            'scheduled_date', 'name', 'total_hours', 'status', 'completion_date', 'created_at',
+            'instructor', 'location', 'class_trainings_count', 'enrollments_count',
+        ];
         $sort = in_array($request->query('sort'), $sortable, true) ? $request->query('sort') : 'scheduled_date';
         $dir = $request->query('dir') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sort, $dir)->orderBy('id');

@@ -194,6 +194,88 @@ class ClassesControllerTest extends TestCase
             ->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('meta.total', 2);
     }
 
+    // ------------------------------------------------------------------
+    // Sort coverage for all header-clickable columns
+    // ------------------------------------------------------------------
+
+    public function test_sort_by_instructor_orders_alphabetically(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        TrainingClass::factory()->for($org, 'organization')->create(['instructor' => 'Zoe Young']);
+        TrainingClass::factory()->for($org, 'organization')->create(['instructor' => 'Ada Xu']);
+
+        $asc = $this->actingAs($manager)
+            ->getJson('/api/classes?sort=instructor&dir=asc')
+            ->assertOk();
+        $this->assertSame('Ada Xu', $asc->json('data.0.instructor'));
+
+        $desc = $this->actingAs($manager)
+            ->getJson('/api/classes?sort=instructor&dir=desc')
+            ->assertOk();
+        $this->assertSame('Zoe Young', $desc->json('data.0.instructor'));
+    }
+
+    public function test_sort_by_location_orders_alphabetically(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        TrainingClass::factory()->for($org, 'organization')->create(['location' => 'Yard 3']);
+        TrainingClass::factory()->for($org, 'organization')->create(['location' => 'Main Hall']);
+
+        $asc = $this->actingAs($manager)
+            ->getJson('/api/classes?sort=location&dir=asc')
+            ->assertOk();
+        $this->assertSame('Main Hall', $asc->json('data.0.location'));
+
+        $desc = $this->actingAs($manager)
+            ->getJson('/api/classes?sort=location&dir=desc')
+            ->assertOk();
+        $this->assertSame('Yard 3', $desc->json('data.0.location'));
+    }
+
+    public function test_sort_by_trainings_count_orders_by_count(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $few = TrainingClass::factory()->for($org, 'organization')->create(['name' => 'Few']);
+        $many = TrainingClass::factory()->for($org, 'organization')->create(['name' => 'Many']);
+        // Attach 2 topics to $many, 0 to $few.
+        ClassTraining::factory()->for($many, 'trainingClass')->count(2)->create();
+
+        $asc = $this->actingAs($manager)
+            ->getJson('/api/classes?sort=class_trainings_count&dir=asc')
+            ->assertOk();
+        $this->assertSame('Few', $asc->json('data.0.name'));
+        $this->assertSame('Many', $asc->json('data.1.name'));
+
+        $desc = $this->actingAs($manager)
+            ->getJson('/api/classes?sort=class_trainings_count&dir=desc')
+            ->assertOk();
+        $this->assertSame('Many', $desc->json('data.0.name'));
+    }
+
+    public function test_sort_by_enrollments_count_orders_by_count(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $few = TrainingClass::factory()->for($org, 'organization')->create(['name' => 'Few']);
+        $many = TrainingClass::factory()->for($org, 'organization')->create(['name' => 'Many']);
+        // Enroll 3 users in $many, 0 in $few.
+        ClassEnrollment::factory()->for($many, 'trainingClass')->count(3)->create();
+
+        $asc = $this->actingAs($manager)
+            ->getJson('/api/classes?sort=enrollments_count&dir=asc')
+            ->assertOk();
+        $this->assertSame('Few', $asc->json('data.0.name'));
+        $this->assertSame('Many', $asc->json('data.1.name'));
+
+        $desc = $this->actingAs($manager)
+            ->getJson('/api/classes?sort=enrollments_count&dir=desc')
+            ->assertOk();
+        $this->assertSame('Many', $desc->json('data.0.name'));
+    }
+
     public function test_attaching_a_training_snapshots_its_fields(): void
     {
         $org = Organization::factory()->create();
