@@ -80,4 +80,29 @@ describe('TrainingMultiSelect', () => {
         expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(0);
         expect(wrapper.text()).toContain('No trainings');
     });
+
+    it('shows a search input and filters the list by name', async () => {
+        const wrapper = mount(TrainingMultiSelect, {
+            props: { trainings, modelValue: [] },
+        });
+
+        const search = wrapper.find('input[type="text"]');
+        expect(search.exists()).toBe(true);
+
+        await search.setValue('first');
+
+        // "First Aid" matches, "Fall Protection" does not.
+        const boxes = wrapper.findAll('input[type="checkbox"]');
+        expect(boxes).toHaveLength(1);
+        expect(wrapper.text()).toContain('First Aid');
+        expect(wrapper.text()).not.toContain('Fall Protection');
+    });
+
+    it('shows a selected count badge', () => {
+        const wrapper = mount(TrainingMultiSelect, {
+            props: { trainings, modelValue: ['t1'] },
+        });
+
+        expect(wrapper.text()).toContain('1 selected');
+    });
 });

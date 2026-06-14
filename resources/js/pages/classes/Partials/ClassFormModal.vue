@@ -78,7 +78,7 @@ async function submit(): Promise<void> {
 
 <template>
     <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
-        <DialogContent class="flex max-h-[90vh] flex-col sm:max-w-2xl">
+        <DialogContent class="flex max-h-[90vh] flex-col sm:max-w-4xl">
             <form @submit.prevent="submit" novalidate class="flex min-h-0 flex-1 flex-col gap-4">
                 <DialogHeader>
                     <DialogTitle>New class</DialogTitle>
@@ -88,15 +88,21 @@ async function submit(): Promise<void> {
                     </DialogDescription>
                 </DialogHeader>
 
-                <div class="min-h-0 flex-1 overflow-y-auto space-y-4 pr-1">
-                    <ErrorBanner :context="FORM_CTX" />
+                <ErrorBanner :context="FORM_CTX" />
 
-                    <ClassFieldset v-model="form" :context="FORM_CTX" />
+                <div class="grid min-h-0 flex-1 grid-cols-2 gap-6">
+                    <!-- Left: class details -->
+                    <div class="min-h-0 overflow-y-auto pr-1">
+                        <ClassFieldset v-model="form" :context="FORM_CTX" />
+                    </div>
 
-                    <TrainingMultiSelect
-                        v-model="selectedTrainingIds"
-                        :trainings="trainings.library"
-                    />
+                    <!-- Right: training picker — fills the same height as the left column -->
+                    <div class="flex min-h-0 flex-col">
+                        <TrainingMultiSelect
+                            v-model="selectedTrainingIds"
+                            :trainings="trainings.library"
+                        />
+                    </div>
                 </div>
 
                 <DialogFooter>
