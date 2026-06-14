@@ -21,29 +21,63 @@ class CompletionsController extends Controller
         Gate::authorize('viewAny', Completion::class);
 
         $query = Completion::query()
-            ->where('org_id', $request->user()->org_id)
+            ->where('completions.org_id', $request->user()->org_id)
             ->with('rqmtElements:id');
 
         if ($request->filled('user_id')) {
-            $query->where('user_id', (string) $request->query('user_id'));
+            $query->where('completions.user_id', (string) $request->query('user_id'));
         }
 
-        // Free-text search across DB-backed completion fields (cert id / notes).
-        // Case-insensitive + portable (LOWER on both sides).
-        if ($request->filled('q')) {
-            $term = '%'.mb_strtolower((string) $request->query('q')).'%';
-            $query->where(function ($w) use ($term) {
-                $w->whereRaw('LOWER(cert_id) LIKE ?', [$term])
-                    ->orWhereRaw('LOWER(cert_ident) LIKE ?', [$term])
-                    ->orWhereRaw('LOWER(notes) LIKE ?', [$term]);
+        // Determine joins required for sort and/or search.
+        $hasSearch = $request->filled('q');
+        $sortable = ['completion_date', 'expire_date', 'certification_date', 'hours', 'cert_id', 'created_at', 'user', 'training_name'];
+        $sort = in_array($request->query('sort'), $sortable, true) ? $request->query('sort') : 'completion_date';
+        $dir = $request->query('dir') === 'asc' ? 'asc' : 'desc';
+
+        $needsUserJoin = $sort === 'user' || $hasSearch;
+        $needsTrainingJoin = $sort === 'training_name' || $hasSearch;
+
+        if ($needsUserJoin || $needsTrainingJoin) {
+            $query->select('completions.*');
+        }
+
+        if ($needsUserJoin) {
+            // Raw LEFT JOIN — bypasses Eloquent's SoftDeletes scope intentionally,
+            // so completions for soft-deleted users still appear and sort correctly.
+            $query->leftJoin('users', 'users.id', '=', 'completions.user_id');
+        }
+
+        if ($needsTrainingJoin) {
+            // Only match Training-type modules; non-Training rows get NULLs (safe for sort/search).
+            $query->leftJoin('trainings', function ($join) {
+                $join->on('trainings.id', '=', 'completions.module_id')
+                    ->where('completions.module_type', '=', \App\Models\Training::class);
             });
         }
 
-        // Server-side sort, restricted to a safe DB-column allowlist.
-        $sortable = ['completion_date', 'expire_date', 'certification_date', 'hours', 'cert_id', 'created_at'];
-        $sort = in_array($request->query('sort'), $sortable, true) ? $request->query('sort') : 'completion_date';
-        $dir = $request->query('dir') === 'asc' ? 'asc' : 'desc';
-        $query->orderBy($sort, $dir)->orderBy('id');
+        // Free-text search — cert/notes always; user name + training name when joins are active.
+        if ($hasSearch) {
+            $term = '%'.mb_strtolower((string) $request->query('q')).'%';
+            $query->where(function ($w) use ($term) {
+                $w->whereRaw('LOWER(completions.cert_id) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(completions.cert_ident) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(completions.notes) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(users.f_name) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(users.l_name) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(users.email) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(trainings.name) LIKE ?', [$term]);
+            });
+        }
+
+        // Sort — join-based columns use table-qualified refs; DB columns qualify when joins are active.
+        if ($sort === 'user') {
+            $query->orderBy('users.l_name', $dir)->orderBy('users.f_name', $dir)->orderBy('completions.id');
+        } elseif ($sort === 'training_name') {
+            $query->orderBy('trainings.name', $dir)->orderBy('completions.id');
+        } else {
+            $col = ($needsUserJoin || $needsTrainingJoin) ? "completions.{$sort}" : $sort;
+            $query->orderBy($col, $dir)->orderBy('completions.id');
+        }
 
         // Always paginated ({data, meta}); the completions Pinia store is the
         // only consumer and drives it via useServerTable.

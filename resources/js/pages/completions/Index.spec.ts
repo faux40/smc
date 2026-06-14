@@ -206,6 +206,30 @@ describe('completions/Index — server-paged table', () => {
         expect(lastParams().page).toBe(2);
     });
 
+    it('User header is sortable and sends sort=user to the server', async () => {
+        const wrapper = await mountPage();
+        const userBtn = wrapper
+            .findAll('thead button')
+            .find((b) => b.text().includes('User'));
+        expect(userBtn).toBeTruthy();
+
+        await userBtn!.trigger('click');
+        await flushPromises();
+        expect(lastParams().sort).toBe('user');
+    });
+
+    it('Training header is sortable and sends sort=training_name to the server', async () => {
+        const wrapper = await mountPage();
+        const trainingBtn = wrapper
+            .findAll('thead button')
+            .find((b) => b.text().includes('Training'));
+        expect(trainingBtn).toBeTruthy();
+
+        await trainingBtn!.trigger('click');
+        await flushPromises();
+        expect(lastParams().sort).toBe('training_name');
+    });
+
     it('hides a column the user turned off in preferences', async () => {
         authUser.value = {
             id: 'me',

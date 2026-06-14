@@ -659,6 +659,144 @@ class CompletionsApiTest extends TestCase
             ->assertStatus(422);
     }
 
+    // ------------------------------------------------------------------
+    // Q-follow — join-based sort + extended search
+    // ------------------------------------------------------------------
+
+    public function test_sort_by_user_orders_by_last_name(): void
+    {
+        $s = $this->scaffold();
+        // Adams comes before Zuniga alphabetically.
+        $adams = User::factory()->for($s['org'], 'organization')
+            ->state(['f_name' => 'Zoe', 'l_name' => 'Adams'])
+            ->create();
+        $zuniga = User::factory()->for($s['org'], 'organization')
+            ->state(['f_name' => 'Amy', 'l_name' => 'Zuniga'])
+            ->create();
+
+        $cAdams = Completion::factory()
+            ->for($s['org'], 'organization')
+            ->for($adams, 'user')
+            ->state(['module_type' => Training::class, 'module_id' => $s['training']->id])
+            ->create();
+        $cAdams->rqmtElements()->sync([$s['element']->id]);
+
+        $cZuniga = Completion::factory()
+            ->for($s['org'], 'organization')
+            ->for($zuniga, 'user')
+            ->state(['module_type' => Training::class, 'module_id' => $s['training']->id])
+            ->create();
+        $cZuniga->rqmtElements()->sync([$s['element']->id]);
+
+        $asc = $this->actingAs($s['admin'])
+            ->getJson('/api/completions?sort=user&dir=asc')
+            ->assertOk();
+        $this->assertSame($adams->id, $asc->json('data.0.user_id'));
+        $this->assertSame($zuniga->id, $asc->json('data.1.user_id'));
+
+        $desc = $this->actingAs($s['admin'])
+            ->getJson('/api/completions?sort=user&dir=desc')
+            ->assertOk();
+        $this->assertSame($zuniga->id, $desc->json('data.0.user_id'));
+    }
+
+    public function test_sort_by_training_name_orders_alphabetically(): void
+    {
+        $s = $this->scaffold();
+        $alpha = Training::factory()->for($s['org'], 'organization')
+            ->state(['name' => 'Advanced CPR'])
+            ->create();
+        $omega = Training::factory()->for($s['org'], 'organization')
+            ->state(['name' => 'Zumba Safety'])
+            ->create();
+
+        foreach ([$alpha, $omega] as $t) {
+            $el = RqmtElement::factory()
+                ->for($s['org'], 'organization')
+                ->for($s['element']->requirement, 'requirement')
+                ->state(['module_type' => Training::class, 'module_id' => $t->id])
+                ->create();
+            $c = Completion::factory()
+                ->for($s['org'], 'organization')
+                ->for($s['user'], 'user')
+                ->state(['module_type' => Training::class, 'module_id' => $t->id])
+                ->create();
+            $c->rqmtElements()->sync([$el->id]);
+        }
+
+        $asc = $this->actingAs($s['admin'])
+            ->getJson('/api/completions?sort=training_name&dir=asc')
+            ->assertOk();
+        $this->assertSame('Advanced CPR', $asc->json('data.0.training_name'));
+        $this->assertSame('Zumba Safety', $asc->json('data.1.training_name'));
+
+        $desc = $this->actingAs($s['admin'])
+            ->getJson('/api/completions?sort=training_name&dir=desc')
+            ->assertOk();
+        $this->assertSame('Zumba Safety', $desc->json('data.0.training_name'));
+    }
+
+    public function test_search_q_matches_user_name(): void
+    {
+        $s = $this->scaffold();
+        $target = User::factory()->for($s['org'], 'organization')
+            ->state(['f_name' => 'Quentin', 'l_name' => 'Xylophone'])
+            ->create();
+        $other = User::factory()->for($s['org'], 'organization')
+            ->state(['f_name' => 'Plain', 'l_name' => 'Person'])
+            ->create();
+
+        foreach ([$target, $other] as $u) {
+            $c = Completion::factory()
+                ->for($s['org'], 'organization')
+                ->for($u, 'user')
+                ->state(['module_type' => Training::class, 'module_id' => $s['training']->id])
+                ->create();
+            $c->rqmtElements()->sync([$s['element']->id]);
+        }
+
+        $res = $this->actingAs($s['admin'])
+            ->getJson('/api/completions?q=xylophone')
+            ->assertOk();
+
+        $this->assertSame(1, $res->json('meta.total'));
+        $this->assertSame($target->id, $res->json('data.0.user_id'));
+    }
+
+    public function test_search_q_matches_training_name(): void
+    {
+        $s = $this->scaffold();
+        $unique = Training::factory()->for($s['org'], 'organization')
+            ->state(['name' => 'UniqueTrainingXYZ'])
+            ->create();
+        $el = RqmtElement::factory()
+            ->for($s['org'], 'organization')
+            ->for($s['element']->requirement, 'requirement')
+            ->state(['module_type' => Training::class, 'module_id' => $unique->id])
+            ->create();
+        $c = Completion::factory()
+            ->for($s['org'], 'organization')
+            ->for($s['user'], 'user')
+            ->state(['module_type' => Training::class, 'module_id' => $unique->id])
+            ->create();
+        $c->rqmtElements()->sync([$el->id]);
+
+        // Also create a completion on the scaffold training — should not match.
+        $other = Completion::factory()
+            ->for($s['org'], 'organization')
+            ->for($s['user'], 'user')
+            ->state(['module_type' => Training::class, 'module_id' => $s['training']->id])
+            ->create();
+        $other->rqmtElements()->sync([$s['element']->id]);
+
+        $res = $this->actingAs($s['admin'])
+            ->getJson('/api/completions?q=uniquetrainingxyz')
+            ->assertOk();
+
+        $this->assertSame(1, $res->json('meta.total'));
+        $this->assertSame($unique->id, $res->json('data.0.module_id'));
+    }
+
     public function test_training_name_resolves_for_trashed_training(): void
     {
         ['admin' => $admin, 'user' => $user, 'training' => $training, 'element' => $element, 'org' => $org]

@@ -33,11 +33,9 @@ interface UserPickerRow {
     email: string | null;
 }
 
-// Only DB-backed columns can be server-sorted. User / training-name / source /
-// credits aren't (they'd need joins / are computed) — left non-sortable for now.
 const COMPLETIONS_COLUMNS = [
-    { key: 'user', label: 'User' },
-    { key: 'module', label: 'Training' },
+    { key: 'user', label: 'User', sortable: true },
+    { key: 'module', label: 'Training', sortable: true },
     { key: 'date', label: 'Date', sortable: true },
     { key: 'expires', label: 'Expires', sortable: true },
     { key: 'hours', label: 'Hours', sortable: true },
@@ -47,11 +45,15 @@ const COMPLETIONS_COLUMNS = [
 
 // Column key ⇄ server sort column.
 const COLUMN_SORT: Record<string, string> = {
+    user: 'user',
+    module: 'training_name',
     date: 'completion_date',
     expires: 'expire_date',
     hours: 'hours',
 };
 const SORT_COLUMN: Record<string, string> = {
+    user: 'user',
+    training_name: 'module',
     completion_date: 'date',
     expire_date: 'expires',
     hours: 'hours',
@@ -301,8 +303,8 @@ function defaultHeaders(): Record<string, string> {
                         <Input
                             id="filter_q"
                             :model-value="search"
-                            placeholder="Cert # or notes"
-                            class="h-8 w-48"
+                            placeholder="Name, training, cert # or notes"
+                            class="h-8 w-56"
                             @update:model-value="onSearch"
                         />
                     </div>
