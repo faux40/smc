@@ -1,20 +1,52 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
+import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
+import Pagination from '@/components/Pagination.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useServerTable } from '@/composables/useServerTable';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import { page as classesPage, showPage } from '@/routes/classes';
 import { useClassesStore } from '@/stores/classes';
-import type { ClassDetail } from '@/stores/classes';
+import type { ClassDetail, ClassRow } from '@/stores/classes';
 
 defineOptions({
     layout: {
         breadcrumbs: [{ title: 'Classes', href: classesPage() }],
     },
 });
+
+// Only DB-backed columns can be server-sorted. Instructor / location / the
+// counts aren't (computed / not indexed) — left non-sortable for now.
+const CLASSES_COLUMNS = [
+    { key: 'name', label: 'Name', sortable: true },
+    { key: 'instructor', label: 'Instructor' },
+    { key: 'date', label: 'Date', sortable: true },
+    { key: 'hours', label: 'Hours', sortable: true },
+    { key: 'location', label: 'Location' },
+    { key: 'trainings', label: 'Trainings' },
+    { key: 'enrolled', label: 'Enrolled' },
+    { key: 'status', label: 'Status', sortable: true },
+];
+
+// Column key ⇄ server sort column.
+const COLUMN_SORT: Record<string, string> = {
+    name: 'name',
+    date: 'scheduled_date',
+    hours: 'total_hours',
+    status: 'status',
+};
+const SORT_COLUMN: Record<string, string> = {
+    name: 'name',
+    scheduled_date: 'date',
+    total_hours: 'hours',
+    status: 'status',
+};
 
 const store = useClassesStore();
 const page = usePage();
@@ -38,8 +70,39 @@ const canManage = computed(() =>
 );
 
 const error = ref<string | null>(null);
-const loading = ref(true);
+const initialLoading = ref(true);
 const modalOpen = ref(false);
+const search = ref('');
+
+// Server-paged table — the store relay owns the fetch.
+const table = useServerTable<ClassRow>((params) => store.fetchPage(params), {
+    perPage: 25,
+    sort: 'scheduled_date',
+    dir: 'desc',
+});
+
+const activeColumnKey = computed(() =>
+    table.sort.value ? (SORT_COLUMN[table.sort.value] ?? null) : null,
+);
+
+function onSort(columnKey: string): void {
+    const serverKey = COLUMN_SORT[columnKey];
+
+    if (serverKey) {
+        table.setSort(serverKey);
+    }
+}
+
+function onSearch(value: string | number): void {
+    search.value = String(value);
+    table.setQuery(search.value);
+}
+
+// Realtime: a ClassChanged broadcast just re-pulls the current page.
+watch(
+    () => store.revision,
+    () => table.refetchSoon(),
+);
 
 function onSaved(detail: ClassDetail): void {
     router.visit(showPage(detail.id));
@@ -51,11 +114,11 @@ onMounted(async () => {
     }
 
     try {
-        await store.load();
+        await table.fetchPage();
     } catch (e) {
         error.value = (e as Error).message;
     } finally {
-        loading.value = false;
+        initialLoading.value = false;
     }
 });
 </script>
@@ -67,7 +130,7 @@ onMounted(async () => {
         <div class="flex items-start justify-between gap-4">
             <Heading
                 title="Classes"
-                description="Schedule a class, attach trainings, and enroll users. Close it out to record completions (coming soon)."
+                description="Schedule a class, attach trainings, and enroll users. Close it out to record completions."
             />
             <Button v-if="canManage" @click="modalOpen = true">
                 + New class
@@ -75,68 +138,104 @@ onMounted(async () => {
         </div>
 
         <AsyncState
-            :loading="loading"
+            :loading="initialLoading"
             :error="error"
-            :empty="store.library.length === 0"
+            :empty="table.total.value === 0"
             empty-text="No classes scheduled yet."
         >
-            <div class="overflow-hidden rounded-md border border-border">
-                <table class="min-w-full divide-y divide-border text-sm">
-                    <thead class="bg-muted/40">
-                        <tr>
-                            <th class="px-4 py-2 text-left font-medium">
-                                Name
-                            </th>
-                            <th class="px-4 py-2 text-left font-medium">
-                                Date
-                            </th>
-                            <th class="px-4 py-2 text-left font-medium">
-                                Trainings
-                            </th>
-                            <th class="px-4 py-2 text-left font-medium">
-                                Enrolled
-                            </th>
-                            <th class="px-4 py-2 text-left font-medium">
-                                Status
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border">
-                        <tr v-for="row in store.library" :key="row.id">
-                            <td class="px-4 py-2">
-                                <Link
-                                    :href="showPage(row.id)"
-                                    class="font-medium text-primary hover:underline"
-                                >
-                                    {{ row.name }}
-                                </Link>
-                                <div
-                                    v-if="row.location"
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    {{ row.location }}
-                                </div>
-                            </td>
-                            <td class="px-4 py-2">{{ row.scheduled_date }}</td>
-                            <td class="px-4 py-2">{{ row.trainings_count }}</td>
-                            <td class="px-4 py-2">
-                                {{ row.enrollments_count }}
-                            </td>
-                            <td class="px-4 py-2">
-                                <Badge
-                                    :variant="
-                                        row.status === 'completed'
-                                            ? 'secondary'
-                                            : 'default'
-                                    "
-                                >
-                                    {{ row.status }}
-                                </Badge>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <DataTable
+                view-id="classes"
+                :default-columns="CLASSES_COLUMNS"
+                :rows="table.rows.value"
+                :sort-key="activeColumnKey"
+                :sort-dir="table.dir.value"
+                :row-key="(row) => row.id"
+                @sort="onSort"
+            >
+                <template #filters>
+                    <div class="grid gap-1">
+                        <Label for="filter_q" class="text-xs">Search</Label>
+                        <Input
+                            id="filter_q"
+                            :model-value="search"
+                            placeholder="Name, instructor, or location"
+                            class="h-8 w-56"
+                            @update:model-value="onSearch"
+                        />
+                    </div>
+                </template>
+
+                <template #lead-header>
+                    <th
+                        class="w-10 px-2 py-2 text-right font-medium text-muted-foreground"
+                    >
+                        #
+                    </th>
+                </template>
+                <template #lead-cells="{ index }">
+                    <td
+                        class="w-10 px-2 py-2 text-right text-xs text-muted-foreground"
+                    >
+                        {{
+                            (table.page.value - 1) * table.perPage.value +
+                            index +
+                            1
+                        }}
+                    </td>
+                </template>
+
+                <template #col-name="{ row }">
+                    <Link
+                        :href="showPage(row.id)"
+                        class="font-medium text-primary hover:underline"
+                    >
+                        {{ row.name }}
+                    </Link>
+                </template>
+
+                <template #col-instructor="{ row }">
+                    <span class="text-xs">{{ row.instructor ?? '—' }}</span>
+                </template>
+
+                <template #col-date="{ row }">
+                    <span class="text-xs">{{ row.scheduled_date ?? '—' }}</span>
+                </template>
+
+                <template #col-hours="{ row }">
+                    <span class="text-xs">{{ row.total_hours ?? '—' }}</span>
+                </template>
+
+                <template #col-location="{ row }">
+                    <span class="text-xs">{{ row.location ?? '—' }}</span>
+                </template>
+
+                <template #col-trainings="{ row }">{{
+                    row.trainings_count
+                }}</template>
+                <template #col-enrolled="{ row }">{{
+                    row.enrollments_count
+                }}</template>
+
+                <template #col-status="{ row }">
+                    <Badge
+                        :variant="
+                            row.status === 'completed' ? 'secondary' : 'default'
+                        "
+                    >
+                        {{ row.status }}
+                    </Badge>
+                </template>
+            </DataTable>
+
+            <Pagination
+                :page="table.page.value"
+                :last-page="table.lastPage.value"
+                :total="table.total.value"
+                :per-page="table.perPage.value"
+                :loading="table.loading.value"
+                @update:page="table.setPage"
+                @update:per-page="table.setPerPage"
+            />
         </AsyncState>
 
         <ClassFormModal v-model:open="modalOpen" @saved="onSaved" />

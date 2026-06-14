@@ -8,6 +8,10 @@ import axios from 'axios';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useRealtime } from '@/composables/useRealtime';
+import type {
+    ServerTableQuery,
+    ServerTableResponse,
+} from '@/composables/useServerTable';
 import { realtimeTabId } from '@/echo';
 
 export interface ClassRow {
@@ -112,6 +116,9 @@ export const useClassesStore = defineStore('classes', () => {
     const loaded = ref(false);
     const detail = ref<Record<string, ClassDetail>>({});
     const subscribedOrgId = ref<string | null>(null);
+    // Bumped on every ClassChanged broadcast — the paged Index watches it and
+    // refetches its current page.
+    const revision = ref(0);
 
     async function load(force = false): Promise<void> {
         if (loaded.value && !force) {
@@ -123,6 +130,36 @@ export const useClassesStore = defineStore('classes', () => {
         });
         library.value = data;
         loaded.value = true;
+    }
+
+    /**
+     * Server-paged fetch for the classes table (paged {data, meta} contract).
+     * Does not touch the cached library — the Index drives it via
+     * useServerTable and renders the returned page.
+     */
+    async function fetchPage(
+        params: ServerTableQuery,
+    ): Promise<ServerTableResponse<ClassRow>> {
+        const query: Record<string, string | number> = {
+            page: params.page,
+            per_page: params.per_page,
+            dir: params.dir,
+        };
+
+        if (params.sort) {
+            query.sort = params.sort;
+        }
+
+        if (params.q) {
+            query.q = params.q;
+        }
+
+        const { data } = await axios.get<ServerTableResponse<ClassRow>>(
+            '/api/classes',
+            { headers: defaultHeaders(), params: query },
+        );
+
+        return data;
     }
 
     async function loadDetail(id: string): Promise<ClassDetail> {
@@ -285,6 +322,7 @@ export const useClassesStore = defineStore('classes', () => {
         // changed class. Self-echoes are filtered by useRealtime.
         bind('ClassChanged', (p: { class_id: string; action: string }) => {
             void load(true);
+            revision.value++;
 
             if (p.action === 'deleted') {
                 const next = { ...detail.value };
@@ -300,7 +338,9 @@ export const useClassesStore = defineStore('classes', () => {
         library,
         loaded,
         detail,
+        revision,
         load,
+        fetchPage,
         loadDetail,
         create,
         update,

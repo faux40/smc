@@ -151,6 +151,47 @@ class ClassesControllerTest extends TestCase
         $this->actingAs($managerA)->getJson('/api/classes')->assertOk()->assertJsonCount(1);
     }
 
+    public function test_index_paginated_returns_data_and_meta(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        TrainingClass::factory()->for($org, 'organization')->count(7)->create();
+
+        $res = $this->actingAs($manager)
+            ->getJson('/api/classes?page=1&per_page=3')
+            ->assertOk();
+
+        $res->assertJsonCount(3, 'data');
+        $res->assertJsonPath('meta.total', 7);
+        $res->assertJsonPath('meta.last_page', 3);
+        $res->assertJsonPath('meta.current_page', 1);
+    }
+
+    public function test_index_paginated_q_filters_by_name(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        TrainingClass::factory()->for($org, 'organization')->create(['name' => 'Forklift Refresher']);
+        TrainingClass::factory()->for($org, 'organization')->create(['name' => 'Fall Protection']);
+
+        $res = $this->actingAs($manager)
+            ->getJson('/api/classes?page=1&q=forklift')
+            ->assertOk();
+
+        $res->assertJsonPath('meta.total', 1);
+        $res->assertJsonPath('data.0.name', 'Forklift Refresher');
+    }
+
+    public function test_index_legacy_flat_array_without_page(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        TrainingClass::factory()->for($org, 'organization')->count(2)->create();
+
+        $this->actingAs($manager)->getJson('/api/classes')
+            ->assertOk()->assertJsonCount(2)->assertJsonMissingPath('meta');
+    }
+
     public function test_attaching_a_training_snapshots_its_fields(): void
     {
         $org = Organization::factory()->create();

@@ -34,11 +34,44 @@ class ClassesController extends Controller
     {
         Gate::authorize('viewAny', TrainingClass::class);
 
-        $classes = TrainingClass::query()
+        $query = TrainingClass::query()
             ->where('org_id', $request->user()->org_id)
-            ->withCount(['classTrainings', 'enrollments'])
-            ->orderByDesc('scheduled_date')
-            ->get();
+            ->withCount(['classTrainings', 'enrollments']);
+
+        // Free-text search (case-insensitive, portable).
+        if ($request->filled('q')) {
+            $term = '%'.mb_strtolower((string) $request->query('q')).'%';
+            $query->where(function ($w) use ($term) {
+                $w->whereRaw('LOWER(name) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(instructor) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(location) LIKE ?', [$term]);
+            });
+        }
+
+        // Server-side sort, restricted to a safe DB-column allowlist.
+        $sortable = ['scheduled_date', 'name', 'total_hours', 'status', 'completion_date', 'created_at'];
+        $sort = in_array($request->query('sort'), $sortable, true) ? $request->query('sort') : 'scheduled_date';
+        $dir = $request->query('dir') === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sort, $dir)->orderBy('id');
+
+        // Paginated mode (?page=…) returns {data, meta}; without it the legacy
+        // flat array is preserved until consumers migrate.
+        if ($request->filled('page')) {
+            $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
+            $p = $query->paginate($perPage);
+
+            return response()->json([
+                'data' => collect($p->items())->map(fn (TrainingClass $c) => $this->summarize($c)),
+                'meta' => [
+                    'current_page' => $p->currentPage(),
+                    'last_page' => $p->lastPage(),
+                    'per_page' => $p->perPage(),
+                    'total' => $p->total(),
+                ],
+            ]);
+        }
+
+        $classes = $query->get();
 
         return response()->json($classes->map(fn (TrainingClass $c) => $this->summarize($c)));
     }
