@@ -334,9 +334,10 @@ const submit = async () => {
                             placeholder="Satisfies **Cal/OSHA** requirements…"
                         />
                         <p class="text-xs text-muted-foreground">
-                            Markdown: blank lines start a new paragraph,
-                            <code>**bold**</code> and <code>*italic*</code> are
-                            supported. Printed on the certificate body.
+                            Markdown: press Enter for a line break, a blank line
+                            for a new paragraph; <code>**bold**</code> and
+                            <code>*italic*</code> are supported. Printed on the
+                            certificate body.
                         </p>
                         <InputError :message="fieldErrors.message('cert_text')" />
                     </div>

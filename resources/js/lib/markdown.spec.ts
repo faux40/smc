@@ -19,6 +19,13 @@ describe('renderMarkdown', () => {
         expect(html).toContain('Second para');
     });
 
+    it('renders a single newline as a line break', () => {
+        const html = renderMarkdown('Line one\nLine two');
+        expect(html).toContain('<br');
+        expect(html).toContain('Line one');
+        expect(html).toContain('Line two');
+    });
+
     it('strips raw HTML rather than rendering it', () => {
         const html = renderMarkdown('Hello <script>alert(1)</script> world');
         expect(html).not.toContain('<script');

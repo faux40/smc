@@ -6,8 +6,9 @@ import { marked } from 'marked';
  * fields) to sanitized HTML for an in-app preview.
  *
  * Mirrors the server renderer (`Str::markdown(..., html_input: 'strip')`):
- *  - blank line → new paragraph; a single newline is a soft break (space),
- *    matching CommonMark (`breaks: false`);
+ *  - blank line → new paragraph; a single newline → a visible line break
+ *    (`breaks: true`), matching the server's `soft_break → <br>` renderer so
+ *    a carriage return behaves the way authors expect;
  *  - `**bold**` / `*italic*`, lists, etc. are supported;
  *  - any raw HTML the author types is stripped, never rendered.
  *
@@ -32,7 +33,7 @@ export function renderMarkdown(source: string | null | undefined): string {
     const html = marked.parse(stripped, {
         async: false,
         gfm: true,
-        breaks: false,
+        breaks: true,
     }) as string;
 
     // Belt-and-suspenders: drop anything outside the allowlist and any unsafe

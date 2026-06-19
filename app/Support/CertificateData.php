@@ -117,9 +117,15 @@ class CertificateData
             'student_name' => $comp->user?->name,
             'cert_title' => $title,
             // Markdown → safe HTML subset (raw HTML stripped) for the cert body;
-            // gives the author control over line breaks plus bold/italic.
+            // gives the author bold/italic plus intuitive line handling: a
+            // single newline is a visible line break (soft_break → <br>), a
+            // blank line starts a new paragraph.
             'cert_html' => filled($text)
-                ? Str::markdown($text, ['html_input' => 'strip', 'allow_unsafe_links' => false])
+                ? Str::markdown($text, [
+                    'html_input' => 'strip',
+                    'allow_unsafe_links' => false,
+                    'renderer' => ['soft_break' => "<br>\n"],
+                ])
                 : '',
             'cert_id' => $comp->cert_id ?: $comp->cert_ident,
             'issue_date' => $issue ? Carbon::parse($issue)->format('F j, Y') : '',

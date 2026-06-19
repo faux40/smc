@@ -76,6 +76,37 @@ class ClassCertificateTest extends TestCase
         $this->assertStringContainsString('Second paragraph', $row['cert_html']);
     }
 
+    public function test_a_single_newline_in_cert_text_becomes_a_line_break(): void
+    {
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+
+        $training = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $training->id,
+            'cert_text' => "Line one\nLine two",
+        ]);
+        $student = User::factory()->for($org, 'organization')->create();
+
+        Completion::create([
+            'org_id' => $org->id,
+            'user_id' => $student->id,
+            'module_type' => Training::class,
+            'module_id' => $training->id,
+            'completion_date' => '2026-06-01',
+            'cert_id' => 'X-1',
+            'class_training_id' => $ct->id,
+        ]);
+
+        $row = CertificateData::forClass($class->fresh())[0];
+
+        // A single newline → <br> (soft_break renderer), not a collapsed space.
+        $this->assertStringContainsString('<br', $row['cert_html']);
+        $this->assertStringContainsString('Line one', $row['cert_html']);
+        $this->assertStringContainsString('Line two', $row['cert_html']);
+    }
+
     public function test_for_completion_pulls_cert_content_from_the_class_snapshot(): void
     {
         $org = Organization::factory()->create();
