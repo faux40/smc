@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\CertificateData;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\LaravelPdf\Facades\Pdf;
 use Tests\TestCase;
 
 class ClassCertificateTest extends TestCase
@@ -210,11 +211,13 @@ class ClassCertificateTest extends TestCase
             'enrollments' => [['id' => $enrollment->id, 'results' => [['class_training_id' => $ct->id, 'passed' => true]]]],
         ])->assertOk();
 
-        $response = $this->actingAs($manager)->get("/api/classes/{$class->id}/certificates");
+        Pdf::fake();
+        $this->actingAs($manager)->get("/api/classes/{$class->id}/certificates")->assertOk();
 
-        $response->assertOk();
-        $this->assertSame('application/pdf', $response->headers->get('content-type'));
-        $this->assertStringStartsWith('%PDF', $response->getContent());
+        Pdf::assertRespondedWithPdf(
+            fn ($pdf) => $pdf->viewName === 'pdf.certificate'
+                && array_key_exists('certs', $pdf->viewData),
+        );
     }
 
     public function test_endpoint_404s_when_no_certificates(): void
@@ -247,11 +250,10 @@ class ClassCertificateTest extends TestCase
             'cert_ident' => 'EXT-1',
         ]);
 
-        $response = $this->actingAs($manager)->get("/api/completions/{$comp->id}/certificate");
+        Pdf::fake();
+        $this->actingAs($manager)->get("/api/completions/{$comp->id}/certificate")->assertOk();
 
-        $response->assertOk();
-        $this->assertSame('application/pdf', $response->headers->get('content-type'));
-        $this->assertStringStartsWith('%PDF', $response->getContent());
+        Pdf::assertRespondedWithPdf(fn ($pdf) => $pdf->viewName === 'pdf.certificate');
     }
 
     public function test_completion_certificate_endpoint_blocks_a_cross_org_completion(): void

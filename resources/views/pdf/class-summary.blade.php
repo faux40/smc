@@ -1,92 +1,58 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <style>
-        /* @page margins are unreliable in this DomPDF build, so the 0.75in
-           "margin" is body padding (the page is 8.5x11 via setPaper). */
-        @page { margin: 0; }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Helvetica', Arial, sans-serif; color: #111827;
-            font-size: 13px; padding: 0.75in;
-        }
+@extends('pdf.layout', ['pageSize' => '8.5in 11in'])
 
-        .org { text-align: right; font-size: 16px; font-weight: bold; color: #374151; }
-        h1 { text-align: center; font-size: 22px; margin: 8px 0 16px; }
+@section('content')
+<div class="p-[0.75in] text-[13px] text-[#111827]">
+    <div class="text-right text-[16px] font-bold text-[#374151]">{{ $org_name }}</div>
+    <h1 class="mb-4 mt-2 text-center text-[22px]">{{ $title }}</h1>
 
-        table.info { width: 100%; margin-bottom: 18px; }
-        table.info td { vertical-align: top; padding: 2px 0; line-height: 1.6; font-size: 13px; }
-        .label { color: #4b5563; width: 115px; }
-        .col-gap { width: 40px; }
-
-        .section-title { font-size: 15px; font-weight: bold; margin: 4px 0 6px; }
-        ul.trainings { margin: 0 0 16px 18px; padding: 0; }
-        ul.trainings li { font-size: 13px; line-height: 1.6; }
-        ul.trainings .meta { color: #4b5563; }
-        table.certs { width: 100%; border-collapse: collapse; }
-        table.certs th, table.certs td {
-            border-bottom: 1px solid #e5e7eb; text-align: left; padding: 7px 7px; font-size: 12px;
-        }
-        table.certs thead th { border-bottom: 1.5px solid #9ca3af; color: #374151; font-size: 12px; }
-        .num { width: 26px; color: #6b7280; }
-
-        .foot { position: fixed; bottom: 0.4in; left: 0.75in; right: 0.75in; font-size: 9px; color: #6b7280; }
-        .foot .r { float: right; }
-    </style>
-</head>
-<body>
-    <div class="org">{{ $org_name }}</div>
-    <h1>{{ $title }}</h1>
-
-    <table class="info">
+    <table class="mb-[18px] w-full text-[13px] [&_td]:py-0.5 [&_td]:align-top [&_td]:leading-relaxed">
         <tr>
-            <td class="label">Date</td><td>{{ $start_date ?: '—' }}</td>
-            <td class="col-gap"></td>
-            <td class="label">Trainer</td><td>{{ $trainer ?: '—' }}</td>
+            <td class="w-[115px] text-[#4b5563]">Date</td><td>{{ $start_date ?: '—' }}</td>
+            <td class="w-[40px]"></td>
+            <td class="w-[115px] text-[#4b5563]">Trainer</td><td>{{ $trainer ?: '—' }}</td>
         </tr>
         <tr>
-            <td class="label">Time</td><td>{{ $time ?: '—' }}</td>
-            <td class="col-gap"></td>
-            <td class="label">Location</td><td>{{ $location ?: '—' }}</td>
+            <td class="text-[#4b5563]">Time</td><td>{{ $time ?: '—' }}</td>
+            <td></td>
+            <td class="text-[#4b5563]">Location</td><td>{{ $location ?: '—' }}</td>
         </tr>
         <tr>
-            <td class="label">Closed Date</td><td>{{ $closed_date ?: '—' }}</td>
-            <td class="col-gap"></td>
-            <td class="label">Address</td>
-            <td style="white-space: pre-line;">{{ $address ?: '—' }}</td>
+            <td class="text-[#4b5563]">Closed Date</td><td>{{ $closed_date ?: '—' }}</td>
+            <td></td>
+            <td class="text-[#4b5563]">Address</td>
+            <td class="whitespace-pre-line">{{ $address ?: '—' }}</td>
         </tr>
         <tr>
-            <td class="label">Length</td><td>{{ $length ?: '—' }}</td>
-            <td class="col-gap"></td>
-            <td class="label">Notes</td><td>{{ $notes ?: '—' }}</td>
+            <td class="text-[#4b5563]">Length</td><td>{{ $length ?: '—' }}</td>
+            <td></td>
+            <td class="text-[#4b5563]">Notes</td><td>{{ $notes ?: '—' }}</td>
         </tr>
         <tr>
-            <td class="label">Certificates</td><td>{{ $certificates }}</td>
-            <td class="col-gap"></td>
+            <td class="text-[#4b5563]">Certificates</td><td>{{ $certificates }}</td>
+            <td></td>
             <td></td><td></td>
         </tr>
     </table>
 
-    <div class="section-title">Trainings</div>
+    <div class="mb-1.5 mt-1 text-[15px] font-bold">Trainings</div>
     @if (count($trainings))
-        <ul class="trainings">
+        <ul class="mb-4 ml-[18px] list-disc">
             @foreach ($trainings as $t)
-                <li>
+                <li class="text-[13px] leading-relaxed">
                     {{ $t['name'] }}
-                    <span class="meta">— {{ $t['hours'] }}@if ($t['frequency']) · {{ $t['frequency'] }}@endif</span>
+                    <span class="text-[#4b5563]">— {{ $t['hours'] }}@if ($t['frequency']) · {{ $t['frequency'] }}@endif</span>
                 </li>
             @endforeach
         </ul>
     @else
-        <p style="color:#6b7280; margin-bottom:16px;">No trainings on this class.</p>
+        <p class="mb-4 text-[#6b7280]">No trainings on this class.</p>
     @endif
 
-    <div class="section-title">Certificate Issued</div>
-    <table class="certs">
+    <div class="mb-1.5 mt-1 text-[15px] font-bold">Certificate Issued</div>
+    <table class="w-full border-collapse text-[12px] [&_td]:border-b [&_td]:border-[#e5e7eb] [&_td]:px-[7px] [&_td]:py-[7px] [&_td]:text-left">
         <thead>
-            <tr>
-                <th class="num">#</th>
+            <tr class="text-[#374151] [&_th]:border-b-[1.5px] [&_th]:border-[#9ca3af] [&_th]:px-[7px] [&_th]:py-[7px] [&_th]:text-left">
+                <th class="w-[26px]">#</th>
                 <th>Employee Name</th>
                 <th>Emp #</th>
                 <th>Location</th>
@@ -98,7 +64,7 @@
         <tbody>
             @forelse ($rows as $i => $r)
                 <tr>
-                    <td class="num">{{ $i + 1 }}</td>
+                    <td class="text-[#6b7280]">{{ $i + 1 }}</td>
                     <td>{{ $r['name'] }}</td>
                     <td>{{ $r['emp_number'] }}</td>
                     <td>{{ $r['location'] }}</td>
@@ -107,13 +73,13 @@
                     <td>{{ $r['expires'] }}</td>
                 </tr>
             @empty
-                <tr><td colspan="7" style="text-align:center; color:#6b7280; padding:14px;">No certificates issued.</td></tr>
+                <tr><td colspan="7" class="py-3.5 text-center text-[#6b7280]">No certificates issued.</td></tr>
             @endforelse
         </tbody>
     </table>
 
-    <div class="foot">
-        {{ $generated_at }}<span class="r">{{ $title }}</span>
+    <div class="fixed inset-x-[0.75in] bottom-[0.4in] text-[9px] text-[#6b7280]">
+        {{ $generated_at }}<span class="float-right">{{ $title }}</span>
     </div>
-</body>
-</html>
+</div>
+@endsection

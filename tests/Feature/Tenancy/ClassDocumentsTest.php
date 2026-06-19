@@ -10,14 +10,14 @@ use App\Models\TrainingClass;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Testing\TestResponse;
+use Spatie\LaravelPdf\Facades\Pdf;
 use Tests\TestCase;
 
 /**
- * Endpoint coverage for the printable class PDFs. The production cert failure
- * (memory / font cache) isn't reproducible in the test env, so these lock the
- * correct rendering path through the CSS-cert refactor: every endpoint streams
- * a valid application/pdf, no-cert classes 404, and cross-org access is denied.
+ * Endpoint coverage for the printable class PDFs. PDFs render via Browsershot
+ * (Chromium), so these fake the renderer (Pdf::fake) and assert the right view
+ * + data are sent — no headless browser is launched in the suite. They also
+ * lock the access rules: no-cert classes 404, cross-org access is denied.
  */
 class ClassDocumentsTest extends TestCase
 {
@@ -27,6 +27,7 @@ class ClassDocumentsTest extends TestCase
     {
         parent::setUp();
         $this->seed(RoleSeeder::class);
+        Pdf::fake();
     }
 
     /**
@@ -66,18 +67,15 @@ class ClassDocumentsTest extends TestCase
         return compact('org', 'admin', 'class');
     }
 
-    private function assertPdf(TestResponse $res): void
-    {
-        $res->assertOk();
-        $this->assertStringContainsString('application/pdf', $res->headers->get('content-type'));
-    }
-
     public function test_admin_can_download_certificates_pdf(): void
     {
         ['admin' => $admin, 'class' => $class] = $this->completedClassWithCert();
 
-        $this->assertPdf(
-            $this->actingAs($admin)->get("/api/classes/{$class->id}/certificates"),
+        $this->actingAs($admin)->get("/api/classes/{$class->id}/certificates")->assertOk();
+
+        Pdf::assertRespondedWithPdf(
+            fn ($pdf) => $pdf->viewName === 'pdf.certificate'
+                && array_key_exists('certs', $pdf->viewData),
         );
     }
 
@@ -96,18 +94,18 @@ class ClassDocumentsTest extends TestCase
     {
         ['admin' => $admin, 'class' => $class] = $this->completedClassWithCert();
 
-        $this->assertPdf(
-            $this->actingAs($admin)->get("/api/classes/{$class->id}/sign-in-sheet"),
-        );
+        $this->actingAs($admin)->get("/api/classes/{$class->id}/sign-in-sheet")->assertOk();
+
+        Pdf::assertRespondedWithPdf(fn ($pdf) => $pdf->viewName === 'pdf.sign-in-sheet');
     }
 
     public function test_admin_can_download_summary_pdf(): void
     {
         ['admin' => $admin, 'class' => $class] = $this->completedClassWithCert();
 
-        $this->assertPdf(
-            $this->actingAs($admin)->get("/api/classes/{$class->id}/summary"),
-        );
+        $this->actingAs($admin)->get("/api/classes/{$class->id}/summary")->assertOk();
+
+        Pdf::assertRespondedWithPdf(fn ($pdf) => $pdf->viewName === 'pdf.class-summary');
     }
 
     public function test_cross_org_admin_cannot_download_certificates(): void

@@ -1,99 +1,52 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <style>
-        @font-face {
-            font-family: 'GreatVibes';
-            font-style: normal;
-            font-weight: normal;
-            src: url("{{ resource_path('fonts/GreatVibes-Regular.ttf') }}") format("truetype");
-        }
-        @page { margin: 0; }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Times New Roman', serif; color: #1f2937; }
+@extends('pdf.layout', ['pageSize' => '11in 8.5in'])
 
-        /* One landscape Letter page per certificate (11in × 8.5in). Text-only
-           for now — no frame/border (a background image comes later). Content
-           flows from the top so the whole block sits in the upper portion of
-           the page; the body is a fixed, clipped track so an over-long cert
-           body can never push the footer off the page or onto a second one.
-           (DomPDF resolves height:100% against the parent border-box, so all
-           sizing here is explicit rather than percentage-based.) */
-        .cert {
-            position: relative;
-            width: 10.4in;
-            height: 8.0in;
-            margin: 0 auto;
-            overflow: hidden;
-        }
-        .content {
-            padding: 1.05in 0.85in 0;
-            text-align: center;
-        }
-
-        .org { font-size: 22px; font-weight: bold; letter-spacing: 1px; margin-top: 0.75in; }
-        .rule { width: 90px; border-bottom: 2px solid #b08d57; margin: 8px auto 0; }
-        /* "CERTIFICATE OF TRAINING" on one line, dropped down the page. */
-        .title { font-size: 32px; letter-spacing: 6px; color: #1f5c3a; margin-top: 0.75in; white-space: nowrap; }
-        .lead { font-style: italic; font-size: 13px; color: #4b5563; margin-top: 0.25in; }
-        .name { font-size: 40px; color: #14532d; margin-top: 8px; }
-        .name-rule { width: 60%; border-bottom: 1px solid #9ca3af; margin: 6px auto 0; }
-
-        /* Fixed, clipped body track. */
-        .body { height: 1.0in; overflow: hidden; margin-top: 0.25in; }
-        .cert-title { font-size: 26px; font-weight: bold; }
-        .body-text { font-size: 15px; color: #374151; line-height: 1.5; margin-top: 10px; }
-        .body-text p { margin: 0 0 4px; }
-        .body-text strong { font-weight: bold; }
-        .body-text em { font-style: italic; }
-        .body-text ul, .body-text ol { margin: 0 0 4px 1.4em; text-align: left; display: inline-block; }
-
-        /* Footer flows under the body, pulled up + inset on both sides. */
-        .footer { margin-top: 0.35in; padding: 0 0.5in; }
-        .footer td { vertical-align: bottom; font-size: 10.5px; }
-        .meta-label { color: #4b5563; padding-right: 8px; }
-        .sig { font-family: 'GreatVibes', cursive; font-size: 28px; color: #111827; line-height: 1; }
-        .sig-line { border-top: 1px solid #6b7280; margin-top: 2px; padding-top: 3px; }
-        .sig-caption { font-size: 9px; letter-spacing: 1px; color: #4b5563; }
-    </style>
-</head>
-<body>
+@section('content')
 @foreach ($certs as $c)
-    <div class="cert {{ $loop->first ? '' : 'break' }}">
-        <div class="content">
-            <div class="org">{{ $c['org_name'] }}</div>
-            <div class="rule"></div>
-            <div class="title">CERTIFICATE OF TRAINING</div>
-            <div class="lead">This certifies that</div>
-            <div class="name">{{ $c['student_name'] }}</div>
-            <div class="name-rule"></div>
+    <div
+        class="relative h-[8.5in] w-[11in] overflow-hidden bg-cover bg-no-repeat font-serif text-[#1f2937] {{ $loop->first ? '' : 'break-before-page' }}"
+        @if (! empty($background)) style="background-image: url('{{ $background }}'); background-size: 100% 100%;" @endif
+    >
+        <div class="px-[1.15in] pt-[1.05in] text-center">
+            <div class="mt-[0.5in] text-[22px] font-bold tracking-[1px]">{{ $c['org_name'] }}</div>
+            <div class="mx-auto mt-2 w-[90px] border-b-2 border-[#b08d57]"></div>
 
-            <div class="body">
-                <div class="cert-title">{{ $c['cert_title'] }}</div>
-                <div class="body-text">{!! $c['cert_html'] !!}</div>
+            <div class="mt-[0.25in] whitespace-nowrap text-[42px] tracking-[6px] text-[#1f5c3a]">
+                CERTIFICATE OF TRAINING
             </div>
 
-            <div class="footer">
-                <table width="100%">
+            <div class="mt-[0.15in] text-[13px] italic text-[#4b5563]">This certifies that</div>
+            <div class="mt-[22px] text-[40px] text-[#0a311a]">{{ $c['student_name'] }}</div>
+            <div class="mt-[0.35in] text-[15px] text-[#374151]">
+                Has successfully fulfilled the training requirements for
+            </div>
+            <div class="mt-[0.25in]"></div>
+
+            <div class="mt-[0.01in] h-[1in] overflow-hidden">
+                <div class="text-[32px] font-bold">{{ $c['cert_title'] }}</div>
+                <div class="mt-2.5 text-[15px] leading-[1.5] text-[#374151] [&_em]:italic [&_ol]:ml-5 [&_ol]:list-decimal [&_ol]:text-left [&_p]:mb-1 [&_strong]:font-bold [&_ul]:ml-5 [&_ul]:list-disc [&_ul]:text-left">
+                    {!! $c['cert_html'] !!}
+                </div>
+            </div>
+
+            <div class="mt-[0.5in] px-[0.5in]">
+                <table class="w-full">
                     <tr>
-                        <td width="55%">
+                        <td class="w-[55%] text-left align-bottom text-[10.5px]">
                             <table>
-                                <tr><td class="meta-label">Certificate</td><td>{{ $c['cert_id'] }}</td></tr>
-                                <tr><td class="meta-label">Expires</td><td>{{ $c['expires'] }}</td></tr>
-                                <tr><td class="meta-label">Hours</td><td>{{ $c['hours'] }}</td></tr>
-                                <tr><td class="meta-label">Instructor</td><td>{{ $c['trainer'] }}</td></tr>
+                                <tr><td class="pr-2 text-[12px] font-bold tracking-[1px] text-[#4b5563]">Certificate</td><td>{{ $c['cert_id'] }}</td></tr>
+                                <tr><td class="pr-2 text-[12px] font-bold tracking-[1px] text-[#4b5563]">Expires</td><td>{{ $c['expires'] }}</td></tr>
+                                <tr><td class="pr-2 text-[12px] font-bold tracking-[1px] text-[#4b5563]">Hours</td><td>{{ $c['hours'] }}</td></tr>
+                                <tr><td class="pr-2 text-[12px] font-bold tracking-[1px] text-[#4b5563]">Instructor</td><td>{{ $c['trainer'] }}</td></tr>
                             </table>
                         </td>
-                        <td width="45%" align="center">
+                        <td class="w-[45%] text-center align-bottom text-[10.5px]">
                             @if ($c['show_signature'] && $c['trainer'])
-                                <div class="sig">{{ $c['trainer'] }}</div>
+                                <div class="text-[28px] leading-none text-[#111827]" style="font-family: 'GreatVibes', cursive;">{{ $c['trainer'] }}</div>
                             @else
-                                <div style="height: 28px;">&nbsp;</div>
+                                <div class="h-[28px]">&nbsp;</div>
                             @endif
-                            <div class="sig-line sig-caption">INSTRUCTOR</div>
-                            <div style="margin-top: 12px;">{{ $c['issue_date'] }}</div>
-                            <div class="sig-caption">ISSUE DATE</div>
+                            <div class="mt-0.5 border-t border-[#6b7280] pt-[3px] text-[9px] tracking-[1px] text-[#4b5563]">INSTRUCTOR</div>
+                            <div class="mt-3">Issued: {{ $c['issue_date'] }}</div>
                         </td>
                     </tr>
                 </table>
@@ -101,5 +54,4 @@
         </div>
     </div>
 @endforeach
-</body>
-</html>
+@endsection

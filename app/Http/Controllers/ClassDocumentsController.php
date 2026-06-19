@@ -5,21 +5,20 @@ namespace App\Http\Controllers;
 use App\Models\Completion;
 use App\Models\TrainingClass;
 use App\Support\CertificateData;
-use App\Support\CertificateRenderer;
 use App\Support\ClassSignInSheet;
 use App\Support\ClassSummary;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\PdfRenderer;
 use Illuminate\Support\Facades\Gate;
-use Symfony\Component\HttpFoundation\Response;
+use Spatie\LaravelPdf\PdfBuilder;
 
 /**
- * Printable PDF documents for a class: certificates (and, later, the sign-in
- * sheet + class summary). Rendered with DomPDF (pure PHP — no headless
- * browser needed).
+ * Printable PDF documents for a class: certificates, sign-in sheet, class
+ * summary. All rendered through PdfRenderer (Browsershot/Chromium) so they
+ * share the Tailwind-styled pdf.layout.
  */
 class ClassDocumentsController extends Controller
 {
-    public function certificates(TrainingClass $class): Response
+    public function certificates(TrainingClass $class): PdfBuilder
     {
         Gate::authorize('view', $class);
 
@@ -27,7 +26,10 @@ class ClassDocumentsController extends Controller
 
         abort_if($certs === [], 404, 'This class has no issued certificates.');
 
-        return $this->streamPdf(CertificateRenderer::pdf($certs), "certificates-{$class->id}.pdf");
+        return PdfRenderer::make('pdf.certificate', [
+            'certs' => $certs,
+            'background' => CertificateData::backgroundDataUri(),
+        ])->name("certificates-{$class->id}.pdf");
     }
 
     /**
@@ -35,42 +37,29 @@ class ClassDocumentsController extends Controller
      * came from a class (manual / imported). Content resolves from the class
      * snapshot when present, else from the training (see CertificateData).
      */
-    public function completionCertificate(Completion $completion): Response
+    public function completionCertificate(Completion $completion): PdfBuilder
     {
         Gate::authorize('view', $completion);
 
-        return $this->streamPdf(
-            CertificateRenderer::pdf(CertificateData::forCompletion($completion)),
-            "certificate-{$completion->id}.pdf",
-        );
+        return PdfRenderer::make('pdf.certificate', [
+            'certs' => CertificateData::forCompletion($completion),
+            'background' => CertificateData::backgroundDataUri(),
+        ])->name("certificate-{$completion->id}.pdf");
     }
 
-    /** Stream a generated PDF string inline. */
-    private function streamPdf(string $pdf, string $filename): Response
-    {
-        return response($pdf, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$filename.'"',
-        ]);
-    }
-
-    public function signInSheet(TrainingClass $class): Response
+    public function signInSheet(TrainingClass $class): PdfBuilder
     {
         Gate::authorize('view', $class);
 
-        $pdf = Pdf::loadView('pdf.sign-in-sheet', ClassSignInSheet::data($class))
-            ->setPaper('letter', 'portrait');
-
-        return $pdf->stream("sign-in-sheet-{$class->id}.pdf");
+        return PdfRenderer::make('pdf.sign-in-sheet', ClassSignInSheet::data($class))
+            ->name("sign-in-sheet-{$class->id}.pdf");
     }
 
-    public function summary(TrainingClass $class): Response
+    public function summary(TrainingClass $class): PdfBuilder
     {
         Gate::authorize('view', $class);
 
-        $pdf = Pdf::loadView('pdf.class-summary', ClassSummary::data($class))
-            ->setPaper('letter', 'portrait');
-
-        return $pdf->stream("class-summary-{$class->id}.pdf");
+        return PdfRenderer::make('pdf.class-summary', ClassSummary::data($class))
+            ->name("class-summary-{$class->id}.pdf");
     }
 }

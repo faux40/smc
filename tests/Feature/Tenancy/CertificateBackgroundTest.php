@@ -2,74 +2,36 @@
 
 namespace Tests\Feature\Tenancy;
 
-use App\Support\CertificateRenderer;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\CertificateData;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use setasign\Fpdi\Fpdi;
-use setasign\Fpdi\PdfParser\StreamReader;
 use Tests\TestCase;
 
 class CertificateBackgroundTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** A minimal cert view-model row. */
-    private function certs(int $n = 1): array
+    public function test_background_data_uri_is_null_when_no_file_exists(): void
     {
-        return array_map(fn (int $i) => [
-            'org_name' => 'Acme', 'student_name' => "Person $i",
-            'cert_title' => 'Title', 'cert_html' => '<p>Body</p>',
-            'cert_id' => "C-$i", 'issue_date' => 'June 1, 2026',
-            'expires' => '—', 'hours' => '4.00', 'trainer' => 'Jane Doe',
-            'show_signature' => true,
-        ], range(1, $n));
+        config(['certificates.background' => '/no/such/file.png']);
+
+        $this->assertNull(CertificateData::backgroundDataUri());
     }
 
-    /** Write a throwaway single-page landscape-Letter PDF to act as a background. */
-    private function makeBackgroundPdf(): string
+    public function test_background_data_uri_encodes_the_configured_image(): void
     {
-        $path = tempnam(sys_get_temp_dir(), 'certbg').'.pdf';
-        file_put_contents(
-            $path,
-            Pdf::loadHTML('<div style="background:#eef">bg</div>')
-                ->setPaper('letter', 'landscape')
-                ->output(),
-        );
-
-        return $path;
-    }
-
-    private function pageCount(string $pdf): int
-    {
-        return (new Fpdi)->setSourceFile(StreamReader::createByString($pdf));
-    }
-
-    public function test_renders_text_only_when_no_background_is_configured(): void
-    {
-        config(['certificates.background' => '/no/such/file.pdf']);
-
-        $this->assertNull(CertificateRenderer::backgroundPath());
-
-        $pdf = CertificateRenderer::pdf($this->certs(2));
-        $this->assertStringStartsWith('%PDF', $pdf);
-        $this->assertSame(2, $this->pageCount($pdf));
-    }
-
-    public function test_merges_the_background_under_each_cert_page(): void
-    {
-        $bg = $this->makeBackgroundPdf();
-        config(['certificates.background' => $bg]);
+        // A 1×1 PNG written to a temp file as the configured background.
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        $path = tempnam(sys_get_temp_dir(), 'certbg').'.png';
+        file_put_contents($path, $png);
+        config(['certificates.background' => $path]);
 
         try {
-            $this->assertSame($bg, CertificateRenderer::backgroundPath());
-
-            $pdf = CertificateRenderer::pdf($this->certs(3));
-
-            // Still one page per certificate (background merged, not appended).
-            $this->assertStringStartsWith('%PDF', $pdf);
-            $this->assertSame(3, $this->pageCount($pdf));
+            $uri = CertificateData::backgroundDataUri();
+            $this->assertNotNull($uri);
+            $this->assertStringStartsWith('data:image/png;base64,', $uri);
+            $this->assertStringContainsString(base64_encode($png), $uri);
         } finally {
-            @unlink($bg);
+            @unlink($path);
         }
     }
 }

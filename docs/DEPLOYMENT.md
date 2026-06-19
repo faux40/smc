@@ -92,6 +92,36 @@ php artisan queue:restart              # pick up new code in the worker
 # restart the reverb:start daemon too (Forge: restart the daemon)
 ```
 
+## PDF rendering (Chromium / Browsershot)
+
+All PDFs (certificates, sign-in sheet, class summary) render with **Browsershot
+→ headless Chromium** so they use the app's real Tailwind CSS. The server needs
+**Node + Chromium + the `puppeteer` node module**, and the renderer must know
+where they live.
+
+**One-time server setup (Forge):**
+```sh
+sudo apt-get install -y chromium fonts-liberation fonts-dejavu-core   # or chromium-browser
+which chromium   # note the path for PDF_CHROME_PATH below
+```
+`npm ci && npm run build` installs `puppeteer` from `package.json`. Set
+`PUPPETEER_SKIP_DOWNLOAD=true` in the Forge environment so it does NOT download
+its own Chromium — the apt one (above) is used instead.
+
+**`.env` (prod):**
+```
+PDF_CHROME_PATH=/usr/bin/chromium      # match `which chromium`
+PDF_NODE_BINARY=/usr/bin/node
+PDF_NODE_MODULES=/home/forge/<site>/node_modules
+PDF_NO_SANDBOX=true                    # Chromium runs as the non-root forge user
+```
+Config lives in `config/pdf.php`. If a PDF endpoint 500s it's almost always the
+Chrome path or the sandbox flag — check `laravel.log`.
+
+**Certificate background:** drop an 8.5×11 landscape image at
+`storage/app/private/cert_background.{png,jpg}` (or set `CERT_BACKGROUND_PATH`);
+it's drawn full-page under the cert text. Remove it for a plain cert.
+
 ## Reverb ports: three endpoints, only one is 8080
 
 The single most confusing thing. There are **three** Reverb endpoints and they

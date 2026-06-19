@@ -136,6 +136,44 @@ class CertificateData
         ];
     }
 
+    /**
+     * The certificate background as a base64 data URI (drawn full-page under
+     * the cert text via CSS), or null when no background image is present.
+     * Resolves config('certificates.background') if set, else auto-detects
+     * storage/app/private/cert_background.{png,jpg,jpeg,gif,webp}.
+     */
+    public static function backgroundDataUri(): ?string
+    {
+        // An explicit config path is used exactly (no fallback); otherwise
+        // auto-detect cert_background.<ext> in storage/app/private.
+        if (is_string($explicit = config('certificates.background')) && $explicit !== '') {
+            $candidates = [$explicit];
+        } else {
+            $base = storage_path('app/private/cert_background');
+            $candidates = array_map(
+                fn (string $ext): string => "{$base}.{$ext}",
+                ['png', 'jpg', 'jpeg', 'gif', 'webp'],
+            );
+        }
+
+        foreach ($candidates as $path) {
+            if (! is_file($path)) {
+                continue;
+            }
+
+            $mime = match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+                'jpg', 'jpeg' => 'image/jpeg',
+                'gif' => 'image/gif',
+                'webp' => 'image/webp',
+                default => 'image/png',
+            };
+
+            return 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($path));
+        }
+
+        return null;
+    }
+
     /** The display name of the content source (snapshot or training). */
     private static function sourceName(?Model $source): string
     {
