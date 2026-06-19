@@ -32,16 +32,16 @@
             text-align: center;
         }
 
-        .org { font-size: 18px; font-weight: bold; letter-spacing: 1px; }
+        .org { font-size: 22px; font-weight: bold; letter-spacing: 1px; margin-top: 0.75in; }
         .rule { width: 90px; border-bottom: 2px solid #b08d57; margin: 8px auto 0; }
         /* "CERTIFICATE OF TRAINING" on one line, dropped down the page. */
         .title { font-size: 32px; letter-spacing: 6px; color: #1f5c3a; margin-top: 0.75in; white-space: nowrap; }
-        .lead { font-style: italic; font-size: 13px; color: #4b5563; margin-top: 0.75in; }
+        .lead { font-style: italic; font-size: 13px; color: #4b5563; margin-top: 0.25in; }
         .name { font-size: 40px; color: #14532d; margin-top: 8px; }
         .name-rule { width: 60%; border-bottom: 1px solid #9ca3af; margin: 6px auto 0; }
 
-        /* Fixed, clipped body track, dropped below the name. */
-        .body { height: 1.5in; overflow: hidden; margin-top: 0.75in; }
+        /* Fixed, clipped body track. */
+        .body { height: 1.0in; overflow: hidden; margin-top: 0.25in; }
         .cert-title { font-size: 26px; font-weight: bold; }
         .body-text { font-size: 15px; color: #374151; line-height: 1.5; margin-top: 10px; }
         .body-text p { margin: 0 0 4px; }
