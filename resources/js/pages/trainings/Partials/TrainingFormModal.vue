@@ -82,7 +82,7 @@ const submit = async () => {
 
 <template>
     <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
-        <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-5xl">
             <form @submit.prevent="submit" class="space-y-4">
                 <DialogHeader>
                     <DialogTitle>{{ title }}</DialogTitle>

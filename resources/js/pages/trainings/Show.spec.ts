@@ -59,7 +59,7 @@ describe('trainings/Show', () => {
             .find((b) => b.text().includes('Save changes'))!;
         expect(saveBtn.attributes('disabled')).toBeDefined();
 
-        await wrapper.get('#t_cert_title').setValue('New Title');
+        await wrapper.get('#cert_title').setValue('New Title');
         expect(saveBtn.attributes('disabled')).toBeUndefined();
 
         await wrapper.get('form').trigger('submit');

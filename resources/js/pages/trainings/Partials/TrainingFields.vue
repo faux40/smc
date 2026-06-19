@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, watch } from 'vue';
+import CertEditor from '@/components/CertEditor.vue';
 import InputError from '@/components/InputError.vue';
-import MarkdownField from '@/components/MarkdownField.vue';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -146,31 +146,11 @@ watch(
                 printed on the certificate.
             </p>
 
-            <div class="grid gap-2">
-                <Label for="t_cert_title">Certificate title</Label>
-                <Input
-                    id="t_cert_title"
-                    v-model="form.cert_title"
-                    placeholder="e.g. Fall Protection Authorized Person"
-                />
-            </div>
-
-            <div class="grid gap-2">
-                <Label for="t_cert_text">Certificate text</Label>
-                <MarkdownField
-                    id="t_cert_text"
-                    v-model="form.cert_text"
-                    :rows="4"
-                    placeholder="Satisfies **Cal/OSHA** requirements…"
-                />
-                <p class="text-xs text-muted-foreground">
-                    Markdown: press Enter for a line break, a blank line for a
-                    new paragraph; <code>**bold**</code> and
-                    <code>*italic*</code> are supported. Printed on the
-                    certificate body.
-                </p>
-                <InputError :message="fieldErrors.message('cert_text')" />
-            </div>
+            <CertEditor
+                v-model:title="form.cert_title"
+                v-model:text="form.cert_text"
+                :context="context"
+            />
 
             <div class="grid grid-cols-2 gap-3">
                 <div class="grid gap-2">

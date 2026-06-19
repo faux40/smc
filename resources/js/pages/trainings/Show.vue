@@ -117,7 +117,7 @@ const confirmDelete = async () => {
 
         <form
             v-if="canManage"
-            class="max-w-3xl space-y-4"
+            class="max-w-5xl space-y-4"
             @submit.prevent="save"
         >
             <TrainingFields v-model="form" :context="FORM_CTX" />

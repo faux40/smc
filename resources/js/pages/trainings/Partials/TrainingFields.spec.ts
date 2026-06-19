@@ -7,6 +7,9 @@ import { blankTrainingForm } from '@/lib/trainingForm';
 import TrainingFields from '@/pages/trainings/Partials/TrainingFields.vue';
 
 vi.mock('axios');
+vi.mock('@inertiajs/vue3', () => ({
+    usePage: () => ({ props: { org: { name: 'Test Org' } } }),
+}));
 
 describe('TrainingFields', () => {
     beforeEach(() => {

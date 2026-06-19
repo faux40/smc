@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
-import MarkdownField from '@/components/MarkdownField.vue';
+import CertEditor from '@/components/CertEditor.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -83,7 +83,7 @@ async function save(): Promise<void> {
 
 <template>
     <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
-        <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
             <DialogHeader>
                 <DialogTitle>Certificate details</DialogTitle>
                 <DialogDescription>
@@ -104,30 +104,10 @@ async function save(): Promise<void> {
             </p>
 
             <form class="space-y-4" @submit.prevent="save">
-                <div class="grid gap-2">
-                    <Label for="c_cert_title">Certificate title</Label>
-                    <Input
-                        id="c_cert_title"
-                        v-model="form.cert_title"
-                        placeholder="e.g. Fall Protection Authorized Person"
-                    />
-                </div>
-
-                <div class="grid gap-2">
-                    <Label for="c_cert_text">Certificate text</Label>
-                    <MarkdownField
-                        id="c_cert_text"
-                        v-model="form.cert_text"
-                        :rows="5"
-                        placeholder="Satisfies **Cal/OSHA** requirements…"
-                    />
-                    <p class="text-xs text-muted-foreground">
-                        Markdown: press Enter for a line break, a blank line for
-                        a new paragraph; <code>**bold**</code> and
-                        <code>*italic*</code> are supported. Printed on the
-                        certificate body.
-                    </p>
-                </div>
+                <CertEditor
+                    v-model:title="form.cert_title"
+                    v-model:text="form.cert_text"
+                />
 
                 <div class="grid grid-cols-2 gap-3">
                     <div class="grid gap-2">

@@ -6,6 +6,9 @@ import { useClassesStore } from '@/stores/classes';
 import ClassCertEditModal from './ClassCertEditModal.vue';
 
 vi.mock('axios');
+vi.mock('@inertiajs/vue3', () => ({
+    usePage: () => ({ props: { org: { name: 'Test Org' } } }),
+}));
 
 const topic = {
     id: 'ct1',
@@ -80,7 +83,7 @@ describe('ClassCertEditModal', () => {
         });
         await flushPromises();
 
-        expect(input('#c_cert_title').value).toBe('Snapshotted Title');
+        expect(input('#cert_title').value).toBe('Snapshotted Title');
     });
 
     it('PATCHes the per-class cert fields and closes on save', async () => {
@@ -95,7 +98,7 @@ describe('ClassCertEditModal', () => {
         });
         await flushPromises();
 
-        setInput('#c_cert_title', 'Per-class Title');
+        setInput('#cert_title', 'Per-class Title');
         await flushPromises();
         (document.body.querySelector('form') as HTMLFormElement).dispatchEvent(
             new Event('submit', { bubbles: true, cancelable: true }),

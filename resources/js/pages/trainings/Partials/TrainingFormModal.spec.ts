@@ -6,6 +6,9 @@ import TrainingFormModal from '@/pages/trainings/Partials/TrainingFormModal.vue'
 import type { TrainingRow } from '@/stores/trainings';
 
 vi.mock('axios');
+vi.mock('@inertiajs/vue3', () => ({
+    usePage: () => ({ props: { org: { name: 'Test Org' } } }),
+}));
 
 function target(overrides: Partial<TrainingRow> = {}): TrainingRow {
     return {
