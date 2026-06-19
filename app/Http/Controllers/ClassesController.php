@@ -6,6 +6,7 @@ use App\Actions\CompleteClass;
 use App\Events\ClassChanged;
 use App\Events\CompletionCreated;
 use App\Events\CompletionDeleted;
+use App\Events\CompletionUpdated;
 use App\Http\Requests\ClassRequest;
 use App\Models\ClassEnrollment;
 use App\Models\ClassTraining;
@@ -384,10 +385,26 @@ class ClassesController extends Controller
         Gate::authorize('update', $class);
         abort_unless($class->status === 'completed', 422, 'Only a completed class can be re-opened.');
 
-        $class->update([
-            'status' => 'scheduled',
-            'completed_at' => null,
-        ]);
+        // Re-opening clears the issued certificate numbers (credit, expiry and
+        // results are kept). Re-closing re-mints them from the current cert_code
+        // — so correcting the code and re-closing updates the printed numbers.
+        $cleared = Completion::query()
+            ->whereIn('class_training_id', $class->classTrainings()->pluck('id'))
+            ->whereNotNull('cert_id')
+            ->get();
+
+        DB::transaction(function () use ($class, $cleared) {
+            Completion::whereKey($cleared->pluck('id'))->update(['cert_id' => null]);
+
+            $class->update([
+                'status' => 'scheduled',
+                'completed_at' => null,
+            ]);
+        });
+
+        foreach ($cleared as $completion) {
+            event(new CompletionUpdated($completion->fresh()));
+        }
 
         event(new ClassChanged($class->id, $class->org_id, 'reopened'));
 

@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Models\ClassTraining;
 use App\Models\Completion;
 use App\Models\Training;
 use App\Models\TrainingClass;
@@ -89,9 +90,11 @@ class CompleteClass
                     }
 
                     if ($decision === null) {
-                        // Unmarked → leave untouched; a preserved cert still counts.
+                        // Unmarked → keep the credit. Re-open clears cert ids,
+                        // so re-mint one here if it's missing (current code).
                         if ($existing !== null) {
                             $passedCount++;
+                            $this->ensureCertId($existing, $ct, $dateStr, $certSeq);
                         }
 
                         continue;
@@ -100,16 +103,19 @@ class CompleteClass
                     // Passed.
                     $passedCount++;
 
-                    if ($ct->training_id === null || $existing !== null) {
-                        continue; // snapshot-only (deleted training), or already credited — preserve.
+                    if ($existing !== null) {
+                        // Already credited — keep the record, re-mint its cert id
+                        // if re-open cleared it (so a corrected cert_code applies).
+                        $this->ensureCertId($existing, $ct, $dateStr, $certSeq);
+
+                        continue;
+                    }
+
+                    if ($ct->training_id === null) {
+                        continue; // snapshot-only (deleted training) — can't credit fresh.
                     }
 
                     $certSeq++;
-                    $code = $ct->cert_code !== null && $ct->cert_code !== ''
-                        ? $ct->cert_code
-                        : 'CERT';
-                    $certId = sprintf('%s%s-%03d', $code, $dateStr, $certSeq);
-
                     $issued[] = Completion::create([
                         'org_id' => $class->org_id,
                         'user_id' => $enrollment->user_id,
@@ -117,7 +123,7 @@ class CompleteClass
                         'module_id' => $ct->training_id,
                         'completion_date' => $completionDate->toDateString(),
                         'expire_date' => $expiryFor[$ct->id],
-                        'cert_id' => $certId,
+                        'cert_id' => $this->makeCertId($ct, $dateStr, $certSeq),
                         'class_training_id' => $ct->id,
                         'hours' => $ct->hours,
                     ]);
@@ -137,6 +143,31 @@ class CompleteClass
         });
 
         return ['issued' => $issued, 'deIssued' => $deIssued];
+    }
+
+    /** The cert id for a topic: `{cert_code}{YYYYMMDD}-{NNN}` (code → CERT if unset). */
+    private function makeCertId(ClassTraining $ct, string $dateStr, int $seq): string
+    {
+        $code = $ct->cert_code !== null && $ct->cert_code !== ''
+            ? $ct->cert_code
+            : 'CERT';
+
+        return sprintf('%s%s-%03d', $code, $dateStr, $seq);
+    }
+
+    /**
+     * Mint a cert id for an existing completion that has none (re-open clears
+     * them) using the current cert_code; advances the per-date sequence. A
+     * completion that still has a number is left untouched.
+     */
+    private function ensureCertId(Completion $completion, ClassTraining $ct, string $dateStr, int &$certSeq): void
+    {
+        if ($completion->cert_id !== null) {
+            return;
+        }
+
+        $certSeq++;
+        $completion->update(['cert_id' => $this->makeCertId($ct, $dateStr, $certSeq)]);
     }
 
     /** Roll an enrollee's per-topic pass count up to a single status. */
