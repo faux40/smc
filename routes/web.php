@@ -19,6 +19,7 @@ use App\Http\Controllers\TrainingsController;
 use App\Http\Controllers\UserPreferencesController;
 use App\Http\Controllers\UsersController;
 use App\Models\Requirement;
+use App\Models\Training;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -235,6 +236,34 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
             ],
         ]);
     })->name('requirements.show');
+
+    Route::get('trainings/{training}', function (Training $training) {
+        abort_unless(auth()->user()->org_id === $training->org_id, 403);
+
+        $training->loadMissing('stdFrequency:id,name');
+
+        return Inertia::render('trainings/Show', [
+            'training' => [
+                'id' => $training->id,
+                'name' => $training->name,
+                'nickname' => $training->nickname,
+                'description' => $training->description,
+                'default_hours' => $training->default_hours,
+                'initial_only' => $training->initial_only,
+                'repeating' => $training->repeating,
+                'std_freq_id' => $training->std_freq_id,
+                'std_freq_name' => $training->stdFrequency?->name,
+                'as_needed' => $training->as_needed,
+                'cert_title' => $training->cert_title,
+                'cert_text' => $training->cert_text,
+                'lifespan_months' => $training->lifespan_months,
+                'cert_code' => $training->cert_code,
+                'default_trainer' => $training->default_trainer,
+                'default_location' => $training->default_location,
+                'default_address' => $training->default_address,
+            ],
+        ]);
+    })->name('trainings.show');
 });
 
 require __DIR__.'/settings.php';

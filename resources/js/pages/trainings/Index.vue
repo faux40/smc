@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import TrainingFormModal from '@/pages/trainings/Partials/TrainingFormModal.vue';
-import { page as trainingsPage } from '@/routes/trainings';
+import { page as trainingsPage, show as trainingShow } from '@/routes/trainings';
 import { useTrainingsStore } from '@/stores/trainings';
 import type { TrainingRow } from '@/stores/trainings';
 
@@ -36,8 +36,6 @@ const canCreate = computed(() =>
 );
 
 const modalOpen = ref(false);
-const modalMode = ref<'create' | 'edit'>('create');
-const editing = ref<TrainingRow | null>(null);
 const error = ref<string | null>(null);
 const loading = ref(true);
 
@@ -56,29 +54,7 @@ onMounted(async () => {
 });
 
 const openCreate = () => {
-    modalMode.value = 'create';
-    editing.value = null;
     modalOpen.value = true;
-};
-
-const openEdit = (row: TrainingRow) => {
-    modalMode.value = 'edit';
-    editing.value = row;
-    modalOpen.value = true;
-};
-
-const remove = async (row: TrainingRow) => {
-    if (!window.confirm(`Delete training "${row.name}"?`)) {
-        return;
-    }
-
-    error.value = null;
-
-    try {
-        await store.destroy(row.id);
-    } catch (e) {
-        error.value = (e as Error).message;
-    }
 };
 
 const timingSummary = (row: TrainingRow): string => {
@@ -142,13 +118,15 @@ const timingSummary = (row: TrainingRow): string => {
                             <th class="px-4 py-2 text-left font-medium">
                                 Timing
                             </th>
-                            <th class="px-4 py-2"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-border">
                         <tr v-for="row in store.library" :key="row.id">
                             <td class="px-4 py-2">
-                                <div class="font-medium">
+                                <Link
+                                    :href="trainingShow(row.id)"
+                                    class="font-medium text-primary hover:underline"
+                                >
                                     {{ row.name }}
                                     <span
                                         v-if="row.nickname"
@@ -156,7 +134,7 @@ const timingSummary = (row: TrainingRow): string => {
                                     >
                                         ({{ row.nickname }})
                                     </span>
-                                </div>
+                                </Link>
                                 <div
                                     v-if="row.description"
                                     class="text-xs text-muted-foreground"
@@ -169,34 +147,12 @@ const timingSummary = (row: TrainingRow): string => {
                                     timingSummary(row)
                                 }}</Badge>
                             </td>
-                            <td class="space-x-3 px-4 py-2 text-right text-xs">
-                                <button
-                                    v-if="row.can_edit"
-                                    type="button"
-                                    class="text-primary hover:underline"
-                                    @click="openEdit(row)"
-                                >
-                                    Edit
-                                </button>
-                                <button
-                                    v-if="row.can_delete"
-                                    type="button"
-                                    class="text-destructive hover:underline"
-                                    @click="remove(row)"
-                                >
-                                    Delete
-                                </button>
-                            </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </AsyncState>
 
-        <TrainingFormModal
-            v-model:open="modalOpen"
-            :mode="modalMode"
-            :target="editing"
-        />
+        <TrainingFormModal v-model:open="modalOpen" mode="create" />
     </div>
 </template>
