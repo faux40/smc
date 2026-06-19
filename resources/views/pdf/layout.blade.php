@@ -7,9 +7,11 @@
     <style>{!! \App\Support\PdfRenderer::tailwindCss() !!}</style>
 
     <style>
-        /* Each document declares its own page size/orientation; Browsershot
-           renders with preferCSSPageSize so this wins. */
-        @page { size: {{ $pageSize ?? '8.5in 11in' }}; margin: 0; }
+        /* Each document declares its own page size/orientation + margins;
+           Browsershot renders with preferCSSPageSize so this wins. @page
+           margins apply to EVERY page (multi-page reports), unlike a padded
+           wrapper which only indents the first/last page. */
+        @page { size: {{ $pageSize ?? '8.5in 11in' }}; margin: {{ $pageMargin ?? '0' }}; }
         html, body { margin: 0; padding: 0; }
         /* The GreatVibes signature face (used by the certificate). */
         @font-face {

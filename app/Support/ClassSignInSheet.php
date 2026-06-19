@@ -53,6 +53,7 @@ class ClassSignInSheet
                 : null,
             'students' => $names->count(),
             'trainer' => $class->instructor,
+            'generated_at' => Carbon::now(config('app.display_timezone'))->format('M j, Y g:i A'),
             'rows' => $rows,
         ];
     }

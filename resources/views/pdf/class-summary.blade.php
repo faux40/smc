@@ -1,7 +1,7 @@
-@extends('pdf.layout', ['pageSize' => '8.5in 11in'])
+@extends('pdf.layout', ['pageSize' => '8.5in 11in', 'pageMargin' => '0.75in'])
 
 @section('content')
-<div class="p-[0.75in] text-[13px] text-[#111827]">
+<div class="text-[13px] text-[#111827]">
     <div class="text-right text-[16px] font-bold text-[#374151]">{{ $org_name }}</div>
     <h1 class="mb-4 mt-2 text-center text-[22px]">{{ $title }}</h1>
 
@@ -77,9 +77,5 @@
             @endforelse
         </tbody>
     </table>
-
-    <div class="fixed inset-x-[0.75in] bottom-[0.4in] text-[9px] text-[#6b7280]">
-        {{ $generated_at }}<span class="float-right">{{ $title }}</span>
-    </div>
 </div>
 @endsection

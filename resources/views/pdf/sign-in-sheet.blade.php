@@ -1,7 +1,7 @@
-@extends('pdf.layout', ['pageSize' => '8.5in 11in'])
+@extends('pdf.layout', ['pageSize' => '8.5in 11in', 'pageMargin' => '0.75in'])
 
 @section('content')
-<div class="p-[0.75in] text-[13px] text-[#111827]">
+<div class="text-[13px] text-[#111827]">
     <table class="mb-2 w-full">
         <tr>
             <td class="align-top"><span class="text-[20px] font-bold">{{ $org_name }}</span></td>
@@ -48,10 +48,5 @@
             @endforeach
         </tbody>
     </table>
-
-    <div class="fixed inset-x-[0.75in] bottom-[0.4in] text-[9px] text-[#6b7280]">
-        <span class="float-left">{{ now()->format('M j, Y g:i A') }}</span>
-        <span class="float-right">{{ $title }}</span>
-    </div>
 </div>
 @endsection

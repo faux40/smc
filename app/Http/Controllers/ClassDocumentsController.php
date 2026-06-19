@@ -51,7 +51,9 @@ class ClassDocumentsController extends Controller
     {
         Gate::authorize('view', $class);
 
-        return PdfRenderer::make('pdf.sign-in-sheet', ClassSignInSheet::data($class))
+        $data = ClassSignInSheet::data($class);
+
+        return $this->withReportFooter(PdfRenderer::make('pdf.sign-in-sheet', $data), $data)
             ->name("sign-in-sheet-{$class->id}.pdf");
     }
 
@@ -59,7 +61,26 @@ class ClassDocumentsController extends Controller
     {
         Gate::authorize('view', $class);
 
-        return PdfRenderer::make('pdf.class-summary', ClassSummary::data($class))
+        $data = ClassSummary::data($class);
+
+        return $this->withReportFooter(PdfRenderer::make('pdf.class-summary', $data), $data)
             ->name("class-summary-{$class->id}.pdf");
+    }
+
+    /**
+     * Repeating page footer (generated-at + title) for the multi-page reports,
+     * via Chromium's native header/footer so it sits in the page-bottom margin
+     * and never overlaps content. An empty header suppresses Chromium's default.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function withReportFooter(PdfBuilder $pdf, array $data): PdfBuilder
+    {
+        return $pdf
+            ->headerHtml('<span></span>')
+            ->footerView('pdf.partials.footer', [
+                'stamp' => $data['generated_at'] ?? '',
+                'title' => $data['title'] ?? '',
+            ]);
     }
 }
