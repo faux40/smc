@@ -356,6 +356,51 @@ class ClassesControllerTest extends TestCase
         $this->assertSame('5.25', (string) $ct->fresh()->hours);
     }
 
+    public function test_can_edit_an_attached_trainings_cert_fields(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'cert_title' => 'Snapshotted Title',
+            'cert_text' => 'Snapshotted text',
+            'cert_code' => 'OLD',
+            'lifespan_months' => 12,
+        ]);
+
+        $this->actingAs($manager)
+            ->patchJson("/api/classes/{$class->id}/trainings/{$ct->id}", [
+                'cert_title' => 'Per-class Title',
+                'cert_text' => "Edited for **this** class\n\nSecond line",
+                'cert_code' => 'NEW',
+                'lifespan_months' => 36,
+            ])
+            ->assertOk()
+            ->assertJsonPath('trainings.0.cert_title', 'Per-class Title')
+            ->assertJsonPath('trainings.0.cert_code', 'NEW')
+            ->assertJsonPath('trainings.0.lifespan_months', 36);
+
+        $fresh = $ct->fresh();
+        $this->assertSame('Per-class Title', $fresh->cert_title);
+        $this->assertSame("Edited for **this** class\n\nSecond line", $fresh->cert_text);
+        $this->assertSame('NEW', $fresh->cert_code);
+        $this->assertSame(36, $fresh->lifespan_months);
+    }
+
+    public function test_editing_cert_fields_is_blocked_on_a_completed_class(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create(['status' => 'completed']);
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create(['cert_title' => 'Locked']);
+
+        $this->actingAs($manager)
+            ->patchJson("/api/classes/{$class->id}/trainings/{$ct->id}", ['cert_title' => 'Nope'])
+            ->assertStatus(422);
+
+        $this->assertSame('Locked', $ct->fresh()->cert_title);
+    }
+
     public function test_attaching_snapshots_cert_fields_and_prefills_class_venue(): void
     {
         $org = Organization::factory()->create();

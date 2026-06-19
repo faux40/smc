@@ -214,6 +214,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // request payload. Phase 13.2 widened the policy for Manager+;
     // self-create / self-view still land in 13.3.
     Route::get('api/completions', [CompletionsController::class, 'index'])->name('completions.index');
+    Route::get('api/completions/{completion}/certificate', [ClassDocumentsController::class, 'completionCertificate'])->name('completions.certificate');
     Route::post('api/completions', [CompletionsController::class, 'store'])->name('completions.store');
     Route::patch('api/completions/{completion}', [CompletionsController::class, 'update'])->name('completions.update');
     Route::delete('api/completions/{completion}', [CompletionsController::class, 'destroy'])->name('completions.destroy');

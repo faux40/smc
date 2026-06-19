@@ -47,8 +47,25 @@ export interface ClassTrainingRow {
     std_freq_name: string | null;
     repeat_days: number | null;
     hours: string | null;
+    /**
+     * Per-class certificate overrides — seeded from the training snapshot at
+     * attach time, editable for this class while it's scheduled. cert_text is
+     * Markdown (rendered on the certificate).
+     */
+    cert_title: string | null;
+    cert_text: string | null;
+    cert_code: string | null;
+    lifespan_months: number | null;
     /** M3 — who earned this topic's credit (populated after close-out). */
     credits: TopicCredit[];
+}
+
+/** The editable per-class certificate fields (see ClassTrainingRow). */
+export interface ClassCertPayload {
+    cert_title: string | null;
+    cert_text: string | null;
+    cert_code: string | null;
+    lifespan_months: number | null;
 }
 
 export interface EnrollmentRow {
@@ -222,6 +239,21 @@ export const useClassesStore = defineStore('classes', () => {
         return cache(data);
     }
 
+    /** Edit a topic's per-class certificate fields (title / text / code / lifespan). */
+    async function updateTrainingCert(
+        id: string,
+        classTrainingId: string,
+        cert: ClassCertPayload,
+    ): Promise<ClassDetail> {
+        const { data } = await axios.patch<ClassDetail>(
+            `/api/classes/${id}/trainings/${classTrainingId}`,
+            cert,
+            { headers: defaultHeaders() },
+        );
+
+        return cache(data);
+    }
+
     async function detachTraining(
         id: string,
         classTrainingId: string,
@@ -342,6 +374,7 @@ export const useClassesStore = defineStore('classes', () => {
         destroy,
         attachTraining,
         updateTrainingHours,
+        updateTrainingCert,
         detachTraining,
         enroll,
         unenroll,

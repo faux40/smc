@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { useClassForm } from '@/composables/useClassForm';
 import { realtimeTabId } from '@/echo';
+import ClassCertEditModal from '@/pages/classes/Partials/ClassCertEditModal.vue';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ManageRosterModal from '@/pages/classes/Partials/ManageRosterModal.vue';
 import type { PickerUser } from '@/pages/classes/Partials/ManageRosterModal.vue';
@@ -52,6 +53,13 @@ const detail = computed(() => store.detail[props.classId] ?? null);
 const userPicker = ref<PickerUser[]>([]);
 const completeOpen = ref(false);
 const topicsOpen = ref(false);
+// Per-topic certificate editor (scheduled classes): which class_training row.
+const certOpen = ref(false);
+const certTopicId = ref<string | null>(null);
+function openCertEditor(topicId: string) {
+    certTopicId.value = topicId;
+    certOpen.value = true;
+}
 const rosterOpen = ref(false);
 const reopenOpen = ref(false);
 const reopening = ref(false);
@@ -275,17 +283,33 @@ const totalHoursLabel = computed(
                                                     <li
                                                         v-for="t in detail.trainings"
                                                         :key="t.id"
+                                                        class="flex items-center justify-between gap-2 py-0.5"
                                                     >
-                                                        {{ t.training_name }}
-                                                        <span
-                                                            class="text-muted-foreground"
-                                                        >
-                                                            ({{
-                                                                hoursLabel(
-                                                                    t.hours,
-                                                                )
-                                                            }})
+                                                        <span>
+                                                            {{ t.training_name }}
+                                                            <span
+                                                                class="text-muted-foreground"
+                                                            >
+                                                                ({{
+                                                                    hoursLabel(
+                                                                        t.hours,
+                                                                    )
+                                                                }})
+                                                            </span>
                                                         </span>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            class="h-6 px-2 text-xs"
+                                                            @click="
+                                                                openCertEditor(
+                                                                    t.id,
+                                                                )
+                                                            "
+                                                        >
+                                                            Edit certificate
+                                                        </Button>
                                                     </li>
                                                 </ul>
                                                 <p
@@ -617,6 +641,11 @@ const totalHoursLabel = computed(
                 <ManageTopicsModal
                     v-model:open="topicsOpen"
                     :class-id="props.classId"
+                />
+                <ClassCertEditModal
+                    v-model:open="certOpen"
+                    :class-id="props.classId"
+                    :topic-id="certTopicId"
                 />
                 <ManageRosterModal
                     v-model:open="rosterOpen"

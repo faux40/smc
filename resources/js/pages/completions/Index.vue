@@ -392,6 +392,13 @@ function defaultHeaders(): Record<string, string> {
 
                 <template #trail-cells="{ row }">
                     <td class="space-x-3 px-4 py-2 text-right text-xs">
+                        <a
+                            :href="`/api/completions/${row.id}/certificate`"
+                            target="_blank"
+                            class="text-primary hover:underline"
+                        >
+                            Certificate
+                        </a>
                         <button
                             v-if="row.can_edit"
                             type="button"

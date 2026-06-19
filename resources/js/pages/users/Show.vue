@@ -98,6 +98,7 @@ interface CompletionHistoryRow {
     certification_date: string | null;
     expire_date: string | null;
     cert_ident: string | null;
+    cert_id: string | null;
     hours: number | null;
     class_training_id: string | null;
     class_id: string | null;
@@ -628,7 +629,17 @@ function defaultHeaders(): Record<string, string> {
                                     {{ c.expire_date ?? '—' }}
                                 </td>
                                 <td class="px-3 py-2 text-xs">
-                                    {{ c.cert_ident ?? '—' }}
+                                    <a
+                                        :href="`/api/completions/${c.id}/certificate`"
+                                        target="_blank"
+                                        class="text-primary hover:underline"
+                                    >
+                                        {{
+                                            c.cert_ident ??
+                                            c.cert_id ??
+                                            'Certificate'
+                                        }}
+                                    </a>
                                 </td>
                                 <td class="px-3 py-2 text-xs">
                                     {{ c.hours ?? '—' }}

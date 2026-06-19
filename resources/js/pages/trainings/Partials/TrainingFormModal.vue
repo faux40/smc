@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import InputError from '@/components/InputError.vue';
+import MarkdownField from '@/components/MarkdownField.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -326,13 +327,12 @@ const submit = async () => {
 
                     <div class="grid gap-2">
                         <Label for="t_cert_text">Certificate text</Label>
-                        <textarea
+                        <MarkdownField
                             id="t_cert_text"
                             v-model="form.cert_text"
-                            rows="4"
-                            class="w-full rounded border border-input bg-background p-2 text-sm"
+                            :rows="4"
                             placeholder="Satisfies **Cal/OSHA** requirements…"
-                        ></textarea>
+                        />
                         <p class="text-xs text-muted-foreground">
                             Markdown: blank lines start a new paragraph,
                             <code>**bold**</code> and <code>*italic*</code> are

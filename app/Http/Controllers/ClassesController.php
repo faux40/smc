@@ -178,11 +178,23 @@ class ClassesController extends Controller
         abort_unless($classTraining->class_id === $class->id, 404);
 
         $data = $request->validate([
-            'hours' => ['nullable', 'numeric', 'min:0'],
+            'hours' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            // Per-class cert overrides: seeded from the training snapshot at
+            // attach time, then editable for this class only. cert_text is
+            // Markdown (rendered on the certificate).
+            'cert_title' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'cert_text' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'cert_code' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'lifespan_months' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:65535'],
         ]);
 
-        $classTraining->update(['hours' => $data['hours'] ?? null]);
-        $this->recomputeTotalHours($class);
+        // Only touch fields the request actually sent, so a cert-only edit
+        // doesn't blank hours (and vice-versa).
+        $classTraining->update($data);
+
+        if (array_key_exists('hours', $data)) {
+            $this->recomputeTotalHours($class);
+        }
         event(new ClassChanged($class->id, $class->org_id, 'updated'));
 
         return response()->json($this->detail($class->fresh()));
@@ -518,6 +530,11 @@ class ClassesController extends Controller
                 'std_freq_name' => $ct->std_freq_name,
                 'repeat_days' => $ct->repeat_days,
                 'hours' => $ct->hours,
+                // Per-class cert overrides (editable while scheduled).
+                'cert_title' => $ct->cert_title,
+                'cert_text' => $ct->cert_text,
+                'cert_code' => $ct->cert_code,
+                'lifespan_months' => $ct->lifespan_months,
                 // M3 — who earned this topic's credit (completed classes).
                 'credits' => ($creditsByTopic[$ct->id] ?? collect())
                     ->map(fn (Completion $comp) => [

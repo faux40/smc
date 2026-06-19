@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Completion;
 use App\Models\TrainingClass;
-use App\Support\ClassCertificates;
+use App\Support\CertificateData;
 use App\Support\ClassSignInSheet;
 use App\Support\ClassSummary;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -22,7 +23,7 @@ class ClassDocumentsController extends Controller
     {
         Gate::authorize('view', $class);
 
-        $certs = ClassCertificates::rows($class);
+        $certs = CertificateData::forClass($class);
 
         abort_if($certs === [], 404, 'This class has no issued certificates.');
 
@@ -37,6 +38,23 @@ class ClassDocumentsController extends Controller
             ->setPaper('letter', 'landscape');
 
         return $pdf->stream("certificates-{$class->id}.pdf");
+    }
+
+    /**
+     * A single completion's certificate — usable for completions that never
+     * came from a class (manual / imported). Content resolves from the class
+     * snapshot when present, else from the training (see CertificateData).
+     */
+    public function completionCertificate(Completion $completion): Response
+    {
+        Gate::authorize('view', $completion);
+
+        $this->prepareDompdfRuntime();
+
+        $pdf = Pdf::loadView('pdf.certificate', ['certs' => CertificateData::forCompletion($completion)])
+            ->setPaper('letter', 'landscape');
+
+        return $pdf->stream("certificate-{$completion->id}.pdf");
     }
 
     public function signInSheet(TrainingClass $class): Response

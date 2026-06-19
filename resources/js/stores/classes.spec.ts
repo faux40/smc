@@ -135,6 +135,27 @@ describe('useClassesStore', () => {
         expect(store.detail.c1.id).toBe('c1');
     });
 
+    it('updateTrainingCert() PATCHes the per-class cert fields and caches', async () => {
+        const patch = axios.patch as ReturnType<typeof vi.fn>;
+        patch.mockResolvedValue({ data: detailA });
+        const store = useClassesStore();
+
+        const cert = {
+            cert_title: 'Per-class Title',
+            cert_text: 'Edited **text**',
+            cert_code: 'NEW',
+            lifespan_months: 36,
+        };
+        await store.updateTrainingCert('c1', 'ct1', cert);
+
+        expect(patch).toHaveBeenCalledWith(
+            '/api/classes/c1/trainings/ct1',
+            cert,
+            expect.anything(),
+        );
+        expect(store.detail.c1.id).toBe('c1');
+    });
+
     it('complete() posts the close-out and caches the returned detail', async () => {
         const post = axios.post as ReturnType<typeof vi.fn>;
         post.mockResolvedValue({ data: { ...detailA, status: 'completed' } });
