@@ -7,7 +7,7 @@
         @if (! empty($background)) style="background-image: url('{{ $background }}'); background-size: 100% 100%;" @endif
     >
         <div class="px-[1.15in] pt-[1.05in] text-center">
-            <div class="mt-[0.5in] text-[22px] font-bold tracking-[1px]">{{ $c['org_name'] }}</div>
+            <div class="mt-[0.25in] text-[22px] font-bold tracking-[1px]">{{ $c['org_name'] }}</div>
             <div class="mx-auto mt-2 w-[90px] border-b-2 border-[#b08d57]"></div>
 
             <div class="mt-[0.25in] whitespace-nowrap text-[42px] tracking-[6px] text-[#1f5c3a]">
