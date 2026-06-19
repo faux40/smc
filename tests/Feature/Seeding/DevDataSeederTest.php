@@ -113,13 +113,21 @@ class DevDataSeederTest extends TestCase
         $this->assertSame(1, $trainings->where('initial_only', true)->count());
         $this->assertSame(1, $trainings->where('as_needed', true)->count());
 
-        // Every std_frequency in BG should back at least one training.
+        // The repeating trainings span five distinct frequencies, and every
+        // one is a real BG frequency. (BG also carries the other standard
+        // frequencies — incl. the multi-year options — which no demo training
+        // happens to use; that's fine, the picker still offers them.)
         $usedFreqIds = $repeating->pluck('std_freq_id')->unique()->values();
-        $bgFreqCount = StdFrequency::query()
+        $this->assertSame(5, $usedFreqIds->count());
+
+        $bgFreqIds = StdFrequency::query()
             ->withoutGlobalScope('organization')
             ->where('org_id', $org->id)
-            ->count();
-        $this->assertSame($bgFreqCount, $usedFreqIds->count());
+            ->pluck('id');
+        $this->assertTrue(
+            $usedFreqIds->every(fn ($id) => $bgFreqIds->contains($id)),
+            'Every frequency used by a training belongs to BG.',
+        );
     }
 
     public function test_seeds_four_requirements_with_single_and_multi_element_shapes(): void

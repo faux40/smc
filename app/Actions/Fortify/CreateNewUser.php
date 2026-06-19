@@ -26,23 +26,6 @@ class CreateNewUser implements CreatesNewUsers
     use PasswordValidationRules, ProfileValidationRules;
 
     /**
-     * Sensible per-org defaults seeded on registration. Admins can edit /
-     * delete / add via /settings/frequencies. A more comprehensive new-org
-     * seeder script is planned and will supersede this inline seed; capture
-     * it here so downstream forms (Trainings, RqmtElements, Assignments) have
-     * a non-empty picker on day one.
-     *
-     * @var array<int, array{name: string, repeat_days: int}>
-     */
-    private const DEFAULT_FREQUENCIES = [
-        ['name' => 'Annual', 'repeat_days' => 365],
-        ['name' => 'Semi-Annual', 'repeat_days' => 180],
-        ['name' => 'Quarterly', 'repeat_days' => 90],
-        ['name' => 'Monthly', 'repeat_days' => 30],
-        ['name' => 'Every 10 days', 'repeat_days' => 10],
-    ];
-
-    /**
      * @param  array<string, string>  $input
      */
     public function create(array $input): User
@@ -70,7 +53,10 @@ class CreateNewUser implements CreatesNewUsers
             $org->update(['owner_user_id' => $user->id]);
             $user->assignRole('Owner');
 
-            foreach (self::DEFAULT_FREQUENCIES as $row) {
+            // Seed the standard per-org frequency set so downstream forms
+            // (Trainings, RqmtElements, Assignments) have a non-empty picker on
+            // day one. Admins can edit / delete / add via /settings/frequencies.
+            foreach (StdFrequency::STANDARD as $row) {
                 StdFrequency::create([
                     'org_id' => $org->id,
                     'name' => $row['name'],

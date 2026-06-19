@@ -41,6 +41,31 @@ class RegistrationCreatesOrgTest extends TestCase
         $this->assertTrue($user->hasRole('Owner'));
     }
 
+    public function test_register_seeds_the_standard_frequency_set(): void
+    {
+        $this->post(route('register'), [
+            'f_name' => 'Ada',
+            'l_name' => 'Lovelace',
+            'org_name' => 'Acme Co',
+            'email' => 'ada@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])->assertRedirect();
+
+        $org = Organization::where('name', 'Acme Co')->firstOrFail();
+
+        $names = \App\Models\StdFrequency::withoutGlobalScope('organization')
+            ->where('org_id', $org->id)
+            ->pluck('name')
+            ->all();
+
+        $this->assertEqualsCanonicalizing(
+            array_column(\App\Models\StdFrequency::STANDARD, 'name'),
+            $names,
+        );
+        $this->assertContains('Every 5 Years', $names); // includes the new multi-year options
+    }
+
     public function test_register_requires_org_name(): void
     {
         $this->from(route('register'))
