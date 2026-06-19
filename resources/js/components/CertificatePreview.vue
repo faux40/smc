@@ -51,16 +51,17 @@ const bodyHtml = computed(() => renderMarkdown(props.certText));
             <div class="mx-auto mt-1 w-[12%] border-b-2 border-[#b08d57]"></div>
 
             <div
-                class="mt-[2%] text-[5cqw] tracking-[0.3em] text-[#1f5c3a]"
+                class="mt-[5%] whitespace-nowrap text-[4cqw] tracking-[0.25em] text-[#1f5c3a]"
             >
-                CERTIFICATE
+                CERTIFICATE OF TRAINING
             </div>
-            <div class="text-[2cqw] italic text-[#4b5563]">of Training</div>
 
-            <div class="mt-[2.5%] text-[1.6cqw] italic text-[#4b5563]">
+            <div class="mt-[5%] text-[1.6cqw] italic text-[#4b5563]">
                 This certifies that
             </div>
-            <div class="mt-1 text-[4cqw] text-[#14532d]">{{ studentName }}</div>
+            <div class="mt-1 text-[4.8cqw] text-[#14532d]">
+                {{ studentName }}
+            </div>
             <div class="mx-auto mt-1 w-[55%] border-b border-[#9ca3af]"></div>
 
             <!-- Author-controlled content -->
