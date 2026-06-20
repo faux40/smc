@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\AttachmentCreated;
 use App\Events\AttachmentDeleted;
+use App\Events\AttachmentUpdated;
 use App\Models\Attachment;
 use App\Models\Requirement;
 use App\Models\Training;
@@ -49,7 +50,7 @@ class AttachmentsController extends Controller
             ->where('attachable_id', $data['attachable_id'])
             ->with('uploadedBy:id,f_name,l_name')
             ->orderByDesc('created_at')
-            ->get(['id', 'attachable_type', 'attachable_id', 'uploaded_by_user_id', 'filename', 'type', 'description', 'mime', 'size', 'created_at']);
+            ->get(['id', 'org_id', 'attachable_type', 'attachable_id', 'uploaded_by_user_id', 'filename', 'type', 'description', 'mime', 'size', 'created_at']);
 
         return response()->json($attachments->map(fn (Attachment $a) => [
             'id' => $a->id,
@@ -64,6 +65,7 @@ class AttachmentsController extends Controller
             'uploaded_by_name' => $a->uploadedBy?->name,
             'created_at' => $a->created_at?->toDateTimeString(),
             'can_delete' => Gate::check('delete', $a),
+            'can_edit' => Gate::check('update', $a),
         ]));
     }
 
@@ -138,6 +140,33 @@ class AttachmentsController extends Controller
             'id' => $attachment->id,
             'filename' => $attachment->filename,
         ], 201);
+    }
+
+    /**
+     * Edit an attachment's Type + Description. Policy gates this — notably,
+     * once the parent (e.g. a class) is closed, only elevated roles may edit.
+     */
+    public function update(Request $request, Attachment $attachment): JsonResponse
+    {
+        Gate::authorize('update', $attachment);
+
+        $data = $request->validate([
+            'type' => ['nullable', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $attachment->update([
+            'type' => $data['type'] ?? null,
+            'description' => $data['description'] ?? null,
+        ]);
+
+        event(new AttachmentUpdated($attachment));
+
+        return response()->json([
+            'id' => $attachment->id,
+            'type' => $attachment->type,
+            'description' => $attachment->description,
+        ]);
     }
 
     public function destroy(Attachment $attachment): JsonResponse

@@ -132,6 +132,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/attachments', [AttachmentsController::class, 'index'])->name('attachments.index');
     Route::get('api/attachments/types', [AttachmentsController::class, 'types'])->name('attachments.types');
     Route::post('api/attachments', [AttachmentsController::class, 'store'])->name('attachments.store');
+    Route::patch('api/attachments/{attachment}', [AttachmentsController::class, 'update'])->name('attachments.update');
     Route::delete('api/attachments/{attachment}', [AttachmentsController::class, 'destroy'])->name('attachments.destroy');
     Route::get('api/attachments/{attachment}/view', [AttachmentsController::class, 'view'])->name('attachments.view');
     Route::get('api/attachments/{attachment}/download', [AttachmentsController::class, 'download'])->name('attachments.download');
@@ -161,6 +162,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/classes/{class}/certificates', [ClassDocumentsController::class, 'certificates'])->name('classes.certificates');
     Route::post('api/classes/{class}/certificates', [ClassDocumentsController::class, 'storeCertificates'])->name('classes.certificates.store');
     Route::get('api/classes/{class}/sign-in-sheet', [ClassDocumentsController::class, 'signInSheet'])->name('classes.sign-in-sheet');
+    Route::post('api/classes/{class}/sign-in-sheet', [ClassDocumentsController::class, 'storeSignInSheet'])->name('classes.sign-in-sheet.store');
     Route::get('api/classes/{class}/summary', [ClassDocumentsController::class, 'summary'])->name('classes.summary');
     Route::post('api/classes/{class}/summary', [ClassDocumentsController::class, 'storeSummary'])->name('classes.summary.store');
     Route::get('api/classes/{class}', [ClassesController::class, 'show'])->name('classes.show');

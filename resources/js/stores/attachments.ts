@@ -26,6 +26,7 @@ export interface AttachmentRow {
     uploaded_by_name: string | null;
     created_at: string | null;
     can_delete: boolean;
+    can_edit: boolean;
 }
 
 /** Optional metadata supplied when uploading. */
@@ -139,16 +140,49 @@ export const useAttachmentsStore = defineStore('attachments', () => {
      */
     async function fileClassDocument(
         classId: string,
-        kind: 'certificates' | 'summary',
+        kind: 'certificates' | 'summary' | 'sign-in',
+        info: AttachmentInfo = {},
     ): Promise<void> {
+        const path = kind === 'sign-in' ? 'sign-in-sheet' : kind;
         await axios.post(
-            `/api/classes/${classId}/${kind}`,
-            {},
+            `/api/classes/${classId}/${path}`,
+            {
+                type: info.type || null,
+                description: info.description || null,
+            },
             { headers: defaultHeaders() },
         );
         const morphable = { type: 'App\\Models\\TrainingClass', id: classId };
         loaded.value = { ...loaded.value, [keyOf(morphable)]: false };
         await load(morphable);
+    }
+
+    /** Edit an attachment's Type + Description (gated server-side). */
+    async function updateInfo(id: string, info: AttachmentInfo): Promise<void> {
+        const { data } = await axios.patch<{
+            id: string;
+            type: string | null;
+            description: string | null;
+        }>(
+            `/api/attachments/${id}`,
+            {
+                type: info.type || null,
+                description: info.description || null,
+            },
+            { headers: defaultHeaders() },
+        );
+        patchRow(id, { type: data.type, description: data.description });
+    }
+
+    /** Patch matching cached rows across all loaded lists. */
+    function patchRow(id: string, fields: Partial<AttachmentRow>): void {
+        const next: Record<string, AttachmentRow[]> = {};
+
+        for (const [key, rows] of Object.entries(lists.value)) {
+            next[key] = rows.map((a) => (a.id === id ? { ...a, ...fields } : a));
+        }
+
+        lists.value = next;
     }
 
     async function destroy(id: string): Promise<void> {
@@ -221,11 +255,18 @@ export const useAttachmentsStore = defineStore('attachments', () => {
                             uploaded_by_name: null,
                             created_at: null,
                             can_delete: false,
+                            can_edit: false,
                         },
                         ...cur,
                     ],
                 };
             },
+        );
+
+        bind(
+            'AttachmentUpdated',
+            (p: { id: string; type: string | null; description: string | null }) =>
+                patchRow(p.id, { type: p.type, description: p.description }),
         );
 
         bind('AttachmentDeleted', (p: { id: string }) => {
@@ -249,6 +290,7 @@ export const useAttachmentsStore = defineStore('attachments', () => {
         invalidateTypes,
         upload,
         fileClassDocument,
+        updateInfo,
         destroy,
         downloadUrl,
         viewUrl,

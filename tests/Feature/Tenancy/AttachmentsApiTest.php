@@ -119,6 +119,67 @@ class AttachmentsApiTest extends TestCase
             ->assertJsonPath('0.description', 'Morning session roster');
     }
 
+    public function test_org_member_can_edit_type_and_description_before_close(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('None')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+        $att = Attachment::factory()->for($org, 'organization')->create([
+            'attachable_type' => User::class, 'attachable_id' => $target->id,
+            'uploaded_by_user_id' => $member->id, 'type' => null, 'description' => null,
+        ]);
+
+        $this->actingAs($member)
+            ->patchJson("/api/attachments/{$att->id}", [
+                'type' => 'Test', 'description' => 'updated',
+            ])
+            ->assertOk()
+            ->assertJsonPath('type', 'Test')
+            ->assertJsonPath('description', 'updated');
+
+        $this->assertSame('Test', $att->fresh()->type);
+    }
+
+    public function test_editing_metadata_on_a_completed_class_requires_admin(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create(['status' => 'completed']);
+        $att = Attachment::factory()->for($org, 'organization')->create([
+            'attachable_type' => TrainingClass::class, 'attachable_id' => $class->id,
+            'uploaded_by_user_id' => $manager->id,
+        ]);
+
+        // Manager (the uploader) is blocked once the class is closed.
+        $this->actingAs($manager)
+            ->patchJson("/api/attachments/{$att->id}", ['type' => 'Nope'])
+            ->assertForbidden();
+
+        // Admin may edit after close.
+        $this->actingAs($admin)
+            ->patchJson("/api/attachments/{$att->id}", ['type' => 'Sign-in sheet'])
+            ->assertOk();
+
+        $this->assertSame('Sign-in sheet', $att->fresh()->type);
+    }
+
+    public function test_index_reports_can_edit(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('None')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+        Attachment::factory()->for($org, 'organization')->create([
+            'attachable_type' => User::class, 'attachable_id' => $target->id,
+            'uploaded_by_user_id' => $member->id,
+        ]);
+
+        $this->actingAs($member)
+            ->getJson($this->indexUrl($target))
+            ->assertOk()
+            ->assertJsonPath('0.can_edit', true);
+    }
+
     public function test_types_endpoint_returns_distinct_org_scoped_types(): void
     {
         $org = Organization::factory()->create();

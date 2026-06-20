@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\FileClassDocument;
+use App\Models\Attachment;
 use App\Models\Completion;
 use App\Models\TrainingClass;
 use App\Support\CertificateData;
@@ -10,6 +11,7 @@ use App\Support\ClassSignInSheet;
 use App\Support\ClassSummary;
 use App\Support\PdfRenderer;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Spatie\LaravelPdf\PdfBuilder;
 
@@ -36,38 +38,80 @@ class ClassDocumentsController extends Controller
      * (a TrainingClass attachment on Linode). The GET above is for viewing;
      * this POST persists a fresh, timestamped copy.
      */
-    public function storeCertificates(TrainingClass $class, FileClassDocument $action): JsonResponse
+    public function storeCertificates(Request $request, TrainingClass $class, FileClassDocument $action): JsonResponse
     {
         Gate::authorize('view', $class);
 
         $certs = CertificateData::forClass($class);
         abort_if($certs === [], 422, 'This class has no issued certificates.');
 
+        [$type, $description] = $this->docInfo($request);
         $attachment = $action->handle(
             $class,
             $this->certificatesPdf($certs),
             FileClassDocument::filename($class, 'Certificates'),
+            $type,
+            $description,
         );
 
-        return response()->json([
-            'id' => $attachment->id,
-            'filename' => $attachment->filename,
-        ], 201);
+        return $this->filedResponse($attachment);
     }
 
     /**
      * File a copy of the class summary PDF into the class's documents.
      */
-    public function storeSummary(TrainingClass $class, FileClassDocument $action): JsonResponse
+    public function storeSummary(Request $request, TrainingClass $class, FileClassDocument $action): JsonResponse
     {
         Gate::authorize('view', $class);
 
+        [$type, $description] = $this->docInfo($request);
         $attachment = $action->handle(
             $class,
             $this->summaryPdf($class),
             FileClassDocument::filename($class, 'Summary'),
+            $type,
+            $description,
         );
 
+        return $this->filedResponse($attachment);
+    }
+
+    /**
+     * File a copy of the class sign-in sheet PDF into the class's documents.
+     */
+    public function storeSignInSheet(Request $request, TrainingClass $class, FileClassDocument $action): JsonResponse
+    {
+        Gate::authorize('view', $class);
+
+        [$type, $description] = $this->docInfo($request);
+        $attachment = $action->handle(
+            $class,
+            $this->signInSheetPdf($class),
+            FileClassDocument::filename($class, 'Sign_In_Sheet'),
+            $type,
+            $description,
+        );
+
+        return $this->filedResponse($attachment);
+    }
+
+    /**
+     * Validated optional Type + Description for a filed document.
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function docInfo(Request $request): array
+    {
+        $data = $request->validate([
+            'type' => ['nullable', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        return [$data['type'] ?? null, $data['description'] ?? null];
+    }
+
+    private function filedResponse(\App\Models\Attachment $attachment): JsonResponse
+    {
         return response()->json([
             'id' => $attachment->id,
             'filename' => $attachment->filename,
@@ -111,10 +155,14 @@ class ClassDocumentsController extends Controller
     {
         Gate::authorize('view', $class);
 
+        return $this->signInSheetPdf($class)->name("sign-in-sheet-{$class->id}.pdf");
+    }
+
+    private function signInSheetPdf(TrainingClass $class): PdfBuilder
+    {
         $data = ClassSignInSheet::data($class);
 
-        return $this->withReportFooter(PdfRenderer::make('pdf.sign-in-sheet', $data), $data)
-            ->name("sign-in-sheet-{$class->id}.pdf");
+        return $this->withReportFooter(PdfRenderer::make('pdf.sign-in-sheet', $data), $data);
     }
 
     public function summary(TrainingClass $class): PdfBuilder

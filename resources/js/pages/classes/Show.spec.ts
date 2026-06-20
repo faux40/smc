@@ -132,16 +132,14 @@ describe('classes/Show inline edit', () => {
         );
     });
 
-    it('shows the sign-in sheet link but gates certificates/summary to completed', async () => {
+    it('shows the sign-in sheet button but gates certificates/summary to completed', async () => {
         const wrapper = await mountShow();
-        const hrefs = wrapper
-            .findAll('a')
-            .map((a) => a.attributes('href') ?? '');
+        const labels = wrapper.findAll('button').map((b) => b.text());
 
-        expect(hrefs).toContain('/api/classes/c1/sign-in-sheet');
-        // Scheduled class → no certificate / summary links yet.
-        expect(hrefs).not.toContain('/api/classes/c1/certificates');
-        expect(hrefs).not.toContain('/api/classes/c1/summary');
+        expect(labels).toContain('Sign-in sheet');
+        // Scheduled class → no certificate / summary docs yet.
+        expect(labels).not.toContain('Certificates');
+        expect(labels).not.toContain('Class summary');
     });
 
     it('mounts AttachmentsList wired to this class as the morphable', async () => {
@@ -296,27 +294,34 @@ describe('classes/Show — completed class (M3)', () => {
         expect(sam).toContain('— Harness Inspection');
     });
 
-    it.each([
-        ['certificates', '/api/classes/c1/certificates'],
-        ['summary', '/api/classes/c1/summary'],
-    ])('clicking %s also pops up the save-to-files modal', async (_kind, href) => {
-        // Clear any dialog teleported by a previous iteration.
-        document.body.innerHTML = '';
-        const wrapper = await mountShow();
+    it.each(['Certificates', 'Class summary', 'Sign-in sheet'])(
+        'clicking %s opens the doc in the in-app viewer (with save-to-files)',
+        async (label) => {
+            // Clear any dialog teleported by a previous iteration.
+            document.body.innerHTML = '';
+            const wrapper = await mountShow();
 
-        // No save popup until the document button is used.
-        expect(
-            document.body.querySelector('[data-testid="doc-save-modal-confirm"]'),
-        ).toBeNull();
+            // No viewer until the document button is used.
+            expect(
+                document.body.querySelector(
+                    '[data-testid="viewer-save-to-files"]',
+                ),
+            ).toBeNull();
 
-        const link = wrapper.find(`a[href="${href}"]`);
-        expect(link.exists()).toBe(true);
-        await link.trigger('click');
-        await flushPromises();
+            const btn = wrapper
+                .findAll('button')
+                .find((b) => b.text() === label);
+            expect(btn).toBeTruthy();
+            await btn!.trigger('click');
+            await flushPromises();
 
-        expect(
-            document.body.querySelector('[data-testid="doc-save-modal-confirm"]'),
-        ).not.toBeNull();
-        wrapper.unmount();
-    });
+            // The generated-doc viewer is open (preview + save-to-files).
+            expect(
+                document.body.querySelector(
+                    '[data-testid="viewer-save-to-files"]',
+                ),
+            ).not.toBeNull();
+            wrapper.unmount();
+        },
+    );
 });

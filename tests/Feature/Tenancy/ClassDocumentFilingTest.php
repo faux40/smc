@@ -115,6 +115,40 @@ class ClassDocumentFilingTest extends TestCase
         $this->assertStringStartsWith('Summary_Hazwoper_', $row->filename);
     }
 
+    public function test_filing_persists_optional_type_and_description(): void
+    {
+        Pdf::fake();
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+        $class = $this->completedClass($org, 'Hazwoper');
+
+        $this->actingAs($this->manager($org))
+            ->postJson("/api/classes/{$class->id}/summary", [
+                'type' => 'Class summary',
+                'description' => 'Filed from the viewer',
+            ])
+            ->assertCreated();
+
+        $row = Attachment::where('attachable_id', $class->id)->firstOrFail();
+        $this->assertSame('Class summary', $row->type);
+        $this->assertSame('Filed from the viewer', $row->description);
+    }
+
+    public function test_sign_in_sheet_endpoint_files_a_pdf(): void
+    {
+        Pdf::fake();
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+        $class = $this->completedClass($org, 'Hazwoper');
+
+        $this->actingAs($this->manager($org))
+            ->postJson("/api/classes/{$class->id}/sign-in-sheet")
+            ->assertCreated();
+
+        $row = Attachment::where('attachable_id', $class->id)->firstOrFail();
+        $this->assertStringStartsWith('Sign_In_Sheet_Hazwoper_', $row->filename);
+    }
+
     public function test_certificates_endpoint_422_when_none_issued(): void
     {
         Pdf::fake();

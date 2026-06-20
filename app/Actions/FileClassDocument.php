@@ -19,8 +19,13 @@ use Spatie\LaravelPdf\PdfBuilder;
  */
 class FileClassDocument
 {
-    public function handle(TrainingClass $class, PdfBuilder $pdf, string $filename): Attachment
-    {
+    public function handle(
+        TrainingClass $class,
+        PdfBuilder $pdf,
+        string $filename,
+        ?string $type = null,
+        ?string $description = null,
+    ): Attachment {
         // UUID-keyed path so repeated saves never collide; the display name
         // (with the readable timestamp) lives on the Attachment row.
         $path = 'attachments/'.Str::uuid().'-'.$filename;
@@ -33,6 +38,8 @@ class FileClassDocument
             'attachable_id' => $class->id,
             'uploaded_by_user_id' => Auth::id(),
             'filename' => $filename,
+            'type' => $type,
+            'description' => $description,
             'mime' => 'application/pdf',
             'size' => null,
             'disk' => 'linode',

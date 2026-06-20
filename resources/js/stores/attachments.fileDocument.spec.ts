@@ -43,7 +43,7 @@ describe('attachments store — fileClassDocument', () => {
 
             expect(post).toHaveBeenCalledWith(
                 `/api/classes/c1/${kind}`,
-                {},
+                { type: null, description: null },
                 expect.anything(),
             );
             const rows = store.listFor({ type: TYPE, id: 'c1' });

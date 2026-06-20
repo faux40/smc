@@ -1,8 +1,14 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AttachmentViewer from '@/components/AttachmentViewer.vue';
+import ComboboxInput from '@/components/ComboboxInput.vue';
+import { useAttachmentsStore } from '@/stores/attachments';
 import type { AttachmentRow } from '@/stores/attachments';
+
+vi.mock('vue-sonner', () => ({
+    toast: { success: vi.fn(), error: vi.fn() },
+}));
 
 function row(overrides: Partial<AttachmentRow> = {}): AttachmentRow {
     return {
@@ -18,6 +24,7 @@ function row(overrides: Partial<AttachmentRow> = {}): AttachmentRow {
         uploaded_by_name: 'Dana Reed',
         created_at: '2026-06-01 10:00:00',
         can_delete: true,
+        can_edit: false,
         ...overrides,
     };
 }
@@ -80,5 +87,81 @@ describe('AttachmentViewer', () => {
         ).find((a) => a.getAttribute('href') === '/api/attachments/a3/download');
         expect(dl).toBeUndefined();
         expect(document.body.textContent).toContain('No preview available');
+    });
+
+    it('edits a stored attachment’s details when permitted', async () => {
+        const store = useAttachmentsStore();
+        vi.spyOn(store, 'loadTypes').mockResolvedValue();
+        const update = vi.spyOn(store, 'updateInfo').mockResolvedValue();
+
+        const wrapper = await openWith(row({ id: 'a4', can_edit: true, type: 'Old' }));
+
+        document.body
+            .querySelector<HTMLButtonElement>('[data-testid="viewer-edit"]')!
+            .click();
+        await flushPromises();
+
+        wrapper
+            .findComponent(ComboboxInput)
+            .vm.$emit('update:modelValue', 'Sign-in sheet');
+        await flushPromises();
+        document.body
+            .querySelector<HTMLButtonElement>('[data-testid="viewer-save"]')!
+            .click();
+        await flushPromises();
+
+        expect(update).toHaveBeenCalledWith('a4', {
+            type: 'Sign-in sheet',
+            description: '',
+        });
+    });
+
+    it('hides the edit affordance when can_edit is false', async () => {
+        await openWith(row({ id: 'a5', can_edit: false }));
+        expect(
+            document.body.querySelector('[data-testid="viewer-edit"]'),
+        ).toBeNull();
+    });
+
+    it('previews a generated doc and files it via save-to-files', async () => {
+        const store = useAttachmentsStore();
+        vi.spyOn(store, 'loadTypes').mockResolvedValue();
+        const file = vi.spyOn(store, 'fileClassDocument').mockResolvedValue();
+
+        const wrapper = mount(AttachmentViewer, {
+            props: {
+                open: false,
+                generated: {
+                    title: 'Certificates',
+                    src: '/api/classes/c1/certificates',
+                    classId: 'c1',
+                    kind: 'certificates',
+                },
+            },
+            attachTo: document.body,
+        });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        // Preview points at the generate endpoint.
+        expect(document.body.querySelector('iframe')?.getAttribute('src')).toBe(
+            '/api/classes/c1/certificates',
+        );
+
+        document.body
+            .querySelector<HTMLButtonElement>(
+                '[data-testid="viewer-save-to-files"]',
+            )!
+            .click();
+        await flushPromises();
+        document.body
+            .querySelector<HTMLButtonElement>('[data-testid="viewer-save"]')!
+            .click();
+        await flushPromises();
+
+        expect(file).toHaveBeenCalledWith('c1', 'certificates', {
+            type: '',
+            description: '',
+        });
     });
 });

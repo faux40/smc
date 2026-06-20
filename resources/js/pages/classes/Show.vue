@@ -17,7 +17,8 @@ import {
 } from '@/components/ui/dialog';
 import { useClassForm } from '@/composables/useClassForm';
 import ClassCertEditModal from '@/pages/classes/Partials/ClassCertEditModal.vue';
-import ClassDocumentSaveModal from '@/pages/classes/Partials/ClassDocumentSaveModal.vue';
+import AttachmentViewer from '@/components/AttachmentViewer.vue';
+import type { GeneratedDoc } from '@/components/AttachmentViewer.vue';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ManageRosterModal from '@/pages/classes/Partials/ManageRosterModal.vue';
 import ManageTopicsModal from '@/pages/classes/Partials/ManageTopicsModal.vue';
@@ -52,9 +53,26 @@ const detail = computed(() => store.detail[props.classId] ?? null);
 
 const completeOpen = ref(false);
 const topicsOpen = ref(false);
-// Prompt to file a copy of a document whenever it's generated.
-const certSaveOpen = ref(false);
-const summarySaveOpen = ref(false);
+// Doc generators open in the in-app viewer (preview + browser download/print,
+// plus "save to this class's files"), instead of a second tab.
+const docOpen = ref(false);
+const activeDoc = ref<GeneratedDoc | null>(null);
+
+const DOC_PATHS: Record<GeneratedDoc['kind'], string> = {
+    certificates: 'certificates',
+    summary: 'summary',
+    'sign-in': 'sign-in-sheet',
+};
+
+function openDoc(kind: GeneratedDoc['kind'], title: string): void {
+    activeDoc.value = {
+        kind,
+        title,
+        classId: props.classId,
+        src: `/api/classes/${props.classId}/${DOC_PATHS[kind]}`,
+    };
+    docOpen.value = true;
+}
 // Per-topic certificate editor (scheduled classes): which class_training row.
 const certOpen = ref(false);
 const certTopicId = ref<string | null>(null);
@@ -468,30 +486,22 @@ const totalHoursLabel = computed(
                             <h2 class="text-sm font-semibold">Documents</h2>
                             <div class="flex flex-wrap gap-2">
                                 <Button
-                                    as="a"
                                     variant="outline"
-                                    :href="`/api/classes/${props.classId}/sign-in-sheet`"
-                                    target="_blank"
+                                    @click="openDoc('sign-in', 'Sign-in sheet')"
                                 >
                                     Sign-in sheet
                                 </Button>
                                 <Button
                                     v-if="detail.status === 'completed'"
-                                    as="a"
                                     variant="outline"
-                                    :href="`/api/classes/${props.classId}/certificates`"
-                                    target="_blank"
-                                    @click="certSaveOpen = true"
+                                    @click="openDoc('certificates', 'Certificates')"
                                 >
                                     Certificates
                                 </Button>
                                 <Button
                                     v-if="detail.status === 'completed'"
-                                    as="a"
                                     variant="outline"
-                                    :href="`/api/classes/${props.classId}/summary`"
-                                    target="_blank"
-                                    @click="summarySaveOpen = true"
+                                    @click="openDoc('summary', 'Class summary')"
                                 >
                                     Class summary
                                 </Button>
@@ -638,15 +648,9 @@ const totalHoursLabel = computed(
                     :class-id="props.classId"
                     :topic-id="certTopicId"
                 />
-                <ClassDocumentSaveModal
-                    v-model:open="certSaveOpen"
-                    :class-id="props.classId"
-                    kind="certificates"
-                />
-                <ClassDocumentSaveModal
-                    v-model:open="summarySaveOpen"
-                    :class-id="props.classId"
-                    kind="summary"
+                <AttachmentViewer
+                    v-model:open="docOpen"
+                    :generated="activeDoc"
                 />
                 <ManageRosterModal
                     v-model:open="rosterOpen"
