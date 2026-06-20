@@ -290,4 +290,24 @@ describe('classes/Show — completed class (M3)', () => {
         const sam = rows[1].text();
         expect(sam).toContain('✗ Fall Protection Basics');
     });
+
+    it('clicking Certificates also pops up the save-to-files modal', async () => {
+        const wrapper = await mountShow();
+
+        // No save popup until the certificates button is used.
+        expect(
+            document.body.querySelector('[data-testid="cert-save-modal-confirm"]'),
+        ).toBeNull();
+
+        const certLink = wrapper.find(
+            'a[href="/api/classes/c1/certificates"]',
+        );
+        expect(certLink.exists()).toBe(true);
+        await certLink.trigger('click');
+        await flushPromises();
+
+        expect(
+            document.body.querySelector('[data-testid="cert-save-modal-confirm"]'),
+        ).not.toBeNull();
+    });
 });

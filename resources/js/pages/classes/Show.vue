@@ -18,6 +18,7 @@ import {
 import { useClassForm } from '@/composables/useClassForm';
 import ClassCertEditModal from '@/pages/classes/Partials/ClassCertEditModal.vue';
 import ClassCertificatesSaveButton from '@/pages/classes/Partials/ClassCertificatesSaveButton.vue';
+import ClassCertificatesSaveModal from '@/pages/classes/Partials/ClassCertificatesSaveModal.vue';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ManageRosterModal from '@/pages/classes/Partials/ManageRosterModal.vue';
 import ManageTopicsModal from '@/pages/classes/Partials/ManageTopicsModal.vue';
@@ -52,6 +53,8 @@ const detail = computed(() => store.detail[props.classId] ?? null);
 
 const completeOpen = ref(false);
 const topicsOpen = ref(false);
+// Prompt to file a copy of the certificates whenever they're generated.
+const certSaveOpen = ref(false);
 // Per-topic certificate editor (scheduled classes): which class_training row.
 const certOpen = ref(false);
 const certTopicId = ref<string | null>(null);
@@ -478,6 +481,7 @@ const totalHoursLabel = computed(
                                     variant="outline"
                                     :href="`/api/classes/${props.classId}/certificates`"
                                     target="_blank"
+                                    @click="certSaveOpen = true"
                                 >
                                     Certificates
                                 </Button>
@@ -630,6 +634,10 @@ const totalHoursLabel = computed(
                     v-model:open="certOpen"
                     :class-id="props.classId"
                     :topic-id="certTopicId"
+                />
+                <ClassCertificatesSaveModal
+                    v-model:open="certSaveOpen"
+                    :class-id="props.classId"
                 />
                 <ManageRosterModal
                     v-model:open="rosterOpen"
