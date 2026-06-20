@@ -522,7 +522,7 @@ const submit = () => {
                             v-model="form.notes"
                             rows="3"
                             class="w-full rounded border border-input bg-background p-2 text-sm"
-                            placeholder="Free-text notes. The combine-users tool appends discarded values here."
+                            placeholder="Free-text notes. The merge-duplicate-users tool appends discarded values here."
                         ></textarea>
                         <InputError :message="fieldErrors.message('notes')" />
                     </div>

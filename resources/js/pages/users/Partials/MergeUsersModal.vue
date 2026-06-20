@@ -172,12 +172,12 @@ async function confirm(): Promise<void> {
             duplicate_id: duplicateId.value!,
             fields: { ...choices },
         });
-        toast.success('Users combined.');
+        toast.success('Users merged.');
         emit('merged');
         emit('update:open', false);
     } catch (e) {
         errorStore.reportFromAxios(e, FORM_CTX, {
-            fallback: 'Failed to combine the users',
+            fallback: 'Failed to merge the users',
         });
     } finally {
         submitting.value = false;
@@ -189,7 +189,7 @@ async function confirm(): Promise<void> {
     <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
         <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
             <DialogHeader>
-                <DialogTitle>Combine users</DialogTitle>
+                <DialogTitle>Merge duplicate users</DialogTitle>
                 <DialogDescription>
                     Fold a duplicate record into the one you want to keep. The
                     survivor inherits all of the duplicate's training records,
@@ -387,7 +387,7 @@ async function confirm(): Promise<void> {
                         data-testid="merge-confirm-btn"
                         @click="confirm"
                     >
-                        Combine users
+                        Merge duplicate users
                     </Button>
                 </template>
             </DialogFooter>

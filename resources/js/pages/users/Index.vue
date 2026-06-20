@@ -299,7 +299,7 @@ const remove = (row: UserRow) => {
                     data-testid="combine-users-btn"
                     @click="mergeOpen = true"
                 >
-                    Combine users
+                    Merge duplicate users
                 </Button>
                 <Button variant="outline" @click="toggleBulk">
                     {{ showBulk ? 'Close bulk add' : 'Bulk add' }}
