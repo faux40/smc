@@ -16,12 +16,22 @@ export interface AttachmentRow {
     attachable_type: string;
     attachable_id: string;
     filename: string;
+    // Optional uploader metadata: a free-text org vocabulary "type"
+    // (e.g. "Sign-in sheet") + a freeform description.
+    type: string | null;
+    description: string | null;
     mime: string | null;
     size: number | null;
     uploaded_by_user_id: string;
     uploaded_by_name: string | null;
     created_at: string | null;
     can_delete: boolean;
+}
+
+/** Optional metadata supplied when uploading. */
+export interface AttachmentInfo {
+    type?: string | null;
+    description?: string | null;
 }
 
 interface MorphableKey {
@@ -51,6 +61,27 @@ export const useAttachmentsStore = defineStore('attachments', () => {
     const loaded = ref<Record<string, boolean>>({});
     const subscribedOrgId = ref<string | null>(null);
 
+    // Org-scoped vocabulary of previously-used attachment types, cached for the
+    // upload form's type-ahead. One fetch per session unless invalidated.
+    const types = ref<string[]>([]);
+    const typesLoaded = ref(false);
+
+    async function loadTypes(force = false): Promise<void> {
+        if (typesLoaded.value && !force) {
+            return;
+        }
+
+        const { data } = await axios.get<string[]>('/api/attachments/types', {
+            headers: defaultHeaders(),
+        });
+        types.value = data;
+        typesLoaded.value = true;
+    }
+
+    function invalidateTypes(): void {
+        typesLoaded.value = false;
+    }
+
     function listFor(morphable: MorphableKey): AttachmentRow[] {
         return lists.value[keyOf(morphable)] ?? [];
     }
@@ -75,12 +106,27 @@ export const useAttachmentsStore = defineStore('attachments', () => {
         loaded.value = { ...loaded.value, [keyOf(morphable)]: true };
     }
 
-    async function upload(morphable: MorphableKey, file: File): Promise<void> {
+    async function upload(
+        morphable: MorphableKey,
+        file: File,
+        info: AttachmentInfo = {},
+    ): Promise<void> {
         const fd = new FormData();
         fd.append('attachable_type', morphable.type);
         fd.append('attachable_id', morphable.id);
         fd.append('file', file);
+
+        if (info.type) {
+            fd.append('type', info.type);
+        }
+
+        if (info.description) {
+            fd.append('description', info.description);
+        }
+
         await axios.post('/api/attachments', fd, { headers: defaultHeaders() });
+        // A new type may have been introduced — refresh the vocabulary next open.
+        invalidateTypes();
         // Reload to pick up can_delete + uploader_name + timestamps.
         loaded.value = { ...loaded.value, [keyOf(morphable)]: false };
         await load(morphable);
@@ -142,6 +188,8 @@ export const useAttachmentsStore = defineStore('attachments', () => {
                 attachable_type: string;
                 attachable_id: string;
                 filename: string;
+                type: string | null;
+                description: string | null;
                 mime: string | null;
                 size: number | null;
                 uploaded_by_user_id: string;
@@ -165,6 +213,8 @@ export const useAttachmentsStore = defineStore('attachments', () => {
                             attachable_type: p.attachable_type,
                             attachable_id: p.attachable_id,
                             filename: p.filename,
+                            type: p.type,
+                            description: p.description,
                             mime: p.mime,
                             size: p.size,
                             uploaded_by_user_id: p.uploaded_by_user_id,
@@ -192,8 +242,11 @@ export const useAttachmentsStore = defineStore('attachments', () => {
     return {
         lists,
         loaded,
+        types,
         listFor,
         load,
+        loadTypes,
+        invalidateTypes,
         upload,
         fileClassDocument,
         destroy,

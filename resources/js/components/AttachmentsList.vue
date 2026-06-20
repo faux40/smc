@@ -9,6 +9,7 @@
 import { usePage } from '@inertiajs/vue3';
 import { MoreHorizontal } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
+import AttachmentUploadModal from '@/components/AttachmentUploadModal.vue';
 import AttachmentViewer from '@/components/AttachmentViewer.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,9 +46,8 @@ const attachments = computed<AttachmentRow[]>(() =>
     store.listFor(morphable.value),
 );
 
-const fileInput = ref<HTMLInputElement | null>(null);
-const submitting = ref(false);
 const error = ref<string | null>(null);
+const uploadOpen = ref(false);
 
 const viewerOpen = ref(false);
 const activeAttachment = ref<AttachmentRow | null>(null);
@@ -70,31 +70,6 @@ onMounted(async () => {
         error.value = (e as Error).message;
     }
 });
-
-const triggerPicker = () => {
-    fileInput.value?.click();
-};
-
-const onPicked = async (event: Event) => {
-    const target = event.target as HTMLInputElement;
-    const file = target.files?.[0];
-
-    if (!file) {
-        return;
-    }
-
-    submitting.value = true;
-    error.value = null;
-
-    try {
-        await store.upload(morphable.value, file);
-        target.value = '';
-    } catch (e) {
-        error.value = (e as Error).message;
-    } finally {
-        submitting.value = false;
-    }
-};
 
 // Delete flows through an "are you sure" popup rather than a native confirm.
 const confirmOpen = ref(false);
@@ -154,15 +129,7 @@ const formatSize = (bytes: number | null): string => {
         </p>
 
         <div class="flex items-center gap-3">
-            <Button :disabled="submitting" @click="triggerPicker">
-                {{ submitting ? 'Uploading…' : 'Upload file' }}
-            </Button>
-            <input
-                ref="fileInput"
-                type="file"
-                class="hidden"
-                @change="onPicked"
-            />
+            <Button @click="uploadOpen = true">Upload files</Button>
             <span
                 v-if="attachments.length === 0"
                 class="text-sm text-muted-foreground"
@@ -177,14 +144,29 @@ const formatSize = (bytes: number | null): string => {
                 :key="a.id"
                 class="flex items-center gap-3 rounded border border-border p-3 text-sm"
             >
-                <div class="flex-1">
-                    <button
-                        type="button"
-                        class="text-left font-medium text-primary hover:underline"
-                        @click="openViewer(a)"
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            class="truncate text-left font-medium text-primary hover:underline"
+                            @click="openViewer(a)"
+                        >
+                            {{ a.filename }}
+                        </button>
+                        <span
+                            v-if="a.type"
+                            class="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                        >
+                            {{ a.type }}
+                        </span>
+                    </div>
+                    <p
+                        v-if="a.description"
+                        class="truncate text-xs text-muted-foreground"
+                        :title="a.description"
                     >
-                        {{ a.filename }}
-                    </button>
+                        {{ a.description }}
+                    </p>
                     <div class="text-xs text-muted-foreground">
                         <span v-if="a.mime">{{ a.mime }}</span>
                         <span v-if="a.size !== null">
@@ -221,6 +203,12 @@ const formatSize = (bytes: number | null): string => {
                 </DropdownMenu>
             </li>
         </ul>
+
+        <AttachmentUploadModal
+            v-model:open="uploadOpen"
+            :morphable-type="morphableType"
+            :morphable-id="morphableId"
+        />
 
         <AttachmentViewer
             v-model:open="viewerOpen"

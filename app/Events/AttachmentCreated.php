@@ -28,7 +28,7 @@ class AttachmentCreated implements ShouldBroadcast
         return [new PrivateChannel('org.'.$this->attachment->org_id)];
     }
 
-    /** @return array{id: string, attachable_type: string, attachable_id: string, filename: string, mime: ?string, size: ?int, uploaded_by_user_id: string, origin_tab: ?string} */
+    /** @return array{id: string, attachable_type: string, attachable_id: string, filename: string, type: ?string, description: ?string, mime: ?string, size: ?int, uploaded_by_user_id: string, origin_tab: ?string} */
     public function broadcastWith(): array
     {
         return [
@@ -36,6 +36,8 @@ class AttachmentCreated implements ShouldBroadcast
             'attachable_type' => $this->attachment->attachable_type,
             'attachable_id' => $this->attachment->attachable_id,
             'filename' => $this->attachment->filename,
+            'type' => $this->attachment->type,
+            'description' => $this->attachment->description,
             'mime' => $this->attachment->mime,
             'size' => $this->attachment->size,
             'uploaded_by_user_id' => $this->attachment->uploaded_by_user_id,

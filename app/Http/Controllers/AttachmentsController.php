@@ -49,13 +49,15 @@ class AttachmentsController extends Controller
             ->where('attachable_id', $data['attachable_id'])
             ->with('uploadedBy:id,f_name,l_name')
             ->orderByDesc('created_at')
-            ->get(['id', 'attachable_type', 'attachable_id', 'uploaded_by_user_id', 'filename', 'mime', 'size', 'created_at']);
+            ->get(['id', 'attachable_type', 'attachable_id', 'uploaded_by_user_id', 'filename', 'type', 'description', 'mime', 'size', 'created_at']);
 
         return response()->json($attachments->map(fn (Attachment $a) => [
             'id' => $a->id,
             'attachable_type' => $a->attachable_type,
             'attachable_id' => $a->attachable_id,
             'filename' => $a->filename,
+            'type' => $a->type,
+            'description' => $a->description,
             'mime' => $a->mime,
             'size' => $a->size,
             'uploaded_by_user_id' => $a->uploaded_by_user_id,
@@ -65,12 +67,34 @@ class AttachmentsController extends Controller
         ]));
     }
 
+    /**
+     * Distinct attachment "type" values already used in the caller's org —
+     * feeds the upload form's type type-ahead so terms stay standardized
+     * (the model's global org scope handles tenancy).
+     */
+    public function types(): JsonResponse
+    {
+        $types = Attachment::query()
+            ->whereNotNull('type')
+            ->where('type', '!=', '')
+            ->distinct()
+            ->orderBy('type')
+            ->pluck('type')
+            ->all();
+
+        return response()->json($types);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
             'attachable_type' => ['required', 'string', Rule::in(self::ALLOWED_ATTACHABLE_TYPES)],
             'attachable_id' => ['required', 'string'],
             'file' => ['required', 'file', 'max:'.self::MAX_UPLOAD_KB],
+            // Optional uploader metadata: a free-text org vocabulary "type"
+            // (e.g. "Sign-in sheet") and a freeform description.
+            'type' => ['nullable', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $this->authorizeSameOrgMorphable($data['attachable_type'], $data['attachable_id']);
@@ -100,6 +124,8 @@ class AttachmentsController extends Controller
             'attachable_id' => $data['attachable_id'],
             'uploaded_by_user_id' => Auth::id(),
             'filename' => $file->getClientOriginalName(),
+            'type' => $data['type'] ?? null,
+            'description' => $data['description'] ?? null,
             'mime' => $file->getClientMimeType(),
             'size' => $file->getSize(),
             'disk' => self::STORAGE_DISK,

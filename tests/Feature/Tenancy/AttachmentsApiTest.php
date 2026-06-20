@@ -90,6 +90,72 @@ class AttachmentsApiTest extends TestCase
         Storage::disk('linode')->assertExists($row->path);
     }
 
+    public function test_upload_persists_optional_type_and_description(): void
+    {
+        $org = Organization::factory()->create();
+        $uploader = User::factory()->for($org, 'organization')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+        $file = UploadedFile::fake()->create('roster.pdf', 64, 'application/pdf');
+
+        $this->actingAs($uploader)
+            ->post('/api/attachments', [
+                'attachable_type' => User::class,
+                'attachable_id' => $target->id,
+                'file' => $file,
+                'type' => 'Sign-in sheet',
+                'description' => 'Morning session roster',
+            ], ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $row = Attachment::firstOrFail();
+        $this->assertSame('Sign-in sheet', $row->type);
+        $this->assertSame('Morning session roster', $row->description);
+
+        // The list exposes them.
+        $this->actingAs($uploader)
+            ->getJson($this->indexUrl($target))
+            ->assertOk()
+            ->assertJsonPath('0.type', 'Sign-in sheet')
+            ->assertJsonPath('0.description', 'Morning session roster');
+    }
+
+    public function test_types_endpoint_returns_distinct_org_scoped_types(): void
+    {
+        $org = Organization::factory()->create();
+        $other = Organization::factory()->create();
+        $user = User::factory()->for($org, 'organization')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+
+        Attachment::factory()->for($org, 'organization')->create([
+            'attachable_type' => User::class, 'attachable_id' => $target->id,
+            'uploaded_by_user_id' => $user->id, 'type' => 'Test',
+        ]);
+        Attachment::factory()->for($org, 'organization')->create([
+            'attachable_type' => User::class, 'attachable_id' => $target->id,
+            'uploaded_by_user_id' => $user->id, 'type' => 'Sign-in sheet',
+        ]);
+        // Duplicate type → collapses; null type → excluded.
+        Attachment::factory()->for($org, 'organization')->create([
+            'attachable_type' => User::class, 'attachable_id' => $target->id,
+            'uploaded_by_user_id' => $user->id, 'type' => 'Test',
+        ]);
+        Attachment::factory()->for($org, 'organization')->create([
+            'attachable_type' => User::class, 'attachable_id' => $target->id,
+            'uploaded_by_user_id' => $user->id, 'type' => null,
+        ]);
+        // Another org's type must not leak.
+        $otherUser = User::factory()->for($other, 'organization')->create();
+        Attachment::factory()->for($other, 'organization')->create([
+            'attachable_type' => User::class, 'attachable_id' => $otherUser->id,
+            'uploaded_by_user_id' => $otherUser->id, 'type' => 'Other-Org Type',
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/api/attachments/types')
+            ->assertOk()
+            ->assertExactJson(['Sign-in sheet', 'Test']); // distinct, sorted
+    }
+
     public function test_upload_rejects_cross_org_morphable(): void
     {
         $orgA = Organization::factory()->create();

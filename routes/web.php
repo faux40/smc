@@ -130,6 +130,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // member can read/upload; uploader OR admin+ can delete. Download
     // 302-redirects to a signed temporary URL on the Linode disk.
     Route::get('api/attachments', [AttachmentsController::class, 'index'])->name('attachments.index');
+    Route::get('api/attachments/types', [AttachmentsController::class, 'types'])->name('attachments.types');
     Route::post('api/attachments', [AttachmentsController::class, 'store'])->name('attachments.store');
     Route::delete('api/attachments/{attachment}', [AttachmentsController::class, 'destroy'])->name('attachments.destroy');
     Route::get('api/attachments/{attachment}/view', [AttachmentsController::class, 'view'])->name('attachments.view');

@@ -14,6 +14,8 @@ const pdfRow = {
     attachable_type: 'App\\Models\\TrainingClass',
     attachable_id: 'c1',
     filename: 'handout.pdf',
+    type: 'Sign-in sheet',
+    description: 'Morning session roster',
     mime: 'application/pdf',
     size: 2048,
     uploaded_by_user_id: 'u1',
@@ -61,6 +63,15 @@ describe('AttachmentsList', () => {
 
         const iframe = document.body.querySelector('iframe');
         expect(iframe?.getAttribute('src')).toBe('/api/attachments/a1/view');
+    });
+
+    it('shows the type and a hover-able (title) description', async () => {
+        const wrapper = await mountList();
+
+        expect(wrapper.text()).toContain('Sign-in sheet');
+        const desc = wrapper.find('p[title="Morning session roster"]');
+        expect(desc.exists()).toBe(true);
+        expect(desc.classes()).toContain('truncate');
     });
 
     it('offers download + delete from a per-row actions menu', async () => {

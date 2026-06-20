@@ -10,6 +10,8 @@ function row(overrides: Partial<AttachmentRow> = {}): AttachmentRow {
         attachable_type: 'App\\Models\\TrainingClass',
         attachable_id: 'c1',
         filename: 'file.pdf',
+        type: null,
+        description: null,
         mime: 'application/pdf',
         size: 1024,
         uploaded_by_user_id: 'u1',
@@ -68,12 +70,15 @@ describe('AttachmentViewer', () => {
         expect(document.body.textContent).toContain('No preview');
     });
 
-    it('always offers a download link to the attachment disposition URL', async () => {
+    it('shows a fallback message for unpreviewable types (no download button)', async () => {
         await openWith(row({ id: 'a3', mime: 'application/zip' }));
 
-        const link = Array.from(
+        // The viewer no longer carries its own Download button — the browser's
+        // built-in preview controls / the file menu handle downloading.
+        const dl = Array.from(
             document.body.querySelectorAll<HTMLAnchorElement>('a'),
         ).find((a) => a.getAttribute('href') === '/api/attachments/a3/download');
-        expect(link).toBeTruthy();
+        expect(dl).toBeUndefined();
+        expect(document.body.textContent).toContain('No preview available');
     });
 });

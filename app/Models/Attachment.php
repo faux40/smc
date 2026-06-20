@@ -22,6 +22,8 @@ class Attachment extends Model
         'attachable_id',
         'uploaded_by_user_id',
         'filename',
+        'type',
+        'description',
         'mime',
         'size',
         'disk',

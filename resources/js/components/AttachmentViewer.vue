@@ -6,16 +6,15 @@
  *
  * Previews PDFs and images inline via the same-origin /view endpoint, which
  * 302-redirects to a short-lived signed URL (inline disposition) — the app
- * never streams the bytes. Unsupported types fall back to a download prompt.
- * A download link is always offered.
+ * never streams the bytes. Unsupported types fall back to a message pointing
+ * at the file's menu. No own Download button — the inline preview / the
+ * actions menu handle downloading.
  */
 import { computed } from 'vue';
-import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
@@ -49,16 +48,16 @@ const previewKind = computed<PreviewKind>(() => {
 const viewSrc = computed(() =>
     props.attachment ? store.viewUrl(props.attachment.id) : '',
 );
-const downloadHref = computed(() =>
-    props.attachment ? store.downloadUrl(props.attachment.id) : '',
-);
 
 const setOpen = (v: boolean) => emit('update:open', v);
 </script>
 
 <template>
     <Dialog :open="open" @update:open="setOpen">
-        <DialogContent v-if="attachment" class="max-w-4xl">
+        <DialogContent
+            v-if="attachment"
+            class="max-h-[92vh] w-[95vw] overflow-y-auto sm:max-w-[1400px]"
+        >
             <DialogHeader>
                 <DialogTitle class="truncate">{{
                     attachment.filename
@@ -76,33 +75,22 @@ const setOpen = (v: boolean) => emit('update:open', v);
                     v-if="previewKind === 'pdf'"
                     :src="viewSrc"
                     :title="attachment.filename"
-                    class="h-[70vh] w-full rounded border border-border"
+                    class="h-[78vh] w-full rounded border border-border"
                 />
                 <img
                     v-else-if="previewKind === 'image'"
                     :src="viewSrc"
                     :alt="attachment.filename"
-                    class="mx-auto max-h-[70vh] object-contain"
+                    class="mx-auto max-h-[78vh] object-contain"
                 />
                 <p
                     v-else
                     class="py-12 text-center text-sm text-muted-foreground"
                 >
-                    No preview available for this file type. Use Download to
-                    open it.
+                    No preview available for this file type. Use the download
+                    action in the file’s menu.
                 </p>
             </div>
-
-            <DialogFooter>
-                <Button
-                    as="a"
-                    variant="outline"
-                    :href="downloadHref"
-                    @click="setOpen(false)"
-                >
-                    Download
-                </Button>
-            </DialogFooter>
         </DialogContent>
     </Dialog>
 </template>
