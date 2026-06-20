@@ -63,15 +63,53 @@ describe('AttachmentsList', () => {
         expect(iframe?.getAttribute('src')).toBe('/api/attachments/a1/view');
     });
 
-    it('offers a direct download link per row', async () => {
+    it('offers download + delete from a per-row actions menu', async () => {
         const wrapper = await mountList();
 
-        const dl = wrapper
-            .findAll('a')
-            .find(
-                (a) =>
-                    a.attributes('href') === '/api/attachments/a1/download',
-            );
+        // Actions live behind a kebab menu, not inline.
+        const trigger = wrapper.find('[aria-label="Actions for handout.pdf"]');
+        expect(trigger.exists()).toBe(true);
+
+        await trigger.trigger('click');
+        await flushPromises();
+
+        const dl = Array.from(document.body.querySelectorAll('a')).find(
+            (a) => a.getAttribute('href') === '/api/attachments/a1/download',
+        );
         expect(dl).toBeTruthy();
+        expect(document.body.textContent).toContain('Delete');
+    });
+
+    it('deletes only after confirming the "are you sure" popup', async () => {
+        const del = axios.delete as ReturnType<typeof vi.fn>;
+        del.mockResolvedValue({ data: { ok: true } });
+
+        const wrapper = await mountList();
+        await wrapper
+            .find('[aria-label="Actions for handout.pdf"]')
+            .trigger('click');
+        await flushPromises();
+
+        // Choosing Delete opens the confirm popup — no request yet.
+        const deleteItem = Array.from(
+            document.body.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+        ).find((el) => el.textContent?.trim() === 'Delete');
+        expect(deleteItem).toBeTruthy();
+        deleteItem!.click();
+        await flushPromises();
+
+        expect(del).not.toHaveBeenCalled();
+
+        const confirmBtn = document.body.querySelector<HTMLButtonElement>(
+            '[data-testid="attachment-delete-confirm"]',
+        );
+        expect(confirmBtn).not.toBeNull();
+        confirmBtn!.click();
+        await flushPromises();
+
+        expect(del).toHaveBeenCalledWith(
+            '/api/attachments/a1',
+            expect.anything(),
+        );
     });
 });

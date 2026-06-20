@@ -7,9 +7,24 @@
  * Routes uploads + deletes through useAttachmentsStore.
  */
 import { usePage } from '@inertiajs/vue3';
+import { MoreHorizontal } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 import AttachmentViewer from '@/components/AttachmentViewer.vue';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAttachmentsStore } from '@/stores/attachments';
 import type { AttachmentRow } from '@/stores/attachments';
 
@@ -81,17 +96,34 @@ const onPicked = async (event: Event) => {
     }
 };
 
-const remove = async (a: AttachmentRow) => {
-    if (!window.confirm(`Delete ${a.filename}?`)) {
+// Delete flows through an "are you sure" popup rather than a native confirm.
+const confirmOpen = ref(false);
+const pendingDelete = ref<AttachmentRow | null>(null);
+const deleting = ref(false);
+
+const requestDelete = (a: AttachmentRow) => {
+    pendingDelete.value = a;
+    confirmOpen.value = true;
+};
+
+const confirmDelete = async () => {
+    const target = pendingDelete.value;
+
+    if (!target) {
         return;
     }
 
+    deleting.value = true;
     error.value = null;
 
     try {
-        await store.destroy(a.id);
+        await store.destroy(target.id);
+        confirmOpen.value = false;
+        pendingDelete.value = null;
     } catch (e) {
         error.value = (e as Error).message;
+    } finally {
+        deleting.value = false;
     }
 };
 
@@ -164,20 +196,29 @@ const formatSize = (bytes: number | null): string => {
                         <span v-if="a.created_at"> · {{ a.created_at }}</span>
                     </div>
                 </div>
-                <a
-                    :href="store.downloadUrl(a.id)"
-                    class="text-xs text-primary hover:underline"
-                >
-                    Download
-                </a>
-                <button
-                    v-if="a.can_delete"
-                    type="button"
-                    class="text-xs text-destructive hover:underline"
-                    @click="remove(a)"
-                >
-                    Delete
-                </button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                        <button
+                            type="button"
+                            class="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                            :aria-label="`Actions for ${a.filename}`"
+                        >
+                            <MoreHorizontal class="size-4" />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem as-child>
+                            <a :href="store.downloadUrl(a.id)">Download</a>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            v-if="a.can_delete"
+                            class="text-destructive focus:text-destructive"
+                            @select="requestDelete(a)"
+                        >
+                            Delete
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </li>
         </ul>
 
@@ -185,5 +226,35 @@ const formatSize = (bytes: number | null): string => {
             v-model:open="viewerOpen"
             :attachment="activeAttachment"
         />
+
+        <Dialog v-model:open="confirmOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Delete file?</DialogTitle>
+                    <DialogDescription>
+                        Are you sure you want to delete “{{
+                            pendingDelete?.filename
+                        }}”? This can’t be undone.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button
+                        variant="outline"
+                        :disabled="deleting"
+                        @click="confirmOpen = false"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        :disabled="deleting"
+                        data-testid="attachment-delete-confirm"
+                        @click="confirmDelete"
+                    >
+                        {{ deleting ? 'Deleting…' : 'Delete' }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </section>
 </template>
