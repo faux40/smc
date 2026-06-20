@@ -152,6 +152,8 @@ export const useAttachmentsStore = defineStore('attachments', () => {
             },
             { headers: defaultHeaders() },
         );
+        // A new type may have been introduced — refresh the vocabulary next open.
+        invalidateTypes();
         const morphable = { type: 'App\\Models\\TrainingClass', id: classId };
         loaded.value = { ...loaded.value, [keyOf(morphable)]: false };
         await load(morphable);
@@ -172,6 +174,8 @@ export const useAttachmentsStore = defineStore('attachments', () => {
             { headers: defaultHeaders() },
         );
         patchRow(id, { type: data.type, description: data.description });
+        // An edit can introduce a new type — refresh the vocabulary next open.
+        invalidateTypes();
     }
 
     /** Patch matching cached rows across all loaded lists. */

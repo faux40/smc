@@ -10,10 +10,43 @@ vi.mock('@/composables/useRealtime', () => ({
 
 const TYPE = 'App\\Models\\TrainingClass';
 
+/** Count GETs to the types vocabulary endpoint. */
+const typesGets = () =>
+    (axios.get as ReturnType<typeof vi.fn>).mock.calls.filter(
+        ([url]) => url === '/api/attachments/types',
+    ).length;
+
 describe('attachments store — upload metadata + type vocabulary', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
+        (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} });
+        (axios.patch as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { id: 'a1', type: null, description: null },
+        });
+    });
+
+    it.each([
+        [
+            'fileClassDocument',
+            (s: ReturnType<typeof useAttachmentsStore>) =>
+                s.fileClassDocument('c1', 'certificates', { type: 'New' }),
+        ],
+        [
+            'updateInfo',
+            (s: ReturnType<typeof useAttachmentsStore>) =>
+                s.updateInfo('a1', { type: 'New' }),
+        ],
+    ])('%s invalidates the type vocabulary so it refetches next open', async (_n, mutate) => {
+        const store = useAttachmentsStore();
+        await store.loadTypes();
+        expect(typesGets()).toBe(1);
+
+        await mutate(store);
+
+        await store.loadTypes(); // cache was invalidated → refetch
+        expect(typesGets()).toBe(2);
     });
 
     it('uploads with type + description in the form data', async () => {
