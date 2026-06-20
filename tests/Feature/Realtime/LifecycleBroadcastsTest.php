@@ -7,6 +7,7 @@ use App\Events\OrganizationDeleted;
 use App\Events\OrganizationUpdated;
 use App\Events\UserRegistered;
 use App\Events\UserSoftDeleted;
+use App\Events\UserUpdated;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -72,6 +73,24 @@ class LifecycleBroadcastsTest extends TestCase
 
         $this->assertArrayHasKey('origin_tab', $event->broadcastWith());
         $this->assertSame('tab-xyz', $event->broadcastWith()['origin_tab']);
+    }
+
+    /**
+     * The store patches its cached rows from these payloads, so the sortable
+     * (last-name-first) display name must ride along — otherwise realtime
+     * updates would revert list rows to a stale or unformatted name.
+     */
+    public function test_user_broadcasts_carry_sortable_name(): void
+    {
+        $org = Organization::factory()->create();
+        $user = User::factory()->forOrganization($org)
+            ->create(['f_name' => 'Ada', 'm_name' => 'Augusta', 'l_name' => 'Lovelace']);
+
+        foreach ([new UserRegistered($user), new UserUpdated($user)] as $event) {
+            $payload = $event->broadcastWith();
+            $this->assertArrayHasKey('sort_name', $payload);
+            $this->assertSame('Lovelace, Ada Augusta', $payload['sort_name']);
+        }
     }
 
     private function instantiate(string $eventClass, Organization $org, User $user): object

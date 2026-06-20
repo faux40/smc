@@ -106,6 +106,7 @@ class UsersController extends Controller
             ->map(fn (User $u) => [
                 'id' => $u->id,
                 'name' => $u->name,
+                'sort_name' => $u->sort_name,
                 'f_name' => $u->f_name,
                 'm_name' => $u->m_name,
                 'l_name' => $u->l_name,
@@ -120,6 +121,7 @@ class UsersController extends Controller
                 'employee_number' => $u->employee_number,
                 'supervisor_id' => $u->supervisor_id,
                 'supervisor_name' => $u->supervisor?->name,
+                'supervisor_sort_name' => $u->supervisor?->sort_name,
                 'start_date' => $u->start_date?->toDateString(),
                 'end_date' => $u->end_date?->toDateString(),
                 'created_at' => $u->created_at?->toDateTimeString(),
@@ -164,14 +166,16 @@ class UsersController extends Controller
             ->orderBy('l_name')
             ->orderBy('f_name')
             ->get([
-                'id', 'f_name', 'l_name', 'email', 'employee_number',
+                'id', 'f_name', 'm_name', 'l_name', 'email', 'employee_number',
                 'department', 'location', 'job_title', 'supervisor_id',
             ]);
 
         return response()->json($users->map(fn (User $u) => [
             'id' => $u->id,
             'name' => $u->name,
+            'sort_name' => $u->sort_name,
             'f_name' => $u->f_name,
+            'm_name' => $u->m_name,
             'l_name' => $u->l_name,
             'email' => $u->email,
             'employee_number' => $u->employee_number,
@@ -180,6 +184,7 @@ class UsersController extends Controller
             'job_title' => $u->job_title,
             'supervisor_id' => $u->supervisor_id,
             'supervisor_name' => $u->supervisor?->name,
+            'supervisor_sort_name' => $u->supervisor?->sort_name,
             'tag_ids' => $u->tags->pluck('id')->all(),
         ]));
     }

@@ -154,6 +154,9 @@ const editOpen = ref(false);
 const editTarget = computed<UserRow>(() => ({
     id: props.subject.id,
     name: props.subject.name,
+    // The edit modal reads the name parts, not the sortable display name —
+    // the detail subject doesn't carry it, so mirror `name` here.
+    sort_name: props.subject.name,
     f_name: props.subject.f_name ?? '',
     m_name: props.subject.m_name,
     l_name: props.subject.l_name ?? '',
@@ -168,6 +171,7 @@ const editTarget = computed<UserRow>(() => ({
     employee_number: props.subject.employee_number,
     supervisor_id: props.subject.supervisor_id,
     supervisor_name: props.subject.supervisor_name,
+    supervisor_sort_name: props.subject.supervisor_name,
     start_date: props.subject.start_date,
     end_date: props.subject.end_date,
     notes: props.subject.notes,

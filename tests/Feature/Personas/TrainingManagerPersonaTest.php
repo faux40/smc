@@ -231,13 +231,14 @@ class TrainingManagerPersonaTest extends PersonaTestCase
 
         $rows = collect($this->actingAs($manager)->getJson('/api/dashboard/needs-action')->assertOk()->json());
 
-        $olive = $rows->firstWhere('user_name', 'Olive Overdue');
+        // Dashboard rows carry the sortable (last-name-first) display name.
+        $olive = $rows->firstWhere('user_name', 'Overdue, Olive');
         $this->assertSame('overdue', $olive['status']);
         $this->assertSame('Fall Protection', $olive['training_name']);
         $this->assertLessThan(0, $olive['days_until_due']);
 
         // Forecasting upcoming demand: due-soon rows carry days_until_due.
-        $dana = $rows->firstWhere('user_name', 'Dana Duesoon');
+        $dana = $rows->firstWhere('user_name', 'Duesoon, Dana');
         $this->assertSame('due_soon', $dana['status']);
         $this->assertSame(20, $dana['days_until_due']);
 

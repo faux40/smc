@@ -135,7 +135,7 @@ class TrainingStatusService
             ->groupBy('user_id')
             ->map(fn (Collection $group) => [
                 'user_id' => $group->first()->user_id,
-                'name' => $group->first()->user?->name,
+                'name' => $group->first()->user?->sort_name,
                 'overdue_count' => $group->count(),
             ])
             ->sortByDesc('overdue_count')
@@ -159,7 +159,7 @@ class TrainingStatusService
             ->take($limit)
             ->map(fn (TrainingAssignment $ta) => [
                 'user_id' => $ta->user_id,
-                'user_name' => $ta->user?->name,
+                'user_name' => $ta->user?->sort_name,
                 'training_name' => $ta->name,
                 'next_due_date' => $ta->expires_at?->toDateString(),
                 'days_until_due' => $this->daysUntilDue($ta),
@@ -197,7 +197,7 @@ class TrainingStatusService
 
                 return [
                     'user_id' => $user->id,
-                    'name' => $user->name,
+                    'name' => $user->sort_name,
                     'email' => $user->email,
                     'counts' => $counts,
                     'overall_status' => $this->overallStatus($counts),

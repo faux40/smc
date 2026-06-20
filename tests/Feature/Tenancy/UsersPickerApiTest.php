@@ -72,8 +72,11 @@ class UsersPickerApiTest extends TestCase
         // list, but the report's supervisor_name must still resolve via the
         // relation (server-side, not a client lookup over the active list).
         $boss = User::factory()->for($org, 'organization')->disabled()
-            ->create(['f_name' => 'Sam', 'l_name' => 'Boss']);
+            ->create(['f_name' => 'Sam', 'm_name' => 'T', 'l_name' => 'Boss']);
         $report = User::factory()->for($org, 'organization')->create([
+            'f_name' => 'Ada',
+            'm_name' => 'Augusta',
+            'l_name' => 'Lovelace',
             'employee_number' => 'EMP-42',
             'department' => 'Operations',
             'location' => 'Yard 3',
@@ -89,7 +92,10 @@ class UsersPickerApiTest extends TestCase
         $this->assertSame('Yard 3', $row['location']);
         $this->assertSame('Foreman', $row['job_title']);
         $this->assertSame($boss->id, $row['supervisor_id']);
-        $this->assertSame('Sam Boss', $row['supervisor_name']);
+        $this->assertSame('Sam T Boss', $row['supervisor_name']);
+        // Sortable last-name-first names for list/picker rendering.
+        $this->assertSame('Lovelace, Ada Augusta', $row['sort_name']);
+        $this->assertSame('Boss, Sam T', $row['supervisor_sort_name']);
 
         // The disabled supervisor is not itself a picker row.
         $this->assertNull(collect($rows)->firstWhere('id', $boss->id));

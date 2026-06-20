@@ -46,18 +46,11 @@ import { useCompletionsStore } from '@/stores/completions';
 import type { CompletionRow } from '@/stores/completions';
 import { useErrorStore } from '@/stores/errors';
 import { useTrainingsStore } from '@/stores/trainings';
+import { useUsersStore } from '@/stores/users';
 
 const FORM_CTX = 'form:completion';
 
 type Mode = 'create' | 'edit';
-
-interface UserPickerRow {
-    id: string;
-    name: string;
-    f_name: string;
-    l_name: string;
-    email: string | null;
-}
 
 interface CandidateElement {
     id: string;
@@ -86,8 +79,8 @@ const emit = defineEmits<{
 
 const store = useCompletionsStore();
 const trainings = useTrainingsStore();
+const users = useUsersStore();
 
-const userPicker = ref<UserPickerRow[]>([]);
 const candidates = ref<CandidateElement[]>([]);
 const loadingCandidates = ref(false);
 const loadError = ref<string | null>(null);
@@ -113,26 +106,23 @@ const title = computed(() =>
     isEdit.value ? 'Edit completion' : 'New completion',
 );
 
-const sortedUsers = computed(() => [...userPicker.value]);
+// Last-name-first ordering via the store's backend-composed sortable name.
+const sortedUsers = computed(() =>
+    [...users.users].sort((a, b) =>
+        (a.sort_name ?? '').localeCompare(b.sort_name ?? ''),
+    ),
+);
 const sortedTrainings = computed(() =>
     [...trainings.library].sort((a, b) => a.name.localeCompare(b.name)),
 );
 
-const userName = (id: string) => {
-    const u = userPicker.value.find((x) => x.id === id);
-
-    return u ? [u.f_name, u.l_name].filter(Boolean).join(' ') : '—';
-};
+const userName = (id: string) => users.displayName(id) || '—';
 const trainingName = (id: string) =>
     trainings.library.find((t) => t.id === id)?.name ?? '—';
 
 async function loadPickers(): Promise<void> {
     try {
-        const u = await axios.get<UserPickerRow[]>('/api/users', {
-            headers: defaultHeaders(),
-        });
-        userPicker.value = u.data;
-        await trainings.load();
+        await Promise.all([users.loadPicker(), trainings.load()]);
     } catch (e) {
         loadError.value = (e as Error).message;
     }
@@ -328,13 +318,7 @@ function defaultHeaders(): Record<string, string> {
                                 :key="u.id"
                                 :value="u.id"
                             >
-                                {{
-                                    [u.f_name, u.l_name]
-                                        .filter(Boolean)
-                                        .join(' ') ||
-                                    u.email ||
-                                    u.id
-                                }}
+                                {{ users.displayName(u.id) || u.id }}
                             </SelectItem>
                         </SelectContent>
                     </Select>

@@ -82,7 +82,7 @@ class DashboardController extends Controller
             ->map(fn (array $x) => [
                 'id' => $x['ta']->id,
                 'user_id' => $x['ta']->user_id,
-                'user_name' => $x['ta']->user?->name,
+                'user_name' => $x['ta']->user?->sort_name,
                 'training_id' => $x['ta']->training_id,
                 'training_name' => $x['ta']->name,
                 'status' => $x['status'],
@@ -108,7 +108,7 @@ class DashboardController extends Controller
 
         $completions = Completion::query()
             ->where('org_id', $org->id)
-            ->with(['user:id,f_name,l_name,email', 'rqmtElements:id'])
+            ->with(['user:id,f_name,m_name,l_name,email', 'rqmtElements:id'])
             ->orderBy('completion_date', 'desc')
             ->orderBy('created_at', 'desc')
             ->limit(self::RECENT_COMPLETIONS_LIMIT)
@@ -117,7 +117,7 @@ class DashboardController extends Controller
         // Shared M1 serializer + the user name; credits_count is the
         // effective credit (pivot ∪ module identity), so class-issued
         // completions no longer read as zero credits.
-        $names = $completions->pluck('user', 'user_id')->map(fn ($u) => $u?->name);
+        $names = $completions->pluck('user', 'user_id')->map(fn ($u) => $u?->sort_name);
         $rows = collect(CompletionSerializer::collection($completions))
             ->map(fn (array $row) => [
                 'id' => $row['id'],

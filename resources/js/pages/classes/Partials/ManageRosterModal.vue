@@ -20,11 +20,10 @@ import { useTagsStore } from '@/stores/tags';
 
 export interface PickerUser {
     id: string;
-    f_name: string;
-    l_name: string;
+    sort_name?: string;
     email: string | null;
     department?: string | null;
-    supervisor_name?: string | null;
+    supervisor_sort_name?: string | null;
     job_title?: string | null;
     location?: string | null;
     tag_ids?: string[];
@@ -81,8 +80,7 @@ watch(
     },
 );
 
-const userLabel = (u: PickerUser) =>
-    [u.f_name, u.l_name].filter(Boolean).join(' ') || u.email || u.id;
+const userLabel = (u: PickerUser) => u.sort_name || u.email || u.id;
 
 const columns = [
     { key: 'name', label: 'Name' },
@@ -121,7 +119,7 @@ const toItem = (u: PickerUser): StudentItem => {
         name: userLabel(u),
         email: u.email ?? '',
         department: u.department ?? '',
-        supervisor: u.supervisor_name ?? '',
+        supervisor: u.supervisor_sort_name ?? '',
         job_title: u.job_title ?? '',
         location: u.location ?? '',
         tags,

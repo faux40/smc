@@ -7,6 +7,7 @@ function row(overrides: Partial<UserRow> = {}): UserRow {
     return {
         id: 'u1',
         name: 'Pat Lee',
+        sort_name: 'Lee, Pat',
         f_name: 'Pat',
         m_name: null,
         l_name: 'Lee',
@@ -21,6 +22,7 @@ function row(overrides: Partial<UserRow> = {}): UserRow {
         employee_number: null,
         supervisor_id: null,
         supervisor_name: null,
+        supervisor_sort_name: null,
         start_date: null,
         end_date: null,
         notes: null,

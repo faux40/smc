@@ -68,4 +68,29 @@ class UserNameSplitTest extends TestCase
         $this->assertArrayHasKey('name', $user->toArray());
         $this->assertSame('Ada Lovelace', $user->toArray()['name']);
     }
+
+    public function test_sort_name_accessor_is_last_name_first(): void
+    {
+        $user = User::factory()->create([
+            'f_name' => 'Ada',
+            'm_name' => 'Augusta',
+            'l_name' => 'Lovelace',
+            'prefix_name' => 'Dr.',
+            'suffix_name' => 'III',
+        ]);
+
+        $this->assertSame('Lovelace, Ada Augusta', $user->sort_name);
+    }
+
+    public function test_short_name_and_initials_accessors(): void
+    {
+        $user = User::factory()->create([
+            'f_name' => 'Ada',
+            'm_name' => 'Augusta',
+            'l_name' => 'Lovelace',
+        ]);
+
+        $this->assertSame('Ada Lovelace', $user->short_name);
+        $this->assertSame('AL', $user->initials);
+    }
 }

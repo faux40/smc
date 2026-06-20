@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import AttachmentsList from '@/components/AttachmentsList.vue';
@@ -17,16 +16,15 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { useClassForm } from '@/composables/useClassForm';
-import { realtimeTabId } from '@/echo';
 import ClassCertEditModal from '@/pages/classes/Partials/ClassCertEditModal.vue';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ManageRosterModal from '@/pages/classes/Partials/ManageRosterModal.vue';
-import type { PickerUser } from '@/pages/classes/Partials/ManageRosterModal.vue';
 import ManageTopicsModal from '@/pages/classes/Partials/ManageTopicsModal.vue';
 import { page as classesPage } from '@/routes/classes';
 import { useClassesStore } from '@/stores/classes';
 import { useErrorStore } from '@/stores/errors';
 import { useTrainingsStore } from '@/stores/trainings';
+import { useUsersStore } from '@/stores/users';
 
 const props = defineProps<{ classId: string }>();
 
@@ -41,6 +39,7 @@ const FORM_CTX = 'form:class';
 const store = useClassesStore();
 const trainings = useTrainingsStore();
 const errorStore = useErrorStore();
+const users = useUsersStore();
 const page = usePage();
 const orgId = computed(
     () => (page.props.auth.user as { org_id?: string } | null)?.org_id ?? null,
@@ -50,7 +49,6 @@ const loading = ref(true);
 const error = ref<string | null>(null);
 const detail = computed(() => store.detail[props.classId] ?? null);
 
-const userPicker = ref<PickerUser[]>([]);
 const completeOpen = ref(false);
 const topicsOpen = ref(false);
 // Per-topic certificate editor (scheduled classes): which class_training row.
@@ -156,29 +154,17 @@ async function saveDetails(): Promise<void> {
     }
 }
 
-function headers(): Record<string, string> {
-    const csrf = document.querySelector<HTMLMetaElement>(
-        'meta[name="csrf-token"]',
-    )?.content;
-
-    return {
-        Accept: 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Origin-Tab': realtimeTabId(),
-        ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
-    };
-}
-
 onMounted(async () => {
     if (orgId.value) {
         store.subscribe(orgId.value);
+        users.subscribe(orgId.value);
     }
 
     try {
         await Promise.all([
             store.loadDetail(props.classId),
             trainings.load(),
-            loadUsers(),
+            users.loadPicker(),
         ]);
         setFrom(detail.value);
     } catch (e) {
@@ -187,13 +173,6 @@ onMounted(async () => {
         loading.value = false;
     }
 });
-
-async function loadUsers(): Promise<void> {
-    const { data } = await axios.get<PickerUser[]>('/api/users', {
-        headers: headers(),
-    });
-    userPicker.value = data;
-}
 
 const hoursLabel = (h: string | null) => (h ? `${Number(h)}h` : '—');
 
@@ -650,7 +629,7 @@ const totalHoursLabel = computed(
                 <ManageRosterModal
                     v-model:open="rosterOpen"
                     :class-id="props.classId"
-                    :users="userPicker"
+                    :users="users.users"
                 />
                 <ClassCompleteModal
                     v-model:open="completeOpen"

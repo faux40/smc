@@ -30,6 +30,7 @@ function user(overrides: Partial<UserRow>): UserRow {
     return {
         id: 'u',
         name: 'X',
+        sort_name: 'X',
         f_name: 'X',
         m_name: null,
         l_name: 'X',
@@ -44,6 +45,7 @@ function user(overrides: Partial<UserRow>): UserRow {
         employee_number: null,
         supervisor_id: null,
         supervisor_name: null,
+        supervisor_sort_name: null,
         start_date: null,
         end_date: null,
         notes: null,
@@ -60,6 +62,7 @@ const users: UserRow[] = [
     user({
         id: 'u1',
         name: 'Zoe Charlie',
+        sort_name: 'Charlie, Zoe',
         f_name: 'Zoe',
         l_name: 'Charlie',
         department: 'Ops',
@@ -67,6 +70,7 @@ const users: UserRow[] = [
     user({
         id: 'u2',
         name: 'Amy Adams',
+        sort_name: 'Adams, Amy',
         f_name: 'Amy',
         l_name: 'Adams',
         department: 'Admin',
@@ -74,6 +78,7 @@ const users: UserRow[] = [
     user({
         id: 'u3',
         name: 'Bob Baker',
+        sort_name: 'Baker, Bob',
         f_name: 'Bob',
         l_name: 'Baker',
         department: null,
@@ -134,9 +139,11 @@ describe('users/Index — sortable columns', () => {
             user({
                 id: 'u9',
                 name: 'Pat Lee',
+                sort_name: 'Lee, Pat',
                 f_name: 'Pat',
                 l_name: 'Lee',
                 supervisor_name: 'Dana Boss',
+                supervisor_sort_name: 'Boss, Dana',
             }),
         ];
         const wrapper = mount(UsersIndex, {
@@ -160,7 +167,7 @@ describe('users/Index — sortable columns', () => {
             },
         });
         await flushPromises();
-        expect(wrapper.find('tbody').text()).toContain('Dana Boss');
+        expect(wrapper.find('tbody').text()).toContain('Boss, Dana');
     });
 
     it('hides a column the user has turned off in their preferences', async () => {
@@ -182,9 +189,9 @@ describe('users/Index — sortable columns', () => {
         await flushPromises();
         // Adams, Baker, Charlie by last name.
         expect(nameColumn(wrapper)).toEqual([
-            'Amy Adams',
-            'Bob Baker',
-            'Zoe Charlie',
+            'Adams, Amy',
+            'Baker, Bob',
+            'Charlie, Zoe',
         ]);
     });
 
@@ -195,9 +202,9 @@ describe('users/Index — sortable columns', () => {
         await clickHeader(wrapper, 'Department');
         // Admin (u2), Ops (u1), then null (u3) last.
         expect(nameColumn(wrapper)).toEqual([
-            'Amy Adams',
-            'Zoe Charlie',
-            'Bob Baker',
+            'Adams, Amy',
+            'Charlie, Zoe',
+            'Baker, Bob',
         ]);
     });
 });

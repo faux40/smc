@@ -152,6 +152,28 @@ class UsersIndexTest extends TestCase
             });
     }
 
+    public function test_index_includes_sortable_names_for_user_and_supervisor(): void
+    {
+        $org = Organization::factory()->create();
+        $owner = $this->ownerOf($org);
+        $boss = User::factory()->forOrganization($org)
+            ->create(['f_name' => 'Sam', 'm_name' => 'T', 'l_name' => 'Boss']);
+        $report = User::factory()->forOrganization($org)->create([
+            'f_name' => 'Ada',
+            'm_name' => 'Augusta',
+            'l_name' => 'Lovelace',
+            'supervisor_id' => $boss->id,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('users.index'))
+            ->assertInertia(function (AssertableInertia $page) use ($report) {
+                $rows = collect($page->toArray()['props']['users'])->keyBy('id');
+                $this->assertSame('Lovelace, Ada Augusta', $rows[$report->id]['sort_name']);
+                $this->assertSame('Boss, Sam T', $rows[$report->id]['supervisor_sort_name']);
+            });
+    }
+
     public function test_index_status_filter_hides_disabled_by_default(): void
     {
         $org = Organization::factory()->create();

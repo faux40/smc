@@ -11,6 +11,7 @@ function user(overrides: Partial<UserRow>): UserRow {
     return {
         id: 'u',
         name: 'X',
+        sort_name: 'X',
         f_name: 'X',
         m_name: null,
         l_name: 'X',
@@ -25,6 +26,7 @@ function user(overrides: Partial<UserRow>): UserRow {
         employee_number: null,
         supervisor_id: null,
         supervisor_name: null,
+        supervisor_sort_name: null,
         start_date: null,
         end_date: null,
         notes: null,

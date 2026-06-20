@@ -6,7 +6,6 @@
  * Select users via checkboxes to bulk-assign a training or requirement.
  */
 import { Head, usePage } from '@inertiajs/vue3';
-import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
@@ -25,7 +24,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTableSort } from '@/composables/useTableSort';
-import { realtimeTabId } from '@/echo';
 import BulkTrainingAssignModal from '@/pages/assignments/Partials/BulkTrainingAssignModal.vue';
 import TrainingAssignmentFormModal from '@/pages/assignments/Partials/TrainingAssignmentFormModal.vue';
 import { page as assignmentsPage } from '@/routes/assignments';
@@ -36,6 +34,7 @@ import { useRequirementsStore } from '@/stores/requirements';
 import { useTagsStore } from '@/stores/tags';
 import { useTrainingAssignmentsStore } from '@/stores/trainingAssignments';
 import type { TrainingAssignmentRow } from '@/stores/trainingAssignments';
+import { useUsersStore, type UserRow } from '@/stores/users';
 
 const USER_TYPE = 'App\\Models\\User';
 
@@ -44,20 +43,6 @@ defineOptions({
         breadcrumbs: [{ title: 'Assignments', href: assignmentsPage() }],
     },
 });
-
-interface UserPickerRow {
-    id: string;
-    f_name: string;
-    l_name: string;
-    email: string | null;
-    tag_ids: string[];
-    employee_number: string | null;
-    department: string | null;
-    location: string | null;
-    job_title: string | null;
-    supervisor_id: string | null;
-    supervisor_name: string | null;
-}
 
 interface UserGroup {
     user_id: string;
@@ -87,6 +72,7 @@ const reqAssignStore = useRequirementAssignmentsStore();
 const tagsStore = useTagsStore();
 const requirements = useRequirementsStore();
 const orgSettings = useOrgSettingsStore();
+const users = useUsersStore();
 const page = usePage();
 const prefs = usePreferencesStore();
 
@@ -109,7 +95,6 @@ const canCreate = computed(() =>
         authUser.value?.isManager,
     ),
 );
-const userPicker = ref<UserPickerRow[]>([]);
 const search = ref('');
 const searchMode = ref<FilterMode>('and');
 const userFilterIds = ref<string[]>([]);
@@ -182,6 +167,7 @@ onMounted(async () => {
     if (authUser.value?.org_id) {
         taStore.subscribe(authUser.value.org_id);
         tagsStore.subscribe(authUser.value.org_id);
+        users.subscribe(authUser.value.org_id);
     }
 
     try {
@@ -199,12 +185,11 @@ onMounted(async () => {
 });
 
 async function loadUsers(): Promise<void> {
-    const { data } = await axios.get<UserPickerRow[]>('/api/users', {
-        headers: defaultHeaders(),
-    });
-    userPicker.value = data;
+    await users.loadPicker();
 
-    for (const u of data) {
+    // Seed the tags store from the cached picker rows so the per-user tag
+    // filter/pills paint without a follow-up fetch.
+    for (const u of users.users) {
         tagsStore.setAttached({ type: USER_TYPE, id: u.id }, u.tag_ids ?? []);
     }
 }
@@ -230,15 +215,9 @@ function userMatchesTags(userId: string): boolean {
     return tagFilter.value.every((id) => ids.has(id));
 }
 
-const userById = (id: string) => userPicker.value.find((u) => u.id === id);
+const userById = (id: string) => users.byId(id);
 
-const userName = (id: string): string => {
-    const u = userById(id);
-
-    return u
-        ? [u.f_name, u.l_name].filter(Boolean).join(' ') || u.email || ''
-        : '';
-};
+const userName = (id: string): string => users.displayName(id);
 
 function matchUser(userId: string): boolean {
     if (userFilterIds.value.length === 0) return true;
@@ -273,7 +252,7 @@ function matchSearch(
     name: string,
     email: string | null,
     tas: TrainingAssignmentRow[],
-    u?: UserPickerRow,
+    u?: UserRow,
 ): boolean {
     const words = search.value
         .trim()
@@ -308,7 +287,7 @@ const filteredGroups = computed<UserGroup[]>(() => {
         byUser.set(ta.user_id, list);
     }
 
-    const userIds = new Set<string>(userPicker.value.map((u) => u.id));
+    const userIds = new Set<string>(users.users.map((u) => u.id));
 
     for (const id of byUser.keys()) {
         userIds.add(id);
@@ -340,7 +319,7 @@ const filteredGroups = computed<UserGroup[]>(() => {
             department: u?.department ?? null,
             location: u?.location ?? null,
             job_title: u?.job_title ?? null,
-            supervisor_name: u?.supervisor_name ?? null,
+            supervisor_name: u?.supervisor_sort_name ?? null,
             trainingAssignments,
         });
     }
@@ -416,14 +395,11 @@ const shownAssignmentCount = computed(() =>
 );
 
 const userOptions = computed(() =>
-    [...userPicker.value]
-        .sort((a, b) => (a.l_name ?? '').localeCompare(b.l_name ?? ''))
+    [...users.users]
+        .sort((a, b) => (a.sort_name ?? '').localeCompare(b.sort_name ?? ''))
         .map((u) => ({
             id: u.id,
-            label:
-                [u.f_name, u.l_name].filter(Boolean).join(' ') ||
-                u.email ||
-                u.id,
+            label: users.displayName(u.id) || u.id,
         })),
 );
 const requirementOptions = computed(() =>
@@ -445,19 +421,6 @@ const openView = (row: TrainingAssignmentRow) => {
     createUserId.value = null;
     modalOpen.value = true;
 };
-
-function defaultHeaders(): Record<string, string> {
-    const csrf = document.querySelector<HTMLMetaElement>(
-        'meta[name="csrf-token"]',
-    )?.content;
-
-    return {
-        Accept: 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Origin-Tab': realtimeTabId(),
-        ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
-    };
-}
 </script>
 
 <template>

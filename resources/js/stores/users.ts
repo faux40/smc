@@ -28,6 +28,9 @@ import {
 export interface UserRow {
     id: string;
     name: string;
+    // Sortable, last-name-first display name ("Lovelace, Ada Augusta"),
+    // composed once on the backend. Lists and pickers render this.
+    sort_name: string;
     f_name: string;
     m_name: string | null;
     l_name: string;
@@ -42,6 +45,7 @@ export interface UserRow {
     employee_number: string | null;
     supervisor_id: string | null;
     supervisor_name: string | null;
+    supervisor_sort_name: string | null;
     start_date: string | null;
     end_date: string | null;
     notes: string | null;
@@ -125,6 +129,7 @@ export interface MergePreview {
 interface BroadcastUser {
     id: string;
     name?: string;
+    sort_name?: string;
     f_name?: string;
     m_name?: string | null;
     l_name?: string;
@@ -190,7 +195,9 @@ export const useUsersStore = defineStore('users', () => {
                     UserRow,
                     | 'id'
                     | 'name'
+                    | 'sort_name'
                     | 'f_name'
+                    | 'm_name'
                     | 'l_name'
                     | 'email'
                     | 'employee_number'
@@ -199,6 +206,7 @@ export const useUsersStore = defineStore('users', () => {
                     | 'job_title'
                     | 'supervisor_id'
                     | 'supervisor_name'
+                    | 'supervisor_sort_name'
                     | 'tag_ids'
                 >
             >
@@ -210,8 +218,9 @@ export const useUsersStore = defineStore('users', () => {
         users.value = data.map((u) => ({
             id: u.id,
             name: u.name,
+            sort_name: u.sort_name ?? '',
             f_name: u.f_name ?? '',
-            m_name: null,
+            m_name: u.m_name ?? null,
             l_name: u.l_name ?? '',
             prefix_name: null,
             suffix_name: null,
@@ -224,6 +233,7 @@ export const useUsersStore = defineStore('users', () => {
             employee_number: u.employee_number ?? null,
             supervisor_id: u.supervisor_id ?? null,
             supervisor_name: u.supervisor_name ?? null,
+            supervisor_sort_name: u.supervisor_sort_name ?? null,
             start_date: null,
             end_date: null,
             notes: null,
@@ -270,6 +280,7 @@ export const useUsersStore = defineStore('users', () => {
             {
                 id: payload.id,
                 name: payload.name ?? '',
+                sort_name: payload.sort_name ?? '',
                 f_name: payload.f_name ?? '',
                 m_name: payload.m_name ?? null,
                 l_name: payload.l_name ?? '',
@@ -284,6 +295,7 @@ export const useUsersStore = defineStore('users', () => {
                 employee_number: null,
                 supervisor_id: null,
                 supervisor_name: null,
+                supervisor_sort_name: null,
                 start_date: null,
                 end_date: null,
                 notes: null,
@@ -306,6 +318,7 @@ export const useUsersStore = defineStore('users', () => {
                 ? {
                       ...u,
                       name: payload.name ?? u.name,
+                      sort_name: payload.sort_name ?? u.sort_name,
                       f_name: payload.f_name ?? u.f_name,
                       m_name:
                           payload.m_name !== undefined
@@ -335,6 +348,32 @@ export const useUsersStore = defineStore('users', () => {
     }
 
     const count = computed(() => users.value.length);
+
+    // O(1) id lookup so list pages resolving many rows don't go quadratic.
+    const usersById = computed(() => {
+        const map = new Map<string, UserRow>();
+        for (const u of users.value) {
+            map.set(u.id, u);
+        }
+        return map;
+    });
+
+    function byId(id: string): UserRow | undefined {
+        return usersById.value.get(id);
+    }
+
+    /**
+     * Canonical display name for a user id — the single way components render
+     * a user's name. Prefers the backend-composed sortable (last-name-first)
+     * name, then the natural name, then email, then empty.
+     */
+    function displayName(id: string): string {
+        const u = usersById.value.get(id);
+        if (!u) {
+            return '';
+        }
+        return u.sort_name || u.name || u.email || '';
+    }
 
     /**
      * Admin add-user. Routes through Inertia so the request carries CSRF and
@@ -504,6 +543,8 @@ export const useUsersStore = defineStore('users', () => {
     return {
         users,
         count,
+        byId,
+        displayName,
         fieldOptions,
         loadFieldOptions,
         hydrate,

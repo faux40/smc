@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToOrganization;
 use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasComments;
 use App\Models\Concerns\HasTags;
+use App\Support\PersonName;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -98,19 +99,52 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Composes the 5 name fields into a display string. Empty segments
-     * are skipped and consecutive spaces are collapsed.
+     * Bundle the 5 name columns into the shared formatter. All name
+     * arrangements (full / sortable / short / initials) derive from here so
+     * the formatting logic lives in exactly one place.
+     */
+    public function personName(): PersonName
+    {
+        return new PersonName(
+            $this->prefix_name,
+            $this->f_name,
+            $this->m_name,
+            $this->l_name,
+            $this->suffix_name,
+        );
+    }
+
+    /**
+     * Full display name in natural order ("Dr. Ada Augusta Lovelace III").
+     * Appended so existing consumers (templates, broadcasts, tests) keep working.
      */
     protected function name(): Attribute
     {
-        return Attribute::make(
-            get: fn (): string => trim(preg_replace('/\s+/', ' ', implode(' ', array_filter([
-                $this->prefix_name,
-                $this->f_name,
-                $this->m_name,
-                $this->l_name,
-                $this->suffix_name,
-            ], fn ($v) => is_string($v) && $v !== ''))) ?? ''),
-        );
+        return Attribute::make(get: fn (): string => $this->personName()->full());
+    }
+
+    /**
+     * Sortable, last-name-first name for lists and pickers
+     * ("Lovelace, Ada Augusta").
+     */
+    protected function sortName(): Attribute
+    {
+        return Attribute::make(get: fn (): string => $this->personName()->sortable());
+    }
+
+    /**
+     * Compact first + last name ("Ada Lovelace").
+     */
+    protected function shortName(): Attribute
+    {
+        return Attribute::make(get: fn (): string => $this->personName()->short());
+    }
+
+    /**
+     * Avatar initials ("AL").
+     */
+    protected function initials(): Attribute
+    {
+        return Attribute::make(get: fn (): string => $this->personName()->initials());
     }
 }

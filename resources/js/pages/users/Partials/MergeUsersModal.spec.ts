@@ -12,6 +12,7 @@ function user(id: string, name: string): UserRow {
     return {
         id,
         name,
+        sort_name: name,
         f_name: name,
         m_name: null,
         l_name: name,
@@ -26,6 +27,7 @@ function user(id: string, name: string): UserRow {
         employee_number: null,
         supervisor_id: null,
         supervisor_name: null,
+        supervisor_sort_name: null,
         start_date: null,
         end_date: null,
         notes: null,

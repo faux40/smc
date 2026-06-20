@@ -381,7 +381,7 @@ const remove = (row: UserRow) => {
                     :href="userShow(row.id)"
                     class="font-medium text-primary hover:underline"
                 >
-                    {{ row.name }}
+                    {{ row.sort_name }}
                 </Link>
                 <span
                     v-if="isSelf(row)"
@@ -409,7 +409,7 @@ const remove = (row: UserRow) => {
             </template>
 
             <template #col-supervisor="{ row }">
-                {{ row.supervisor_name ?? '—' }}
+                {{ row.supervisor_sort_name ?? '—' }}
             </template>
 
             <template #trail-header>

@@ -31,13 +31,14 @@ class UserUpdated implements ShouldBroadcast
     }
 
     /**
-     * @return array{id: string, name: string, email: ?string, status: string, role: ?string, origin_tab: ?string}
+     * @return array{id: string, name: string, sort_name: string, email: ?string, status: string, role: ?string, origin_tab: ?string}
      */
     public function broadcastWith(): array
     {
         return [
             'id' => $this->user->id,
             'name' => $this->user->name,
+            'sort_name' => $this->user->sort_name,
             'email' => $this->user->email,
             'status' => $this->user->status,
             'role' => $this->user->roles->first()?->name,

@@ -40,15 +40,13 @@ const detail: ClassDetail = {
 const users = [
     {
         id: 'u1',
-        f_name: 'Dana',
-        l_name: 'Reed',
+        sort_name: 'Reed, Dana',
         email: 'dana@x.com',
         tag_ids: [],
     },
     {
         id: 'u2',
-        f_name: 'Sam',
-        l_name: 'Lee',
+        sort_name: 'Lee, Sam',
         email: 'sam@x.com',
         tag_ids: ['t1'],
     },
@@ -117,7 +115,7 @@ describe('ManageRosterModal', () => {
             .querySelectorAll('table')[1]
             .querySelectorAll('tbody tr');
         expect(availRows).toHaveLength(1);
-        expect(availRows[0].textContent).toContain('Sam Lee');
+        expect(availRows[0].textContent).toContain('Lee, Sam');
     });
 
     it('opens with both lists shown (no reveal needed)', async () => {
@@ -176,24 +174,21 @@ describe('ManageRosterModal', () => {
             // u1 is the enrolled student (in detail.enrollments).
             {
                 id: 'u1',
-                f_name: 'Dana',
-                l_name: 'Reed',
+                sort_name: 'Reed, Dana',
                 email: 'd@x.com',
                 department: 'Ops',
                 tag_ids: [],
             },
             {
                 id: 'u2',
-                f_name: 'Sam',
-                l_name: 'Lee',
+                sort_name: 'Lee, Sam',
                 email: 's@x.com',
                 department: 'Field',
                 tag_ids: [],
             },
             {
                 id: 'u3',
-                f_name: 'Pat',
-                l_name: 'Kim',
+                sort_name: 'Kim, Pat',
                 email: 'p@x.com',
                 department: 'Ops',
                 tag_ids: [],
@@ -222,6 +217,6 @@ describe('ManageRosterModal', () => {
             .querySelectorAll('table')[1]
             .querySelectorAll('tbody tr');
         expect(availRows).toHaveLength(1);
-        expect(availRows[0].textContent).toContain('Sam Lee');
+        expect(availRows[0].textContent).toContain('Lee, Sam');
     });
 });

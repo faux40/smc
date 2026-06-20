@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
-import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
@@ -11,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useServerTable } from '@/composables/useServerTable';
-import { realtimeTabId } from '@/echo';
 import CompletionFormModal from '@/pages/completions/Partials/CompletionFormModal.vue';
 import { page as completionsPage } from '@/routes/completions';
 import { useCompletionsStore } from '@/stores/completions';
@@ -19,19 +17,13 @@ import type { CompletionRow } from '@/stores/completions';
 import { usePreferencesStore } from '@/stores/preferences';
 import type { PrefsBlob } from '@/stores/preferences';
 import { useTrainingsStore } from '@/stores/trainings';
+import { useUsersStore } from '@/stores/users';
 
 defineOptions({
     layout: {
         breadcrumbs: [{ title: 'Completions', href: completionsPage() }],
     },
 });
-
-interface UserPickerRow {
-    id: string;
-    f_name: string;
-    l_name: string;
-    email: string | null;
-}
 
 const COMPLETIONS_COLUMNS = [
     { key: 'user', label: 'User', sortable: true },
@@ -62,6 +54,7 @@ const SORT_COLUMN: Record<string, string> = {
 const store = useCompletionsStore();
 const trainings = useTrainingsStore();
 const prefs = usePreferencesStore();
+const users = useUsersStore();
 const page = usePage();
 
 const authUser = computed(
@@ -84,7 +77,6 @@ const canCreate = computed(() =>
     ),
 );
 
-const userPicker = ref<UserPickerRow[]>([]);
 const userFilter = ref('');
 const search = ref('');
 
@@ -114,7 +106,6 @@ function onSort(columnKey: string): void {
     }
 }
 
-const userById = (id: string) => userPicker.value.find((u) => u.id === id);
 const trainingById = (id: string) => trainings.library.find((t) => t.id === id);
 
 // Server-resolved (M1); the lookup is only a fallback for stale rows.
@@ -163,10 +154,15 @@ onMounted(async () => {
 
     if (authUser.value?.org_id) {
         store.subscribe(authUser.value.org_id);
+        users.subscribe(authUser.value.org_id);
     }
 
     try {
-        await Promise.all([table.fetchPage(), trainings.load(), loadUsers()]);
+        await Promise.all([
+            table.fetchPage(),
+            trainings.load(),
+            users.loadPicker(),
+        ]);
     } catch (e) {
         error.value = (e as Error).message;
     } finally {
@@ -174,16 +170,11 @@ onMounted(async () => {
     }
 });
 
-async function loadUsers(): Promise<void> {
-    const { data } = await axios.get<UserPickerRow[]>('/api/users', {
-        headers: defaultHeaders(),
-    });
-    userPicker.value = data;
-}
-
+// Last-name-first ordering for the filter dropdown, via the store's
+// backend-composed sortable name.
 const sortedUsers = computed(() =>
-    [...userPicker.value].sort((a, b) =>
-        (a.l_name ?? '').localeCompare(b.l_name ?? ''),
+    [...users.users].sort((a, b) =>
+        (a.sort_name ?? '').localeCompare(b.sort_name ?? ''),
     ),
 );
 
@@ -200,10 +191,7 @@ const openEdit = (row: CompletionRow) => {
 };
 
 const remove = async (row: CompletionRow) => {
-    const u = userById(row.user_id);
-    const userName = u
-        ? [u.f_name, u.l_name].filter(Boolean).join(' ')
-        : 'user';
+    const userName = users.displayName(row.user_id) || 'user';
 
     if (!window.confirm(`Soft-delete this completion for ${userName}?`)) {
         return;
@@ -218,19 +206,6 @@ const remove = async (row: CompletionRow) => {
         error.value = (e as Error).message;
     }
 };
-
-function defaultHeaders(): Record<string, string> {
-    const csrf = document.querySelector<HTMLMetaElement>(
-        'meta[name="csrf-token"]',
-    )?.content;
-
-    return {
-        Accept: 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Origin-Tab': realtimeTabId(),
-        ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
-    };
-}
 </script>
 
 <template>
@@ -288,13 +263,7 @@ function defaultHeaders(): Record<string, string> {
                                 :key="u.id"
                                 :value="u.id"
                             >
-                                {{
-                                    [u.f_name, u.l_name]
-                                        .filter(Boolean)
-                                        .join(' ') ||
-                                    u.email ||
-                                    u.id
-                                }}
+                                {{ users.displayName(u.id) || u.id }}
                             </option>
                         </select>
                     </div>
@@ -330,20 +299,13 @@ function defaultHeaders(): Record<string, string> {
                 </template>
 
                 <template #col-user="{ row }">
-                    <template v-if="userById(row.user_id)">
-                        {{
-                            [
-                                userById(row.user_id)?.f_name,
-                                userById(row.user_id)?.l_name,
-                            ]
-                                .filter(Boolean)
-                                .join(' ')
-                        }}
+                    <template v-if="users.byId(row.user_id)">
+                        {{ users.displayName(row.user_id) }}
                         <div
-                            v-if="userById(row.user_id)?.email"
+                            v-if="users.byId(row.user_id)?.email"
                             class="text-xs text-muted-foreground"
                         >
-                            {{ userById(row.user_id)?.email }}
+                            {{ users.byId(row.user_id)?.email }}
                         </div>
                     </template>
                     <span v-else class="text-muted-foreground">—</span>

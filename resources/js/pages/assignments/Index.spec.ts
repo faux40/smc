@@ -22,7 +22,10 @@ vi.mock('@/routes/assignments', () => ({ page: () => ({ url: '/assignments' }) }
 const picker = [
     {
         id: 'u1',
+        name: 'Pat Lee',
+        sort_name: 'Lee, Pat',
         f_name: 'Pat',
+        m_name: null,
         l_name: 'Lee',
         email: null,
         tag_ids: [],
@@ -32,6 +35,7 @@ const picker = [
         job_title: 'Foreman',
         supervisor_id: null,
         supervisor_name: 'Dana Boss',
+        supervisor_sort_name: 'Boss, Dana',
     },
 ];
 
@@ -107,7 +111,7 @@ describe('assignments/Index — user profile columns', () => {
         expect(body).toContain('Operations');
         expect(body).toContain('Yard 3');
         expect(body).toContain('Foreman');
-        expect(body).toContain('Dana Boss');
+        expect(body).toContain('Boss, Dana');
     });
 
     it("restores the user's saved filters on mount", async () => {
