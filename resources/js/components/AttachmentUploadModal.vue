@@ -55,6 +55,9 @@ watch(
             rows.value = [];
             error.value = null;
             dragging.value = false;
+            // Pull the latest org type vocabulary every open, so types entered
+            // on a previous save are offered in the type-ahead.
+            void store.loadTypes(true);
         }
     },
 );
