@@ -24,7 +24,7 @@ import {
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import { useErrorStore } from '@/stores/errors';
 import { useUsersStore } from '@/stores/users';
-import type { UserRow } from '@/stores/users';
+import type { PickerUserRow, UserRow } from '@/stores/users';
 
 const FORM_CTX = 'form:user';
 
@@ -34,9 +34,16 @@ const props = defineProps<{
     open: boolean;
     mode: Mode;
     target?: UserRow | null;
+    // Inline mode: create via a non-navigating JSON request and emit the new
+    // user (rather than the Inertia create that redraws the users page). Used
+    // by hosts like the class roster that create-and-act without leaving.
+    inline?: boolean;
 }>();
 
-const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
+const emit = defineEmits<{
+    (e: 'update:open', v: boolean): void;
+    (e: 'created', user: PickerUserRow): void;
+}>();
 
 const store = useUsersStore();
 
@@ -234,6 +241,33 @@ const submit = () => {
             },
             opts,
         );
+    } else if (props.inline) {
+        // Non-navigating create: resolve to the new row, hand it to the host
+        // (e.g. roster auto-enroll), then close.
+        store
+            .createReturning({ ...namePayload, ...profilePayload, email })
+            .then((user) => {
+                submitting.value = false;
+                emit('created', user);
+                emit('update:open', false);
+            })
+            .catch((e: unknown) => {
+                submitting.value = false;
+                const errors =
+                    (
+                        e as {
+                            response?: {
+                                data?: { errors?: Record<string, string[]> };
+                            };
+                        }
+                    ).response?.data?.errors ?? {};
+                errorStore.report({
+                    context: FORM_CTX,
+                    message: 'Validation failed',
+                    fieldErrors: errors,
+                    surface: 'field',
+                });
+            });
     } else {
         store.create({ ...namePayload, ...profilePayload, email }, opts);
     }

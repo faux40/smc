@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select';
 import { useTableFilter } from '@/composables/useTableFilter';
 import { useTableSort } from '@/composables/useTableSort';
+import { ASSIGNABLE_ROLES } from '@/lib/userRoles';
 import MergeUsersModal from '@/pages/users/Partials/MergeUsersModal.vue';
 import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import UserRowActions from '@/pages/users/Partials/UserRowActions.vue';
@@ -221,15 +222,7 @@ const isSelf = (row: UserRow): boolean => row.id === authUser?.id;
 
 // BULK USER ADD — spreadsheet-style grid above the table.
 const showBulk = ref(false);
-// Assignable roles for new users (never Owner); None first as the default.
-const bulkRoles = [
-    'None',
-    'SelfView',
-    'SelfEdit',
-    'Manager',
-    'Admin',
-    'SuperAdmin',
-];
+const bulkRoles = [...ASSIGNABLE_ROLES];
 const existingEmails = computed(() =>
     store.users
         .map((u) => u.email)

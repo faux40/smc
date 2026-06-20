@@ -132,6 +132,24 @@ describe('UsersBulkAddGrid', () => {
         expect(wrapper.emitted('close')).toBeTruthy();
     });
 
+    it('emits created with the new user ids so callers can act on them', async () => {
+        const wrapper = mountGrid();
+        const store = useUsersStore();
+        vi.spyOn(store, 'bulkCreate').mockResolvedValue({
+            created: 1,
+            skipped: 0,
+            results: [{ index: 0, status: 'created', user_id: 'u42' }],
+        });
+
+        await setCell(wrapper, 'First * row 1', 'Ada');
+        await setCell(wrapper, 'Last * row 1', 'Lovelace');
+
+        await wrapper.findAll('button').at(-1)!.trigger('click');
+        await flushPromises();
+
+        expect(wrapper.emitted('created')).toEqual([[['u42']]]);
+    });
+
     it('does not call the store when nothing is filled in', async () => {
         const wrapper = mountGrid();
         const store = useUsersStore();

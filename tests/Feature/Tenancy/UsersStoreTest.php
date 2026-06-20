@@ -101,6 +101,38 @@ class UsersStoreTest extends TestCase
             ->assertSessionHasErrors(['f_name', 'l_name']);
     }
 
+    public function test_json_request_returns_the_created_user_row(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->forOrganization($org)->withRole('Admin')->create();
+        $boss = User::factory()->forOrganization($org)
+            ->create(['f_name' => 'Sam', 'm_name' => 'T', 'l_name' => 'Boss']);
+
+        // expectsJson (postJson) → the endpoint returns the new user row (201)
+        // instead of the Inertia redirect, so callers like the class roster can
+        // create + enroll inline without navigating away.
+        $response = $this->actingAs($admin)
+            ->postJson(route('users.store'), [
+                'f_name' => 'Ada',
+                'm_name' => 'Augusta',
+                'l_name' => 'Lovelace',
+                'email' => 'ada@example.com',
+                'supervisor_id' => $boss->id,
+            ])
+            ->assertCreated();
+
+        $created = User::where('email', 'ada@example.com')->firstOrFail();
+
+        $response->assertjson([
+            'id' => $created->id,
+            'name' => 'Ada Augusta Lovelace',
+            'sort_name' => 'Lovelace, Ada Augusta',
+            'email' => 'ada@example.com',
+            'supervisor_id' => $boss->id,
+            'supervisor_sort_name' => 'Boss, Sam T',
+        ]);
+    }
+
     public function test_create_dispatches_user_registered(): void
     {
         Event::fake([UserRegistered::class]);

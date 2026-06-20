@@ -170,7 +170,19 @@ class UsersController extends Controller
                 'department', 'location', 'job_title', 'supervisor_id',
             ]);
 
-        return response()->json($users->map(fn (User $u) => [
+        return response()->json($users->map(fn (User $u) => $this->pickerRow($u)));
+    }
+
+    /**
+     * Lean picker/roster row for a single user — the shape the users Pinia
+     * store hydrates from. Shared by pickerList() and the JSON branch of
+     * store() so the inline create-and-enroll flow gets the same row.
+     *
+     * @return array<string, mixed>
+     */
+    private function pickerRow(User $u): array
+    {
+        return [
             'id' => $u->id,
             'name' => $u->name,
             'sort_name' => $u->sort_name,
@@ -186,7 +198,7 @@ class UsersController extends Controller
             'supervisor_name' => $u->supervisor?->name,
             'supervisor_sort_name' => $u->supervisor?->sort_name,
             'tag_ids' => $u->tags->pluck('id')->all(),
-        ]));
+        ];
     }
 
     /**
@@ -333,10 +345,19 @@ class UsersController extends Controller
         return CompletionSerializer::collection($completions);
     }
 
-    public function store(CreateUserRequest $request, CreateUser $creator): RedirectResponse
+    public function store(CreateUserRequest $request, CreateUser $creator): RedirectResponse|JsonResponse
     {
         // New single-add users land as role None (role is set later via edit).
-        $creator->handle($request->user()->org_id, $request->validated(), 'None');
+        $user = $creator->handle($request->user()->org_id, $request->validated(), 'None');
+
+        // Inline callers (e.g. the class roster's add-and-enroll flow) ask for
+        // JSON and get the created row back so they can enroll it without an
+        // Inertia navigation; the users page keeps the redirect-and-redraw flow.
+        if ($request->expectsJson()) {
+            $user->load('supervisor:id,prefix_name,f_name,m_name,l_name,suffix_name');
+
+            return response()->json($this->pickerRow($user), 201);
+        }
 
         return Redirect::route('users.index');
     }

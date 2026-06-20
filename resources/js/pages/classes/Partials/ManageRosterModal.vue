@@ -14,9 +14,14 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { ASSIGNABLE_ROLES } from '@/lib/userRoles';
+import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
+import UsersBulkAddGrid from '@/pages/users/Partials/UsersBulkAddGrid.vue';
 import { useClassesStore } from '@/stores/classes';
 import type { TagRow } from '@/stores/tags';
 import { useTagsStore } from '@/stores/tags';
+import { useUsersStore } from '@/stores/users';
+import type { PickerUserRow } from '@/stores/users';
 
 export interface PickerUser {
     id: string;
@@ -38,10 +43,51 @@ const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
 
 const store = useClassesStore();
 const tagsStore = useTagsStore();
+const usersStore = useUsersStore();
 
 onMounted(() => {
     void tagsStore.loadLibrary();
 });
+
+// ── Inline add-user (single + bulk) ────────────────────────────────────────
+// Create people without leaving the roster; new users are queued as enrolled
+// (added to `selected`) and persisted on close via the existing commit() diff.
+const addPersonOpen = ref(false);
+const showBulkAdd = ref(false);
+
+const assignableRoles = [...ASSIGNABLE_ROLES];
+const existingEmails = computed(() =>
+    usersStore.users
+        .map((u) => u.email)
+        .filter((e): e is string => typeof e === 'string' && e !== ''),
+);
+const supervisorOptions = computed(() =>
+    usersStore.users.map((u) => ({ id: u.id, name: u.sort_name || u.id })),
+);
+
+function openAddPerson(): void {
+    void usersStore.loadFieldOptions();
+    addPersonOpen.value = true;
+}
+
+function toggleBulkAdd(): void {
+    showBulkAdd.value = !showBulkAdd.value;
+
+    if (showBulkAdd.value) {
+        void usersStore.loadFieldOptions();
+    }
+}
+
+// Queue newly created people as enrolled and refresh the picker so they show
+// up with full profile data in the lists.
+async function enrollCreated(userIds: string[]): Promise<void> {
+    selected.value = new Set([...selected.value, ...userIds]);
+    await usersStore.loadPicker(true);
+}
+
+function onPersonCreated(user: PickerUserRow): void {
+    void enrollCreated([user.id]);
+}
 
 const tagsById = computed(
     () => new Map(tagsStore.library.map((t) => [t.id, t])),
@@ -193,9 +239,10 @@ async function commit(): Promise<void> {
     }
 
     const original = new Map(d.enrollments.map((e) => [e.user_id, e.id]));
-    const toEnroll = props.users
-        .filter((u) => selected.value.has(u.id) && !original.has(u.id))
-        .map((u) => u.id);
+    // Enroll every selected id not already on the roster — derived from the
+    // selection set (not the available pool) so a just-created user enrolls
+    // even before the picker refresh repopulates the lists.
+    const toEnroll = [...selected.value].filter((id) => !original.has(id));
     const toUnenroll = d.enrollments
         .filter((e) => !selected.value.has(e.user_id))
         .map((e) => e.id);
@@ -249,6 +296,41 @@ function onOpenChange(value: boolean): void {
             >
                 {{ actionError }}
             </p>
+
+            <!-- Inline add-user: create people without leaving the roster.
+                 Created users are queued as enrolled and saved on close. -->
+            <div v-if="canEdit" class="flex items-center gap-2">
+                <span class="text-xs text-muted-foreground">
+                    Don't see someone?
+                </span>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    @click="openAddPerson"
+                >
+                    + Add a person
+                </Button>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    data-testid="roster-bulk-toggle"
+                    @click="toggleBulkAdd"
+                >
+                    {{ showBulkAdd ? 'Close bulk add' : 'Bulk add' }}
+                </Button>
+            </div>
+
+            <UsersBulkAddGrid
+                v-if="canEdit && showBulkAdd"
+                :existing-emails="existingEmails"
+                :roles="assignableRoles"
+                :supervisors="supervisorOptions"
+                :field-options="usersStore.fieldOptions"
+                @created="enrollCreated"
+                @close="showBulkAdd = false"
+            />
 
             <DualListShuttle
                 :assigned="assigned"
@@ -331,4 +413,13 @@ function onOpenChange(value: boolean): void {
             </DialogFooter>
         </DialogContent>
     </Dialog>
+
+    <!-- Rich single-add form (reused), in non-navigating inline mode so the
+         new user is created and auto-enrolled without leaving the roster. -->
+    <UserFormModal
+        v-model:open="addPersonOpen"
+        mode="create"
+        inline
+        @created="onPersonCreated"
+    />
 </template>

@@ -30,7 +30,11 @@ const props = defineProps<{
     fieldOptions: FieldOptions;
 }>();
 
-const emit = defineEmits<{ (e: 'done'): void; (e: 'close'): void }>();
+const emit = defineEmits<{
+    (e: 'done'): void;
+    (e: 'close'): void;
+    (e: 'created', userIds: string[]): void;
+}>();
 
 const store = useUsersStore();
 
@@ -147,6 +151,7 @@ async function submit(): Promise<void> {
 
         // Map positional server results back to original grid indexes.
         const createdIdx = new Set<number>();
+        const createdIds: string[] = [];
         const errorsByOrigin: Record<
             number,
             Partial<Record<keyof GridRow, string>>
@@ -160,6 +165,10 @@ async function submit(): Promise<void> {
 
             if (r.status === 'created') {
                 createdIdx.add(origin);
+
+                if (r.user_id) {
+                    createdIds.push(r.user_id);
+                }
             } else if (r.errors) {
                 errorsByOrigin[origin] = r.errors as Partial<
                     Record<keyof GridRow, string>
@@ -189,6 +198,12 @@ async function submit(): Promise<void> {
         rows.value = kept.length > 0 ? kept : [emptyRow()];
         serverErrors.value = remapped;
         emit('done');
+
+        // Announce the new ids so inline callers (e.g. the class roster) can
+        // enroll them; the users page can ignore this.
+        if (createdIds.length > 0) {
+            emit('created', createdIds);
+        }
 
         // Everything was accepted → close the grid. If any row was skipped,
         // stay open so those rows can be fixed and resubmitted.

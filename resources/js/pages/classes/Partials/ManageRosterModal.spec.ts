@@ -3,8 +3,10 @@ import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ManageRosterModal from '@/pages/classes/Partials/ManageRosterModal.vue';
+import UsersBulkAddGrid from '@/pages/users/Partials/UsersBulkAddGrid.vue';
 import type { ClassDetail } from '@/stores/classes';
 import { useClassesStore } from '@/stores/classes';
+import { useUsersStore } from '@/stores/users';
 
 vi.mock('axios');
 
@@ -165,6 +167,46 @@ describe('ManageRosterModal', () => {
         expect(axios.post).toHaveBeenCalledWith(
             '/api/classes/c1/enrollments/bulk',
             { enroll: [], unenroll: ['e1'] },
+            expect.anything(),
+        );
+    });
+
+    it('offers inline add-user controls when the class is editable', async () => {
+        await openModal();
+        expect(document.body.textContent).toContain('Add a person');
+        expect(document.body.textContent).toContain('Bulk add');
+    });
+
+    it('auto-enrolls a user created via the inline bulk grid on close', async () => {
+        const wrapper = mount(ManageRosterModal, {
+            props: { open: false, classId: 'c1', users },
+            attachTo: document.body,
+            global: { stubs: { UsersBulkAddGrid: true, UserFormModal: true } },
+        });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        const usersStore = useUsersStore();
+        vi.spyOn(usersStore, 'loadPicker').mockResolvedValue();
+
+        // Reveal the bulk grid, then simulate it reporting a created user.
+        const toggle = document.body.querySelector<HTMLButtonElement>(
+            '[data-testid="roster-bulk-toggle"]',
+        );
+        toggle!.click();
+        await flushPromises();
+
+        wrapper.findComponent(UsersBulkAddGrid).vm.$emit('created', ['newU']);
+        await flushPromises();
+
+        // Closing commits the queued enrollment for the new user.
+        findBtn('Done')!.click();
+        await flushPromises();
+
+        expect(usersStore.loadPicker).toHaveBeenCalledWith(true);
+        expect(axios.post).toHaveBeenCalledWith(
+            '/api/classes/c1/enrollments/bulk',
+            { enroll: ['newU'], unenroll: [] },
             expect.anything(),
         );
     });

@@ -65,6 +65,30 @@ export interface FieldOptions {
     job_title: string[];
 }
 
+/**
+ * Lean row returned by the picker endpoint (GET /api/users) and by the
+ * inline JSON create path (POST /users with Accept: json) — the subset of
+ * UserRow those endpoints serialize.
+ */
+export type PickerUserRow = Pick<
+    UserRow,
+    | 'id'
+    | 'name'
+    | 'sort_name'
+    | 'f_name'
+    | 'm_name'
+    | 'l_name'
+    | 'email'
+    | 'employee_number'
+    | 'department'
+    | 'location'
+    | 'job_title'
+    | 'supervisor_id'
+    | 'supervisor_name'
+    | 'supervisor_sort_name'
+    | 'tag_ids'
+>;
+
 /** One row submitted by the BULK USER ADD grid. */
 export interface BulkUserRow {
     f_name: string;
@@ -184,33 +208,14 @@ export const useUsersStore = defineStore('users', () => {
      * roster to populate its supervisor dropdown. No-op if the cache is
      * already populated (navigating in from the Index keeps its richer rows).
      */
-    async function loadPicker(): Promise<void> {
-        if (users.value.length > 0) {
+    async function loadPicker(force = false): Promise<void> {
+        if (users.value.length > 0 && !force) {
             return;
         }
 
-        const { data } = await axios.get<
-            Array<
-                Pick<
-                    UserRow,
-                    | 'id'
-                    | 'name'
-                    | 'sort_name'
-                    | 'f_name'
-                    | 'm_name'
-                    | 'l_name'
-                    | 'email'
-                    | 'employee_number'
-                    | 'department'
-                    | 'location'
-                    | 'job_title'
-                    | 'supervisor_id'
-                    | 'supervisor_name'
-                    | 'supervisor_sort_name'
-                    | 'tag_ids'
-                >
-            >
-        >('/api/users', { headers: writeHeaders() });
+        const { data } = await axios.get<PickerUserRow[]>('/api/users', {
+            headers: writeHeaders(),
+        });
 
         // Picker rows carry only a subset of UserRow; pad the rest with
         // defaults. These rows back the supervisor dropdown (id + name), not
@@ -425,6 +430,26 @@ export const useUsersStore = defineStore('users', () => {
         );
     }
 
+    /**
+     * Non-navigating single create for inline callers (e.g. the class roster's
+     * add-and-enroll flow). Unlike create() — which posts via Inertia and
+     * redraws the users page — this posts JSON, patches the cache with the
+     * returned row, and resolves to it so the caller can act on the new id.
+     */
+    async function createReturning(
+        form: NamePayload & ProfilePayload & { email: string | null },
+    ): Promise<PickerUserRow> {
+        const { data } = await axios.post<PickerUserRow>(
+            usersStore().url,
+            form as unknown as Record<string, string>,
+            { headers: writeHeaders() },
+        );
+        applyAdded(data);
+        invalidateFieldOptions();
+
+        return data;
+    }
+
     function update(
         id: string,
         form: NamePayload &
@@ -554,6 +579,7 @@ export const useUsersStore = defineStore('users', () => {
         applyUpdated,
         applySoftDeleted,
         create,
+        createReturning,
         bulkCreate,
         update,
         mergePreview,
