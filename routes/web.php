@@ -161,6 +161,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::post('api/classes/{class}/certificates', [ClassDocumentsController::class, 'storeCertificates'])->name('classes.certificates.store');
     Route::get('api/classes/{class}/sign-in-sheet', [ClassDocumentsController::class, 'signInSheet'])->name('classes.sign-in-sheet');
     Route::get('api/classes/{class}/summary', [ClassDocumentsController::class, 'summary'])->name('classes.summary');
+    Route::post('api/classes/{class}/summary', [ClassDocumentsController::class, 'storeSummary'])->name('classes.summary.store');
     Route::get('api/classes/{class}', [ClassesController::class, 'show'])->name('classes.show');
     Route::patch('api/classes/{class}', [ClassesController::class, 'update'])->name('classes.update');
     Route::delete('api/classes/{class}', [ClassesController::class, 'destroy'])->name('classes.destroy');

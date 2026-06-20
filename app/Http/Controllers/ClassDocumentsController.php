@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\StoreClassCertificates;
+use App\Actions\FileClassDocument;
 use App\Models\Completion;
 use App\Models\TrainingClass;
 use App\Support\CertificateData;
@@ -28,10 +28,7 @@ class ClassDocumentsController extends Controller
 
         abort_if($certs === [], 404, 'This class has no issued certificates.');
 
-        return PdfRenderer::make('pdf.certificate', [
-            'certs' => $certs,
-            'background' => CertificateData::backgroundDataUri(),
-        ])->name("certificates-{$class->id}.pdf");
+        return $this->certificatesPdf($certs)->name("certificates-{$class->id}.pdf");
     }
 
     /**
@@ -39,16 +36,60 @@ class ClassDocumentsController extends Controller
      * (a TrainingClass attachment on Linode). The GET above is for viewing;
      * this POST persists a fresh, timestamped copy.
      */
-    public function storeCertificates(TrainingClass $class, StoreClassCertificates $action): JsonResponse
+    public function storeCertificates(TrainingClass $class, FileClassDocument $action): JsonResponse
     {
         Gate::authorize('view', $class);
 
-        $attachment = $action->handle($class);
+        $certs = CertificateData::forClass($class);
+        abort_if($certs === [], 422, 'This class has no issued certificates.');
+
+        $attachment = $action->handle(
+            $class,
+            $this->certificatesPdf($certs),
+            FileClassDocument::filename($class, 'Certificates'),
+        );
 
         return response()->json([
             'id' => $attachment->id,
             'filename' => $attachment->filename,
         ], 201);
+    }
+
+    /**
+     * File a copy of the class summary PDF into the class's documents.
+     */
+    public function storeSummary(TrainingClass $class, FileClassDocument $action): JsonResponse
+    {
+        Gate::authorize('view', $class);
+
+        $attachment = $action->handle(
+            $class,
+            $this->summaryPdf($class),
+            FileClassDocument::filename($class, 'Summary'),
+        );
+
+        return response()->json([
+            'id' => $attachment->id,
+            'filename' => $attachment->filename,
+        ], 201);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $certs
+     */
+    private function certificatesPdf(array $certs): PdfBuilder
+    {
+        return PdfRenderer::make('pdf.certificate', [
+            'certs' => $certs,
+            'background' => CertificateData::backgroundDataUri(),
+        ]);
+    }
+
+    private function summaryPdf(TrainingClass $class): PdfBuilder
+    {
+        $data = ClassSummary::data($class);
+
+        return $this->withReportFooter(PdfRenderer::make('pdf.class-summary', $data), $data);
     }
 
     /**
@@ -80,10 +121,7 @@ class ClassDocumentsController extends Controller
     {
         Gate::authorize('view', $class);
 
-        $data = ClassSummary::data($class);
-
-        return $this->withReportFooter(PdfRenderer::make('pdf.class-summary', $data), $data)
-            ->name("class-summary-{$class->id}.pdf");
+        return $this->summaryPdf($class)->name("class-summary-{$class->id}.pdf");
     }
 
     /**

@@ -291,23 +291,27 @@ describe('classes/Show — completed class (M3)', () => {
         expect(sam).toContain('✗ Fall Protection Basics');
     });
 
-    it('clicking Certificates also pops up the save-to-files modal', async () => {
+    it.each([
+        ['certificates', '/api/classes/c1/certificates'],
+        ['summary', '/api/classes/c1/summary'],
+    ])('clicking %s also pops up the save-to-files modal', async (_kind, href) => {
+        // Clear any dialog teleported by a previous iteration.
+        document.body.innerHTML = '';
         const wrapper = await mountShow();
 
-        // No save popup until the certificates button is used.
+        // No save popup until the document button is used.
         expect(
-            document.body.querySelector('[data-testid="cert-save-modal-confirm"]'),
+            document.body.querySelector('[data-testid="doc-save-modal-confirm"]'),
         ).toBeNull();
 
-        const certLink = wrapper.find(
-            'a[href="/api/classes/c1/certificates"]',
-        );
-        expect(certLink.exists()).toBe(true);
-        await certLink.trigger('click');
+        const link = wrapper.find(`a[href="${href}"]`);
+        expect(link.exists()).toBe(true);
+        await link.trigger('click');
         await flushPromises();
 
         expect(
-            document.body.querySelector('[data-testid="cert-save-modal-confirm"]'),
+            document.body.querySelector('[data-testid="doc-save-modal-confirm"]'),
         ).not.toBeNull();
+        wrapper.unmount();
     });
 });

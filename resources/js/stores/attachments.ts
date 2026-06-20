@@ -87,13 +87,16 @@ export const useAttachmentsStore = defineStore('attachments', () => {
     }
 
     /**
-     * Render + file a copy of a completed class's certificates as a
-     * TrainingClass attachment, then refresh that class's list so the new
-     * file shows with full metadata (name / uploader / timestamp).
+     * Render + file a copy of a generated class document ('certificates' or
+     * 'summary') as a TrainingClass attachment, then refresh that class's
+     * list so the new file shows with full metadata (name/uploader/timestamp).
      */
-    async function fileClassCertificates(classId: string): Promise<void> {
+    async function fileClassDocument(
+        classId: string,
+        kind: 'certificates' | 'summary',
+    ): Promise<void> {
         await axios.post(
-            `/api/classes/${classId}/certificates`,
+            `/api/classes/${classId}/${kind}`,
             {},
             { headers: defaultHeaders() },
         );
@@ -192,7 +195,7 @@ export const useAttachmentsStore = defineStore('attachments', () => {
         listFor,
         load,
         upload,
-        fileClassCertificates,
+        fileClassDocument,
         destroy,
         downloadUrl,
         viewUrl,

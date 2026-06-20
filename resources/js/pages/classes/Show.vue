@@ -17,8 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { useClassForm } from '@/composables/useClassForm';
 import ClassCertEditModal from '@/pages/classes/Partials/ClassCertEditModal.vue';
-import ClassCertificatesSaveButton from '@/pages/classes/Partials/ClassCertificatesSaveButton.vue';
-import ClassCertificatesSaveModal from '@/pages/classes/Partials/ClassCertificatesSaveModal.vue';
+import ClassDocumentSaveModal from '@/pages/classes/Partials/ClassDocumentSaveModal.vue';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ManageRosterModal from '@/pages/classes/Partials/ManageRosterModal.vue';
 import ManageTopicsModal from '@/pages/classes/Partials/ManageTopicsModal.vue';
@@ -53,8 +52,9 @@ const detail = computed(() => store.detail[props.classId] ?? null);
 
 const completeOpen = ref(false);
 const topicsOpen = ref(false);
-// Prompt to file a copy of the certificates whenever they're generated.
+// Prompt to file a copy of a document whenever it's generated.
 const certSaveOpen = ref(false);
+const summarySaveOpen = ref(false);
 // Per-topic certificate editor (scheduled classes): which class_training row.
 const certOpen = ref(false);
 const certTopicId = ref<string | null>(null);
@@ -485,16 +485,13 @@ const totalHoursLabel = computed(
                                 >
                                     Certificates
                                 </Button>
-                                <ClassCertificatesSaveButton
-                                    v-if="detail.status === 'completed'"
-                                    :class-id="props.classId"
-                                />
                                 <Button
                                     v-if="detail.status === 'completed'"
                                     as="a"
                                     variant="outline"
                                     :href="`/api/classes/${props.classId}/summary`"
                                     target="_blank"
+                                    @click="summarySaveOpen = true"
                                 >
                                     Class summary
                                 </Button>
@@ -635,9 +632,15 @@ const totalHoursLabel = computed(
                     :class-id="props.classId"
                     :topic-id="certTopicId"
                 />
-                <ClassCertificatesSaveModal
+                <ClassDocumentSaveModal
                     v-model:open="certSaveOpen"
                     :class-id="props.classId"
+                    kind="certificates"
+                />
+                <ClassDocumentSaveModal
+                    v-model:open="summarySaveOpen"
+                    :class-id="props.classId"
+                    kind="summary"
                 />
                 <ManageRosterModal
                     v-model:open="rosterOpen"
