@@ -191,7 +191,7 @@ class TrainingManagerPersonaTest extends PersonaTestCase
                 'completion_date' => now()->toDateString(),
                 'enrollments' => [[
                     'id' => $enrollmentId,
-                    'results' => [['class_training_id' => $classTrainingId, 'passed' => true]],
+                    'results' => [['class_training_id' => $classTrainingId, 'result' => 'pass']],
                 ]],
             ])
             ->assertOk()

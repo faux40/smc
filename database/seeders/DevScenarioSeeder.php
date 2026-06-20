@@ -411,7 +411,7 @@ class DevScenarioSeeder extends Seeder
                 'results' => $ctIds
                     ->map(fn (string $ctId, int $t) => [
                         'class_training_id' => $ctId,
-                        'passed' => $results[$i][$t] ?? false,
+                        'result' => ($results[$i][$t] ?? false) ? 'pass' : 'incomplete',
                     ])
                     ->all(),
             ])

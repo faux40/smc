@@ -14,12 +14,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useClassesStore } from '@/stores/classes';
-import type { ClassDetail } from '@/stores/classes';
+import type { ClassDetail, TopicResult } from '@/stores/classes';
 import { useErrorStore } from '@/stores/errors';
 
 const FORM_CTX = 'form:class-complete';
 
-type Decision = 'pass' | 'fail';
+type Decision = TopicResult;
+const DECISIONS: Decision[] = ['pass', 'fail', 'incomplete'];
 
 const props = defineProps<{ open: boolean; target: ClassDetail }>();
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
@@ -35,13 +36,16 @@ interface Mark {
     notes: string;
     // Freshly added on a re-opened class (never graded yet).
     isNew: boolean;
-    // Topics this person already holds a certificate for (for context).
-    credited: Set<string>;
-    // Per-topic decision keyed by class_training_id; absent = unmarked.
+    // Per-topic decision keyed by class_training_id (pass/fail/incomplete).
     result: Record<string, Decision>;
 }
 
 const marks = reactive<Mark[]>([]);
+
+/** A topic's current decision, defaulting to incomplete. */
+function decisionOf(m: Mark, trainingId: string): Decision {
+    return m.result[trainingId] ?? 'incomplete';
+}
 
 watch(
     () => props.open,
@@ -53,10 +57,10 @@ watch(
         errorStore.clear(FORM_CTX);
         completionDate.value = props.target.scheduled_date ?? '';
 
-        // Every topic starts UNMARKED — the instructor must choose pass/fail
-        // (or use "Mark all passed"). Nothing is pre-selected, so a freshly
-        // added attendee is never silently credited, and on a re-close an
-        // unmarked topic leaves the existing certificate untouched.
+        // Pre-fill each topic from its stored result (pass/fail/incomplete),
+        // defaulting to incomplete. So re-closing without touching anyone keeps
+        // their prior outcome, and nobody is silently credited — only an
+        // explicit Pass issues a certificate.
         const previouslyCompleted = props.target.completion_date != null;
 
         marks.splice(
@@ -67,20 +71,20 @@ watch(
                 user_name: e.user_name,
                 notes: e.notes ?? '',
                 isNew: previouslyCompleted && e.status === 'enrolled',
-                credited: new Set(e.credited_training_ids),
-                result: {} as Record<string, Decision>,
+                result: Object.fromEntries(
+                    props.target.trainings.map((t) => [
+                        t.id,
+                        e.results?.[t.id] ?? 'incomplete',
+                    ]),
+                ) as Record<string, Decision>,
             })),
         );
     },
 );
 
-/** Click a pass/fail chip: set it, or toggle back to unmarked if re-clicked. */
+/** Pick a topic's result (pass / fail / incomplete). */
 function choose(m: Mark, trainingId: string, value: Decision): void {
-    if (m.result[trainingId] === value) {
-        delete m.result[trainingId];
-    } else {
-        m.result[trainingId] = value;
-    }
+    m.result[trainingId] = value;
 }
 
 function markAll(value: Decision): void {
@@ -88,12 +92,6 @@ function markAll(value: Decision): void {
         for (const t of props.target.trainings) {
             m.result[t.id] = value;
         }
-    }
-}
-
-function clearAll(): void {
-    for (const m of marks) {
-        m.result = {};
     }
 }
 
@@ -107,13 +105,11 @@ async function submit(): Promise<void> {
             enrollments: marks.map((m) => ({
                 id: m.id,
                 notes: m.notes.trim() === '' ? null : m.notes,
-                // Only marked topics are sent; unmarked ones are left as-is.
-                results: props.target.trainings
-                    .filter((t) => m.result[t.id] !== undefined)
-                    .map((t) => ({
-                        class_training_id: t.id,
-                        passed: m.result[t.id] === 'pass',
-                    })),
+                // Every topic is sent with an explicit result.
+                results: props.target.trainings.map((t) => ({
+                    class_training_id: t.id,
+                    result: decisionOf(m, t.id),
+                })),
             })),
         });
         emit('update:open', false);
@@ -134,10 +130,10 @@ async function submit(): Promise<void> {
                 <DialogHeader>
                     <DialogTitle>Complete class</DialogTitle>
                     <DialogDescription>
-                        Mark each attendee passed or failed per training — a
-                        certificate is issued for every passed pairing.
-                        Unmarked topics are left unchanged. This locks the
-                        class.
+                        Mark each attendee Pass, Fail, or Incomplete per
+                        training — a certificate is issued only for a Pass; Fail
+                        and Incomplete grant no credit. Topics default to
+                        Incomplete. This locks the class.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -167,9 +163,9 @@ async function submit(): Promise<void> {
                             type="button"
                             variant="outline"
                             size="sm"
-                            @click="clearAll"
+                            @click="markAll('incomplete')"
                         >
-                            Clear all
+                            Mark all incomplete
                         </Button>
                     </div>
                 </div>
@@ -202,41 +198,25 @@ async function submit(): Promise<void> {
                             :key="t.id"
                             class="flex items-center gap-2"
                         >
-                            <span class="flex-1">
-                                {{ t.training_name }}
-                                <span
-                                    v-if="
-                                        m.credited.has(t.id) &&
-                                        m.result[t.id] === undefined
-                                    "
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    · certified
-                                </span>
-                            </span>
+                            <span class="flex-1">{{ t.training_name }}</span>
                             <button
+                                v-for="d in DECISIONS"
+                                :key="d"
                                 type="button"
-                                class="rounded px-2 py-0.5 text-xs ring-1 ring-inset"
+                                class="rounded px-2 py-0.5 text-xs capitalize ring-1 ring-inset"
                                 :class="
-                                    m.result[t.id] === 'pass'
-                                        ? 'bg-emerald-100 text-emerald-900 ring-emerald-300'
+                                    decisionOf(m, t.id) === d
+                                        ? d === 'pass'
+                                            ? 'bg-emerald-100 text-emerald-900 ring-emerald-300'
+                                            : d === 'fail'
+                                              ? 'bg-red-100 text-red-900 ring-red-300'
+                                              : 'bg-muted text-foreground ring-border'
                                         : 'text-muted-foreground ring-border'
                                 "
-                                @click="choose(m, t.id, 'pass')"
+                                :data-testid="`mark-${t.id}-${d}`"
+                                @click="choose(m, t.id, d)"
                             >
-                                Pass
-                            </button>
-                            <button
-                                type="button"
-                                class="rounded px-2 py-0.5 text-xs ring-1 ring-inset"
-                                :class="
-                                    m.result[t.id] === 'fail'
-                                        ? 'bg-red-100 text-red-900 ring-red-300'
-                                        : 'text-muted-foreground ring-border'
-                                "
-                                @click="choose(m, t.id, 'fail')"
-                            >
-                                Fail
+                                {{ d }}
                             </button>
                         </div>
                         <Input

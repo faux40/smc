@@ -39,6 +39,7 @@ const detail: ClassDetail = {
             status: 'enrolled',
             notes: null,
             credited_training_ids: [],
+            results: {},
         },
     ],
 };
@@ -234,6 +235,7 @@ const completedDetail: ClassDetail = {
             status: 'partial',
             notes: null,
             credited_training_ids: ['ct1'],
+            results: { ct1: 'pass', ct2: 'fail' },
         },
         {
             id: 'e2',
@@ -243,6 +245,7 @@ const completedDetail: ClassDetail = {
             status: 'incomplete',
             notes: null,
             credited_training_ids: [],
+            results: { ct1: 'fail', ct2: 'incomplete' },
         },
     ],
 };
@@ -289,6 +292,8 @@ describe('classes/Show — completed class (M3)', () => {
         expect(dana).toContain('✗ Harness Inspection');
         const sam = rows[1].text();
         expect(sam).toContain('✗ Fall Protection Basics');
+        // Incomplete renders as a neutral dash, distinct from fail.
+        expect(sam).toContain('— Harness Inspection');
     });
 
     it.each([

@@ -66,6 +66,9 @@ export interface ClassCertPayload {
     cert_code: string | null;
 }
 
+/** Per-topic close-out result. */
+export type TopicResult = 'pass' | 'fail' | 'incomplete';
+
 export interface EnrollmentRow {
     id: string;
     user_id: string;
@@ -73,10 +76,11 @@ export interface EnrollmentRow {
     user_email: string | null;
     status: 'enrolled' | 'passed' | 'partial' | 'incomplete';
     notes: string | null;
-    // Class topics this user already holds a (live) completion for — drives
-    // the close-out modal's per-topic defaults so re-completing preserves
-    // existing credit.
+    // Class topics this user already holds a (live) completion for.
     credited_training_ids: string[];
+    // Per-topic result map {class_training_id: pass|fail|incomplete} — drives
+    // the close-out modal's pre-fill and the roster's three-state display.
+    results: Record<string, TopicResult>;
 }
 
 export interface ClassDetail {
@@ -310,7 +314,7 @@ export const useClassesStore = defineStore('classes', () => {
             enrollments: {
                 id: string;
                 notes: string | null;
-                results: { class_training_id: string; passed: boolean }[];
+                results: { class_training_id: string; result: TopicResult }[];
             }[];
         },
     ): Promise<ClassDetail> {

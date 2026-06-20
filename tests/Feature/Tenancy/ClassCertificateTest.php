@@ -216,7 +216,7 @@ class ClassCertificateTest extends TestCase
 
         $this->actingAs($manager)->postJson("/api/classes/{$class->id}/complete", [
             'completion_date' => '2026-06-01',
-            'enrollments' => [['id' => $enrollment->id, 'results' => [['class_training_id' => $ct->id, 'passed' => true]]]],
+            'enrollments' => [['id' => $enrollment->id, 'results' => [['class_training_id' => $ct->id, 'result' => 'pass']]]],
         ])->assertOk();
 
         Pdf::fake();

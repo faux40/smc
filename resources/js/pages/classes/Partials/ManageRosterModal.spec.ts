@@ -35,6 +35,7 @@ const detail: ClassDetail = {
             status: 'enrolled',
             notes: null,
             credited_training_ids: [],
+            results: {},
         },
     ],
 };

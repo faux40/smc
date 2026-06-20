@@ -59,8 +59,8 @@ class ClassCompletionTest extends TestCase
             ->postJson("/api/classes/{$class->id}/complete", [
                 'completion_date' => '2026-06-01',
                 'enrollments' => [
-                    ['id' => $eP->id, 'results' => [['class_training_id' => $ct->id, 'passed' => true]]],
-                    ['id' => $eF->id, 'notes' => 'failed the test', 'results' => [['class_training_id' => $ct->id, 'passed' => false]]],
+                    ['id' => $eP->id, 'results' => [['class_training_id' => $ct->id, 'result' => 'pass']]],
+                    ['id' => $eF->id, 'notes' => 'failed the test', 'results' => [['class_training_id' => $ct->id, 'result' => 'fail']]],
                 ],
             ])
             ->assertOk()
@@ -84,6 +84,41 @@ class ClassCompletionTest extends TestCase
         $this->assertSame('failed the test', $eF->fresh()->notes);
     }
 
+    public function test_an_unmarked_topic_defaults_to_incomplete_and_is_not_credited(): void
+    {
+        // Reproduces the reported bug: with two courses, a topic left unmarked
+        // must NOT be credited — it defaults to incomplete.
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $a = Training::factory()->for($org, 'organization')->create();
+        $b = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ctA = ClassTraining::factory()->for($class, 'trainingClass')->create(['training_id' => $a->id]);
+        $ctB = ClassTraining::factory()->for($class, 'trainingClass')->create(['training_id' => $b->id]);
+        $user = User::factory()->for($org, 'organization')->create();
+        $e = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $user->id]);
+
+        // Only course A is marked (pass); course B is omitted entirely.
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/complete", [
+                'completion_date' => '2026-06-01',
+                'enrollments' => [
+                    ['id' => $e->id, 'results' => [['class_training_id' => $ctA->id, 'result' => 'pass']]],
+                ],
+            ])
+            ->assertOk();
+
+        // Credit for A only; B uncredited.
+        $this->assertSame(1, Completion::where('user_id', $user->id)->where('class_training_id', $ctA->id)->count());
+        $this->assertSame(0, Completion::where('user_id', $user->id)->where('class_training_id', $ctB->id)->count());
+
+        // The full per-topic result map is persisted (B defaulted to incomplete).
+        $results = $e->fresh()->results;
+        $this->assertSame('pass', $results[$ctA->id]);
+        $this->assertSame('incomplete', $results[$ctB->id]);
+        $this->assertSame('partial', $e->fresh()->status);
+    }
+
     public function test_partial_pass_issues_certs_only_for_the_passed_trainings(): void
     {
         $org = Organization::factory()->create();
@@ -102,8 +137,8 @@ class ClassCompletionTest extends TestCase
                 'completion_date' => '2026-06-01',
                 'enrollments' => [
                     ['id' => $eJohn->id, 'results' => [
-                        ['class_training_id' => $ctFirst->id, 'passed' => false],
-                        ['class_training_id' => $ctFall->id, 'passed' => true],
+                        ['class_training_id' => $ctFirst->id, 'result' => 'fail'],
+                        ['class_training_id' => $ctFall->id, 'result' => 'pass'],
                     ]],
                 ],
             ])
@@ -138,8 +173,8 @@ class ClassCompletionTest extends TestCase
             ->postJson("/api/classes/{$class->id}/complete", [
                 'completion_date' => '2026-06-01',
                 'enrollments' => [
-                    ['id' => $eA->id, 'results' => [['class_training_id' => $ct->id, 'passed' => true]]],
-                    ['id' => $eB->id, 'results' => [['class_training_id' => $ct->id, 'passed' => true]]],
+                    ['id' => $eA->id, 'results' => [['class_training_id' => $ct->id, 'result' => 'pass']]],
+                    ['id' => $eB->id, 'results' => [['class_training_id' => $ct->id, 'result' => 'pass']]],
                 ],
             ])
             ->assertOk();
@@ -182,7 +217,7 @@ class ClassCompletionTest extends TestCase
         $this->actingAs($manager)
             ->postJson("/api/classes/{$class->id}/complete", [
                 'completion_date' => '2026-06-01',
-                'enrollments' => [['id' => $e->id, 'results' => [['class_training_id' => $ct->id, 'passed' => true]]]],
+                'enrollments' => [['id' => $e->id, 'results' => [['class_training_id' => $ct->id, 'result' => 'pass']]]],
             ])
             ->assertOk();
 
@@ -251,12 +286,12 @@ class ClassCompletionTest extends TestCase
                 'completion_date' => '2026-06-01',
                 'enrollments' => [
                     ['id' => $eAlice->id, 'results' => [
-                        ['class_training_id' => $ct1->id, 'passed' => true],
-                        ['class_training_id' => $ct2->id, 'passed' => true],
+                        ['class_training_id' => $ct1->id, 'result' => 'pass'],
+                        ['class_training_id' => $ct2->id, 'result' => 'pass'],
                     ]],
                     ['id' => $eBob->id, 'results' => [
-                        ['class_training_id' => $ct1->id, 'passed' => true],
-                        ['class_training_id' => $ct2->id, 'passed' => false],
+                        ['class_training_id' => $ct1->id, 'result' => 'pass'],
+                        ['class_training_id' => $ct2->id, 'result' => 'fail'],
                     ]],
                 ],
             ])
@@ -293,10 +328,10 @@ class ClassCompletionTest extends TestCase
                 'completion_date' => '2026-06-01',
                 'enrollments' => [
                     ['id' => $eAlice->id, 'results' => [
-                        ['class_training_id' => $ct->id, 'passed' => true],
+                        ['class_training_id' => $ct->id, 'result' => 'pass'],
                     ]],
                     ['id' => $eBob->id, 'results' => [
-                        ['class_training_id' => $ct->id, 'passed' => false],
+                        ['class_training_id' => $ct->id, 'result' => 'fail'],
                     ]],
                 ],
             ])
@@ -334,7 +369,7 @@ class ClassCompletionTest extends TestCase
                 'completion_date' => '2026-06-01',
                 'enrollments' => [
                     ['id' => $enrollment->id, 'results' => [
-                        ['class_training_id' => $ct->id, 'passed' => true],
+                        ['class_training_id' => $ct->id, 'result' => 'pass'],
                     ]],
                 ],
             ])
@@ -363,7 +398,7 @@ class ClassCompletionTest extends TestCase
                 'completion_date' => '2026-06-01',
                 'enrollments' => [
                     ['id' => $enrollment->id, 'results' => [
-                        ['class_training_id' => $ct->id, 'passed' => true],
+                        ['class_training_id' => $ct->id, 'result' => 'pass'],
                     ]],
                 ],
             ])
@@ -386,7 +421,7 @@ class ClassCompletionTest extends TestCase
                 'completion_date' => '2026-06-01',
                 'enrollments' => [
                     ['id' => $enrollment->id, 'results' => [
-                        ['class_training_id' => $ct->id, 'passed' => false],
+                        ['class_training_id' => $ct->id, 'result' => 'fail'],
                     ]],
                 ],
             ])

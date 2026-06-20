@@ -336,7 +336,7 @@ class ClassesController extends Controller
                 'required', 'string',
                 Rule::exists('class_training', 'id')->where('class_id', $class->id),
             ],
-            'enrollments.*.results.*.passed' => ['required', 'boolean'],
+            'enrollments.*.results.*.result' => ['required', 'in:pass,fail,incomplete'],
             'trainings' => ['array'],
             'trainings.*.id' => [
                 'required', 'string',
@@ -571,6 +571,9 @@ class ClassesController extends Controller
                 'status' => $e->status,
                 'notes' => $e->notes,
                 'credited_training_ids' => $creditByUser->get($e->user_id, []),
+                // Per-topic pass/fail/incomplete map (pre-fills the complete
+                // modal on re-close; drives the roster's three-state display).
+                'results' => $e->results ?? [],
             ])->all(),
         ];
     }

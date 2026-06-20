@@ -26,7 +26,7 @@ function detail(): ClassDetail {
             { id: 'ct2', training_id: 't2', training_name: 'Fall Protection', initial_only: false, repeating: true, as_needed: false, std_freq_name: null, repeat_days: null, hours: null, cert_title: null, cert_text: null, cert_code: null, credits: [] },
         ],
         enrollments: [
-            { id: 'e1', user_id: 'u1', user_name: 'John Doe', user_email: null, status: 'enrolled', notes: null, credited_training_ids: [] },
+            { id: 'e1', user_id: 'u1', user_name: 'John Doe', user_email: null, status: 'enrolled', notes: null, credited_training_ids: [], results: {} },
         ],
     };
 }
@@ -42,14 +42,14 @@ async function openWith(target: ClassDetail) {
     return wrapper;
 }
 
-function buttonsByText(text: string): HTMLButtonElement[] {
-    return Array.from(
-        document.body.querySelectorAll<HTMLButtonElement>('button'),
-    ).filter((b) => b.textContent?.trim() === text);
-}
+const chip = (testid: string): HTMLButtonElement =>
+    document.body.querySelector<HTMLButtonElement>(`[data-testid="${testid}"]`)!;
 
-const isActive = (b: HTMLButtonElement) =>
-    /bg-emerald-100|bg-red-100/.test(b.className);
+function submitForm(): void {
+    document.body
+        .querySelector('form')!
+        .dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+}
 
 describe('ClassCompleteModal', () => {
     beforeEach(() => {
@@ -61,28 +61,15 @@ describe('ClassCompleteModal', () => {
         document.body.innerHTML = '';
     });
 
-    it('starts every topic unmarked (neither pass nor fail active)', async () => {
-        await openWith(detail());
-
-        const passes = buttonsByText('Pass');
-        const fails = buttonsByText('Fail');
-        expect(passes).toHaveLength(2);
-        expect(fails).toHaveLength(2);
-        expect([...passes, ...fails].some(isActive)).toBe(false);
-    });
-
-    it('"Mark all passed" passes every topic and submits them all', async () => {
+    it('defaults every topic to incomplete and submits them all', async () => {
         const store = useClassesStore();
         const complete = vi.spyOn(store, 'complete').mockResolvedValue(detail());
 
         await openWith(detail());
-        buttonsByText('Mark all passed')[0].click();
-        await flushPromises();
-        expect(buttonsByText('Pass').every(isActive)).toBe(true);
+        // Incomplete is the active default.
+        expect(chip('mark-ct1-incomplete').className).toMatch(/bg-muted/);
 
-        document.body
-            .querySelector('form')!
-            .dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        submitForm();
         await flushPromises();
 
         expect(complete).toHaveBeenCalledWith('c1', {
@@ -92,26 +79,25 @@ describe('ClassCompleteModal', () => {
                     id: 'e1',
                     notes: null,
                     results: [
-                        { class_training_id: 'ct1', passed: true },
-                        { class_training_id: 'ct2', passed: true },
+                        { class_training_id: 'ct1', result: 'incomplete' },
+                        { class_training_id: 'ct2', result: 'incomplete' },
                     ],
                 },
             ],
         });
     });
 
-    it('submits only marked topics; unmarked ones are omitted', async () => {
+    it('"Mark all passed" passes every topic', async () => {
         const store = useClassesStore();
         const complete = vi.spyOn(store, 'complete').mockResolvedValue(detail());
 
         await openWith(detail());
-        // Mark only First Aid (ct1) passed; leave Fall Protection unmarked.
-        buttonsByText('Pass')[0].click();
+        Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+            .find((b) => b.textContent?.trim() === 'Mark all passed')!
+            .click();
         await flushPromises();
 
-        document.body
-            .querySelector('form')!
-            .dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        submitForm();
         await flushPromises();
 
         expect(complete).toHaveBeenCalledWith('c1', {
@@ -120,23 +106,68 @@ describe('ClassCompleteModal', () => {
                 {
                     id: 'e1',
                     notes: null,
-                    results: [{ class_training_id: 'ct1', passed: true }],
+                    results: [
+                        { class_training_id: 'ct1', result: 'pass' },
+                        { class_training_id: 'ct2', result: 'pass' },
+                    ],
                 },
             ],
         });
     });
 
-    it('re-clicking an active chip toggles it back to unmarked', async () => {
+    it('records an explicit per-topic mix (pass / fail / incomplete)', async () => {
+        const store = useClassesStore();
+        const complete = vi.spyOn(store, 'complete').mockResolvedValue(detail());
+
         await openWith(detail());
-
-        const firstPass = buttonsByText('Pass')[0];
-        firstPass.click();
+        chip('mark-ct1-pass').click();
+        chip('mark-ct2-fail').click();
         await flushPromises();
-        expect(isActive(firstPass)).toBe(true);
 
-        firstPass.click();
+        submitForm();
         await flushPromises();
-        expect(isActive(buttonsByText('Pass')[0])).toBe(false);
+
+        expect(complete).toHaveBeenCalledWith('c1', {
+            completion_date: '2026-06-01',
+            enrollments: [
+                {
+                    id: 'e1',
+                    notes: null,
+                    results: [
+                        { class_training_id: 'ct1', result: 'pass' },
+                        { class_training_id: 'ct2', result: 'fail' },
+                    ],
+                },
+            ],
+        });
+    });
+
+    it('pre-fills each topic from the stored results on a re-close', async () => {
+        const store = useClassesStore();
+        const complete = vi.spyOn(store, 'complete').mockResolvedValue(detail());
+
+        const target = detail();
+        target.completion_date = '2026-06-01'; // previously completed → re-close
+        target.enrollments[0].results = { ct1: 'pass', ct2: 'fail' };
+
+        await openWith(target);
+        // Submitting without touching anything preserves the prior outcome.
+        submitForm();
+        await flushPromises();
+
+        expect(complete).toHaveBeenCalledWith('c1', {
+            completion_date: '2026-06-01',
+            enrollments: [
+                {
+                    id: 'e1',
+                    notes: null,
+                    results: [
+                        { class_training_id: 'ct1', result: 'pass' },
+                        { class_training_id: 'ct2', result: 'fail' },
+                    ],
+                },
+            ],
+        });
     });
 
     it('flags a freshly-added enrollee on a re-opened class', async () => {

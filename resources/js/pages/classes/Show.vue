@@ -603,15 +603,21 @@ const totalHoursLabel = computed(
                                     :key="t.id"
                                     class="rounded-full border px-1.5 py-0.5"
                                     :class="
-                                        e.credited_training_ids.includes(t.id)
+                                        (e.results?.[t.id] ?? 'incomplete') ===
+                                        'pass'
                                             ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
-                                            : 'border-border text-muted-foreground'
+                                            : (e.results?.[t.id] ?? '') === 'fail'
+                                              ? 'border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-200'
+                                              : 'border-border text-muted-foreground'
                                     "
                                 >
                                     {{
-                                        e.credited_training_ids.includes(t.id)
+                                        (e.results?.[t.id] ?? 'incomplete') ===
+                                        'pass'
                                             ? '✓'
-                                            : '✗'
+                                            : (e.results?.[t.id] ?? '') === 'fail'
+                                              ? '✗'
+                                              : '—'
                                     }}
                                     {{ t.training_name }}
                                 </span>

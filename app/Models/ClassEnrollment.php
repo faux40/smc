@@ -25,6 +25,12 @@ class ClassEnrollment extends Model
         'user_id',
         'status',
         'notes',
+        'results',
+    ];
+
+    /** @var array<string, string> */
+    protected $casts = [
+        'results' => 'array',
     ];
 
     /** @return BelongsTo<TrainingClass, $this> */

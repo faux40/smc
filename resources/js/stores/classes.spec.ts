@@ -167,7 +167,7 @@ describe('useClassesStore', () => {
                 {
                     id: 'e1',
                     notes: null,
-                    results: [{ class_training_id: 'ct1', passed: true }],
+                    results: [{ class_training_id: 'ct1', result: 'pass' }],
                 },
             ],
         });

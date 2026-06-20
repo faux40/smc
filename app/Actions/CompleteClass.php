@@ -22,16 +22,17 @@ use Illuminate\Support\Facades\DB;
 class CompleteClass
 {
     /**
-     * Reconcile completions per enrollee × training pair. Each topic is
-     * tri-state:
-     *   passed   + no cert → issue one;  passed + has cert → keep it;
-     *   failed   + has cert → de-issue it;
-     *   UNMARKED → leave as-is (preserve any existing cert).
-     * So a re-close only applies the topics actually marked, and the
-     * attendees you didn't touch keep their original certificates. New
-     * cert ids continue after the highest suffix used on this date.
+     * Reconcile completions per enrollee × training pair from an explicit
+     * per-topic result — credit reflects exactly what's marked at close:
+     *   pass        → issue a cert (or keep + re-mint a cleared one);
+     *   fail        → no credit (de-issue any existing cert);
+     *   incomplete  → no credit (de-issue any existing cert).
+     * A topic with no result defaults to `incomplete`. The full per-topic
+     * result map is persisted on the enrollment so re-close pre-fills exactly
+     * and the roster can show the three states. New cert ids continue after
+     * the highest suffix used on this date.
      *
-     * @param  Collection<string, array{id: string, notes?: string|null, results?: array<int, array{class_training_id: string, passed: bool}>}>  $marks  keyed by enrollment id
+     * @param  Collection<string, array{id: string, notes?: string|null, results?: array<int, array{class_training_id: string, result: string}>}>  $marks  keyed by enrollment id
      * @param  Collection<string, string|null>  $expireOverrides  expire_date keyed by class_training_id
      * @return array{issued: list<Completion>, deIssued: list<array{id: string, user_id: string}>}
      */
@@ -68,33 +69,26 @@ class CompleteClass
 
             foreach ($class->enrollments as $enrollment) {
                 $enrollMark = $marks->get($enrollment->id) ?? [];
-                $results = collect($enrollMark['results'] ?? [])->pluck('passed', 'class_training_id');
+                $results = collect($enrollMark['results'] ?? [])->pluck('result', 'class_training_id');
 
                 $passedCount = 0;
+                $resultMap = [];
 
                 foreach ($class->classTrainings as $ct) {
-                    $decision = $results->get($ct->id); // true | false | null (unmarked)
+                    // Default to incomplete so nobody is silently credited.
+                    $decision = $results->get($ct->id) ?? 'incomplete';
+                    $resultMap[$ct->id] = $decision;
+
                     $existing = Completion::query()
                         ->where('class_training_id', $ct->id)
                         ->where('user_id', $enrollment->user_id)
                         ->first();
 
-                    if ($decision === false) {
+                    if ($decision !== 'pass') {
+                        // Fail or incomplete → no credit; drop any existing cert.
                         if ($existing !== null) {
-                            // Explicitly failed → de-issue.
                             $deIssued[] = ['id' => $existing->id, 'user_id' => $existing->user_id];
                             $existing->delete();
-                        }
-
-                        continue;
-                    }
-
-                    if ($decision === null) {
-                        // Unmarked → keep the credit. Re-open clears cert ids,
-                        // so re-mint one here if it's missing (current code).
-                        if ($existing !== null) {
-                            $passedCount++;
-                            $this->ensureCertId($existing, $ct, $dateStr, $certSeq);
                         }
 
                         continue;
@@ -132,6 +126,7 @@ class CompleteClass
                 $enrollment->update([
                     'status' => $this->rollUpStatus($passedCount, $totalTopics),
                     'notes' => $enrollMark['notes'] ?? $enrollment->notes,
+                    'results' => $resultMap,
                 ]);
             }
 
