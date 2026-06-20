@@ -26,7 +26,6 @@ export interface TrainingRow {
     default_hours: string | null;
     cert_title: string | null;
     cert_text: string | null;
-    lifespan_months: number | null;
     cert_code: string | null;
     default_trainer: string | null;
     default_location: string | null;
@@ -46,7 +45,6 @@ export interface TrainingFormPayload {
     as_needed: boolean;
     cert_title: string | null;
     cert_text: string | null;
-    lifespan_months: number | null;
     cert_code: string | null;
     default_trainer: string | null;
     default_location: string | null;

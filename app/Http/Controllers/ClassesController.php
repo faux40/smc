@@ -186,7 +186,6 @@ class ClassesController extends Controller
             'cert_title' => ['sometimes', 'nullable', 'string', 'max:255'],
             'cert_text' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'cert_code' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'lifespan_months' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:65535'],
         ]);
 
         // Only touch fields the request actually sent, so a cert-only edit
@@ -433,7 +432,6 @@ class ClassesController extends Controller
             // rewrite certs an already-completed class issued.
             'cert_title' => $training->cert_title,
             'cert_text' => $training->cert_text,
-            'lifespan_months' => $training->lifespan_months,
             'cert_code' => $training->cert_code,
         ]);
 
@@ -551,7 +549,6 @@ class ClassesController extends Controller
                 'cert_title' => $ct->cert_title,
                 'cert_text' => $ct->cert_text,
                 'cert_code' => $ct->cert_code,
-                'lifespan_months' => $ct->lifespan_months,
                 // M3 — who earned this topic's credit (completed classes).
                 'credits' => ($creditsByTopic[$ct->id] ?? collect())
                     ->map(fn (Completion $comp) => [

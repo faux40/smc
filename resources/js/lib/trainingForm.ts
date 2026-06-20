@@ -24,7 +24,6 @@ export interface TrainingFormSource {
     as_needed: boolean;
     cert_title: string | null;
     cert_text: string | null;
-    lifespan_months: number | null;
     cert_code: string | null;
     default_trainer: string | null;
     default_location: string | null;
@@ -42,7 +41,6 @@ export interface TrainingFormState {
     as_needed: boolean;
     cert_title: string;
     cert_text: string;
-    lifespan_months: string | number;
     cert_code: string;
     default_trainer: string;
     default_location: string;
@@ -61,7 +59,6 @@ export function blankTrainingForm(): TrainingFormState {
         as_needed: false,
         cert_title: '',
         cert_text: '',
-        lifespan_months: '',
         cert_code: '',
         default_trainer: '',
         default_location: '',
@@ -82,7 +79,6 @@ export function trainingToForm(t: TrainingFormSource): TrainingFormState {
         as_needed: t.as_needed,
         cert_title: t.cert_title ?? '',
         cert_text: t.cert_text ?? '',
-        lifespan_months: t.lifespan_months ?? '',
         cert_code: t.cert_code ?? '',
         default_trainer: t.default_trainer ?? '',
         default_location: t.default_location ?? '',
@@ -105,7 +101,6 @@ export function trainingFormPayload(form: TrainingFormState): TrainingFormPayloa
         as_needed: form.as_needed,
         cert_title: blank(form.cert_title),
         cert_text: blank(form.cert_text),
-        lifespan_months: optionalNumber(form.lifespan_months),
         cert_code: blank(form.cert_code),
         default_trainer: blank(form.default_trainer),
         default_location: blank(form.default_location),

@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
  * Builds the per-certificate view-models rendered by the `pdf.certificate`
  * blade. One row per issued completion.
  *
- * Cert content (title / body / lifespan) is resolved against the frozen
+ * Cert content (title / body) is resolved against the frozen
  * class_training snapshot when the completion came from a class — so reprints
  * are stable and per-class edits are honoured — otherwise it falls back to the
  * live Training (e.g. a manual / imported completion with no class).
@@ -102,11 +102,17 @@ class CertificateData
         string $orgName,
     ): array {
         $issue = $comp->completion_date;
-        $lifespan = $source?->lifespan_months;
+        // A training's lifespan is its frequency: the recurrence interval
+        // (repeat_days). ClassTraining snapshots it; a live Training carries it
+        // via its std_frequency. No frequency → no fixed life.
+        $repeatDays = $source instanceof ClassTraining
+            ? $source->repeat_days
+            : ($source instanceof Training ? $source->stdFrequency?->repeat_days : null);
 
-        // Prefer the completion's own expiry; fall back to issue + lifespan.
+        // Prefer the completion's own stamped expiry; fall back to issue +
+        // frequency for records that never had one stamped.
         $expires = $comp->expire_date
-            ?? (($issue && $lifespan) ? Carbon::parse($issue)->addMonths($lifespan) : null);
+            ?? (($issue && $repeatDays) ? Carbon::parse($issue)->addDays($repeatDays) : null);
 
         $title = $source?->cert_title ?: self::sourceName($source);
         $text = $source?->cert_text;

@@ -365,7 +365,6 @@ class ClassesControllerTest extends TestCase
             'cert_title' => 'Snapshotted Title',
             'cert_text' => 'Snapshotted text',
             'cert_code' => 'OLD',
-            'lifespan_months' => 12,
         ]);
 
         $this->actingAs($manager)
@@ -373,18 +372,15 @@ class ClassesControllerTest extends TestCase
                 'cert_title' => 'Per-class Title',
                 'cert_text' => "Edited for **this** class\n\nSecond line",
                 'cert_code' => 'NEW',
-                'lifespan_months' => 36,
             ])
             ->assertOk()
             ->assertJsonPath('trainings.0.cert_title', 'Per-class Title')
-            ->assertJsonPath('trainings.0.cert_code', 'NEW')
-            ->assertJsonPath('trainings.0.lifespan_months', 36);
+            ->assertJsonPath('trainings.0.cert_code', 'NEW');
 
         $fresh = $ct->fresh();
         $this->assertSame('Per-class Title', $fresh->cert_title);
         $this->assertSame("Edited for **this** class\n\nSecond line", $fresh->cert_text);
         $this->assertSame('NEW', $fresh->cert_code);
-        $this->assertSame(36, $fresh->lifespan_months);
     }
 
     public function test_editing_cert_fields_is_blocked_on_a_completed_class(): void
@@ -413,7 +409,6 @@ class ClassesControllerTest extends TestCase
         $training = Training::factory()->for($org, 'organization')->create([
             'cert_title' => 'FP Authorized',
             'cert_text' => 'Satisfies **Cal/OSHA**',
-            'lifespan_months' => 24,
             'cert_code' => 'FPAP',
             'default_trainer' => 'John B',
             'default_location' => 'Room A',
@@ -429,7 +424,6 @@ class ClassesControllerTest extends TestCase
         $this->assertSame('FP Authorized', $snap->cert_title);
         $this->assertSame('Satisfies **Cal/OSHA**', $snap->cert_text);
         $this->assertSame('FPAP', $snap->cert_code);
-        $this->assertSame(24, $snap->lifespan_months);
 
         // Empty class venue fields are pre-filled from the training defaults.
         $class->refresh();

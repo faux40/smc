@@ -51,7 +51,8 @@ class ClassDocumentsTest extends TestCase
             'training_id' => $training->id,
             'training_name' => 'CPR',
             'hours' => 4,
-            'lifespan_months' => 12,
+            'repeating' => true,
+            'repeat_days' => 365,
             'cert_title' => 'CPR Certification',
             'cert_text' => 'Has completed **CPR** training.',
         ]);

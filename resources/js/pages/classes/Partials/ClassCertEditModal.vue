@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { optionalNumber } from '@/lib/forms';
 import { useClassesStore } from '@/stores/classes';
 
 const props = defineProps<{
@@ -35,7 +34,6 @@ const form = reactive({
     cert_title: '',
     cert_text: '',
     cert_code: '',
-    lifespan_months: '' as string | number,
 });
 
 // (Re)seed the form whenever the modal opens for a (different) topic.
@@ -46,7 +44,6 @@ watch(
             form.cert_title = topic.value.cert_title ?? '';
             form.cert_text = topic.value.cert_text ?? '';
             form.cert_code = topic.value.cert_code ?? '';
-            form.lifespan_months = topic.value.lifespan_months ?? '';
         }
     },
     { immediate: true },
@@ -68,7 +65,6 @@ async function save(): Promise<void> {
             cert_title: form.cert_title.trim() || null,
             cert_text: form.cert_text.trim() || null,
             cert_code: form.cert_code.trim() || null,
-            lifespan_months: optionalNumber(form.lifespan_months),
         });
         emit('update:open', false);
     } catch (e) {
@@ -109,18 +105,7 @@ async function save(): Promise<void> {
                     v-model:text="form.cert_text"
                 />
 
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="grid gap-2">
-                        <Label for="c_lifespan">Lifespan (months)</Label>
-                        <Input
-                            id="c_lifespan"
-                            type="number"
-                            min="0"
-                            step="1"
-                            v-model="form.lifespan_months"
-                            placeholder="e.g. 24"
-                        />
-                    </div>
+                <div class="grid gap-2">
                     <div class="grid gap-2">
                         <Label for="c_cert_code">Cert code</Label>
                         <Input

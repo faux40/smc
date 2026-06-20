@@ -41,7 +41,6 @@ class TrainingRequest extends FormRequest
             // Certificate content defaults (snapshotted onto a class topic).
             'cert_title' => ['nullable', 'string', 'max:255'],
             'cert_text' => ['nullable', 'string', 'max:2000'],
-            'lifespan_months' => ['nullable', 'integer', 'min:0', 'max:600'],
             'cert_code' => ['nullable', 'string', 'max:32'],
             'default_trainer' => ['nullable', 'string', 'max:255'],
             'default_location' => ['nullable', 'string', 'max:255'],

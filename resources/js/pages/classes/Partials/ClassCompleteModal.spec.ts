@@ -22,8 +22,8 @@ function detail(): ClassDetail {
         completion_date: null,
         can_edit: true,
         trainings: [
-            { id: 'ct1', training_id: 't1', training_name: 'First Aid', initial_only: false, repeating: true, as_needed: false, std_freq_name: null, repeat_days: null, hours: null, cert_title: null, cert_text: null, cert_code: null, lifespan_months: null, credits: [] },
-            { id: 'ct2', training_id: 't2', training_name: 'Fall Protection', initial_only: false, repeating: true, as_needed: false, std_freq_name: null, repeat_days: null, hours: null, cert_title: null, cert_text: null, cert_code: null, lifespan_months: null, credits: [] },
+            { id: 'ct1', training_id: 't1', training_name: 'First Aid', initial_only: false, repeating: true, as_needed: false, std_freq_name: null, repeat_days: null, hours: null, cert_title: null, cert_text: null, cert_code: null, credits: [] },
+            { id: 'ct2', training_id: 't2', training_name: 'Fall Protection', initial_only: false, repeating: true, as_needed: false, std_freq_name: null, repeat_days: null, hours: null, cert_title: null, cert_text: null, cert_code: null, credits: [] },
         ],
         enrollments: [
             { id: 'e1', user_id: 'u1', user_name: 'John Doe', user_email: null, status: 'enrolled', notes: null, credited_training_ids: [] },

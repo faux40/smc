@@ -38,7 +38,8 @@ class ClassSummaryTest extends TestCase
         $class = TrainingClass::factory()->for($org, 'organization')->create();
         $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
             'training_id' => $training->id,
-            'lifespan_months' => 36,
+            'repeating' => true,
+            'repeat_days' => 365,
         ]);
         $user = User::factory()->for($org, 'organization')->create([
             'f_name' => 'Mark', 'l_name' => 'Bristow',
@@ -61,7 +62,7 @@ class ClassSummaryTest extends TestCase
         // the group header, not on every row.
         $group = $data['groups'][0];
         $this->assertSame('May 13, 2026', $group['issue_date']);
-        $this->assertSame('May 13, 2029', $group['expires']); // +36 months
+        $this->assertSame('May 13, 2027', $group['expires']); // +365 days (frequency)
 
         $row = $group['rows'][0];
         $this->assertSame('Bristow, Mark', $row['name']);
@@ -103,8 +104,8 @@ class ClassSummaryTest extends TestCase
 
     public function test_expires_prefers_the_completions_own_expire_date(): void
     {
-        // Imported classes have no lifespan_months on the topic, so expires
-        // showed "—" even though the completion carries a real expiry.
+        // Imported classes have no frequency on the topic, so expires would
+        // show "—" — but the completion carries a real expiry, which wins.
         $org = Organization::factory()->create();
         app()->instance('currentOrgId', $org->id);
 
@@ -112,7 +113,7 @@ class ClassSummaryTest extends TestCase
         $class = TrainingClass::factory()->for($org, 'organization')->create();
         $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
             'training_id' => $training->id,
-            'lifespan_months' => null,
+            'repeat_days' => null,
         ]);
         $user = User::factory()->for($org, 'organization')->create();
         Completion::create([
@@ -139,7 +140,7 @@ class ClassSummaryTest extends TestCase
         $class = TrainingClass::factory()->for($org, 'organization')->create();
         $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
             'training_id' => $training->id,
-            'lifespan_months' => null,
+            'repeat_days' => null,
         ]);
         $user = User::factory()->for($org, 'organization')->create();
         Completion::create([
@@ -164,14 +165,16 @@ class ClassSummaryTest extends TestCase
 
         $class = TrainingClass::factory()->for($org, 'organization')->create();
 
-        // Two trainings on the class, each with its own lifespan + a cert.
+        // Two trainings on the class, each with its own frequency + a cert.
         $fp = Training::factory()->for($org, 'organization')->create();
         $ctFp = ClassTraining::factory()->for($class, 'trainingClass')->create([
-            'training_id' => $fp->id, 'training_name' => 'Fall Protection', 'lifespan_months' => 12,
+            'training_id' => $fp->id, 'training_name' => 'Fall Protection',
+            'repeating' => true, 'repeat_days' => 365,
         ]);
         $fa = Training::factory()->for($org, 'organization')->create();
         $ctFa = ClassTraining::factory()->for($class, 'trainingClass')->create([
-            'training_id' => $fa->id, 'training_name' => 'First Aid', 'lifespan_months' => 24,
+            'training_id' => $fa->id, 'training_name' => 'First Aid',
+            'repeating' => true, 'repeat_days' => 30,
         ]);
 
         $u = User::factory()->for($org, 'organization')->create(['f_name' => 'A', 'l_name' => 'One']);
@@ -189,9 +192,9 @@ class ClassSummaryTest extends TestCase
         $this->assertCount(2, $groups);
         // Group order follows the class-trainings order.
         $this->assertSame('Fall Protection', $groups[0]['training']);
-        $this->assertSame('May 13, 2027', $groups[0]['expires']); // +12mo
+        $this->assertSame('May 13, 2027', $groups[0]['expires']); // +365 days
         $this->assertSame('First Aid', $groups[1]['training']);
-        $this->assertSame('May 13, 2028', $groups[1]['expires']); // +24mo
+        $this->assertSame('Jun 12, 2026', $groups[1]['expires']); // +30 days
     }
 
     public function test_header_shows_varies_when_rows_in_a_training_differ(): void
@@ -202,7 +205,7 @@ class ClassSummaryTest extends TestCase
         $training = Training::factory()->for($org, 'organization')->create();
         $class = TrainingClass::factory()->for($org, 'organization')->create();
         $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
-            'training_id' => $training->id, 'lifespan_months' => 12,
+            'training_id' => $training->id, 'repeating' => true, 'repeat_days' => 365,
         ]);
 
         // Two people completed the same training on different dates (imported).

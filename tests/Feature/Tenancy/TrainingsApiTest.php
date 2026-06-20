@@ -184,7 +184,6 @@ class TrainingsApiTest extends TestCase
                 'as_needed' => false,
                 'cert_title' => 'Fall Protection Authorized Person',
                 'cert_text' => "Training satisfies **Cal/OSHA** requirements\n\nSecond line",
-                'lifespan_months' => 24,
                 'cert_code' => 'FPAP',
                 'default_trainer' => 'John Balestrini',
                 'default_location' => 'VSFCD Training Room',
@@ -193,14 +192,12 @@ class TrainingsApiTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('cert_title', 'Fall Protection Authorized Person')
             ->assertJsonPath('cert_text', "Training satisfies **Cal/OSHA** requirements\n\nSecond line")
-            ->assertJsonPath('lifespan_months', 24)
             ->assertJsonPath('cert_code', 'FPAP')
             ->assertJsonPath('default_location', 'VSFCD Training Room');
 
         $this->assertDatabaseHas('trainings', [
             'org_id' => $org->id,
             'cert_title' => 'Fall Protection Authorized Person',
-            'lifespan_months' => 24,
             'cert_code' => 'FPAP',
             'default_trainer' => 'John Balestrini',
         ]);

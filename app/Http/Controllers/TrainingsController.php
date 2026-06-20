@@ -126,7 +126,6 @@ class TrainingsController extends Controller
         return [
             'cert_title' => $data['cert_title'] ?? null,
             'cert_text' => $data['cert_text'] ?? null,
-            'lifespan_months' => $data['lifespan_months'] ?? null,
             'cert_code' => $data['cert_code'] ?? null,
             'default_trainer' => $data['default_trainer'] ?? null,
             'default_location' => $data['default_location'] ?? null,
@@ -140,7 +139,6 @@ class TrainingsController extends Controller
         return [
             'cert_title' => $t->cert_title,
             'cert_text' => $t->cert_text,
-            'lifespan_months' => $t->lifespan_months,
             'cert_code' => $t->cert_code,
             'default_trainer' => $t->default_trainer,
             'default_location' => $t->default_location,

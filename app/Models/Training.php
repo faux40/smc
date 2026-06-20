@@ -30,7 +30,6 @@ class Training extends Model
         'default_hours',
         'cert_title',
         'cert_text',
-        'lifespan_months',
         'cert_code',
         'default_trainer',
         'default_location',
@@ -42,7 +41,6 @@ class Training extends Model
         'repeating' => 'boolean',
         'as_needed' => 'boolean',
         'default_hours' => 'decimal:2',
-        'lifespan_months' => 'integer',
     ];
 
     public function stdFrequency(): BelongsTo

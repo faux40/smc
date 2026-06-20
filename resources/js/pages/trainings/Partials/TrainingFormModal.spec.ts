@@ -24,7 +24,6 @@ function target(overrides: Partial<TrainingRow> = {}): TrainingRow {
         default_hours: null,
         cert_title: null,
         cert_text: null,
-        lifespan_months: null,
         cert_code: null,
         default_trainer: null,
         default_location: null,

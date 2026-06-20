@@ -6,6 +6,7 @@ use App\Models\ClassEnrollment;
 use App\Models\ClassTraining;
 use App\Models\Completion;
 use App\Models\Organization;
+use App\Models\StdFrequency;
 use App\Models\Training;
 use App\Models\TrainingClass;
 use App\Models\User;
@@ -45,7 +46,8 @@ class ClassCertificateTest extends TestCase
             'training_name' => 'Fall Protection',
             'cert_title' => 'FP Authorized Person',
             'cert_text' => "Satisfies **Cal/OSHA**\n\nSecond paragraph",
-            'lifespan_months' => 24,
+            'repeating' => true,
+            'repeat_days' => 365,
             'hours' => 4,
         ]);
         $student = User::factory()->for($org, 'organization')->create(['f_name' => 'Greg', 'l_name' => 'Ange']);
@@ -68,7 +70,7 @@ class ClassCertificateTest extends TestCase
         $this->assertSame('FP Authorized Person', $row['cert_title']);
         $this->assertSame('Greg Ange', $row['student_name']);
         $this->assertSame('June 1, 2026', $row['issue_date']);
-        $this->assertSame('June 1, 2028', $row['expires']); // issue + 24 months
+        $this->assertSame('June 1, 2027', $row['expires']); // issue + 365 days (frequency)
         $this->assertSame('4.00', $row['hours']);
         $this->assertSame('Jane Doe', $row['trainer']);
         $this->assertTrue($row['show_signature']); // class-level flag
@@ -127,7 +129,8 @@ class ClassCertificateTest extends TestCase
             'training_name' => 'Fall Protection',
             'cert_title' => 'Class-overridden Title',
             'cert_text' => 'Class-overridden **text**',
-            'lifespan_months' => 24,
+            'repeating' => true,
+            'repeat_days' => 365,
             'hours' => 4,
         ]);
         $student = User::factory()->for($org, 'organization')->create(['f_name' => 'Greg', 'l_name' => 'Ange']);
@@ -153,7 +156,7 @@ class ClassCertificateTest extends TestCase
         $this->assertSame('Greg Ange', $row['student_name']);
         $this->assertSame('Jane Doe', $row['trainer']);
         $this->assertTrue($row['show_signature']);
-        $this->assertSame('June 1, 2028', $row['expires']); // issue + 24mo
+        $this->assertSame('June 1, 2027', $row['expires']); // issue + 365 days (frequency)
     }
 
     public function test_for_completion_falls_back_to_the_training_when_not_from_a_class(): void
@@ -161,11 +164,16 @@ class ClassCertificateTest extends TestCase
         $org = Organization::factory()->create();
         app()->instance('currentOrgId', $org->id);
 
+        // A live training's lifespan is its frequency (repeat_days via std_freq).
+        $annual = StdFrequency::create([
+            'org_id' => $org->id, 'name' => 'Annual', 'repeat_days' => 365,
+        ]);
         $training = Training::factory()->for($org, 'organization')->create([
             'name' => 'CPR Basics',
             'cert_title' => 'CPR Certified',
             'cert_text' => 'Completed *CPR* training',
-            'lifespan_months' => 12,
+            'repeating' => true,
+            'std_freq_id' => $annual->id,
         ]);
         $student = User::factory()->for($org, 'organization')->create(['f_name' => 'Pat', 'l_name' => 'Lee']);
 

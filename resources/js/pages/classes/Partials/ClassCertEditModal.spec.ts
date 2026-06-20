@@ -23,7 +23,6 @@ const topic = {
     cert_title: 'Snapshotted Title',
     cert_text: 'Snapshotted **text**',
     cert_code: 'OLD',
-    lifespan_months: 12,
     credits: [],
 };
 
@@ -111,7 +110,6 @@ describe('ClassCertEditModal', () => {
                 cert_title: 'Per-class Title',
                 cert_text: 'Snapshotted **text**',
                 cert_code: 'OLD',
-                lifespan_months: 12,
             },
             expect.anything(),
         );

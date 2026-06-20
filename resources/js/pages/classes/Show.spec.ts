@@ -174,7 +174,7 @@ describe('classes/Show inline edit', () => {
                 std_freq_name: 'Annual',
                 repeat_days: 365,
                 hours: '4.00',
-                cert_title: null, cert_text: null, cert_code: null, lifespan_months: null, credits: [],
+                cert_title: null, cert_text: null, cert_code: null, credits: [],
             },
         ];
         const wrapper = await mountShow();
@@ -201,7 +201,7 @@ const completedDetail: ClassDetail = {
             std_freq_name: 'Annual',
             repeat_days: 365,
             hours: '4.00',
-            cert_title: null, cert_text: null, cert_code: null, lifespan_months: null, credits: [
+            cert_title: null, cert_text: null, cert_code: null, credits: [
                 {
                     completion_id: 'cp1',
                     user_id: 'u1',
@@ -222,7 +222,7 @@ const completedDetail: ClassDetail = {
             std_freq_name: null,
             repeat_days: null,
             hours: '2.00',
-            cert_title: null, cert_text: null, cert_code: null, lifespan_months: null, credits: [],
+            cert_title: null, cert_text: null, cert_code: null, credits: [],
         },
     ],
     enrollments: [

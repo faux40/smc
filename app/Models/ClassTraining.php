@@ -34,7 +34,6 @@ class ClassTraining extends Model
         'expire_date',
         'cert_title',
         'cert_text',
-        'lifespan_months',
         'cert_code',
     ];
 
@@ -45,7 +44,6 @@ class ClassTraining extends Model
         'repeat_days' => 'integer',
         'hours' => 'decimal:2',
         'expire_date' => 'date',
-        'lifespan_months' => 'integer',
     ];
 
     /** @return BelongsTo<TrainingClass, $this> */

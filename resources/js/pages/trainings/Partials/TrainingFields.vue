@@ -152,30 +152,14 @@ watch(
                 :context="context"
             />
 
-            <div class="grid grid-cols-2 gap-3">
-                <div class="grid gap-2">
-                    <Label for="t_lifespan">Lifespan (months)</Label>
-                    <Input
-                        id="t_lifespan"
-                        type="number"
-                        min="0"
-                        step="1"
-                        v-model="form.lifespan_months"
-                        placeholder="e.g. 24"
-                    />
-                    <InputError
-                        :message="fieldErrors.message('lifespan_months')"
-                    />
-                </div>
-                <div class="grid gap-2">
-                    <Label for="t_cert_code">Cert code</Label>
-                    <Input
-                        id="t_cert_code"
-                        v-model="form.cert_code"
-                        placeholder="e.g. FPAP"
-                    />
-                    <InputError :message="fieldErrors.message('cert_code')" />
-                </div>
+            <div class="grid gap-2">
+                <Label for="t_cert_code">Cert code</Label>
+                <Input
+                    id="t_cert_code"
+                    v-model="form.cert_code"
+                    placeholder="e.g. FPAP"
+                />
+                <InputError :message="fieldErrors.message('cert_code')" />
             </div>
 
             <div class="grid gap-2">

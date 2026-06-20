@@ -378,7 +378,6 @@ class DevScenarioSeeder extends Seeder
                 'hours' => $topic['hours'] ?? $training->default_hours,
                 'cert_title' => $training->cert_title,
                 'cert_text' => $training->cert_text,
-                'lifespan_months' => $training->lifespan_months,
                 'cert_code' => $training->cert_code,
             ]);
         }

@@ -40,12 +40,12 @@ class ClassSummary
             $ct = $ctById->get($comp->class_training_id);
             $user = $comp->user;
             $issue = $comp->completion_date;
-            // Prefer the completion's own expiry (imported records carry a
-            // real expire_date even when the topic has no lifespan_months);
-            // otherwise derive it from issue date + lifespan.
+            // Prefer the completion's own stamped expiry; otherwise derive it
+            // from the training's frequency (repeat_days). No frequency → no
+            // fixed life.
             $expires = $comp->expire_date
-                ?: (($issue && $ct && $ct->lifespan_months)
-                    ? Carbon::parse($issue)->addMonths($ct->lifespan_months)
+                ?: (($issue && $ct && $ct->repeat_days)
+                    ? Carbon::parse($issue)->addDays($ct->repeat_days)
                     : null);
 
             $name = $user

@@ -144,7 +144,6 @@ describe('useClassesStore', () => {
             cert_title: 'Per-class Title',
             cert_text: 'Edited **text**',
             cert_code: 'NEW',
-            lifespan_months: 36,
         };
         await store.updateTrainingCert('c1', 'ct1', cert);
 

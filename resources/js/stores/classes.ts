@@ -55,7 +55,6 @@ export interface ClassTrainingRow {
     cert_title: string | null;
     cert_text: string | null;
     cert_code: string | null;
-    lifespan_months: number | null;
     /** M3 — who earned this topic's credit (populated after close-out). */
     credits: TopicCredit[];
 }
@@ -65,7 +64,6 @@ export interface ClassCertPayload {
     cert_title: string | null;
     cert_text: string | null;
     cert_code: string | null;
-    lifespan_months: number | null;
 }
 
 export interface EnrollmentRow {
@@ -239,7 +237,7 @@ export const useClassesStore = defineStore('classes', () => {
         return cache(data);
     }
 
-    /** Edit a topic's per-class certificate fields (title / text / code / lifespan). */
+    /** Edit a topic's per-class certificate fields (title / text / code). */
     async function updateTrainingCert(
         id: string,
         classTrainingId: string,
