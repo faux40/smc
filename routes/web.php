@@ -158,6 +158,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/classes', [ClassesController::class, 'index'])->name('classes.index');
     Route::post('api/classes', [ClassesController::class, 'store'])->name('classes.store');
     Route::get('api/classes/{class}/certificates', [ClassDocumentsController::class, 'certificates'])->name('classes.certificates');
+    Route::post('api/classes/{class}/certificates', [ClassDocumentsController::class, 'storeCertificates'])->name('classes.certificates.store');
     Route::get('api/classes/{class}/sign-in-sheet', [ClassDocumentsController::class, 'signInSheet'])->name('classes.sign-in-sheet');
     Route::get('api/classes/{class}/summary', [ClassDocumentsController::class, 'summary'])->name('classes.summary');
     Route::get('api/classes/{class}', [ClassesController::class, 'show'])->name('classes.show');

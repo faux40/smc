@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\StoreClassCertificates;
 use App\Models\Completion;
 use App\Models\TrainingClass;
 use App\Support\CertificateData;
 use App\Support\ClassSignInSheet;
 use App\Support\ClassSummary;
 use App\Support\PdfRenderer;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 use Spatie\LaravelPdf\PdfBuilder;
 
@@ -30,6 +32,23 @@ class ClassDocumentsController extends Controller
             'certs' => $certs,
             'background' => CertificateData::backgroundDataUri(),
         ])->name("certificates-{$class->id}.pdf");
+    }
+
+    /**
+     * File a copy of the class's certificates PDF into the class's documents
+     * (a TrainingClass attachment on Linode). The GET above is for viewing;
+     * this POST persists a fresh, timestamped copy.
+     */
+    public function storeCertificates(TrainingClass $class, StoreClassCertificates $action): JsonResponse
+    {
+        Gate::authorize('view', $class);
+
+        $attachment = $action->handle($class);
+
+        return response()->json([
+            'id' => $attachment->id,
+            'filename' => $attachment->filename,
+        ], 201);
     }
 
     /**

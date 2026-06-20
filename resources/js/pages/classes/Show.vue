@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { useClassForm } from '@/composables/useClassForm';
 import ClassCertEditModal from '@/pages/classes/Partials/ClassCertEditModal.vue';
+import ClassCertificatesSaveButton from '@/pages/classes/Partials/ClassCertificatesSaveButton.vue';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ManageRosterModal from '@/pages/classes/Partials/ManageRosterModal.vue';
 import ManageTopicsModal from '@/pages/classes/Partials/ManageTopicsModal.vue';
@@ -480,6 +481,10 @@ const totalHoursLabel = computed(
                                 >
                                     Certificates
                                 </Button>
+                                <ClassCertificatesSaveButton
+                                    v-if="detail.status === 'completed'"
+                                    :class-id="props.classId"
+                                />
                                 <Button
                                     v-if="detail.status === 'completed'"
                                     as="a"

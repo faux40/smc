@@ -86,6 +86,22 @@ export const useAttachmentsStore = defineStore('attachments', () => {
         await load(morphable);
     }
 
+    /**
+     * Render + file a copy of a completed class's certificates as a
+     * TrainingClass attachment, then refresh that class's list so the new
+     * file shows with full metadata (name / uploader / timestamp).
+     */
+    async function fileClassCertificates(classId: string): Promise<void> {
+        await axios.post(
+            `/api/classes/${classId}/certificates`,
+            {},
+            { headers: defaultHeaders() },
+        );
+        const morphable = { type: 'App\\Models\\TrainingClass', id: classId };
+        loaded.value = { ...loaded.value, [keyOf(morphable)]: false };
+        await load(morphable);
+    }
+
     async function destroy(id: string): Promise<void> {
         await axios.delete(`/api/attachments/${id}`, {
             headers: defaultHeaders(),
@@ -176,6 +192,7 @@ export const useAttachmentsStore = defineStore('attachments', () => {
         listFor,
         load,
         upload,
+        fileClassCertificates,
         destroy,
         downloadUrl,
         viewUrl,
