@@ -119,82 +119,42 @@ const setOpen = (v: boolean) => emit('update:open', v);
             class="max-h-[92vh] w-[95vw] overflow-y-auto sm:max-w-[1400px]"
         >
             <DialogHeader>
-                <DialogTitle class="truncate">{{ title }}</DialogTitle>
-                <DialogDescription>
-                    <template v-if="generated">Generated document</template>
-                    <template v-else>
-                        <span v-if="attachment?.mime">{{ attachment.mime }}</span>
-                        <span v-if="attachment?.uploaded_by_name">
-                            · uploaded by {{ attachment.uploaded_by_name }}
-                        </span>
-                    </template>
-                </DialogDescription>
+                <div class="flex items-start justify-between gap-3 pr-8">
+                    <div class="min-w-0">
+                        <DialogTitle class="truncate">{{ title }}</DialogTitle>
+                        <DialogDescription>
+                            <template v-if="generated">Generated document</template>
+                            <template v-else>
+                                <span v-if="attachment?.mime">{{ attachment.mime }}</span>
+                                <span v-if="attachment?.uploaded_by_name">
+                                    · uploaded by {{ attachment.uploaded_by_name }}
+                                </span>
+                            </template>
+                        </DialogDescription>
+                    </div>
+                    <!-- Header action: file a generated doc, or edit a stored
+                         attachment's details. -->
+                    <Button
+                        v-if="generated && !formOpen"
+                        size="sm"
+                        data-testid="viewer-save-to-files"
+                        @click="openForm"
+                    >
+                        Save to this class’s files
+                    </Button>
+                    <Button
+                        v-else-if="attachment?.can_edit && !formOpen"
+                        variant="outline"
+                        size="sm"
+                        data-testid="viewer-edit"
+                        @click="openForm"
+                    >
+                        Edit details
+                    </Button>
+                </div>
             </DialogHeader>
 
-            <!-- Stored-attachment type/description (read) + edit affordance. -->
-            <div
-                v-if="attachment && !formOpen"
-                class="flex items-start justify-between gap-3 text-sm"
-            >
-                <div class="min-w-0">
-                    <span
-                        v-if="attachment.type"
-                        class="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-                    >
-                        {{ attachment.type }}
-                    </span>
-                    <p
-                        v-if="attachment.description"
-                        class="mt-1 text-muted-foreground"
-                    >
-                        {{ attachment.description }}
-                    </p>
-                </div>
-                <Button
-                    v-if="attachment.can_edit"
-                    variant="outline"
-                    size="sm"
-                    data-testid="viewer-edit"
-                    @click="openForm"
-                >
-                    Edit details
-                </Button>
-            </div>
-
-            <div class="min-h-[40vh]">
-                <iframe
-                    v-if="previewKind === 'pdf'"
-                    :src="previewSrc"
-                    :title="title"
-                    class="h-[78vh] w-full rounded border border-border"
-                />
-                <img
-                    v-else-if="previewKind === 'image'"
-                    :src="previewSrc"
-                    :alt="title"
-                    class="mx-auto max-h-[78vh] object-contain"
-                />
-                <p
-                    v-else
-                    class="py-12 text-center text-sm text-muted-foreground"
-                >
-                    No preview available for this file type. Use the download
-                    action in the file’s menu.
-                </p>
-            </div>
-
-            <!-- Save-to-files (generated docs) trigger. -->
-            <div v-if="generated && !formOpen" class="flex justify-end">
-                <Button
-                    variant="outline"
-                    data-testid="viewer-save-to-files"
-                    @click="openForm"
-                >
-                    Save to this class’s files
-                </Button>
-            </div>
-
-            <!-- Shared details form: edits an attachment, or sets info on save. -->
+            <!-- Details form sits ABOVE the preview when collecting input. -->
             <div v-if="formOpen" class="space-y-3 rounded border border-border p-3">
                 <AttachmentInfoFields
                     v-model:type="formType"
@@ -219,6 +179,44 @@ const setOpen = (v: boolean) => emit('update:open', v);
                         {{ saving ? 'Saving…' : 'Save' }}
                     </Button>
                 </div>
+            </div>
+
+            <!-- Stored-attachment type/description (read; edit is in the header). -->
+            <div
+                v-if="attachment && !formOpen && (attachment.type || attachment.description)"
+                class="text-sm"
+            >
+                <span
+                    v-if="attachment.type"
+                    class="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                >
+                    {{ attachment.type }}
+                </span>
+                <p v-if="attachment.description" class="mt-1 text-muted-foreground">
+                    {{ attachment.description }}
+                </p>
+            </div>
+
+            <div class="min-h-[40vh]">
+                <iframe
+                    v-if="previewKind === 'pdf'"
+                    :src="previewSrc"
+                    :title="title"
+                    class="h-[78vh] w-full rounded border border-border"
+                />
+                <img
+                    v-else-if="previewKind === 'image'"
+                    :src="previewSrc"
+                    :alt="title"
+                    class="mx-auto max-h-[78vh] object-contain"
+                />
+                <p
+                    v-else
+                    class="py-12 text-center text-sm text-muted-foreground"
+                >
+                    No preview available for this file type. Use the download
+                    action in the file’s menu.
+                </p>
             </div>
         </DialogContent>
     </Dialog>
