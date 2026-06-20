@@ -48,34 +48,42 @@
         <p class="mb-4 text-[#6b7280]">No trainings on this class.</p>
     @endif
 
-    <div class="mb-1.5 mt-1 text-[15px] font-bold">Certificate Issued</div>
-    <table class="w-full border-collapse text-[12px] [&_td]:border-b [&_td]:border-[#e5e7eb] [&_td]:px-[7px] [&_td]:py-[7px] [&_td]:text-left">
-        <thead>
-            <tr class="text-[#374151] [&_th]:border-b-[1.5px] [&_th]:border-[#9ca3af] [&_th]:px-[7px] [&_th]:py-[7px] [&_th]:text-left">
-                <th class="w-[26px]">#</th>
-                <th>Employee Name</th>
-                <th>Emp #</th>
-                <th>Location</th>
-                <th>Certificate</th>
-                <th>Issue Date</th>
-                <th>Expires</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse ($rows as $i => $r)
-                <tr>
-                    <td class="text-[#6b7280]">{{ $i + 1 }}</td>
-                    <td>{{ $r['name'] }}</td>
-                    <td>{{ $r['emp_number'] }}</td>
-                    <td>{{ $r['location'] }}</td>
-                    <td>{{ $r['cert_id'] }}</td>
-                    <td>{{ $r['issue_date'] }}</td>
-                    <td>{{ $r['expires'] }}</td>
-                </tr>
-            @empty
-                <tr><td colspan="7" class="py-3.5 text-center text-[#6b7280]">No certificates issued.</td></tr>
-            @endforelse
-        </tbody>
-    </table>
+    <div class="mb-1.5 mt-1 text-[15px] font-bold">Certificates Issued</div>
+    @forelse ($groups as $g)
+        <div class="mb-4">
+            {{-- Per-training header: issue + expire are the same for everyone
+                 in this training, so they live here once instead of per row. --}}
+            <div class="mb-1 flex items-baseline justify-between border-b-[1.5px] border-[#9ca3af] pb-1 [break-inside:avoid]">
+                <span class="text-[14px] font-semibold text-[#111827]">{{ $g['training'] }}</span>
+                <span class="text-[12px] text-[#4b5563]">
+                    Issued: {{ $g['issue_date'] ?: '—' }} &nbsp;·&nbsp; Expires: {{ $g['expires'] }}
+                </span>
+            </div>
+            <table class="w-full border-collapse text-[12px] [&_td]:border-b [&_td]:border-[#e5e7eb] [&_td]:px-[7px] [&_td]:py-[7px] [&_td]:text-left">
+                <thead>
+                    <tr class="text-[#374151] [&_th]:border-b [&_th]:border-[#d1d5db] [&_th]:px-[7px] [&_th]:py-[5px] [&_th]:text-left">
+                        <th class="w-[26px]">#</th>
+                        <th>Employee Name</th>
+                        <th>Emp #</th>
+                        <th>Location</th>
+                        <th>Certificate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($g['rows'] as $i => $r)
+                        <tr>
+                            <td class="text-[#6b7280]">{{ $i + 1 }}</td>
+                            <td>{{ $r['name'] }}</td>
+                            <td>{{ $r['emp_number'] }}</td>
+                            <td>{{ $r['location'] }}</td>
+                            <td>{{ $r['cert_id'] }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @empty
+        <p class="text-[#6b7280]">No certificates issued.</p>
+    @endforelse
 </div>
 @endsection
