@@ -50,6 +50,57 @@ class TrainingsApiTest extends TestCase
             ->assertJsonCount(1);
     }
 
+    public function test_paged_list_returns_data_and_meta_clamped_per_page(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->create();
+        Training::factory()->for($org, 'organization')->count(5)->create();
+
+        $this->actingAs($member)
+            ->getJson('/api/trainings/list?per_page=2&page=2')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('meta.total', 5)
+            ->assertJsonPath('meta.per_page', 2)
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.last_page', 3);
+
+        $this->actingAs($member)
+            ->getJson('/api/trainings/list?per_page=9999')
+            ->assertOk()
+            ->assertJsonPath('meta.per_page', 100);
+    }
+
+    public function test_paged_list_searches_name_nickname_description(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->create();
+        Training::factory()->for($org, 'organization')->create(['name' => 'Forklift Safety', 'nickname' => null, 'description' => null]);
+        Training::factory()->for($org, 'organization')->create(['name' => 'Ladders', 'nickname' => 'Climb', 'description' => 'roof work']);
+
+        $byName = $this->actingAs($member)->getJson('/api/trainings/list?q=forklift')->assertOk()->json('data');
+        $this->assertCount(1, $byName);
+        $this->assertSame('Forklift Safety', $byName[0]['name']);
+
+        $this->assertCount(1, $this->actingAs($member)->getJson('/api/trainings/list?q=climb')->json('data'));
+        $this->assertCount(1, $this->actingAs($member)->getJson('/api/trainings/list?q=ROOF')->json('data'));
+    }
+
+    public function test_paged_list_sorts_by_name(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->create();
+        foreach (['Carter', 'Adams', 'Baker'] as $n) {
+            Training::factory()->for($org, 'organization')->create(['name' => $n]);
+        }
+
+        $asc = collect($this->actingAs($member)->getJson('/api/trainings/list?sort=name&dir=asc')->json('data'))->pluck('name')->all();
+        $this->assertSame(['Adams', 'Baker', 'Carter'], $asc);
+
+        $desc = collect($this->actingAs($member)->getJson('/api/trainings/list?sort=name&dir=desc')->json('data'))->pluck('name')->all();
+        $this->assertSame(['Carter', 'Baker', 'Adams'], $desc);
+    }
+
     public function test_admin_can_create_repeating_training(): void
     {
         $org = Organization::factory()->create();

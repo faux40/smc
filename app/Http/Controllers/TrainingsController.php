@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Gate;
 
 class TrainingsController extends Controller
 {
+    /**
+     * Full library array (no paging) — the trainings Pinia store loads this for
+     * downstream rqmt-element pickers. The paginated table uses list() instead.
+     */
     public function index(Request $request): JsonResponse
     {
         Gate::authorize('viewAny', Training::class);
@@ -23,7 +27,57 @@ class TrainingsController extends Controller
             ->orderBy('name')
             ->get();
 
-        return response()->json($rows->map(fn (Training $t) => [
+        return response()->json($rows->map(fn (Training $t) => $this->trainingRow($t)));
+    }
+
+    /**
+     * Server-paged JSON list backing the trainings table ({data, meta}). Search
+     * + sort run in the DB; per-row gates are evaluated only for the page.
+     */
+    public function list(Request $request): JsonResponse
+    {
+        Gate::authorize('viewAny', Training::class);
+
+        $query = Training::query()
+            ->where('org_id', $request->user()->org_id)
+            ->with('stdFrequency:id,name,repeat_days');
+
+        if ($request->filled('q')) {
+            $term = '%'.mb_strtolower((string) $request->query('q')).'%';
+            $query->where(function ($w) use ($term) {
+                $w->whereRaw('LOWER(name) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(nickname) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(description) LIKE ?', [$term]);
+            });
+        }
+
+        $sortable = ['name', 'nickname', 'default_hours', 'created_at'];
+        $sort = in_array($request->query('sort'), $sortable, true) ? $request->query('sort') : 'name';
+        $dir = $request->query('dir') === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sort, $dir)->orderBy('id');
+
+        $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
+        $page = $query->paginate($perPage);
+
+        return response()->json([
+            'data' => collect($page->items())->map(fn (Training $t) => $this->trainingRow($t)),
+            'meta' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * Table/library row shape (shared by index() + list()).
+     *
+     * @return array<string, mixed>
+     */
+    private function trainingRow(Training $t): array
+    {
+        return [
             'id' => $t->id,
             'name' => $t->name,
             'nickname' => $t->nickname,
@@ -37,7 +91,7 @@ class TrainingsController extends Controller
             ...$this->certOutput($t),
             'can_edit' => Gate::check('update', $t),
             'can_delete' => Gate::check('delete', $t),
-        ]));
+        ];
     }
 
     public function store(TrainingRequest $request): JsonResponse

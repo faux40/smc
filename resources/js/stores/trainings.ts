@@ -10,6 +10,10 @@
 import axios from 'axios';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import type {
+    ServerTableQuery,
+    ServerTableResponse,
+} from '@/composables/useServerTable';
 import { useRealtime } from '@/composables/useRealtime';
 import { realtimeTabId } from '@/echo';
 
@@ -69,6 +73,9 @@ export const useTrainingsStore = defineStore('trainings', () => {
     const loaded = ref(false);
     const subscribedOrgId = ref<string | null>(null);
 
+    // Bumped on any mutation/broadcast so the paged Index re-pulls its page.
+    const revision = ref(0);
+
     async function load(): Promise<void> {
         if (loaded.value) {
             return;
@@ -79,6 +86,34 @@ export const useTrainingsStore = defineStore('trainings', () => {
         });
         library.value = data;
         loaded.value = true;
+    }
+
+    /**
+     * Server-paged fetch for the trainings table ({data, meta}). The Index
+     * drives it via useServerTable; does not touch the picker `library` cache.
+     */
+    async function fetchPage(
+        params: ServerTableQuery,
+    ): Promise<ServerTableResponse<TrainingRow>> {
+        const query: Record<string, string | number> = {
+            page: params.page,
+            per_page: params.per_page,
+            dir: params.dir,
+        };
+
+        if (params.sort) {
+            query.sort = params.sort;
+        }
+        if (params.q) {
+            query.q = params.q;
+        }
+
+        const { data } = await axios.get<ServerTableResponse<TrainingRow>>(
+            '/api/trainings/list',
+            { headers: defaultHeaders(), params: query },
+        );
+
+        return data;
     }
 
     async function create(payload: TrainingFormPayload): Promise<TrainingRow> {
@@ -99,6 +134,7 @@ export const useTrainingsStore = defineStore('trainings', () => {
         // Re-fetch to pick up std_freq_name + accurate can_* from the server.
         loaded.value = false;
         await load();
+        revision.value++;
 
         return data;
     }
@@ -112,6 +148,7 @@ export const useTrainingsStore = defineStore('trainings', () => {
         });
         loaded.value = false;
         await load();
+        revision.value++;
     }
 
     async function destroy(id: string): Promise<void> {
@@ -119,6 +156,7 @@ export const useTrainingsStore = defineStore('trainings', () => {
             headers: defaultHeaders(),
         });
         library.value = library.value.filter((t) => t.id !== id);
+        revision.value++;
     }
 
     function subscribe(orgId: string): void {
@@ -142,16 +180,29 @@ export const useTrainingsStore = defineStore('trainings', () => {
                     },
                 ];
             }
+            revision.value++;
         });
         bind('TrainingUpdated', (p: TrainingRow & { origin_tab?: string }) => {
             library.value = library.value.map((t) =>
                 t.id === p.id ? { ...t, ...p } : t,
             );
+            revision.value++;
         });
         bind('TrainingDeleted', (p: { id: string }) => {
             library.value = library.value.filter((t) => t.id !== p.id);
+            revision.value++;
         });
     }
 
-    return { library, loaded, load, create, update, destroy, subscribe };
+    return {
+        library,
+        loaded,
+        revision,
+        load,
+        fetchPage,
+        create,
+        update,
+        destroy,
+        subscribe,
+    };
 });

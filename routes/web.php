@@ -152,6 +152,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // member (downstream rqmt_elements pickers need the list); CRUD is
     // Owner/SA/Admin. Inertia page lives at /trainings (Vue route).
     Route::get('api/trainings', [TrainingsController::class, 'index'])->name('trainings.index');
+    Route::get('api/trainings/list', [TrainingsController::class, 'list'])->name('trainings.list');
     Route::post('api/trainings', [TrainingsController::class, 'store'])->name('trainings.store');
     Route::patch('api/trainings/{training}', [TrainingsController::class, 'update'])->name('trainings.update');
     Route::delete('api/trainings/{training}', [TrainingsController::class, 'destroy'])->name('trainings.destroy');

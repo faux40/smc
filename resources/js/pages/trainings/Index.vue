@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
+import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
+import Pagination from '@/components/Pagination.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useServerTable } from '@/composables/useServerTable';
 import TrainingFormModal from '@/pages/trainings/Partials/TrainingFormModal.vue';
 import { page as trainingsPage, show as trainingShow } from '@/routes/trainings';
 import { useTrainingsStore } from '@/stores/trainings';
@@ -15,6 +20,11 @@ defineOptions({
         breadcrumbs: [{ title: 'Trainings', href: trainingsPage() }],
     },
 });
+
+const TRAININGS_COLUMNS = [
+    { key: 'name', label: 'Name', sortable: true },
+    { key: 'timing', label: 'Timing', sortable: false },
+];
 
 const store = useTrainingsStore();
 const page = usePage();
@@ -37,7 +47,25 @@ const canCreate = computed(() =>
 
 const modalOpen = ref(false);
 const error = ref<string | null>(null);
-const loading = ref(true);
+const initialLoading = ref(true);
+const search = ref('');
+
+const table = useServerTable<TrainingRow>((params) => store.fetchPage(params), {
+    perPage: 25,
+    sort: 'name',
+    dir: 'asc',
+});
+
+function onSearch(value: string | number): void {
+    search.value = String(value);
+    table.setQuery(search.value);
+}
+
+// Realtime: a training mutation (local or peer broadcast) re-pulls the page.
+watch(
+    () => store.revision,
+    () => table.refetchSoon(),
+);
 
 onMounted(async () => {
     if (authUser.value?.org_id) {
@@ -45,11 +73,11 @@ onMounted(async () => {
     }
 
     try {
-        await store.load();
+        await table.fetchPage();
     } catch (e) {
         error.value = (e as Error).message;
     } finally {
-        loading.value = false;
+        initialLoading.value = false;
     }
 });
 
@@ -92,65 +120,66 @@ const timingSummary = (row: TrainingRow): string => {
             <Button v-if="canCreate" @click="openCreate">+ New training</Button>
         </div>
 
-        <AsyncState
-            :loading="loading"
-            :error="error"
-            :empty="store.library.length === 0"
-        >
-            <template #empty>
-                <div
-                    class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
-                >
-                    No trainings yet.
-                    <span v-if="canCreate"
-                        >Click "+ New training" to add one.</span
-                    >
-                </div>
-            </template>
+        <AsyncState :loading="initialLoading" :error="error">
+            <DataTable
+                view-id="trainings"
+                :default-columns="TRAININGS_COLUMNS"
+                :rows="table.rows.value"
+                :sort-key="table.sort.value"
+                :sort-dir="table.dir.value"
+                :row-key="(row) => row.id"
+                @sort="table.setSort"
+            >
+                <template #filters>
+                    <div class="grid gap-1">
+                        <Label for="filter_q" class="text-xs">Search</Label>
+                        <Input
+                            id="filter_q"
+                            :model-value="search"
+                            placeholder="Name, nickname, or description"
+                            class="h-8 w-64"
+                            @update:model-value="onSearch"
+                        />
+                    </div>
+                </template>
 
-            <div class="overflow-hidden rounded-md border border-border">
-                <table class="min-w-full divide-y divide-border text-sm">
-                    <thead class="bg-muted/40">
-                        <tr>
-                            <th class="px-4 py-2 text-left font-medium">
-                                Name
-                            </th>
-                            <th class="px-4 py-2 text-left font-medium">
-                                Timing
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border">
-                        <tr v-for="row in store.library" :key="row.id">
-                            <td class="px-4 py-2">
-                                <Link
-                                    :href="trainingShow(row.id)"
-                                    class="font-medium text-primary hover:underline"
-                                >
-                                    {{ row.name }}
-                                    <span
-                                        v-if="row.nickname"
-                                        class="font-normal text-muted-foreground"
-                                    >
-                                        ({{ row.nickname }})
-                                    </span>
-                                </Link>
-                                <div
-                                    v-if="row.description"
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    {{ row.description }}
-                                </div>
-                            </td>
-                            <td class="px-4 py-2">
-                                <Badge variant="secondary">{{
-                                    timingSummary(row)
-                                }}</Badge>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+                <template #col-name="{ row }">
+                    <Link
+                        :href="trainingShow(row.id)"
+                        class="font-medium text-primary hover:underline"
+                    >
+                        {{ row.name }}
+                        <span
+                            v-if="row.nickname"
+                            class="font-normal text-muted-foreground"
+                        >
+                            ({{ row.nickname }})
+                        </span>
+                    </Link>
+                    <div
+                        v-if="row.description"
+                        class="text-xs text-muted-foreground"
+                    >
+                        {{ row.description }}
+                    </div>
+                </template>
+
+                <template #col-timing="{ row }">
+                    <Badge variant="secondary">{{ timingSummary(row) }}</Badge>
+                </template>
+
+                <template #empty>No trainings match the current search.</template>
+            </DataTable>
+
+            <Pagination
+                :page="table.page.value"
+                :last-page="table.lastPage.value"
+                :total="table.total.value"
+                :per-page="table.perPage.value"
+                :loading="table.loading.value"
+                @update:page="table.setPage"
+                @update:per-page="table.setPerPage"
+            />
         </AsyncState>
 
         <TrainingFormModal v-model:open="modalOpen" mode="create" />
