@@ -15,6 +15,10 @@ import { router } from '@inertiajs/vue3';
 import axios from 'axios';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
+import type {
+    ServerTableQuery,
+    ServerTableResponse,
+} from '@/composables/useServerTable';
 import { useRealtime } from '@/composables/useRealtime';
 import { realtimeTabId } from '@/echo';
 import {
@@ -163,9 +167,66 @@ interface BroadcastUser {
     status?: 'active' | 'disabled';
 }
 
+/**
+ * Query for the server-paged users table: the generic ServerTableQuery plus the
+ * users-specific filters (role / disabled / tags). The Index closure merges its
+ * live filter state onto each useServerTable fetch.
+ */
+export type UsersListQuery = ServerTableQuery & {
+    role?: string;
+    include_disabled?: boolean;
+    tags?: string[];
+    tags_mode?: string;
+};
+
 export const useUsersStore = defineStore('users', () => {
     const users = ref<UserRow[]>([]);
     const subscribedOrgId = ref<string | null>(null);
+
+    // Bumped on any user mutation (local or peer broadcast). The Index watches
+    // it and re-pulls the current page, so the table stays consistent with the
+    // server's sort/filter/paging instead of being patched row-by-row.
+    const revision = ref(0);
+
+    /**
+     * Server-paged fetch for the users table ({data, meta} contract). The
+     * useServerTable params carry page/per_page/sort/dir/q; the Index merges the
+     * extra filter state (role / disabled / tags) onto them. Does not touch the
+     * `users` picker cache.
+     */
+    async function fetchPage(
+        params: UsersListQuery,
+    ): Promise<ServerTableResponse<UserRow>> {
+        const query: Record<string, string | number | string[]> = {
+            page: params.page,
+            per_page: params.per_page,
+            dir: params.dir,
+        };
+
+        if (params.sort) {
+            query.sort = params.sort;
+        }
+        if (params.q) {
+            query.q = params.q;
+        }
+        if (params.role) {
+            query.role = params.role;
+        }
+        if (params.include_disabled) {
+            query.include_disabled = 1;
+        }
+        if (params.tags && params.tags.length > 0) {
+            query.tags = params.tags;
+            query.tags_mode = params.tags_mode ?? 'and';
+        }
+
+        const { data } = await axios.get<ServerTableResponse<UserRow>>(
+            '/api/users/list',
+            { headers: writeHeaders(), params: query },
+        );
+
+        return data;
+    }
 
     // Distinct existing values for the free-text profile fields, cached so the
     // user-form type-ahead doesn't refetch on every open. One round trip per
@@ -265,14 +326,17 @@ export const useUsersStore = defineStore('users', () => {
 
         const { bind } = useRealtime(`org.${orgId}`);
 
-        bind('UserRegistered', (payload: BroadcastUser) => applyAdded(payload));
-        bind('UserUpdated', (payload: BroadcastUser) => applyUpdated(payload));
-        bind('UserStatusChanged', (payload: BroadcastUser) =>
-            applyUpdated(payload),
-        );
-        bind('UserSoftDeleted', (payload: BroadcastUser) =>
-            applySoftDeleted(payload.id),
-        );
+        // Each broadcast keeps the picker cache fresh (apply*) AND bumps the
+        // revision so the paged Index re-pulls its current page.
+        const onChange = <T>(fn: (p: T) => void) => (payload: T) => {
+            fn(payload);
+            revision.value++;
+        };
+
+        bind('UserRegistered', onChange((p: BroadcastUser) => applyAdded(p)));
+        bind('UserUpdated', onChange((p: BroadcastUser) => applyUpdated(p)));
+        bind('UserStatusChanged', onChange((p: BroadcastUser) => applyUpdated(p)));
+        bind('UserSoftDeleted', onChange((p: BroadcastUser) => applySoftDeleted(p.id)));
     }
 
     function applyAdded(payload: BroadcastUser) {
@@ -418,10 +482,14 @@ export const useUsersStore = defineStore('users', () => {
             form as unknown as Record<string, string>,
             {
                 preserveScroll: true,
+                // Keep the table's page/sort/filter state; the revision bump
+                // (below) re-pulls the current page rather than remounting.
+                preserveState: true,
                 onSuccess: () => {
                     // The new user may carry a fresh department/location/
                     // job_title — refresh the type-ahead options next open.
                     invalidateFieldOptions();
+                    revision.value++;
                     opts.onSuccess?.();
                 },
                 onError: (errors) =>
@@ -446,6 +514,7 @@ export const useUsersStore = defineStore('users', () => {
         );
         applyAdded(data);
         invalidateFieldOptions();
+        revision.value++;
 
         return data;
     }
@@ -468,8 +537,10 @@ export const useUsersStore = defineStore('users', () => {
             form as unknown as Record<string, string>,
             {
                 preserveScroll: true,
+                preserveState: true,
                 onSuccess: () => {
                     invalidateFieldOptions();
+                    revision.value++;
                     opts.onSuccess?.();
                 },
                 onError: (errors) =>
@@ -493,6 +564,7 @@ export const useUsersStore = defineStore('users', () => {
             { headers: writeHeaders() },
         );
         invalidateFieldOptions();
+        revision.value++;
 
         return data;
     }
@@ -534,44 +606,50 @@ export const useUsersStore = defineStore('users', () => {
         applySoftDeleted(data.duplicate_id);
         applyUpdated(data.survivor);
         invalidateFieldOptions();
+        revision.value++;
     }
 
-    function disable(id: string, opts: { onSuccess?: () => void } = {}): void {
-        router.post(
-            usersDisable(id).url,
-            {},
-            {
-                preserveScroll: true,
-                onSuccess: () => opts.onSuccess?.(),
-            },
-        );
+    // Quick row actions go through JSON (not Inertia) so the paged table updates
+    // in place via the revision bump instead of a full-page redraw.
+    async function disable(
+        id: string,
+        opts: { onSuccess?: () => void } = {},
+    ): Promise<void> {
+        await axios.post(usersDisable(id).url, {}, { headers: writeHeaders() });
+        applyUpdated({ id, status: 'disabled' });
+        revision.value++;
+        opts.onSuccess?.();
     }
 
-    function enable(id: string, opts: { onSuccess?: () => void } = {}): void {
-        router.post(
-            usersEnable(id).url,
-            {},
-            {
-                preserveScroll: true,
-                onSuccess: () => opts.onSuccess?.(),
-            },
-        );
+    async function enable(
+        id: string,
+        opts: { onSuccess?: () => void } = {},
+    ): Promise<void> {
+        await axios.post(usersEnable(id).url, {}, { headers: writeHeaders() });
+        applyUpdated({ id, status: 'active' });
+        revision.value++;
+        opts.onSuccess?.();
     }
 
-    function destroy(id: string, opts: { onSuccess?: () => void } = {}): void {
-        router.delete(usersDestroy(id).url, {
-            preserveScroll: true,
-            onSuccess: () => opts.onSuccess?.(),
-        });
+    async function destroy(
+        id: string,
+        opts: { onSuccess?: () => void } = {},
+    ): Promise<void> {
+        await axios.delete(usersDestroy(id).url, { headers: writeHeaders() });
+        applySoftDeleted(id);
+        revision.value++;
+        opts.onSuccess?.();
     }
 
     return {
         users,
+        revision,
         count,
         byId,
         displayName,
         fieldOptions,
         loadFieldOptions,
+        fetchPage,
         hydrate,
         loadPicker,
         subscribe,

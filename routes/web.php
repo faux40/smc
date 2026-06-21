@@ -90,6 +90,9 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // completion form modals). Manager+ via inline role gate; UsersController
     // viewAny otherwise stays admin-only.
     Route::get('api/users', [UsersController::class, 'pickerList'])->name('users.picker');
+    // Server-paged JSON list backing the users Index table ({data, meta}).
+    // Declared before the users/{user} bindings so the literal path wins.
+    Route::get('api/users/list', [UsersController::class, 'list'])->name('users.list');
     // Distinct org-scoped values for the user-form type-ahead. Declared before
     // the users/{user} bindings so the literal path wins over route binding.
     Route::get('api/users/field-options', [UsersController::class, 'fieldOptions'])->name('users.field-options');

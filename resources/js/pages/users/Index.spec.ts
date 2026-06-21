@@ -6,9 +6,7 @@ import UsersIndex from '@/pages/users/Index.vue';
 import UsersBulkAddGrid from '@/pages/users/Partials/UsersBulkAddGrid.vue';
 import type { UserRow } from '@/stores/users';
 
-const { routerGet, routerReload, authUser } = vi.hoisted(() => ({
-    routerGet: vi.fn(),
-    routerReload: vi.fn(),
+const { authUser } = vi.hoisted(() => ({
     authUser: {
         value: { id: 'me', org_id: 'org1' } as Record<string, unknown>,
     },
@@ -18,12 +16,17 @@ vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
     Link: { template: '<a><slot /></a>' },
-    router: { get: routerGet, reload: routerReload },
+    router: { get: vi.fn(), reload: vi.fn() },
     usePage: () => ({ props: { auth: { user: authUser.value } } }),
 }));
 vi.mock('@/routes/users', () => ({
     index: () => ({ url: '/users' }),
     show: (id: string) => ({ url: `/users/${id}` }),
+    store: () => ({ url: '/users' }),
+    update: (id: string) => ({ url: `/users/${id}` }),
+    disable: (id: string) => ({ url: `/users/${id}/disable` }),
+    enable: (id: string) => ({ url: `/users/${id}/enable` }),
+    destroy: (id: string) => ({ url: `/users/${id}` }),
 }));
 
 function user(overrides: Partial<UserRow>): UserRow {
@@ -59,44 +62,41 @@ function user(overrides: Partial<UserRow>): UserRow {
 }
 
 const users: UserRow[] = [
-    user({
-        id: 'u1',
-        name: 'Zoe Charlie',
-        sort_name: 'Charlie, Zoe',
-        f_name: 'Zoe',
-        l_name: 'Charlie',
-        department: 'Ops',
-    }),
-    user({
-        id: 'u2',
-        name: 'Amy Adams',
-        sort_name: 'Adams, Amy',
-        f_name: 'Amy',
-        l_name: 'Adams',
-        department: 'Admin',
-    }),
-    user({
-        id: 'u3',
-        name: 'Bob Baker',
-        sort_name: 'Baker, Bob',
-        f_name: 'Bob',
-        l_name: 'Baker',
-        department: null,
-    }),
+    user({ id: 'u2', name: 'Amy Adams', sort_name: 'Adams, Amy', f_name: 'Amy', l_name: 'Adams', department: 'Admin' }),
+    user({ id: 'u3', name: 'Bob Baker', sort_name: 'Baker, Bob', f_name: 'Bob', l_name: 'Baker' }),
+    user({ id: 'u1', name: 'Zoe Charlie', sort_name: 'Charlie, Zoe', f_name: 'Zoe', l_name: 'Charlie', department: 'Ops' }),
 ];
 
-function mountIndex() {
+const META = { current_page: 1, last_page: 1, per_page: 25, total: users.length };
+
+/** Route axios.get by URL: the paged list, plus the bulk-grid lookups. */
+function stubAxios(rows: UserRow[] = users): void {
+    (axios.get as ReturnType<typeof vi.fn>).mockImplementation(
+        (url: string) => {
+            if (url === '/api/users/list') {
+                return Promise.resolve({ data: { data: rows, meta: { ...META, total: rows.length } } });
+            }
+            if (url === '/api/users/field-options') {
+                return Promise.resolve({ data: { department: [], location: [], job_title: [] } });
+            }
+            // picker roster (loadPicker) — empty is fine for these tests
+            return Promise.resolve({ data: [] });
+        },
+    );
+}
+
+/** Params of each GET to the paged list endpoint, in call order. */
+function listParams(): Array<Record<string, unknown>> {
+    return (axios.get as ReturnType<typeof vi.fn>).mock.calls
+        .filter((c) => c[0] === '/api/users/list')
+        .map((c) => (c[1]?.params ?? {}) as Record<string, unknown>);
+}
+
+function mountIndex(canCreate = false) {
     return mount(UsersIndex, {
         props: {
-            users,
-            filters: {
-                q: '',
-                role: '',
-                include_disabled: false,
-                tags: [],
-                tags_mode: 'and',
-            },
-            can_create: false,
+            filters: { q: '', role: '', include_disabled: false, tags: [], tags_mode: 'and' },
+            can_create: canCreate,
         },
         global: {
             stubs: { TagFilter: true, TagsListCell: true, UserFormModal: true },
@@ -104,68 +104,48 @@ function mountIndex() {
     });
 }
 
-function nameColumn(wrapper: ReturnType<typeof mountIndex>): string[] {
-    return wrapper.findAll('tbody tr').map((tr) => tr.find('td').text().trim());
-}
-
-function clickHeader(wrapper: ReturnType<typeof mountIndex>, label: string) {
-    const btn = wrapper
-        .findAll('thead button')
-        .find((b) => b.text().includes(label));
-
-    return btn!.trigger('click');
-}
-
-describe('users/Index — sortable columns', () => {
+describe('users/Index — server-paged table', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        sessionStorage.clear();
         authUser.value = { id: 'me', org_id: 'org1' };
+        stubAxios();
     });
 
-    it('renders the new profile column headers', async () => {
+    it('renders the profile column headers', async () => {
         const wrapper = mountIndex();
         await flushPromises();
         const headers = wrapper.findAll('thead th').map((th) => th.text());
-        expect(headers.some((h) => h.includes('Job title'))).toBe(true);
-        expect(headers.some((h) => h.includes('Employee #'))).toBe(true);
-        expect(headers.some((h) => h.includes('Department'))).toBe(true);
-        expect(headers.some((h) => h.includes('Location'))).toBe(true);
-        expect(headers.some((h) => h.includes('Supervisor'))).toBe(true);
+        for (const h of ['Job title', 'Employee #', 'Department', 'Location', 'Supervisor']) {
+            expect(headers.some((x) => x.includes(h))).toBe(true);
+        }
+    });
+
+    it('fetches page 1 sorted by name ascending on mount', async () => {
+        mountIndex();
+        await flushPromises();
+
+        expect(listParams()[0]).toMatchObject({
+            page: 1,
+            per_page: 25,
+            sort: 'name',
+            dir: 'asc',
+        });
+    });
+
+    it('renders the rows the server returns', async () => {
+        const wrapper = mountIndex();
+        await flushPromises();
+        const cells = wrapper.findAll('tbody tr').map((tr) => tr.find('td').text().trim());
+        expect(cells).toEqual(['Adams, Amy', 'Baker, Bob', 'Charlie, Zoe']);
     });
 
     it("shows each user's supervisor name in the Supervisor column", async () => {
-        const withBoss = [
-            user({
-                id: 'u9',
-                name: 'Pat Lee',
-                sort_name: 'Lee, Pat',
-                f_name: 'Pat',
-                l_name: 'Lee',
-                supervisor_name: 'Dana Boss',
-                supervisor_sort_name: 'Boss, Dana',
-            }),
-        ];
-        const wrapper = mount(UsersIndex, {
-            props: {
-                users: withBoss,
-                filters: {
-                    q: '',
-                    role: '',
-                    include_disabled: false,
-                    tags: [],
-                    tags_mode: 'and',
-                },
-                can_create: false,
-            },
-            global: {
-                stubs: {
-                    TagFilter: true,
-                    TagsListCell: true,
-                    UserFormModal: true,
-                },
-            },
-        });
+        stubAxios([
+            user({ id: 'u9', sort_name: 'Lee, Pat', supervisor_sort_name: 'Boss, Dana' }),
+        ]);
+        const wrapper = mountIndex();
         await flushPromises();
         expect(wrapper.find('tbody').text()).toContain('Boss, Dana');
     });
@@ -178,34 +158,20 @@ describe('users/Index — sortable columns', () => {
         };
         const wrapper = mountIndex();
         await flushPromises();
-
         const headers = wrapper.findAll('thead th').map((th) => th.text());
         expect(headers.some((h) => h.includes('Email'))).toBe(false);
         expect(headers.some((h) => h.includes('Name'))).toBe(true);
     });
 
-    it('defaults to last-name ascending order', async () => {
-        const wrapper = mountIndex();
-        await flushPromises();
-        // Adams, Baker, Charlie by last name.
-        expect(nameColumn(wrapper)).toEqual([
-            'Adams, Amy',
-            'Baker, Bob',
-            'Charlie, Zoe',
-        ]);
-    });
-
-    it('reorders by department (empties last) when that header is clicked', async () => {
+    it('re-fetches with the server sort key when a header is clicked', async () => {
         const wrapper = mountIndex();
         await flushPromises();
 
-        await clickHeader(wrapper, 'Department');
-        // Admin (u2), Ops (u1), then null (u3) last.
-        expect(nameColumn(wrapper)).toEqual([
-            'Adams, Amy',
-            'Charlie, Zoe',
-            'Baker, Bob',
-        ]);
+        const btn = wrapper.findAll('thead button').find((b) => b.text().includes('Department'));
+        await btn!.trigger('click');
+        await flushPromises();
+
+        expect(listParams().at(-1)).toMatchObject({ sort: 'department', dir: 'asc' });
     });
 });
 
@@ -215,61 +181,43 @@ describe('users/Index — live filtering', () => {
         vi.clearAllMocks();
         sessionStorage.clear();
         authUser.value = { id: 'me', org_id: 'org1' };
+        stubAxios();
     });
 
-    it('restores the session filter on a clean (unfiltered) visit', async () => {
-        // Session-scoped (sessionStorage), NOT the user profile.
-        sessionStorage.setItem(
-            'tableFilters:users',
-            JSON.stringify({ q: 'saved-term', role: '' }),
-        );
-        mountIndex(); // props.filters are all default → unfiltered
+    it('restores the session filter on a clean visit (initial fetch carries it)', async () => {
+        sessionStorage.setItem('tableFilters:users', JSON.stringify({ q: 'saved-term', role: '' }));
+        mountIndex();
         await flushPromises();
 
-        expect(routerGet).toHaveBeenCalledWith(
-            '/users',
-            expect.objectContaining({ q: 'saved-term' }),
-            expect.objectContaining({ preserveState: true }),
-        );
+        expect(listParams()[0]).toMatchObject({ q: 'saved-term' });
     });
 
     it('shows a Clear control only when a filter is active, and clears it', async () => {
-        sessionStorage.setItem(
-            'tableFilters:users',
-            JSON.stringify({ q: 'dana' }),
-        );
+        sessionStorage.setItem('tableFilters:users', JSON.stringify({ q: 'dana' }));
         const wrapper = mountIndex();
         await flushPromises();
-        vi.clearAllMocks();
 
-        const clearBtn = wrapper
-            .findAll('button')
-            .find((b) => b.text().includes('Clear filters'));
+        const clearBtn = wrapper.findAll('button').find((b) => b.text().includes('Clear filters'));
         expect(clearBtn).toBeTruthy();
 
         await clearBtn!.trigger('click');
         await flushPromises();
 
-        // Clearing re-queries unfiltered and drops the session entry.
-        expect(routerGet).toHaveBeenCalledWith(
-            '/users',
-            expect.objectContaining({ q: undefined }),
-            expect.objectContaining({ preserveState: true }),
-        );
+        // Re-queries unfiltered (q dropped) and drops the session entry.
+        expect(listParams().at(-1)?.q).toBeUndefined();
         expect(sessionStorage.getItem('tableFilters:users')).toBeNull();
     });
 
     it('has no Apply button — filters apply live', async () => {
         const wrapper = mountIndex();
         await flushPromises();
-        expect(
-            wrapper.findAll('button').some((b) => b.text().trim() === 'Apply'),
-        ).toBe(false);
+        expect(wrapper.findAll('button').some((b) => b.text().trim() === 'Apply')).toBe(false);
     });
 
     it('applies the search filter as you type, debounced', async () => {
         const wrapper = mountIndex();
         await flushPromises();
+        const before = listParams().length;
 
         vi.useFakeTimers();
         const search = wrapper.find(
@@ -277,60 +225,33 @@ describe('users/Index — live filtering', () => {
         );
         await search.setValue('dana');
 
-        // Not yet — still within the debounce window.
-        expect(routerGet).not.toHaveBeenCalled();
+        expect(listParams().length).toBe(before); // still within debounce window
 
         await vi.advanceTimersByTimeAsync(400);
         vi.useRealTimers();
+        await flushPromises();
 
-        expect(routerGet).toHaveBeenCalledTimes(1);
-        expect(routerGet).toHaveBeenLastCalledWith(
-            '/users',
-            expect.objectContaining({ q: 'dana' }),
-            expect.objectContaining({ preserveState: true }),
-        );
+        expect(listParams().at(-1)).toMatchObject({ q: 'dana' });
     });
 
-    it('reloads the users list after a bulk add completes', async () => {
-        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({
-            data: { department: [], location: [], job_title: [] },
-        });
-
-        const wrapper = mount(UsersIndex, {
-            props: {
-                users,
-                filters: {
-                    q: '',
-                    role: '',
-                    include_disabled: false,
-                    tags: [],
-                    tags_mode: 'and',
-                },
-                can_create: true,
-            },
-            global: {
-                stubs: {
-                    TagFilter: true,
-                    TagsListCell: true,
-                    UserFormModal: true,
-                    UsersBulkAddGrid: true,
-                },
-            },
-        });
+    it('re-pulls the current page after a bulk add completes', async () => {
+        const wrapper = mountIndex(true);
         await flushPromises();
 
-        const bulkBtn = wrapper
-            .findAll('button')
-            .find((b) => b.text() === 'Bulk add')!;
+        const bulkBtn = wrapper.findAll('button').find((b) => b.text() === 'Bulk add')!;
         await bulkBtn.trigger('click');
         await flushPromises();
+        const before = listParams().length;
 
         const grid = wrapper.findComponent(UsersBulkAddGrid);
         expect(grid.exists()).toBe(true);
 
+        vi.useFakeTimers();
         grid.vm.$emit('done');
+        await vi.advanceTimersByTimeAsync(400); // refetchSoon debounce
+        vi.useRealTimers();
         await flushPromises();
 
-        expect(routerReload).toHaveBeenCalledWith({ only: ['users'] });
+        expect(listParams().length).toBeGreaterThan(before);
     });
 });

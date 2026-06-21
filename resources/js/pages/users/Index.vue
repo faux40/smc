@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import { useDebounceFn } from '@vueuse/core';
 import { X } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
+import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
+import Pagination from '@/components/Pagination.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
@@ -19,14 +21,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useServerTable } from '@/composables/useServerTable';
 import { useTableFilter } from '@/composables/useTableFilter';
-import { useTableSort } from '@/composables/useTableSort';
 import { ASSIGNABLE_ROLES } from '@/lib/userRoles';
 import MergeUsersModal from '@/pages/users/Partials/MergeUsersModal.vue';
 import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import UserRowActions from '@/pages/users/Partials/UserRowActions.vue';
 import UsersBulkAddGrid from '@/pages/users/Partials/UsersBulkAddGrid.vue';
-import { index, show as userShow } from '@/routes/users';
+import { show as userShow } from '@/routes/users';
 import { usePreferencesStore } from '@/stores/preferences';
 import type { PrefsBlob } from '@/stores/preferences';
 import { useTagsStore } from '@/stores/tags';
@@ -51,7 +53,6 @@ type AuthUser = {
 };
 
 const props = defineProps<{
-    users: UserRow[];
     filters: Filters;
     can_create: boolean;
 }>();
@@ -80,21 +81,8 @@ const page = usePage();
 const authUser = page.props.auth.user as AuthUser;
 const prefs = usePreferencesStore();
 
-const { sortKey, sortDir, toggleSort, sorted } = useTableSort<UserRow>(
-    () => store.users,
-    {
-        name: (u) => `${u.l_name} ${u.f_name}`,
-        email: (u) => u.email,
-        role: (u) => u.role,
-        status: (u) => u.status,
-        job_title: (u) => u.job_title,
-        employee_number: (u) => u.employee_number,
-        department: (u) => u.department,
-        location: (u) => u.location,
-        supervisor: (u) => u.supervisor_name,
-    },
-    { key: 'name', dir: 'asc' },
-);
+const error = ref<string | null>(null);
+const initialLoading = ref(true);
 
 function hydrateTagAttachments(rows: UserRow[]): void {
     for (const u of rows) {
@@ -123,6 +111,17 @@ const BLANK_FILTERS: UserFilters = {
     tags_mode: 'and',
 };
 
+// Gate the filter `apply` until the initial fetch has run, so restoring the
+// session filter on mount only seeds params (the one initial fetch picks them
+// up) instead of firing a second request. `applyFilters` is a hoisted function
+// so it can be passed to useTableFilter before `table` is declared below.
+let ready = false;
+function applyFilters(): void {
+    if (ready) {
+        table.reload();
+    }
+}
+
 const {
     params: filters,
     commit,
@@ -138,18 +137,30 @@ const {
         tags_mode: props.filters.tags_mode ?? 'and',
     },
     BLANK_FILTERS,
-    (p) =>
-        router.get(
-            index().url,
-            {
-                q: p.q || undefined,
-                role: p.role || undefined,
-                include_disabled: p.include_disabled ? 1 : undefined,
-                tags: p.tags.length > 0 ? p.tags : undefined,
-                tags_mode: p.tags.length > 0 ? p.tags_mode : undefined,
-            },
-            { preserveState: true, replace: true },
-        ),
+    applyFilters,
+);
+
+// Server-paged table. The fetcher merges the live filter state onto the
+// page/sort params, so the whole query — search, role, disabled, tags, sort,
+// paging — runs in the DB.
+const table = useServerTable<UserRow>(
+    (params) =>
+        store.fetchPage({
+            ...params,
+            q: filters.q,
+            role: filters.role,
+            include_disabled: filters.include_disabled,
+            tags: filters.tags,
+            tags_mode: filters.tags_mode,
+        }),
+    { perPage: 25, sort: 'name', dir: 'asc' },
+);
+
+// Hydrate the tags store for each fetched page so TagsListCell renders attached
+// pills without a per-row fetch.
+watch(
+    () => table.rows.value,
+    (rows) => hydrateTagAttachments(rows),
 );
 
 // Drives the visible "Clear" control — shown only when a filter is active.
@@ -175,20 +186,29 @@ function onSearch(value: string | number): void {
     debouncedCommit();
 }
 
-onMounted(() => {
-    store.hydrate(props.users);
-    hydrateTagAttachments(props.users);
+function onSort(columnKey: string): void {
+    // Column keys map 1:1 to the server sort keys.
+    table.setSort(columnKey);
+}
+
+// Realtime: a user mutation (local or peer broadcast) re-pulls the current page.
+watch(
+    () => store.revision,
+    () => table.refetchSoon(),
+);
+
+onMounted(async () => {
     prefs.ensureHydrated(authUser?.preferences ?? null);
 
-    // Re-apply the session filter on every load: when the page arrived without
-    // filter params in the URL (e.g. via the breadcrumb / nav), restore the
-    // session's last filter so the list stays filtered until explicitly cleared.
+    // Seed params from the session filter (when the page arrived without filter
+    // params in the URL); `apply` no-ops until `ready`, so this doesn't fetch.
     restore(
         !props.filters.q &&
             !props.filters.role &&
             !props.filters.include_disabled &&
             (props.filters.tags?.length ?? 0) === 0,
     );
+    ready = true;
 
     if (authUser?.org_id) {
         store.subscribe(authUser.org_id);
@@ -198,15 +218,15 @@ onMounted(() => {
     tagsStore.loadLibrary().catch(() => {
         /* surfaced through store */
     });
-});
 
-watch(
-    () => props.users,
-    (next) => {
-        store.hydrate(next);
-        hydrateTagAttachments(next);
-    },
-);
+    try {
+        await table.fetchPage();
+    } catch (e) {
+        error.value = (e as Error).message;
+    } finally {
+        initialLoading.value = false;
+    }
+});
 
 const roles = [
     'Owner',
@@ -220,7 +240,9 @@ const roles = [
 
 const isSelf = (row: UserRow): boolean => row.id === authUser?.id;
 
-// BULK USER ADD — spreadsheet-style grid above the table.
+// BULK USER ADD — spreadsheet-style grid above the table. The table only holds
+// the current page now, so the email-dedup hint + supervisor picker source the
+// full org roster from the picker cache (loaded when the grid opens).
 const showBulk = ref(false);
 const bulkRoles = [...ASSIGNABLE_ROLES];
 const existingEmails = computed(() =>
@@ -236,14 +258,15 @@ const toggleBulk = () => {
 
     if (showBulk.value) {
         void store.loadFieldOptions();
+        void store.loadPicker();
     }
 };
 
 // After a bulk add, the submitting tab's own UserRegistered broadcasts are
-// self-echo-filtered, so reload the server-filtered users prop to surface the
-// new rows (only those matching the current filter, like single-add does).
+// self-echo-filtered, so re-pull the current page to surface any new rows that
+// match the active filter/sort.
 const onBulkDone = () => {
-    router.reload({ only: ['users'] });
+    table.refetchSoon();
 };
 
 const modalOpen = ref(false);
@@ -318,15 +341,16 @@ const remove = (row: UserRow) => {
             @close="showBulk = false"
         />
 
-        <DataTable
-            view-id="users"
-            :default-columns="USERS_COLUMNS"
-            :rows="sorted"
-            :sort-key="sortKey"
-            :sort-dir="sortDir"
-            :row-key="(row) => row.id"
-            @sort="toggleSort"
-        >
+        <AsyncState :loading="initialLoading" :error="error">
+            <DataTable
+                view-id="users"
+                :default-columns="USERS_COLUMNS"
+                :rows="table.rows.value"
+                :sort-key="table.sort.value"
+                :sort-dir="table.dir.value"
+                :row-key="(row) => row.id"
+                @sort="onSort"
+            >
             <template #filters>
                 <Input
                     :model-value="filters.q"
@@ -439,7 +463,18 @@ const remove = (row: UserRow) => {
             </template>
 
             <template #empty>No users match the current filters.</template>
-        </DataTable>
+            </DataTable>
+
+            <Pagination
+                :page="table.page.value"
+                :last-page="table.lastPage.value"
+                :total="table.total.value"
+                :per-page="table.perPage.value"
+                :loading="table.loading.value"
+                @update:page="table.setPage"
+                @update:per-page="table.setPerPage"
+            />
+        </AsyncState>
 
         <UserFormModal
             v-model:open="modalOpen"

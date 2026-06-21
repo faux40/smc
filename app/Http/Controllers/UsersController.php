@@ -16,6 +16,7 @@ use App\Services\TrainingStatusService;
 use App\Support\CompletionSerializer;
 use App\Support\SourceChips;
 use App\Support\UserMerge;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -30,35 +31,94 @@ use Inertia\Response;
 
 class UsersController extends Controller
 {
+    /**
+     * Inertia shell for the users page. The list itself streams in via the
+     * paginated JSON `list()` endpoint (the users Pinia store drives it through
+     * useServerTable), so this only ships the initial filter state + the
+     * create gate — never the (potentially huge) user list.
+     */
     public function index(Request $request): Response
     {
         Gate::authorize('viewAny', User::class);
 
-        $search = trim((string) $request->query('q', ''));
-        $roleFilter = trim((string) $request->query('role', ''));
-        $includeDisabled = filter_var($request->query('include_disabled', false), FILTER_VALIDATE_BOOLEAN);
+        return Inertia::render('users/Index', [
+            'filters' => $this->listFilters($request),
+            'can_create' => Gate::check('create', User::class),
+        ]);
+    }
 
-        // Tag filter: tags=<uuid>,<uuid>&tags_mode=and|or|not
-        // - and: row must have *every* selected tag (whereHas per id)
-        // - or : row must have *any*   selected tag (whereHas whereIn)
-        // - not: row must have *none* of the selected tags (whereDoesntHave)
+    /**
+     * Server-paged JSON list backing the users table ({data, meta}). Every
+     * filter (search / role / disabled / tags) and the sort run in the DB, and
+     * the per-row gates are evaluated only for the current page — so cost scales
+     * with the page size, not the org's user count.
+     */
+    public function list(Request $request): JsonResponse
+    {
+        Gate::authorize('viewAny', User::class);
+
+        $query = $this->filteredUsersQuery($request)->select('users.*');
+        $this->applySort($query, (string) $request->query('sort', 'name'),
+            $request->query('dir') === 'desc' ? 'desc' : 'asc');
+
+        $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
+        $page = $query->paginate($perPage);
+
+        return response()->json([
+            'data' => collect($page->items())->map(fn (User $u) => $this->userRow($u)),
+            'meta' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * Normalized list filter state, shared by the Inertia shell (initial state)
+     * and the JSON list query.
+     *
+     * @return array<string, mixed>
+     */
+    private function listFilters(Request $request): array
+    {
         $tagIds = array_values(array_filter(
             (array) $request->query('tags', []),
             fn ($v) => is_string($v) && $v !== '',
         ));
-        $tagsMode = in_array($request->query('tags_mode'), ['and', 'or', 'not'], true)
-            ? $request->query('tags_mode')
-            : 'and';
 
-        $users = User::query()
+        return [
+            'q' => trim((string) $request->query('q', '')),
+            'role' => trim((string) $request->query('role', '')),
+            'include_disabled' => filter_var($request->query('include_disabled', false), FILTER_VALIDATE_BOOLEAN),
+            'tags' => $tagIds,
+            'tags_mode' => in_array($request->query('tags_mode'), ['and', 'or', 'not'], true)
+                ? $request->query('tags_mode')
+                : 'and',
+        ];
+    }
+
+    /**
+     * Base list query with all filters applied in the DB. Columns are qualified
+     * with `users.` so the sort joins (role / supervisor self-join) never make a
+     * column reference ambiguous.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<User>
+     */
+    private function filteredUsersQuery(Request $request): Builder
+    {
+        $f = $this->listFilters($request);
+
+        return User::query()
             ->with(['roles:id,name', 'tags:id', 'supervisor:id,prefix_name,f_name,m_name,l_name,suffix_name'])
-            ->when(! $includeDisabled, fn ($q) => $q->where('status', 'active'))
-            ->when($search !== '', function ($q) use ($search) {
+            ->when(! $f['include_disabled'], fn ($q) => $q->where('users.status', 'active'))
+            ->when($f['q'] !== '', function ($q) use ($f) {
                 // Case-insensitive via LOWER() on both sides — portable across
                 // sqlite (tests) and Postgres (dev/prod), where bare LIKE is
                 // case-sensitive. Column names are a fixed allowlist, never
                 // user input, so interpolating them into the raw clause is safe.
-                $term = '%'.mb_strtolower($search).'%';
+                $term = '%'.mb_strtolower($f['q']).'%';
                 $columns = [
                     'f_name', 'm_name', 'l_name', 'email',
                     'job_title', 'department', 'location', 'employee_number',
@@ -66,17 +126,23 @@ class UsersController extends Controller
 
                 $q->where(function ($inner) use ($columns, $term) {
                     foreach ($columns as $column) {
-                        $inner->orWhereRaw("LOWER({$column}) LIKE ?", [$term]);
+                        $inner->orWhereRaw("LOWER(users.{$column}) LIKE ?", [$term]);
                     }
                 });
             })
-            ->when(count($tagIds) > 0, function ($q) use ($tagIds, $tagsMode) {
-                // `taggables.taggable_id` is varchar (schema kept generic
-                // for mixed-PK morphs); `users.id` is uuid. Postgres
-                // won't auto-cast across the join, so the relation's
-                // default whereHas/whereDoesntHave error with 42883.
-                // Explicit `CAST(users.id AS text)` works on both
-                // sqlite (tests) and pgsql (dev/prod).
+            // Role filter runs in the DB (was a post-query collection filter).
+            ->when($f['role'] !== '', fn ($q) => $q->whereHas(
+                'roles', fn ($r) => $r->where('name', $f['role']),
+            ))
+            // Tag filter: tags=<uuid>,<uuid>&tags_mode=and|or|not
+            // - and: row must have *every* selected tag
+            // - or : row must have *any*   selected tag
+            // - not: row must have *none* of the selected tags
+            ->when(count($f['tags']) > 0, function ($q) use ($f) {
+                // `taggables.taggable_id` is varchar (schema kept generic for
+                // mixed-PK morphs); `users.id` is uuid. Postgres won't auto-cast
+                // across the join, so an explicit CAST works on both sqlite
+                // (tests) and pgsql (dev/prod).
                 $tagSubquery = function ($sub, array $ids) {
                     $sub->select(DB::raw(1))
                         ->from('taggables')
@@ -87,64 +153,94 @@ class UsersController extends Controller
                         ->whereIn('tags.id', $ids);
                 };
 
-                if ($tagsMode === 'and') {
-                    foreach ($tagIds as $tagId) {
+                if ($f['tags_mode'] === 'and') {
+                    foreach ($f['tags'] as $tagId) {
                         $q->whereExists(fn ($sub) => $tagSubquery($sub, [$tagId]));
                     }
-                } elseif ($tagsMode === 'or') {
-                    $q->whereExists(fn ($sub) => $tagSubquery($sub, $tagIds));
+                } elseif ($f['tags_mode'] === 'or') {
+                    $q->whereExists(fn ($sub) => $tagSubquery($sub, $f['tags']));
                 } else { // 'not'
-                    $q->whereNotExists(fn ($sub) => $tagSubquery($sub, $tagIds));
+                    $q->whereNotExists(fn ($sub) => $tagSubquery($sub, $f['tags']));
                 }
-            })
-            ->orderBy('l_name')
-            ->orderBy('f_name')
-            ->get(['id', 'org_id', 'f_name', 'm_name', 'l_name', 'prefix_name', 'suffix_name', 'email', 'status', 'department', 'location', 'job_title', 'employee_number', 'supervisor_id', 'start_date', 'end_date', 'created_at'])
-            ->when($roleFilter !== '', fn ($collection) => $collection->filter(
-                fn (User $u) => $u->roles->contains('name', $roleFilter),
-            )->values())
-            ->map(fn (User $u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'sort_name' => $u->sort_name,
-                'f_name' => $u->f_name,
-                'm_name' => $u->m_name,
-                'l_name' => $u->l_name,
-                'prefix_name' => $u->prefix_name,
-                'suffix_name' => $u->suffix_name,
-                'email' => $u->email,
-                'status' => $u->status,
-                'role' => $u->roles->first()?->name,
-                'department' => $u->department,
-                'location' => $u->location,
-                'job_title' => $u->job_title,
-                'employee_number' => $u->employee_number,
-                'supervisor_id' => $u->supervisor_id,
-                'supervisor_name' => $u->supervisor?->name,
-                'supervisor_sort_name' => $u->supervisor?->sort_name,
-                'start_date' => $u->start_date?->toDateString(),
-                'end_date' => $u->end_date?->toDateString(),
-                'created_at' => $u->created_at?->toDateTimeString(),
-                // TagsListCell hydrates the tags store with these so the
-                // first paint already shows attached pills without a
-                // follow-up fetch. Eager-loaded via `with('tags:id')`.
-                'tag_ids' => $u->tags->pluck('id')->all(),
-                'can_edit' => Gate::check('update', $u),
-                'can_disable' => Gate::check('disable', $u),
-                'can_delete' => Gate::check('delete', $u),
-            ]);
+            });
+    }
 
-        return Inertia::render('users/Index', [
-            'users' => $users,
-            'filters' => [
-                'q' => $search,
-                'role' => $roleFilter,
-                'include_disabled' => $includeDisabled,
-                'tags' => $tagIds,
-                'tags_mode' => $tagsMode,
-            ],
-            'can_create' => Gate::check('create', User::class),
-        ]);
+    /**
+     * Server-side sort whitelist. Name sorts by (l_name, f_name); role and
+     * supervisor sort via left joins (one-role-per-user + 1:1 supervisor keep
+     * the joins row-preserving). Always ends on users.id for a stable order.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<User>  $query
+     */
+    private function applySort(Builder $query, string $sort, string $dir): void
+    {
+        if ($sort === 'role') {
+            $query->leftJoin('model_has_roles', function ($j) {
+                $j->on('model_has_roles.model_id', '=', 'users.id')
+                    ->where('model_has_roles.model_type', '=', User::class);
+            })
+                ->leftJoin('roles', 'roles.id', '=', 'model_has_roles.role_id')
+                ->orderBy('roles.name', $dir);
+        } elseif ($sort === 'supervisor') {
+            $query->leftJoin('users as sup', 'sup.id', '=', 'users.supervisor_id')
+                ->orderBy('sup.l_name', $dir)
+                ->orderBy('sup.f_name', $dir);
+        } else {
+            $columns = [
+                'name' => ['l_name', 'f_name'],
+                'email' => ['email'],
+                'status' => ['status'],
+                'job_title' => ['job_title'],
+                'employee_number' => ['employee_number'],
+                'department' => ['department'],
+                'location' => ['location'],
+            ];
+
+            foreach ($columns[$sort] ?? $columns['name'] as $column) {
+                $query->orderBy('users.'.$column, $dir);
+            }
+        }
+
+        $query->orderBy('users.id');
+    }
+
+    /**
+     * Full table row for the users Index — the shape the users Pinia store
+     * hydrates from. Carries the per-row gates the row actions key off.
+     *
+     * @return array<string, mixed>
+     */
+    private function userRow(User $u): array
+    {
+        return [
+            'id' => $u->id,
+            'name' => $u->name,
+            'sort_name' => $u->sort_name,
+            'f_name' => $u->f_name,
+            'm_name' => $u->m_name,
+            'l_name' => $u->l_name,
+            'prefix_name' => $u->prefix_name,
+            'suffix_name' => $u->suffix_name,
+            'email' => $u->email,
+            'status' => $u->status,
+            'role' => $u->roles->first()?->name,
+            'department' => $u->department,
+            'location' => $u->location,
+            'job_title' => $u->job_title,
+            'employee_number' => $u->employee_number,
+            'supervisor_id' => $u->supervisor_id,
+            'supervisor_name' => $u->supervisor?->name,
+            'supervisor_sort_name' => $u->supervisor?->sort_name,
+            'start_date' => $u->start_date?->toDateString(),
+            'end_date' => $u->end_date?->toDateString(),
+            'created_at' => $u->created_at?->toDateTimeString(),
+            // TagsListCell hydrates the tags store with these so the first paint
+            // shows attached pills without a follow-up fetch (eager `tags:id`).
+            'tag_ids' => $u->tags->pluck('id')->all(),
+            'can_edit' => Gate::check('update', $u),
+            'can_disable' => Gate::check('disable', $u),
+            'can_delete' => Gate::check('delete', $u),
+        ];
     }
 
     /**
@@ -529,7 +625,7 @@ class UsersController extends Controller
         ]);
     }
 
-    public function disable(User $user): RedirectResponse
+    public function disable(Request $request, User $user): RedirectResponse|JsonResponse
     {
         Gate::authorize('disable', $user);
 
@@ -537,10 +633,14 @@ class UsersController extends Controller
 
         event(new UserStatusChanged($user->fresh()));
 
+        if ($request->expectsJson()) {
+            return response()->json(['id' => $user->id, 'status' => 'disabled']);
+        }
+
         return Redirect::route('users.index');
     }
 
-    public function enable(User $user): RedirectResponse
+    public function enable(Request $request, User $user): RedirectResponse|JsonResponse
     {
         Gate::authorize('enable', $user);
 
@@ -548,16 +648,24 @@ class UsersController extends Controller
 
         event(new UserStatusChanged($user->fresh()));
 
+        if ($request->expectsJson()) {
+            return response()->json(['id' => $user->id, 'status' => 'active']);
+        }
+
         return Redirect::route('users.index');
     }
 
-    public function destroy(User $user): RedirectResponse
+    public function destroy(Request $request, User $user): RedirectResponse|JsonResponse
     {
         Gate::authorize('delete', $user);
 
         $user->delete();
 
         event(new UserSoftDeleted($user));
+
+        if ($request->expectsJson()) {
+            return response()->json(['id' => $user->id]);
+        }
 
         return Redirect::route('users.index');
     }
