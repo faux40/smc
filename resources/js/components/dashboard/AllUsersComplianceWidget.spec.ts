@@ -17,13 +17,7 @@ const userRows = [
         user_id: 'u1',
         name: 'Alice',
         email: 'alice@x.com',
-        counts: {
-            overdue: 3,
-            due_soon: 1,
-            current: 0,
-            not_started: 0,
-            as_needed: 0,
-        },
+        counts: { overdue: 3, due_soon: 1, current: 0, not_started: 0, as_needed: 0 },
         overall_status: 'overdue',
         tag_ids: [],
     },
@@ -31,13 +25,7 @@ const userRows = [
         user_id: 'u2',
         name: 'Bob',
         email: 'bob@x.com',
-        counts: {
-            overdue: 0,
-            due_soon: 2,
-            current: 1,
-            not_started: 0,
-            as_needed: 0,
-        },
+        counts: { overdue: 0, due_soon: 2, current: 1, not_started: 0, as_needed: 0 },
         overall_status: 'due_soon',
         tag_ids: [],
     },
@@ -45,17 +33,13 @@ const userRows = [
         user_id: 'u3',
         name: 'Carol',
         email: 'carol@x.com',
-        counts: {
-            overdue: 1,
-            due_soon: 0,
-            current: 0,
-            not_started: 0,
-            as_needed: 0,
-        },
+        counts: { overdue: 1, due_soon: 0, current: 0, not_started: 0, as_needed: 0 },
         overall_status: 'overdue',
         tag_ids: [],
     },
 ];
+
+const META = { current_page: 1, last_page: 1, per_page: 25, total: userRows.length };
 
 type DetailItem = {
     training_name?: string | null;
@@ -71,23 +55,26 @@ function mockGet(
         groups: { overdue: [], due_soon: [] },
     },
 ) {
-    (axios.get as ReturnType<typeof vi.fn>).mockImplementation(
-        (url: string) => {
-            if (url === '/api/dashboard/users-compliance') {
-                return Promise.resolve({ data: userRows });
-            }
+    (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+        if (url === '/api/dashboard/users-compliance') {
+            return Promise.resolve({ data: { data: userRows, meta: META } });
+        }
+        if (url === '/api/tags') {
+            return Promise.resolve({ data: [] });
+        }
+        if (url.endsWith('/training-compliance')) {
+            return Promise.resolve({ data: detail });
+        }
 
-            if (url === '/api/tags') {
-                return Promise.resolve({ data: [] });
-            }
+        return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+}
 
-            if (url.endsWith('/training-compliance')) {
-                return Promise.resolve({ data: detail });
-            }
-
-            return Promise.reject(new Error(`unexpected GET ${url}`));
-        },
-    );
+/** Params of each GET to the users-compliance endpoint, in call order. */
+function complianceParams(): Array<Record<string, unknown>> {
+    return (axios.get as ReturnType<typeof vi.fn>).mock.calls
+        .filter((c) => c[0] === '/api/dashboard/users-compliance')
+        .map((c) => (c[1]?.params ?? {}) as Record<string, unknown>);
 }
 
 async function mountWidget() {
@@ -98,7 +85,6 @@ async function mountWidget() {
 }
 
 function dataRowNames(wrapper: ReturnType<typeof mount>): string[] {
-    // First cell of each user row holds the name link.
     return wrapper
         .findAll('tbody tr')
         .map((tr) => tr.find('td')?.text() ?? '')
@@ -121,37 +107,39 @@ describe('AllUsersComplianceWidget', () => {
         expect(names.some((n) => n.includes('Carol'))).toBe(true);
     });
 
-    it('defaults to sorting by overdue, descending', async () => {
+    it('requests overdue-descending sort on first load', async () => {
         mockGet();
-        const wrapper = await mountWidget();
+        await mountWidget();
 
-        // overdue: Alice 3, Carol 1, Bob 0
-        const first = dataRowNames(wrapper)[0];
-        expect(first).toContain('Alice');
+        expect(complianceParams()[0]).toMatchObject({ sort: 'overdue', dir: 'desc' });
     });
 
     it('shows the bucket count inside the status pill', async () => {
         mockGet();
         const wrapper = await mountWidget();
 
-        // Alice (overdue, count 3) sorts first; status cell is the 2nd column.
+        // Rows render in server order (Alice first); status cell is column 2.
         const statusCell = wrapper.find('tbody tr').findAll('td')[1];
         expect(statusCell.text()).toContain('Overdue');
         expect(statusCell.text()).toContain('3');
     });
 
-    it('filters by the search box', async () => {
+    it('sends the search term to the server (debounced)', async () => {
         mockGet();
         const wrapper = await mountWidget();
+        const before = complianceParams().length;
 
+        vi.useFakeTimers();
         await wrapper.find('input[type="search"]').setValue('bob');
+        await vi.advanceTimersByTimeAsync(400);
+        vi.useRealTimers();
+        await flushPromises();
 
-        const names = dataRowNames(wrapper);
-        expect(names).toHaveLength(1);
-        expect(names[0]).toContain('Bob');
+        expect(complianceParams().length).toBeGreaterThan(before);
+        expect(complianceParams().at(-1)).toMatchObject({ q: 'bob' });
     });
 
-    it('re-sorts when the due-soon header is clicked', async () => {
+    it('re-fetches with the due_soon sort key when that header is clicked', async () => {
         mockGet();
         const wrapper = await mountWidget();
 
@@ -159,9 +147,9 @@ describe('AllUsersComplianceWidget', () => {
             .findAll('thead th button')
             .find((b) => b.text().startsWith('Due soon'));
         await dueSoonHeader!.trigger('click');
+        await flushPromises();
 
-        // due_soon: Bob 2, Alice 1, Carol 0
-        expect(dataRowNames(wrapper)[0]).toContain('Bob');
+        expect(complianceParams().at(-1)).toMatchObject({ sort: 'due_soon' });
     });
 
     it('lazy-loads detail from /api/users/{id}/training-compliance on expand', async () => {
@@ -181,7 +169,6 @@ describe('AllUsersComplianceWidget', () => {
         });
         const wrapper = await mountWidget();
 
-        // Expand the first row (Alice).
         const expandBtn = wrapper.find('tbody tr td:last-child button');
         await expandBtn.trigger('click');
         await flushPromises();
@@ -268,7 +255,6 @@ describe('AllUsersComplianceWidget', () => {
         expect(items[0]).toContain('Forklift');
         expect(items[1]).toContain('Confined Space');
         expect(items[2]).toContain('OSHA General');
-        // Items without a completion render a "never" hint, not a blank.
         expect(items[1].toLowerCase()).toContain('not started');
     });
 });

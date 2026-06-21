@@ -2,16 +2,19 @@
 /*
  * Full-width all-users compliance list (replaces the top-N overdue widget).
  * One row per org user with per-status counts + an overall status badge +
- * tag chips. Sortable headers (name, status, overdue, due-soon), client-side
- * search, and a lazy drill-down: expanding a row fetches that user's full
- * compliance breakdown from /api/users/{id}/compliance on demand.
+ * tag chips. Server-paged (search / sort / paging all round-trip), with a
+ * lazy drill-down: expanding a row fetches that user's full compliance
+ * breakdown from /api/users/{id}/training-compliance on demand.
  */
 import { Link } from '@inertiajs/vue3';
 import axios from 'axios';
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import DashWidget from '@/components/dashboard/DashWidget.vue';
+import Pagination from '@/components/Pagination.vue';
 import TagPill from '@/components/TagPill.vue';
 import { Input } from '@/components/ui/input';
+import { useServerTable } from '@/composables/useServerTable';
+import type { ServerTableResponse } from '@/composables/useServerTable';
 import { realtimeTabId } from '@/echo';
 import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import type { ComplianceStatus } from '@/pages/users/Partials/ComplianceStatusBadge.vue';
@@ -46,27 +49,11 @@ interface DetailItem {
 type SortKey = 'name' | 'status' | 'overdue' | 'due_soon';
 
 const tagsStore = useTagsStore();
-const rows = ref<UserRow[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
-
 const search = ref('');
-const sortKey = ref<SortKey>('overdue');
-const sortAsc = ref(false); // default: most overdue first
 
-// Worst-first ordering for the status column sort.
-const STATUS_ORDER: Record<OverallStatus, number> = {
-    overdue: 0,
-    due_soon: 1,
-    never_started: 2,
-    not_started: 2, // canonical alias of never_started (K3 port pending)
-    current: 3,
-    as_needed: 4,
-    inactive: 4,
-    none: 5,
-};
-
-// Drill-down group ordering — worst first, matching STATUS_ORDER above.
+// Drill-down group ordering — worst first.
 const DETAIL_GROUP_ORDER = [
     'overdue',
     'due_soon',
@@ -74,6 +61,32 @@ const DETAIL_GROUP_ORDER = [
     'current',
     'as_needed',
 ] as const;
+
+// Server-paged: search / sort / paging all run on the server.
+const table = useServerTable<UserRow>(
+    async (params) => {
+        const { data } = await axios.get<ServerTableResponse<UserRow>>(
+            '/api/dashboard/users-compliance',
+            { headers: defaultHeaders(), params },
+        );
+
+        return data;
+    },
+    { perPage: 25, sort: 'overdue', dir: 'desc' },
+);
+
+function onSearch(value: string | number): void {
+    search.value = String(value);
+    table.setQuery(search.value);
+}
+
+function sortIndicator(key: SortKey): string {
+    if (table.sort.value !== key) {
+        return '';
+    }
+
+    return table.dir.value === 'asc' ? '▲' : '▼';
+}
 
 // Drill-down state, keyed by user id.
 const expanded = ref<string | null>(null);
@@ -83,78 +96,13 @@ const detailError = ref<Record<string, string>>({});
 
 onMounted(async () => {
     try {
-        const [{ data }] = await Promise.all([
-            axios.get<UserRow[]>('/api/dashboard/users-compliance', {
-                headers: defaultHeaders(),
-            }),
-            tagsStore.loadLibrary(),
-        ]);
-        rows.value = data;
+        await Promise.all([table.fetchPage(), tagsStore.loadLibrary()]);
     } catch (e) {
         error.value = (e as Error).message;
     } finally {
         loading.value = false;
     }
 });
-
-const filtered = computed(() => {
-    const q = search.value.trim().toLowerCase();
-
-    if (!q) {
-        return rows.value;
-    }
-
-    return rows.value.filter(
-        (r) =>
-            (r.name ?? '').toLowerCase().includes(q) ||
-            (r.email ?? '').toLowerCase().includes(q),
-    );
-});
-
-const sorted = computed(() => {
-    const dir = sortAsc.value ? 1 : -1;
-
-    return [...filtered.value].sort((a, b) => {
-        let cmp = 0;
-
-        switch (sortKey.value) {
-            case 'name':
-                cmp = (a.name ?? '').localeCompare(b.name ?? '');
-                break;
-            case 'status':
-                cmp =
-                    STATUS_ORDER[a.overall_status] -
-                    STATUS_ORDER[b.overall_status];
-                break;
-            case 'overdue':
-                cmp = (a.counts.overdue ?? 0) - (b.counts.overdue ?? 0);
-                break;
-            case 'due_soon':
-                cmp = (a.counts.due_soon ?? 0) - (b.counts.due_soon ?? 0);
-                break;
-        }
-
-        return cmp * dir;
-    });
-});
-
-function toggleSort(key: SortKey): void {
-    if (sortKey.value === key) {
-        sortAsc.value = !sortAsc.value;
-    } else {
-        sortKey.value = key;
-        // Counts default to descending (most first); name/status ascending.
-        sortAsc.value = key === 'name' || key === 'status';
-    }
-}
-
-function sortIndicator(key: SortKey): string {
-    if (sortKey.value !== key) {
-        return '';
-    }
-
-    return sortAsc.value ? '▲' : '▼';
-}
 
 function tagsFor(row: UserRow) {
     return row.tag_ids
@@ -226,206 +174,235 @@ function defaultHeaders(): Record<string, string> {
     >
         <template #actions>
             <Input
-                v-model="search"
+                :model-value="search"
                 type="search"
                 placeholder="Search name or email…"
                 class="h-8 w-56"
                 aria-label="Search users"
+                @update:model-value="onSearch"
             />
         </template>
 
         <div
-            v-if="rows.length === 0"
+            v-if="table.total.value === 0"
             class="rounded border border-dashed border-border p-3 text-xs text-muted-foreground"
         >
-            No users yet.
+            No users match the current search.
         </div>
 
-        <div v-else class="max-h-[32rem] overflow-x-auto overflow-y-auto">
-            <table class="min-w-full divide-y divide-border text-sm">
-                <thead class="bg-muted/40">
-                    <tr>
-                        <th class="px-3 py-2 text-left font-medium">
-                            <button
-                                type="button"
-                                class="hover:underline"
-                                @click="toggleSort('name')"
-                            >
-                                User {{ sortIndicator('name') }}
-                            </button>
-                        </th>
-                        <th class="px-3 py-2 text-left font-medium">
-                            <button
-                                type="button"
-                                class="hover:underline"
-                                @click="toggleSort('status')"
-                            >
-                                Status {{ sortIndicator('status') }}
-                            </button>
-                        </th>
-                        <th class="px-3 py-2 text-left font-medium">
-                            <button
-                                type="button"
-                                class="hover:underline"
-                                @click="toggleSort('overdue')"
-                            >
-                                Overdue {{ sortIndicator('overdue') }}
-                            </button>
-                        </th>
-                        <th class="px-3 py-2 text-left font-medium">
-                            <button
-                                type="button"
-                                class="hover:underline"
-                                @click="toggleSort('due_soon')"
-                            >
-                                Due soon {{ sortIndicator('due_soon') }}
-                            </button>
-                        </th>
-                        <th class="px-3 py-2 text-left font-medium">Tags</th>
-                        <th class="px-3 py-2"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-border">
-                    <template v-for="row in sorted" :key="row.user_id">
-                        <tr class="hover:bg-muted/30">
-                            <td class="px-3 py-2">
-                                <Link
-                                    :href="userShow(row.user_id)"
-                                    class="font-medium text-primary hover:underline"
-                                >
-                                    {{ row.name ?? row.email ?? row.user_id }}
-                                </Link>
-                                <div
-                                    v-if="row.email"
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    {{ row.email }}
-                                </div>
-                            </td>
-                            <td class="px-3 py-2">
-                                <ComplianceStatusBadge
-                                    v-if="row.overall_status !== 'none'"
-                                    :status="row.overall_status"
-                                    :count="row.counts[row.overall_status]"
-                                />
-                                <span
-                                    v-else
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    No assignments
-                                </span>
-                            </td>
-                            <td class="px-3 py-2">
-                                <span
-                                    v-if="row.counts.overdue > 0"
-                                    class="font-medium text-red-700 dark:text-red-300"
-                                >
-                                    {{ row.counts.overdue }}
-                                </span>
-                                <span v-else class="text-muted-foreground"
-                                    >0</span
-                                >
-                            </td>
-                            <td class="px-3 py-2">
-                                {{ row.counts.due_soon }}
-                            </td>
-                            <td class="px-3 py-2">
-                                <div class="flex flex-wrap gap-1">
-                                    <TagPill
-                                        v-for="tag in tagsFor(row)"
-                                        :key="tag.id"
-                                        :tag="tag"
-                                        size="sm"
-                                    />
-                                </div>
-                            </td>
-                            <td class="px-3 py-2 text-right">
+        <template v-else>
+            <div class="max-h-[32rem] overflow-x-auto overflow-y-auto">
+                <table class="min-w-full divide-y divide-border text-sm">
+                    <thead class="bg-muted/40">
+                        <tr>
+                            <th class="px-3 py-2 text-left font-medium">
                                 <button
                                     type="button"
-                                    class="text-xs text-primary hover:underline"
-                                    :aria-expanded="expanded === row.user_id"
-                                    @click="toggleExpand(row)"
+                                    class="hover:underline"
+                                    @click="table.setSort('name')"
                                 >
-                                    {{ expanded === row.user_id ? '▲' : '▼' }}
+                                    User {{ sortIndicator('name') }}
                                 </button>
-                            </td>
+                            </th>
+                            <th class="px-3 py-2 text-left font-medium">
+                                <button
+                                    type="button"
+                                    class="hover:underline"
+                                    @click="table.setSort('status')"
+                                >
+                                    Status {{ sortIndicator('status') }}
+                                </button>
+                            </th>
+                            <th class="px-3 py-2 text-left font-medium">
+                                <button
+                                    type="button"
+                                    class="hover:underline"
+                                    @click="table.setSort('overdue')"
+                                >
+                                    Overdue {{ sortIndicator('overdue') }}
+                                </button>
+                            </th>
+                            <th class="px-3 py-2 text-left font-medium">
+                                <button
+                                    type="button"
+                                    class="hover:underline"
+                                    @click="table.setSort('due_soon')"
+                                >
+                                    Due soon {{ sortIndicator('due_soon') }}
+                                </button>
+                            </th>
+                            <th class="px-3 py-2 text-left font-medium">Tags</th>
+                            <th class="px-3 py-2"></th>
                         </tr>
-                        <tr v-if="expanded === row.user_id" class="bg-muted/20">
-                            <td colspan="6" class="px-3 py-2">
-                                <p
-                                    v-if="detailLoading === row.user_id"
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    Loading detail…
-                                </p>
-                                <p
-                                    v-else-if="detailError[row.user_id]"
-                                    class="text-xs text-red-700 dark:text-red-300"
-                                >
-                                    {{ detailError[row.user_id] }}
-                                </p>
-                                <p
-                                    v-else-if="
-                                        (detail[row.user_id]?.length ?? 0) === 0
-                                    "
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    No assignments.
-                                </p>
-                                <ul v-else class="space-y-1 text-xs">
-                                    <li
-                                        v-for="(item, i) in detail[row.user_id]"
-                                        :key="i"
-                                        class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
+                    </thead>
+                    <tbody class="divide-y divide-border">
+                        <template
+                            v-for="row in table.rows.value"
+                            :key="row.user_id"
+                        >
+                            <tr class="hover:bg-muted/30">
+                                <td class="px-3 py-2">
+                                    <Link
+                                        :href="userShow(row.user_id)"
+                                        class="font-medium text-primary hover:underline"
                                     >
-                                        <span
-                                            class="flex items-center gap-2 font-medium"
+                                        {{
+                                            row.name ?? row.email ?? row.user_id
+                                        }}
+                                    </Link>
+                                    <div
+                                        v-if="row.email"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        {{ row.email }}
+                                    </div>
+                                </td>
+                                <td class="px-3 py-2">
+                                    <ComplianceStatusBadge
+                                        v-if="row.overall_status !== 'none'"
+                                        :status="row.overall_status"
+                                        :count="row.counts[row.overall_status]"
+                                    />
+                                    <span
+                                        v-else
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        No assignments
+                                    </span>
+                                </td>
+                                <td class="px-3 py-2">
+                                    <span
+                                        v-if="row.counts.overdue > 0"
+                                        class="font-medium text-red-700 dark:text-red-300"
+                                    >
+                                        {{ row.counts.overdue }}
+                                    </span>
+                                    <span v-else class="text-muted-foreground"
+                                        >0</span
+                                    >
+                                </td>
+                                <td class="px-3 py-2">
+                                    {{ row.counts.due_soon }}
+                                </td>
+                                <td class="px-3 py-2">
+                                    <div class="flex flex-wrap gap-1">
+                                        <TagPill
+                                            v-for="tag in tagsFor(row)"
+                                            :key="tag.id"
+                                            :tag="tag"
+                                            size="sm"
+                                        />
+                                    </div>
+                                </td>
+                                <td class="px-3 py-2 text-right">
+                                    <button
+                                        type="button"
+                                        class="text-xs text-primary hover:underline"
+                                        :aria-expanded="expanded === row.user_id"
+                                        @click="toggleExpand(row)"
+                                    >
+                                        {{
+                                            expanded === row.user_id ? '▲' : '▼'
+                                        }}
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr
+                                v-if="expanded === row.user_id"
+                                class="bg-muted/20"
+                            >
+                                <td colspan="6" class="px-3 py-2">
+                                    <p
+                                        v-if="detailLoading === row.user_id"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        Loading detail…
+                                    </p>
+                                    <p
+                                        v-else-if="detailError[row.user_id]"
+                                        class="text-xs text-red-700 dark:text-red-300"
+                                    >
+                                        {{ detailError[row.user_id] }}
+                                    </p>
+                                    <p
+                                        v-else-if="
+                                            (detail[row.user_id]?.length ?? 0) ===
+                                            0
+                                        "
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        No assignments.
+                                    </p>
+                                    <ul v-else class="space-y-1 text-xs">
+                                        <li
+                                            v-for="(item, i) in detail[
+                                                row.user_id
+                                            ]"
+                                            :key="i"
+                                            class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
                                         >
-                                            <ComplianceStatusBadge
-                                                v-if="item.status"
-                                                :status="item.status"
-                                            />
-                                            {{ item.training_name ?? '—' }}
                                             <span
-                                                v-for="(chip, ci) in item.sources ??
-                                                []"
-                                                :key="ci"
-                                                class="rounded-full border border-border px-1.5 py-0.5 font-normal text-muted-foreground"
+                                                class="flex items-center gap-2 font-medium"
                                             >
+                                                <ComplianceStatusBadge
+                                                    v-if="item.status"
+                                                    :status="item.status"
+                                                />
+                                                {{ item.training_name ?? '—' }}
+                                                <span
+                                                    v-for="(chip, ci) in item.sources ??
+                                                    []"
+                                                    :key="ci"
+                                                    class="rounded-full border border-border px-1.5 py-0.5 font-normal text-muted-foreground"
+                                                >
+                                                    {{
+                                                        chip.type ===
+                                                        'requirement'
+                                                            ? (chip.name ??
+                                                              'Requirement')
+                                                            : 'Direct'
+                                                    }}
+                                                </span>
+                                            </span>
+                                            <span class="text-muted-foreground">
+                                                <template v-if="item.expires_at">
+                                                    due {{ item.expires_at
+                                                    }}<template
+                                                        v-if="
+                                                            item.days_until_due !=
+                                                            null
+                                                        "
+                                                    >
+                                                        ({{
+                                                            item.days_until_due
+                                                        }}d)</template
+                                                    >
+                                                    ·
+                                                </template>
+                                                last completed
                                                 {{
-                                                    chip.type === 'requirement'
-                                                        ? (chip.name ??
-                                                          'Requirement')
-                                                        : 'Direct'
+                                                    item.last_completed_at ??
+                                                    'never'
                                                 }}
                                             </span>
-                                        </span>
-                                        <span class="text-muted-foreground">
-                                            <template v-if="item.expires_at">
-                                                due {{ item.expires_at
-                                                }}<template
-                                                    v-if="
-                                                        item.days_until_due !=
-                                                        null
-                                                    "
-                                                >
-                                                    ({{ item.days_until_due }}d)</template
-                                                >
-                                                ·
-                                            </template>
-                                            last completed
-                                            {{
-                                                item.last_completed_at ??
-                                                'never'
-                                            }}
-                                        </span>
-                                    </li>
-                                </ul>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
+                                        </li>
+                                    </ul>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <Pagination
+                :page="table.page.value"
+                :last-page="table.lastPage.value"
+                :total="table.total.value"
+                :per-page="table.perPage.value"
+                :loading="table.loading.value"
+                @update:page="table.setPage"
+                @update:per-page="table.setPerPage"
+            />
+        </template>
     </DashWidget>
 </template>

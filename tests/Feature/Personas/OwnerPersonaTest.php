@@ -47,7 +47,7 @@ class OwnerPersonaTest extends PersonaTestCase
             $this->actingAs($owner)->getJson('/api/dashboard/needs-action')->assertOk()->json(),
         );
         $this->assertNotEmpty(
-            $this->actingAs($owner)->getJson('/api/dashboard/users-compliance')->assertOk()->json(),
+            $this->actingAs($owner)->getJson('/api/dashboard/users-compliance')->assertOk()->json('data'),
         );
         $this->actingAs($owner)->getJson('/api/dashboard/recent-completions')->assertOk();
         $this->actingAs($owner)->get('/users')->assertOk();

@@ -44,13 +44,64 @@ class DashboardController extends Controller
         );
     }
 
+    /**
+     * Server-paged all-users compliance ({data, meta}). The per-user summary
+     * is computed once, then searched (name/email), sorted, and sliced to a
+     * page so a large org doesn't ship/render thousands of rows at once. Sort
+     * keys: name, status (worst-first), overdue count, due_soon count.
+     */
     public function usersCompliance(Request $request): JsonResponse
     {
         $this->authorize($request);
 
-        return response()->json(
-            $this->status->usersComplianceSummary($this->orgFor($request)),
-        );
+        $rows = $this->status->usersComplianceSummary($this->orgFor($request));
+
+        $q = trim(mb_strtolower((string) $request->query('q', '')));
+        if ($q !== '') {
+            $rows = array_values(array_filter($rows, fn (array $r) => str_contains(mb_strtolower((string) $r['name']), $q)
+                || str_contains(mb_strtolower((string) ($r['email'] ?? '')), $q)));
+        }
+
+        // Worst-first status precedence (overdue → … → none last).
+        $statusRank = array_flip(TrainingStatusService::STATUSES);
+        $rankOf = fn (string $s): int => $statusRank[$s] ?? 99;
+
+        $sort = in_array($request->query('sort'), ['name', 'status', 'overdue', 'due_soon'], true)
+            ? $request->query('sort')
+            : 'overdue';
+
+        usort($rows, function (array $a, array $b) use ($sort, $rankOf): int {
+            $primary = match ($sort) {
+                'name' => strcasecmp((string) $a['name'], (string) $b['name']),
+                'status' => $rankOf($a['overall_status']) <=> $rankOf($b['overall_status']),
+                'due_soon' => ($a['counts']['due_soon'] ?? 0) <=> ($b['counts']['due_soon'] ?? 0),
+                default => ($a['counts']['overdue'] ?? 0) <=> ($b['counts']['overdue'] ?? 0),
+            };
+
+            // Stable, page-consistent tiebreak.
+            return $primary !== 0
+                ? $primary
+                : (strcasecmp((string) $a['name'], (string) $b['name']) ?: strcmp((string) $a['user_id'], (string) $b['user_id']));
+        });
+
+        if ($request->query('dir') !== 'asc') {
+            $rows = array_reverse($rows);
+        }
+
+        $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
+        $total = count($rows);
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page = max(1, min((int) $request->query('page', 1), $lastPage));
+
+        return response()->json([
+            'data' => array_values(array_slice($rows, ($page - 1) * $perPage, $perPage)),
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage,
+                'per_page' => $perPage,
+                'total' => $total,
+            ],
+        ]);
     }
 
     /**

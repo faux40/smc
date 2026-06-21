@@ -59,7 +59,7 @@ class DashboardUsersComplianceTest extends TestCase
         $overdueUser = User::factory()->for($org, 'organization')->create();
         $this->makeOverdue($org, $overdueUser);
 
-        $rows = $this->actingAs($manager)->getJson(self::URL)->assertOk()->json();
+        $rows = $this->actingAs($manager)->getJson(self::URL)->assertOk()->json('data');
         $byId = collect($rows)->keyBy('user_id');
 
         // Overdue user surfaces as overdue with a count of 1.
@@ -78,7 +78,7 @@ class DashboardUsersComplianceTest extends TestCase
         $managerA = $this->manager($orgA);
         User::factory()->for($orgB, 'organization')->count(3)->create();
 
-        $rows = $this->actingAs($managerA)->getJson(self::URL)->assertOk()->json();
+        $rows = $this->actingAs($managerA)->getJson(self::URL)->assertOk()->json('data');
 
         $this->assertCount(1, $rows); // only orgA's manager
     }
@@ -91,6 +91,51 @@ class DashboardUsersComplianceTest extends TestCase
         $this->actingAs($none)->getJson(self::URL)->assertForbidden();
     }
 
+    public function test_paginates_with_meta_and_clamps_per_page(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        User::factory()->for($org, 'organization')->count(5)->create(); // 6 incl. manager
+
+        $this->actingAs($manager)
+            ->getJson(self::URL.'?per_page=2&page=2')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('meta.total', 6)
+            ->assertJsonPath('meta.per_page', 2)
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.last_page', 3);
+
+        $this->actingAs($manager)
+            ->getJson(self::URL.'?per_page=9999')
+            ->assertOk()
+            ->assertJsonPath('meta.per_page', 100);
+    }
+
+    public function test_searches_by_name_or_email(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        User::factory()->for($org, 'organization')->create(['f_name' => 'Forklift', 'l_name' => 'Frank']);
+        User::factory()->for($org, 'organization')->create(['f_name' => 'Alice', 'l_name' => 'Andersen']);
+
+        $rows = $this->actingAs($manager)->getJson(self::URL.'?q=forklift')->assertOk()->json('data');
+        $this->assertCount(1, $rows);
+        $this->assertStringContainsString('Forklift', (string) $rows[0]['name']);
+    }
+
+    public function test_sorts_by_overdue_count_descending_by_default(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $worst = User::factory()->for($org, 'organization')->create();
+        $this->makeOverdue($org, $worst);
+
+        $rows = $this->actingAs($manager)->getJson(self::URL)->assertOk()->json('data');
+        // Most-overdue user first.
+        $this->assertSame($worst->id, $rows[0]['user_id']);
+    }
+
     public function test_includes_attached_tag_ids(): void
     {
         $org = Organization::factory()->create();
@@ -98,7 +143,7 @@ class DashboardUsersComplianceTest extends TestCase
         $tag = Tag::factory()->for($org, 'organization')->create();
         $manager->tags()->attach($tag->id);
 
-        $rows = $this->actingAs($manager)->getJson(self::URL)->assertOk()->json();
+        $rows = $this->actingAs($manager)->getJson(self::URL)->assertOk()->json('data');
         $byId = collect($rows)->keyBy('user_id');
 
         $this->assertContains($tag->id, $byId[$manager->id]['tag_ids']);
