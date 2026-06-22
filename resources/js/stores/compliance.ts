@@ -54,15 +54,19 @@ function defaultHeaders(): Record<string, string> {
     };
 }
 
-/** Drill-down query: the server-table params plus an optional status filter. */
-export type ComplianceUsersQuery = ServerTableQuery & { status?: string };
+/** Drill-down query: server-table params plus optional status + tag filters. */
+export type ComplianceUsersQuery = ServerTableQuery & {
+    status?: string;
+    tags?: string[];
+    tags_mode?: string;
+};
 
 export const useComplianceStore = defineStore('compliance', () => {
     async function fetchPaged<T>(
         url: string,
         params: ComplianceUsersQuery,
     ): Promise<ServerTableResponse<T>> {
-        const query: Record<string, string | number> = {
+        const query: Record<string, string | number | string[]> = {
             page: params.page,
             per_page: params.per_page,
             dir: params.dir,
@@ -76,6 +80,10 @@ export const useComplianceStore = defineStore('compliance', () => {
         }
         if (params.status) {
             query.status = params.status;
+        }
+        if (params.tags && params.tags.length > 0) {
+            query.tags = params.tags;
+            query.tags_mode = params.tags_mode ?? 'and';
         }
 
         const { data } = await axios.get<ServerTableResponse<T>>(url, {

@@ -260,6 +260,45 @@ class ComplianceQueryTest extends TestCase
         }
     }
 
+    public function test_users_for_training_filters_by_tags_and_or_not(): void
+    {
+        $org = Organization::factory()->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+        $tagA = Tag::factory()->for($org, 'organization')->create();
+        $tagB = Tag::factory()->for($org, 'organization')->create();
+
+        $mk = function (array $tagIds) use ($org, $training) {
+            $u = User::factory()->for($org, 'organization')->create();
+            TrainingAssignment::factory()->create([
+                'org_id' => $org->id, 'user_id' => $u->id, 'training_id' => $training->id,
+                'name' => $training->name, 'status' => 'overdue',
+            ]);
+            if ($tagIds) {
+                $u->tags()->attach($tagIds);
+            }
+
+            return $u;
+        };
+        $both = $mk([$tagA->id, $tagB->id]);
+        $onlyA = $mk([$tagA->id]);
+        $none = $mk([]);
+
+        $cq = new ComplianceQuery;
+        $ids = fn (array $r) => collect($r['data'])->pluck('user_id')->all();
+
+        // and: every selected tag.
+        $and = $cq->usersForTraining($org, $training->id, ['tags' => [$tagA->id, $tagB->id], 'tags_mode' => 'and']);
+        $this->assertSame([$both->id], $ids($and));
+
+        // or: any selected tag.
+        $or = $cq->usersForTraining($org, $training->id, ['tags' => [$tagA->id, $tagB->id], 'tags_mode' => 'or']);
+        $this->assertEqualsCanonicalizing([$both->id, $onlyA->id], $ids($or));
+
+        // not: none of the selected tags.
+        $not = $cq->usersForTraining($org, $training->id, ['tags' => [$tagA->id, $tagB->id], 'tags_mode' => 'not']);
+        $this->assertSame([$none->id], $ids($not));
+    }
+
     public function test_users_for_requirement_drilldown_only_counts_sourced_assignments(): void
     {
         $org = Organization::factory()->create();

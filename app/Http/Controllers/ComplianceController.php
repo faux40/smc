@@ -123,6 +123,8 @@ class ComplianceController extends Controller
             'per_page' => $request->query('per_page'),
             'q' => $request->query('q'),
             'status' => $request->query('status'),
+            'tags' => $request->query('tags'),
+            'tags_mode' => $request->query('tags_mode'),
         ];
     }
 }

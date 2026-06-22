@@ -244,6 +244,37 @@ class ComplianceQuery
             }));
         }
 
+        // Optional tag filter (and / or / not) — same CAST subquery as
+        // UsersController, correlated to the TA's user.
+        $tagIds = array_values(array_filter(
+            (array) ($opts['tags'] ?? []),
+            fn ($v) => is_string($v) && $v !== '',
+        ));
+        if (count($tagIds) > 0) {
+            $mode = in_array($opts['tags_mode'] ?? null, ['and', 'or', 'not'], true)
+                ? $opts['tags_mode']
+                : 'and';
+            $tagSubquery = function ($sub, array $ids) {
+                $sub->select(DB::raw(1))
+                    ->from('taggables')
+                    ->join('tags', 'tags.id', '=', 'taggables.tag_id')
+                    ->whereRaw('taggables.taggable_id = CAST(training_assignments.user_id AS text)')
+                    ->where('taggables.taggable_type', User::class)
+                    ->whereNull('tags.deleted_at')
+                    ->whereIn('tags.id', $ids);
+            };
+
+            if ($mode === 'and') {
+                foreach ($tagIds as $id) {
+                    $base->whereExists(fn ($sub) => $tagSubquery($sub, [$id]));
+                }
+            } elseif ($mode === 'or') {
+                $base->whereExists(fn ($sub) => $tagSubquery($sub, $tagIds));
+            } else { // 'not'
+                $base->whereNotExists(fn ($sub) => $tagSubquery($sub, $tagIds));
+            }
+        }
+
         // Worst-first by the canonical bucket order, then soonest expiry.
         $rank = collect(self::BUCKETS)
             ->map(fn (string $b, int $i) => "WHEN '{$b}' THEN {$i}")

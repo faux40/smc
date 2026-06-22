@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import TagFilter from '@/components/TagFilter.vue';
 import { Checkbox } from '@/components/ui/checkbox';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import TrainingDetail from '@/pages/compliance/TrainingDetail.vue';
@@ -110,6 +111,17 @@ describe('compliance/TrainingDetail', () => {
 
         expect(getParams().length).toBeGreaterThan(before);
         expect(getParams().at(-1)).toMatchObject({ q: 'baker' });
+    });
+
+    it('refetches with the chosen tags when the tag filter changes', async () => {
+        const wrapper = await mountDetail();
+        const before = getParams().length;
+
+        wrapper.findComponent(TagFilter).vm.$emit('update:tag-ids', ['tag1']);
+        await flushPromises();
+
+        expect(getParams().length).toBeGreaterThan(before);
+        expect(getParams().at(-1)).toMatchObject({ tags: ['tag1'], tags_mode: 'and' });
     });
 
     it('assembles a class from the selected users, then navigates to it', async () => {

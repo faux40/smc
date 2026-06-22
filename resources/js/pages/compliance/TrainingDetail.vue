@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import TagFilter from '@/components/TagFilter.vue';
+import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
 import { useServerTable } from '@/composables/useServerTable';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
@@ -95,15 +97,23 @@ const error = ref<string | null>(null);
 const initialLoading = ref(true);
 const search = ref('');
 const statusFilter = ref('');
+const tagFilter = ref<string[]>([]);
+const tagFilterMode = ref<TagFilterMode>('and');
 
 const table = useServerTable<ComplianceUserRow>(
     (params) =>
         store.trainingUsers(props.training.id, {
             ...params,
             status: statusFilter.value || undefined,
+            tags: tagFilter.value,
+            tags_mode: tagFilterMode.value,
         }),
     { perPage: 25, sort: null, dir: 'desc' },
 );
+
+function reloadForTags(): void {
+    table.reload();
+}
 
 function chipCount(key: string): number {
     if (key === '') return props.counts.total;
@@ -244,6 +254,16 @@ onMounted(async () => {
                                 placeholder="Search name, email, EE#, dept, location, tag…"
                                 class="h-8 w-72"
                                 @update:model-value="onSearch"
+                            />
+                        </div>
+                        <div class="grid gap-1">
+                            <Label class="text-xs">Tags</Label>
+                            <TagFilter
+                                v-model:tag-ids="tagFilter"
+                                v-model:mode="tagFilterMode"
+                                placeholder="Any tag…"
+                                @update:tag-ids="reloadForTags"
+                                @update:mode="reloadForTags"
                             />
                         </div>
                         <Button
