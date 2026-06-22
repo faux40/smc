@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useServerTable } from '@/composables/useServerTable';
+import { useTableView } from '@/composables/useTableView';
 import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import type { ComplianceStatus } from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import { useReportsStore } from '@/stores/reports';
@@ -47,6 +48,10 @@ const COLUMNS = [
 ];
 
 const USER_MORPH = 'App\\Models\\User';
+
+// Shared between the DataTable and the page-side useTableView below, so the
+// export link can read the same resolved column visibility/order the table shows.
+const REPORT_VIEW_ID = 'reports-completions';
 
 // Expiry statuses match ExpiryStatus keys/labels (mirrors the Status column).
 const STATUS_OPTIONS = [
@@ -88,6 +93,10 @@ const table = useServerTable<CompletionReportRow>(
     { perPage: 25, sort: null, dir: 'desc' },
 );
 
+// Mirror the table's resolved column state (same viewId + COLUMNS) so the
+// export link can carry the visible columns, in order, to the PDF.
+const reportView = useTableView(REPORT_VIEW_ID, COLUMNS);
+
 const debouncedReload = useDebounceFn(() => table.reload(), 300);
 function reloadNow(): void {
     table.reload();
@@ -103,6 +112,8 @@ const exportHref = computed(() => {
     for (const id of tagFilter.value) params.append('tags[]', id);
     if (tagFilter.value.length > 0) params.set('tags_mode', tagFilterMode.value);
     for (const s of statusFilter.value) params.append('statuses[]', s);
+    for (const col of reportView.visibleColumns.value)
+        params.append('columns[]', col.key);
     const qs = params.toString();
     return `/api/reports/completions/export${qs ? `?${qs}` : ''}`;
 });
@@ -162,7 +173,7 @@ onMounted(async () => {
 
         <AsyncState :loading="initialLoading" :error="error">
             <DataTable
-                view-id="reports-completions"
+                :view-id="REPORT_VIEW_ID"
                 :default-columns="COLUMNS"
                 :rows="table.rows.value"
                 :sort-key="null"

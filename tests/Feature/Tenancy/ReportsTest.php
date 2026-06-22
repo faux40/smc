@@ -311,6 +311,46 @@ class ReportsTest extends TestCase
         );
     }
 
+    public function test_completion_report_export_honors_selected_columns_and_order(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $user = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Lee']);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+        Completion::factory()->for($org, 'organization')->for($user, 'user')->state([
+            'module_type' => Training::class, 'module_id' => $training->id, 'completion_date' => '2026-02-01',
+        ])->create();
+
+        // Subset + reordered (status before user), one unknown key to be ignored.
+        $this->actingAs($manager)
+            ->get(route('reports.completions-export', ['columns' => ['status', 'user', 'bogus']]))
+            ->assertOk();
+
+        Pdf::assertRespondedWithPdf(
+            fn ($pdf) => (new Collection($pdf->viewData['columns']))->pluck('key')->all() === ['status', 'user'],
+        );
+    }
+
+    public function test_completion_report_export_defaults_to_all_columns(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $user = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Lee']);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+        Completion::factory()->for($org, 'organization')->for($user, 'user')->state([
+            'module_type' => Training::class, 'module_id' => $training->id, 'completion_date' => '2026-02-01',
+        ])->create();
+
+        // No columns param → full set; all-unknown → also falls back to full set.
+        foreach ([[], ['columns' => ['nope']]] as $query) {
+            $this->actingAs($manager)->get(route('reports.completions-export', $query))->assertOk();
+            Pdf::assertRespondedWithPdf(
+                fn ($pdf) => (new Collection($pdf->viewData['columns']))->pluck('key')->all()
+                    === ['user', 'employee_number', 'department', 'location', 'training', 'completion_date', 'expire_date', 'status', 'tags', 'hours', 'class', 'cert_id'],
+            );
+        }
+    }
+
     public function test_completion_report_forbidden_for_non_manager(): void
     {
         $org = Organization::factory()->create();

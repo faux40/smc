@@ -83,24 +83,54 @@ class ReportsController extends Controller
             org: $org,
             title: 'Completion report',
             subtitle: $this->dateRangeLabel($request),
-            columns: [
-                ['key' => 'user', 'label' => 'User'],
-                ['key' => 'employee_number', 'label' => 'Employee #'],
-                ['key' => 'department', 'label' => 'Department'],
-                ['key' => 'location', 'label' => 'Location'],
-                ['key' => 'training', 'label' => 'Training'],
-                ['key' => 'completion_date', 'label' => 'Completed'],
-                ['key' => 'expire_date', 'label' => 'Expires'],
-                ['key' => 'status', 'label' => 'Status'],
-                ['key' => 'tags', 'label' => 'Tags'],
-                ['key' => 'hours', 'label' => 'Hours'],
-                ['key' => 'class', 'label' => 'Class'],
-                ['key' => 'cert_id', 'label' => 'Cert ID'],
-            ],
+            columns: $this->selectedColumns($request),
             rows: $this->reportRows($all->take(self::ROW_CAP), $org),
             capped: $capped,
             filename: 'completion-report.pdf',
             filters: $this->filterSummary($request),
+        );
+    }
+
+    /**
+     * The completion report's full column catalog (key → label), in default
+     * order. The on-screen table mirrors these keys via useTableView.
+     *
+     * @var array<string, string>
+     */
+    private const COMPLETION_COLUMNS = [
+        'user' => 'User',
+        'employee_number' => 'Employee #',
+        'department' => 'Department',
+        'location' => 'Location',
+        'training' => 'Training',
+        'completion_date' => 'Completed',
+        'expire_date' => 'Expires',
+        'status' => 'Status',
+        'tags' => 'Tags',
+        'hours' => 'Hours',
+        'class' => 'Class',
+        'cert_id' => 'Cert ID',
+    ];
+
+    /**
+     * Resolve which columns the export PDF should render, honoring the
+     * on-screen column show/hide + order passed as `columns[]`. Unknown keys
+     * are ignored (whitelist); an empty/absent/all-unknown selection falls
+     * back to the full catalog rather than rendering an empty table.
+     *
+     * @return array<int, array{key: string, label: string}>
+     */
+    private function selectedColumns(Request $request): array
+    {
+        $requested = array_values(array_filter(
+            (array) $request->query('columns', []),
+            fn ($k) => is_string($k) && isset(self::COMPLETION_COLUMNS[$k]),
+        ));
+        $keys = $requested !== [] ? $requested : array_keys(self::COMPLETION_COLUMNS);
+
+        return array_map(
+            fn (string $key) => ['key' => $key, 'label' => self::COMPLETION_COLUMNS[$key]],
+            $keys,
         );
     }
 

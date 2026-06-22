@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MultiSelectFilter from '@/components/MultiSelectFilter.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import ReportsIndex from '@/pages/reports/Index.vue';
+import { usePreferencesStore } from '@/stores/preferences';
 
 vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
@@ -123,6 +124,30 @@ describe('reports/Index — completion report', () => {
             .find('[data-testid="export-completion-report"]')
             .attributes('href');
         expect(href).toContain('statuses%5B%5D=expired');
+    });
+
+    it('export link lists all visible columns in order by default', async () => {
+        const wrapper = await mountPage();
+        const href = wrapper
+            .find('[data-testid="export-completion-report"]')
+            .attributes('href');
+        // First and last catalog columns both present.
+        expect(href).toContain('columns%5B%5D=user');
+        expect(href).toContain('columns%5B%5D=tags');
+        expect(href).toContain('columns%5B%5D=cert_id');
+    });
+
+    it('export link omits a hidden column', async () => {
+        const wrapper = await mountPage();
+        usePreferencesStore().update('reports-completions', {
+            visible_columns: { tags: false },
+        });
+        await flushPromises();
+        const href = wrapper
+            .find('[data-testid="export-completion-report"]')
+            .attributes('href');
+        expect(href).toContain('columns%5B%5D=user');
+        expect(href).not.toContain('columns%5B%5D=tags');
     });
 
     it('builds the export link from the current filters', async () => {
