@@ -201,6 +201,46 @@ class ComplianceQueryTest extends TestCase
         $this->assertNotNull($res['data'][0]['name']);
     }
 
+    public function test_training_counts_tallies_each_status(): void
+    {
+        $org = Organization::factory()->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+        $this->ta($org, $training, ['status' => 'overdue']);
+        $this->ta($org, $training, ['status' => 'overdue']);
+        $this->ta($org, $training, ['status' => 'current']);
+
+        $counts = (new ComplianceQuery)->trainingCounts($org, $training->id);
+
+        $this->assertSame(2, $counts['overdue']);
+        $this->assertSame(1, $counts['current']);
+        $this->assertSame(3, $counts['total']);
+    }
+
+    public function test_users_for_training_filters_by_status_and_searches_by_name(): void
+    {
+        $org = Organization::factory()->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+
+        $alice = User::factory()->for($org, 'organization')->create(['f_name' => 'Alice', 'l_name' => 'Adams']);
+        $bob = User::factory()->for($org, 'organization')->create(['f_name' => 'Bob', 'l_name' => 'Baker']);
+        foreach ([[$alice, 'overdue'], [$bob, 'current']] as [$u, $status]) {
+            TrainingAssignment::factory()->create([
+                'org_id' => $org->id, 'user_id' => $u->id, 'training_id' => $training->id,
+                'name' => $training->name, 'status' => $status,
+            ]);
+        }
+
+        $cq = new ComplianceQuery;
+
+        $overdue = $cq->usersForTraining($org, $training->id, ['status' => 'overdue']);
+        $this->assertSame(1, $overdue['meta']['total']);
+        $this->assertSame($alice->id, $overdue['data'][0]['user_id']);
+
+        $search = $cq->usersForTraining($org, $training->id, ['q' => 'baker']);
+        $this->assertSame(1, $search['meta']['total']);
+        $this->assertSame($bob->id, $search['data'][0]['user_id']);
+    }
+
     public function test_users_for_requirement_drilldown_only_counts_sourced_assignments(): void
     {
         $org = Organization::factory()->create();

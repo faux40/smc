@@ -50,10 +50,13 @@ function defaultHeaders(): Record<string, string> {
     };
 }
 
+/** Drill-down query: the server-table params plus an optional status filter. */
+export type ComplianceUsersQuery = ServerTableQuery & { status?: string };
+
 export const useComplianceStore = defineStore('compliance', () => {
     async function fetchPaged<T>(
         url: string,
-        params: ServerTableQuery,
+        params: ComplianceUsersQuery,
     ): Promise<ServerTableResponse<T>> {
         const query: Record<string, string | number> = {
             page: params.page,
@@ -66,6 +69,9 @@ export const useComplianceStore = defineStore('compliance', () => {
         }
         if (params.q) {
             query.q = params.q;
+        }
+        if (params.status) {
+            query.status = params.status;
         }
 
         const { data } = await axios.get<ServerTableResponse<T>>(url, {
@@ -86,13 +92,13 @@ export const useComplianceStore = defineStore('compliance', () => {
         fetchPaged<ComplianceRow>('/api/compliance/not-required', params);
 
     // Drill-down: users under one training / requirement.
-    const trainingUsers = (id: string, params: ServerTableQuery) =>
+    const trainingUsers = (id: string, params: ComplianceUsersQuery) =>
         fetchPaged<ComplianceUserRow>(
             `/api/compliance/by-training/${id}/users`,
             params,
         );
 
-    const requirementUsers = (id: string, params: ServerTableQuery) =>
+    const requirementUsers = (id: string, params: ComplianceUsersQuery) =>
         fetchPaged<ComplianceUserRow>(
             `/api/compliance/by-requirement/${id}/users`,
             params,

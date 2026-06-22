@@ -30,6 +30,20 @@ class ComplianceController extends Controller
         return Inertia::render('compliance/Index');
     }
 
+    /**
+     * Per-training compliance detail shell: the training + its status tallies
+     * (header chips). The user list streams in via the trainingUsers endpoint.
+     */
+    public function trainingDetail(Request $request, Training $training): Response
+    {
+        $this->authorizeManager($request);
+
+        return Inertia::render('compliance/TrainingDetail', [
+            'training' => ['id' => $training->id, 'name' => $training->name],
+            'counts' => $this->compliance->trainingCounts($request->user()->organization, $training->id),
+        ]);
+    }
+
     public function byTraining(Request $request): JsonResponse
     {
         $this->authorizeManager($request);
@@ -107,6 +121,8 @@ class ComplianceController extends Controller
         return [
             'page' => $request->query('page'),
             'per_page' => $request->query('per_page'),
+            'q' => $request->query('q'),
+            'status' => $request->query('status'),
         ];
     }
 }

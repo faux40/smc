@@ -5,6 +5,7 @@
  * fetcher + name label. Server-paged via useServerTable; per-status counts
  * come straight off the materialized status.
  */
+import { Link } from '@inertiajs/vue3';
 import { onMounted, ref } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
@@ -34,6 +35,8 @@ const props = defineProps<{
     ) => (
         params: ServerTableQuery,
     ) => Promise<ServerTableResponse<ComplianceUserRow>>;
+    // Optional: make the row name link somewhere (e.g. the training detail).
+    rowHref?: (rowId: string) => string;
 }>();
 
 // Inline drill-down: the row whose users are shown below the table.
@@ -104,7 +107,14 @@ onMounted(async () => {
             </template>
 
             <template #col-name="{ row }">
-                <span class="font-medium">{{ row.name }}</span>
+                <Link
+                    v-if="rowHref"
+                    :href="rowHref(row.id)"
+                    class="font-medium text-primary hover:underline"
+                >
+                    {{ row.name }}
+                </Link>
+                <span v-else class="font-medium">{{ row.name }}</span>
             </template>
 
             <template #col-overdue="{ row }">

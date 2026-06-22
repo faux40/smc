@@ -53,6 +53,18 @@ describe('ClassFormModal create validation', () => {
         expect(axios.post).not.toHaveBeenCalled();
     });
 
+    it('seeds the class name from presetName on open (assemble-a-class flow)', async () => {
+        const wrapper = mount(ClassFormModal, {
+            props: { open: false, presetTrainingIds: ['t1'], presetName: 'Fall Protection' },
+            attachTo: document.body,
+        });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        const seeded = document.body.querySelector<HTMLInputElement>('#class_name');
+        expect(seeded?.value).toBe('Fall Protection');
+    });
+
     it('posts once name + date are provided', async () => {
         await openCreate();
 

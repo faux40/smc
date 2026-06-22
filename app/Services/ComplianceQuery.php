@@ -181,10 +181,56 @@ class ComplianceQuery
      * @param  array<string, mixed>  $opts
      * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>}
      */
+    /**
+     * Per-training status tallies (the detail-page header chips). One indexed
+     * GROUP-less aggregate over the stored status.
+     *
+     * @return array<string, int>
+     */
+    public function trainingCounts(Organization $org, string $trainingId): array
+    {
+        $row = DB::table('training_assignments')
+            ->where('org_id', $org->id)
+            ->where('training_id', $trainingId)
+            ->selectRaw(<<<'SQL'
+                SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) as overdue,
+                SUM(CASE WHEN status = 'due_soon' THEN 1 ELSE 0 END) as due_soon,
+                SUM(CASE WHEN status = 'not_started' THEN 1 ELSE 0 END) as not_started,
+                SUM(CASE WHEN status = 'current' THEN 1 ELSE 0 END) as current,
+                SUM(CASE WHEN status = 'as_needed' THEN 1 ELSE 0 END) as as_needed,
+                COUNT(*) as total
+            SQL)
+            ->first();
+
+        return [
+            'overdue' => (int) ($row->overdue ?? 0),
+            'due_soon' => (int) ($row->due_soon ?? 0),
+            'not_started' => (int) ($row->not_started ?? 0),
+            'current' => (int) ($row->current ?? 0),
+            'as_needed' => (int) ($row->as_needed ?? 0),
+            'total' => (int) ($row->total ?? 0),
+        ];
+    }
+
     private function paginateUsers(EloquentBuilder $base, array $opts): array
     {
         $perPage = max(1, min(100, (int) ($opts['per_page'] ?? 10)));
         $page = max(1, (int) ($opts['page'] ?? 1));
+
+        // Optional status filter (chips) — status is a TA column, no join.
+        if (in_array($opts['status'] ?? null, self::BUCKETS, true)) {
+            $base->where('status', $opts['status']);
+        }
+
+        // Optional user-name/email search — via the relation so there's no
+        // join (and no org_id ambiguity with the users table).
+        if ($like = $this->searchLike($opts)) {
+            $base->whereHas('user', fn ($u) => $u->where(function ($w) use ($like) {
+                foreach (['f_name', 'm_name', 'l_name', 'email'] as $col) {
+                    $w->orWhereRaw("LOWER({$col}) LIKE ?", [$like]);
+                }
+            }));
+        }
 
         // Worst-first by the canonical bucket order, then soonest expiry.
         $rank = collect(self::BUCKETS)

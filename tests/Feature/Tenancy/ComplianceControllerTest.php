@@ -88,6 +88,41 @@ class ComplianceControllerTest extends TestCase
             ->assertJsonStructure(['data' => [['user_id', 'name', 'status', 'expires_at', 'last_completed_at']], 'meta']);
     }
 
+    public function test_training_detail_shell_carries_counts(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'Hazwoper']);
+        $this->ta($org, $training, 'overdue');
+        $this->ta($org, $training, 'current');
+
+        $this->actingAs($manager)
+            ->get(route('compliance.training', $training))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('compliance/TrainingDetail')
+                ->where('training.id', $training->id)
+                ->where('training.name', 'Hazwoper')
+                ->where('counts.overdue', 1)
+                ->where('counts.current', 1)
+                ->where('counts.total', 2));
+    }
+
+    public function test_training_users_endpoint_filters_by_status(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create();
+        $this->ta($org, $training, 'overdue');
+        $this->ta($org, $training, 'current');
+
+        $this->actingAs($manager)
+            ->getJson(route('compliance.training-users', [$training, 'status' => 'overdue']))
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.status', 'overdue');
+    }
+
     public function test_non_manager_is_forbidden(): void
     {
         $org = Organization::factory()->create();

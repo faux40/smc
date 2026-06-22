@@ -40,6 +40,7 @@ const CONFIGS = {
         fetcher: store.byTraining,
         drilldown: (id: string) => (params: ServerTableQuery) =>
             store.trainingUsers(id, params),
+        rowHref: (id: string) => `/compliance/training/${id}`,
     },
     requirement: {
         viewId: 'compliance-requirement',
@@ -48,6 +49,7 @@ const CONFIGS = {
         fetcher: store.byRequirement,
         drilldown: (id: string) => (params: ServerTableQuery) =>
             store.requirementUsers(id, params),
+        rowHref: undefined,
     },
     // Not-required mixes assignments + orphan completions, so no per-row
     // drill-down (yet) — the counts stand on their own.
@@ -57,6 +59,7 @@ const CONFIGS = {
         searchPlaceholder: 'Search trainings…',
         fetcher: store.notRequired,
         drilldown: undefined,
+        rowHref: undefined,
     },
 } as const;
 
@@ -100,6 +103,7 @@ const activeConfig = computed(() => CONFIGS[tab.value]);
             :search-placeholder="activeConfig.searchPlaceholder"
             :fetcher="activeConfig.fetcher"
             :drilldown="activeConfig.drilldown"
+            :row-href="activeConfig.rowHref"
         />
     </div>
 </template>

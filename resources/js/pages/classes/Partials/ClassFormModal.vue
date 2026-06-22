@@ -20,7 +20,13 @@ import { useTrainingsStore } from '@/stores/trainings';
 
 const FORM_CTX = 'form:class';
 
-const props = defineProps<{ open: boolean }>();
+const props = defineProps<{
+    open: boolean;
+    // Optional seed (e.g. "assemble a class" from the compliance detail page):
+    // pre-check these trainings and default the class name.
+    presetTrainingIds?: string[];
+    presetName?: string;
+}>();
 
 const emit = defineEmits<{
     (e: 'update:open', v: boolean): void;
@@ -45,7 +51,12 @@ watch(
 
         errorStore.clear(FORM_CTX);
         setFrom(null);
-        selectedTrainingIds.value = [];
+        selectedTrainingIds.value = props.presetTrainingIds
+            ? [...props.presetTrainingIds]
+            : [];
+        if (props.presetName) {
+            form.value.name = props.presetName;
+        }
         void trainings.load();
     },
 );

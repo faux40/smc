@@ -56,6 +56,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // Compliance roll-ups (Manager+), pivoted by training / requirement. Shell
     // + per-tab paginated JSON; aggregation lives in ComplianceQuery.
     Route::get('compliance', [ComplianceController::class, 'index'])->name('compliance.page');
+    Route::get('compliance/training/{training}', [ComplianceController::class, 'trainingDetail'])->name('compliance.training');
     Route::get('api/compliance/by-training', [ComplianceController::class, 'byTraining'])->name('compliance.by-training');
     Route::get('api/compliance/by-requirement', [ComplianceController::class, 'byRequirement'])->name('compliance.by-requirement');
     Route::get('api/compliance/not-required', [ComplianceController::class, 'notRequired'])->name('compliance.not-required');
