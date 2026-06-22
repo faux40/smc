@@ -74,6 +74,42 @@ class ReportsTest extends TestCase
         );
     }
 
+    public function test_manager_can_export_a_user_record(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $user = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Lee']);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'Hazwoper']);
+        Completion::factory()->for($org, 'organization')->for($user, 'user')->state([
+            'module_type' => Training::class,
+            'module_id' => $training->id,
+            'completion_date' => '2026-02-01',
+        ])->create();
+
+        $this->actingAs($manager)
+            ->get(route('reports.user-record', $user))
+            ->assertOk();
+
+        Pdf::assertRespondedWithPdf(
+            fn ($pdf) => $pdf->viewName === 'pdf.report'
+                && $pdf->viewData['subtitle'] === 'Lee, Sam'
+                && (new Collection($pdf->viewData['rows']))->contains(
+                    fn (array $r) => $r['training'] === 'Hazwoper',
+                ),
+        );
+    }
+
+    public function test_user_record_forbidden_for_non_manager(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('None')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+
+        $this->actingAs($member)
+            ->get(route('reports.user-record', $target))
+            ->assertForbidden();
+    }
+
     public function test_non_manager_cannot_export(): void
     {
         $org = Organization::factory()->create();

@@ -65,6 +65,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
 
     // Exportable PDF reports (T1, Manager+).
     Route::get('api/reports/training/{training}/record', [ReportsController::class, 'trainingRecord'])->name('reports.training-record');
+    Route::get('api/reports/user/{user}/record', [ReportsController::class, 'userRecord'])->name('reports.user-record');
     Route::get('api/compliance/by-requirement/{requirement}/users', [ComplianceController::class, 'requirementUsers'])->name('compliance.requirement-users');
 
     // Save the current user's UI preferences (table column visibility/order +

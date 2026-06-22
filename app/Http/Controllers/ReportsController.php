@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Completion;
 use App\Models\Training;
+use App\Models\User;
 use App\Support\CompletionSerializer;
 use App\Support\PdfRenderer;
 use Illuminate\Http\Request;
@@ -71,6 +72,54 @@ class ReportsController extends Controller
             rows: $rows,
             capped: $capped,
             filename: 'training-record-'.$training->id.'.pdf',
+        );
+    }
+
+    /**
+     * User training record (transcript) — one user's full completion history,
+     * newest first (training, when, expiry, hours, class, cert id).
+     */
+    public function userRecord(Request $request, User $user): PdfBuilder
+    {
+        $this->authorizeManager($request);
+
+        $completions = Completion::query()
+            ->where('org_id', $user->org_id)
+            ->where('user_id', $user->id)
+            ->with('rqmtElements:id')
+            ->orderByDesc('completion_date')
+            ->limit(self::ROW_CAP + 1)
+            ->get();
+
+        $capped = $completions->count() > self::ROW_CAP;
+        $completions = $completions->take(self::ROW_CAP);
+
+        $rows = collect(CompletionSerializer::collection($completions))
+            ->map(fn (array $r) => [
+                'training' => $r['training_name'] ?? '—',
+                'completion_date' => $r['completion_date'] ?? '—',
+                'expire_date' => $r['expire_date'] ?? '—',
+                'hours' => $r['hours'] ?? '—',
+                'class' => $r['class_name'] ?? '—',
+                'cert_id' => $r['cert_id'] ?? '—',
+            ])
+            ->all();
+
+        return $this->tableReport(
+            org: $user->organization,
+            title: 'Training record',
+            subtitle: $user->sort_name,
+            columns: [
+                ['key' => 'training', 'label' => 'Training'],
+                ['key' => 'completion_date', 'label' => 'Completed'],
+                ['key' => 'expire_date', 'label' => 'Expires'],
+                ['key' => 'hours', 'label' => 'Hours'],
+                ['key' => 'class', 'label' => 'Class'],
+                ['key' => 'cert_id', 'label' => 'Cert ID'],
+            ],
+            rows: $rows,
+            capped: $capped,
+            filename: 'training-record-user-'.$user->id.'.pdf',
         );
     }
 

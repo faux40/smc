@@ -332,15 +332,32 @@ function defaultHeaders(): Record<string, string> {
                 :title="fullName"
                 :description="subject.email ?? 'No email on file.'"
             />
-            <Button
-                v-if="subject.can_edit"
-                size="sm"
-                variant="outline"
-                data-testid="edit-user-btn"
-                @click="editOpen = true"
-            >
-                Edit profile
-            </Button>
+            <div class="flex items-center gap-2">
+                <Button
+                    v-if="canAssign"
+                    as-child
+                    size="sm"
+                    variant="outline"
+                >
+                    <a
+                        :href="`/api/reports/user/${subject.id}/record`"
+                        target="_blank"
+                        rel="noopener"
+                        data-testid="export-user-record"
+                    >
+                        Print record (PDF)
+                    </a>
+                </Button>
+                <Button
+                    v-if="subject.can_edit"
+                    size="sm"
+                    variant="outline"
+                    data-testid="edit-user-btn"
+                    @click="editOpen = true"
+                >
+                    Edit profile
+                </Button>
+            </div>
         </div>
 
         <div

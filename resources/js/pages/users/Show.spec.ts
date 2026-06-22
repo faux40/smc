@@ -259,6 +259,13 @@ describe('users/Show — profile edit affordance', () => {
         vi.clearAllMocks();
     });
 
+    it('links the Print-record button to the user transcript PDF endpoint', async () => {
+        const wrapper = await mountShow();
+        const link = wrapper.find('[data-testid="export-user-record"]');
+        expect(link.exists()).toBe(true); // auth user isAdmin → Manager+
+        expect(link.attributes('href')).toBe('/api/reports/user/u1/record');
+    });
+
     it('shows the Edit button and loads the supervisor roster when can_edit', async () => {
         const wrapper = await mountShow([], emptyCompliance, { can_edit: true });
 
