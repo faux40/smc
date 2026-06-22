@@ -39,6 +39,11 @@ const props = defineProps<{
     fetcher: (
         params: ComplianceUsersQuery,
     ) => Promise<ServerTableResponse<ComplianceUserRow>>;
+    // Requirement detail shows one row per training a user owes → label the rows.
+    showTraining?: boolean;
+    // Remap a stored status to a different badge (e.g. not-required's stored
+    // 'overdue' should read as 'Expired'). Keyed by the raw row status.
+    badgeStatusMap?: Record<string, ComplianceStatus>;
 }>();
 
 const tagsStore = useTagsStore();
@@ -47,8 +52,11 @@ const authUser = computed(
     () => page.props.auth.user as { org_id?: string } | null,
 );
 
-const COLUMNS = [
+const columns = computed(() => [
     { key: 'name', label: 'User', sortable: false },
+    ...(props.showTraining
+        ? [{ key: 'training', label: 'Training', sortable: false }]
+        : []),
     { key: 'status', label: 'Status', sortable: false },
     { key: 'employee_number', label: 'Employee #', sortable: false },
     { key: 'department', label: 'Department', sortable: false },
@@ -56,7 +64,11 @@ const COLUMNS = [
     { key: 'expires', label: 'Expires', sortable: false },
     { key: 'last_completed', label: 'Last completed', sortable: false },
     { key: 'tags', label: 'Tags', sortable: false },
-];
+]);
+
+function badgeStatus(status: string): ComplianceStatus {
+    return (props.badgeStatusMap?.[status] ?? status) as ComplianceStatus;
+}
 
 const allChips = computed(() => [
     { key: '', label: 'All' },
@@ -162,7 +174,7 @@ onMounted(async () => {
         <AsyncState :loading="initialLoading" :error="error">
             <DataTable
                 :view-id="viewId"
-                :default-columns="COLUMNS"
+                :default-columns="columns"
                 :rows="table.rows.value"
                 :sort-key="null"
                 :sort-dir="table.dir.value"
@@ -202,8 +214,12 @@ onMounted(async () => {
                     </Link>
                 </template>
 
+                <template #col-training="{ row }">
+                    {{ row.training ?? '—' }}
+                </template>
+
                 <template #col-status="{ row }">
-                    <ComplianceStatusBadge :status="(row.status as ComplianceStatus)" />
+                    <ComplianceStatusBadge :status="badgeStatus(row.status)" />
                 </template>
 
                 <template #col-employee_number="{ row }">

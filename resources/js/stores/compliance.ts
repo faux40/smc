@@ -35,6 +35,10 @@ export interface ComplianceUserRow {
     user_id: string;
     name: string | null;
     status: string;
+    // Present on requirement rows (one per training a user owes); the detail
+    // shows these in a Training column so the rows are self-explanatory.
+    training_id?: string;
+    training?: string | null;
     expires_at: string | null;
     last_completed_at: string | null;
     employee_number: string | null;

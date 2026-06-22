@@ -33,5 +33,6 @@ const fetcher = (params: ServerTableQuery) =>
         :counts="counts"
         :status-chips="STATUS_CHIPS"
         :fetcher="fetcher"
+        :badge-status-map="{ overdue: 'expired' }"
     />
 </template>

@@ -8,6 +8,7 @@ import { computed } from 'vue';
 
 export type ComplianceStatus =
     | 'overdue'
+    | 'expired'
     | 'due_soon'
     | 'current'
     | 'never_started'
@@ -24,6 +25,14 @@ const presentation = computed(() => {
         case 'overdue':
             return {
                 label: 'Overdue',
+                classes:
+                    'bg-red-100 text-red-800 ring-red-200 dark:bg-red-900/30 dark:text-red-200 dark:ring-red-800',
+            };
+        case 'expired':
+            // Same red as overdue, but "expired" reads correctly where someone
+            // took a training they weren't required to (not-required detail).
+            return {
+                label: 'Expired',
                 classes:
                     'bg-red-100 text-red-800 ring-red-200 dark:bg-red-900/30 dark:text-red-200 dark:ring-red-800',
             };

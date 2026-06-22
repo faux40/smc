@@ -36,5 +36,6 @@ const fetcher = (params: ServerTableQuery) =>
         :counts="counts"
         :status-chips="STATUS_CHIPS"
         :fetcher="fetcher"
+        show-training
     />
 </template>

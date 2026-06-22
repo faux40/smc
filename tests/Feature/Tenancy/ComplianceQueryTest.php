@@ -421,4 +421,34 @@ class ComplianceQueryTest extends TestCase
         $this->assertSame(1, $res['meta']['total']);
         $this->assertSame($sourced->user_id, $res['data'][0]['user_id']);
     }
+
+    public function test_users_for_requirement_carries_the_training_per_row(): void
+    {
+        $org = Organization::factory()->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+        // One user owing two trainings under the same requirement → two rows,
+        // each tagged with its training (so the detail's Training column reads).
+        $user = User::factory()->for($org, 'organization')->create();
+        foreach (['First Aid', 'Lockout/Tagout'] as $name) {
+            $training = Training::factory()->for($org, 'organization')->create(['name' => $name]);
+            $ta = TrainingAssignment::factory()->create([
+                'org_id' => $org->id, 'user_id' => $user->id, 'training_id' => $training->id,
+                'name' => $name, 'status' => 'overdue',
+            ]);
+            AssignmentSource::create([
+                'training_assignment_id' => $ta->id,
+                'sourceable_type' => Requirement::class,
+                'sourceable_id' => $req->id,
+                'added_at' => now(),
+            ]);
+        }
+
+        $res = (new ComplianceQuery)->usersForRequirement($org, $req->id);
+
+        $this->assertSame(2, $res['meta']['total']);
+        $this->assertEqualsCanonicalizing(
+            ['First Aid', 'Lockout/Tagout'],
+            collect($res['data'])->pluck('training')->all(),
+        );
+    }
 }

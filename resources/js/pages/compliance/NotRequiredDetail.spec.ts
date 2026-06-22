@@ -66,6 +66,10 @@ describe('compliance/NotRequiredDetail (via ComplianceDetail)', () => {
         expect(wrapper.find('[data-testid="status-chip-expired"]').text()).toContain('2');
         expect(wrapper.find('tbody').text()).toContain('Lee, Sam');
         expect(wrapper.find('tbody').text()).toContain('EMP-1');
+        // Stored 'overdue' reads as "Expired" here (badge-status-map), matching
+        // the "Taken but Expired" chip rather than saying "Overdue".
+        expect(wrapper.find('tbody').text()).toContain('Expired');
+        expect(wrapper.find('tbody').text()).not.toContain('Overdue');
     });
 
     it('filters by a status chip', async () => {

@@ -503,6 +503,10 @@ class ComplianceQuery
                 'user_id' => $ta->user_id,
                 'name' => $ta->user?->sort_name,
                 'status' => $ta->status,
+                // The assignment's training (snapshot name) — lets the requirement
+                // detail show one self-explanatory row per training a user owes.
+                'training_id' => $ta->training_id,
+                'training' => $ta->name,
                 'expires_at' => $ta->expires_at?->toDateString(),
                 'last_completed_at' => $ta->last_completed_at?->toDateString(),
                 'employee_number' => $ta->user?->employee_number,
