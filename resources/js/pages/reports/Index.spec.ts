@@ -1,0 +1,97 @@
+import { flushPromises, mount } from '@vue/test-utils';
+import axios from 'axios';
+import { createPinia, setActivePinia } from 'pinia';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import TagFilter from '@/components/TagFilter.vue';
+import ReportsIndex from '@/pages/reports/Index.vue';
+
+vi.mock('axios');
+vi.mock('@inertiajs/vue3', () => ({
+    Head: { template: '<div><slot /></div>' },
+    usePage: () => ({ props: { auth: { user: { org_id: 'o1' } } } }),
+}));
+
+const META = { current_page: 1, last_page: 1, per_page: 25, total: 1 };
+const COMPLETIONS = '/api/reports/completions';
+
+function stubAxios() {
+    (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+        if (url === COMPLETIONS) {
+            return Promise.resolve({
+                data: {
+                    data: [
+                        { id: 'c1', user: 'Lee, Sam', training: 'CPR', completion_date: '2026-02-01', expire_date: '—', hours: 4, class: '—', cert_id: 'CERT-1' },
+                    ],
+                    meta: META,
+                },
+            });
+        }
+        if (url === '/api/tags') return Promise.resolve({ data: [] });
+        return Promise.resolve({ data: [] });
+    });
+}
+
+function params(): Array<Record<string, unknown>> {
+    return (axios.get as ReturnType<typeof vi.fn>).mock.calls
+        .filter((c) => c[0] === COMPLETIONS)
+        .map((c) => (c[1]?.params ?? {}) as Record<string, unknown>);
+}
+
+async function mountPage() {
+    const wrapper = mount(ReportsIndex);
+    await flushPromises();
+
+    return wrapper;
+}
+
+describe('reports/Index — completion report', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+        stubAxios();
+    });
+
+    it('loads completions on mount and renders a row', async () => {
+        const wrapper = await mountPage();
+        expect(params().length).toBeGreaterThan(0);
+        expect(wrapper.find('tbody').text()).toContain('Lee, Sam');
+        expect(wrapper.find('tbody').text()).toContain('CPR');
+    });
+
+    it('sends training search (q) and user search (user_q), debounced', async () => {
+        const wrapper = await mountPage();
+        vi.useFakeTimers();
+        await wrapper.find('#rep_training').setValue('forklift');
+        await wrapper.find('#rep_user').setValue('lee');
+        await vi.advanceTimersByTimeAsync(400);
+        vi.useRealTimers();
+        await flushPromises();
+        expect(params().at(-1)).toMatchObject({ q: 'forklift', user_q: 'lee' });
+    });
+
+    it('sends the date range immediately', async () => {
+        const wrapper = await mountPage();
+        await wrapper.find('#rep_from').setValue('2026-01-01');
+        await flushPromises();
+        expect(params().at(-1)).toMatchObject({ from: '2026-01-01' });
+    });
+
+    it('sends the tag filter', async () => {
+        const wrapper = await mountPage();
+        wrapper.findComponent(TagFilter).vm.$emit('update:tag-ids', ['tag1']);
+        await flushPromises();
+        expect(params().at(-1)).toMatchObject({ tags: ['tag1'], tags_mode: 'and' });
+    });
+
+    it('builds the export link from the current filters', async () => {
+        const wrapper = await mountPage();
+        await wrapper.find('#rep_training').setValue('cpr');
+        await wrapper.find('#rep_from').setValue('2026-01-01');
+        await flushPromises();
+
+        const href = wrapper.find('[data-testid="export-completion-report"]').attributes('href');
+        expect(href).toContain('/api/reports/completions/export?');
+        expect(href).toContain('q=cpr');
+        expect(href).toContain('from=2026-01-01');
+    });
+});

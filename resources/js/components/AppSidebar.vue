@@ -5,6 +5,7 @@ import {
     CheckCircle2,
     ClipboardCheck,
     ClipboardList,
+    FileText,
     GraduationCap,
     LayoutGrid,
     ShieldCheck,
@@ -63,6 +64,11 @@ const mainNavItems = computed<NavItem[]>(() => {
             title: 'Compliance',
             href: '/compliance',
             icon: ShieldCheck,
+        });
+        items.push({
+            title: 'Reports',
+            href: '/reports',
+            icon: FileText,
         });
     }
 

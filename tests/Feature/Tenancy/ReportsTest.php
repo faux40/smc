@@ -9,6 +9,7 @@ use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
+use Inertia\Testing\AssertableInertia;
 use Spatie\LaravelPdf\Facades\Pdf;
 use Tests\TestCase;
 
@@ -108,6 +109,82 @@ class ReportsTest extends TestCase
         $this->actingAs($member)
             ->get(route('reports.user-record', $target))
             ->assertForbidden();
+    }
+
+    public function test_reports_page_shell_for_manager(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+
+        $this->actingAs($manager)
+            ->get(route('reports.page'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('reports/Index'));
+    }
+
+    public function test_completion_report_json_filters_by_date_training_and_user(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $alice = User::factory()->for($org, 'organization')->create(['f_name' => 'Alice', 'l_name' => 'Adams']);
+        $bob = User::factory()->for($org, 'organization')->create(['f_name' => 'Bob', 'l_name' => 'Baker']);
+        $forklift = Training::factory()->for($org, 'organization')->create(['name' => 'Forklift']);
+        $ladders = Training::factory()->for($org, 'organization')->create(['name' => 'Ladders']);
+
+        $mk = fn (User $u, Training $t, string $date) => Completion::factory()->for($org, 'organization')->for($u, 'user')->state([
+            'module_type' => Training::class, 'module_id' => $t->id, 'completion_date' => $date,
+        ])->create();
+        $mk($alice, $forklift, '2026-03-01');
+        $mk($bob, $ladders, '2026-01-01');
+
+        // No filter → both.
+        $all = $this->actingAs($manager)->getJson(route('reports.completions'))->assertOk()->json('data');
+        $this->assertCount(2, $all);
+
+        // Training filter.
+        $byTraining = $this->actingAs($manager)->getJson(route('reports.completions', ['q' => 'forklift']))->json('data');
+        $this->assertSame(['Forklift'], collect($byTraining)->pluck('training')->all());
+
+        // User filter.
+        $byUser = $this->actingAs($manager)->getJson(route('reports.completions', ['user_q' => 'baker']))->json('data');
+        $this->assertSame(['Baker, Bob'], collect($byUser)->pluck('user')->all());
+
+        // Date range (Feb–Apr) → only the March completion.
+        $byDate = $this->actingAs($manager)->getJson(route('reports.completions', ['from' => '2026-02-01', 'to' => '2026-04-01']))->json('data');
+        $this->assertCount(1, $byDate);
+        $this->assertSame('Forklift', $byDate[0]['training']);
+    }
+
+    public function test_completion_report_export_pdf(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $user = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Lee']);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+        Completion::factory()->for($org, 'organization')->for($user, 'user')->state([
+            'module_type' => Training::class, 'module_id' => $training->id, 'completion_date' => '2026-02-01',
+        ])->create();
+
+        $this->actingAs($manager)
+            ->get(route('reports.completions-export'))
+            ->assertOk();
+
+        Pdf::assertRespondedWithPdf(
+            fn ($pdf) => $pdf->viewName === 'pdf.report'
+                && $pdf->viewData['title'] === 'Completion report'
+                && (new Collection($pdf->viewData['rows']))->contains(
+                    fn (array $r) => $r['user'] === 'Lee, Sam' && $r['training'] === 'CPR',
+                ),
+        );
+    }
+
+    public function test_completion_report_forbidden_for_non_manager(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('None')->create();
+
+        $this->actingAs($member)->getJson(route('reports.completions'))->assertForbidden();
+        $this->actingAs($member)->get(route('reports.completions-export'))->assertForbidden();
     }
 
     public function test_non_manager_cannot_export(): void
