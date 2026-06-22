@@ -64,14 +64,17 @@ class ComplianceQuery
         $today = Date::now()->startOfDay()->toDateString();
         $boundary = Date::now()->startOfDay()->addDays($org->expiringSoonDays())->toDateString();
 
-        // (a) Direct-only assignments → materialized status.
+        // (a) Direct-only assignments → materialized status. training_id is a
+        //     uuid while completions.module_id is varchar; Postgres won't union
+        //     mismatched types, so both legs cast the id to text (and the join
+        //     below matches on text). Mirrors the taggables CAST pattern.
         $direct = DB::table('training_assignments as ta')
             ->where('ta.org_id', $org->id)
             ->whereNotExists(fn ($q) => $q->from('assignment_sources as s')
                 ->whereColumn('s.training_assignment_id', 'ta.id')
                 ->whereNull('s.removed_at')
                 ->where('s.sourceable_type', Requirement::class))
-            ->select('ta.training_id as training_id', 'ta.status as status');
+            ->selectRaw('CAST(ta.training_id AS text) as training_id, ta.status as status');
 
         // (b) Completions of an unassigned training → status from the latest
         //     completion's own expiry (no TA exists to carry a bucket).
@@ -80,14 +83,15 @@ class ComplianceQuery
             ->where('c.module_type', Training::class)
             ->whereNotExists(fn ($q) => $q->from('training_assignments as ta2')
                 ->whereColumn('ta2.user_id', 'c.user_id')
-                ->whereColumn('ta2.training_id', 'c.module_id'))
+                // uuid training_id vs varchar module_id — cast to compare.
+                ->whereRaw('CAST(ta2.training_id AS text) = c.module_id'))
             ->whereNotExists(fn ($q) => $q->from('completions as c2')
                 ->whereColumn('c2.user_id', 'c.user_id')
                 ->whereColumn('c2.module_id', 'c.module_id')
                 ->where('c2.module_type', Training::class)
                 ->whereColumn('c2.completion_date', '>', 'c.completion_date'))
             ->selectRaw(
-                "c.module_id as training_id, CASE
+                "CAST(c.module_id AS text) as training_id, CASE
                     WHEN c.expire_date IS NULL THEN 'current'
                     WHEN c.expire_date < ? THEN 'overdue'
                     WHEN c.expire_date <= ? THEN 'due_soon'
@@ -99,7 +103,7 @@ class ComplianceQuery
 
         $base = DB::query()
             ->fromSub($facts, 'f')
-            ->join('trainings as t', 't.id', '=', 'f.training_id')
+            ->join('trainings as t', fn ($join) => $join->whereRaw('CAST(t.id AS text) = f.training_id'))
             ->whereNull('t.deleted_at');
 
         if ($like = $this->searchLike($opts)) {
