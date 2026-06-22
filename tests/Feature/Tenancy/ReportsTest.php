@@ -255,6 +255,31 @@ class ReportsTest extends TestCase
         );
     }
 
+    public function test_completion_report_export_pdf_includes_a_tags_column(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $user = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Lee']);
+        $alpha = Tag::factory()->for($org, 'organization')->create(['name' => 'Alpha']);
+        $beta = Tag::factory()->for($org, 'organization')->create(['name' => 'Beta']);
+        $user->tags()->attach([$alpha->id, $beta->id]);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+        Completion::factory()->for($org, 'organization')->for($user, 'user')->state([
+            'module_type' => Training::class, 'module_id' => $training->id, 'completion_date' => '2026-02-01',
+        ])->create();
+
+        $this->actingAs($manager)->get(route('reports.completions-export'))->assertOk();
+
+        Pdf::assertRespondedWithPdf(
+            fn ($pdf) => (new Collection($pdf->viewData['columns']))->contains(fn (array $c) => $c['key'] === 'tags')
+                && (new Collection($pdf->viewData['rows']))->contains(
+                    fn (array $r) => $r['user'] === 'Lee, Sam'
+                        && str_contains($r['tags'], 'Alpha')
+                        && str_contains($r['tags'], 'Beta'),
+                ),
+        );
+    }
+
     public function test_completion_report_forbidden_for_non_manager(): void
     {
         $org = Organization::factory()->create();

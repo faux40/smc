@@ -50,7 +50,7 @@ class ReportsController extends Controller
         $org = $request->user()->organization;
 
         $base = $this->completionsQuery($request, $org)
-            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location', 'user.tags:id', 'rqmtElements:id']);
+            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location', 'user.tags:id,name', 'rqmtElements:id']);
 
         $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
         $page = $base->paginate($perPage);
@@ -73,7 +73,7 @@ class ReportsController extends Controller
         $org = $request->user()->organization;
 
         $all = $this->completionsQuery($request, $org)
-            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location', 'rqmtElements:id'])
+            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location', 'user.tags:id,name', 'rqmtElements:id'])
             ->limit(self::ROW_CAP + 1)
             ->get();
 
@@ -92,6 +92,7 @@ class ReportsController extends Controller
                 ['key' => 'completion_date', 'label' => 'Completed'],
                 ['key' => 'expire_date', 'label' => 'Expires'],
                 ['key' => 'status', 'label' => 'Status'],
+                ['key' => 'tags', 'label' => 'Tags'],
                 ['key' => 'hours', 'label' => 'Hours'],
                 ['key' => 'class', 'label' => 'Class'],
                 ['key' => 'cert_id', 'label' => 'Cert ID'],
@@ -197,6 +198,11 @@ class ReportsController extends Controller
                     'tag_ids' => $u && $u->relationLoaded('tags')
                         ? $u->tags->pluck('id')->all()
                         : [],
+                    // Tag names joined, for the server-rendered PDF column
+                    // (the on-screen list renders pills from tag_ids instead).
+                    'tags' => $u && $u->relationLoaded('tags') && $u->tags->isNotEmpty()
+                        ? $u->tags->pluck('name')->implode(', ')
+                        : '—',
                     'user' => $u?->sort_name ?? '—',
                     'employee_number' => $u?->employee_number ?? '—',
                     'department' => $u?->department ?? '—',
