@@ -113,6 +113,13 @@ describe('compliance/TrainingDetail', () => {
         expect(getParams().at(-1)).toMatchObject({ q: 'baker' });
     });
 
+    it('links the export-report button to the training record PDF endpoint', async () => {
+        const wrapper = await mountDetail();
+        const link = wrapper.find('[data-testid="export-training-record"]');
+        expect(link.exists()).toBe(true);
+        expect(link.attributes('href')).toBe('/api/reports/training/t1/record');
+    });
+
     it('refetches with the chosen tags when the tag filter changes', async () => {
         const wrapper = await mountDetail();
         const before = getParams().length;

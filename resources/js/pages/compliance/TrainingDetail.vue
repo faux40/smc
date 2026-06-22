@@ -207,12 +207,24 @@ onMounted(async () => {
                 :title="training.name"
                 description="Compliance for this training. Filter by status, then select users to assemble a class."
             />
-            <Link
-                href="/compliance"
-                class="text-sm text-muted-foreground hover:underline"
-            >
-                ← All compliance
-            </Link>
+            <div class="flex items-center gap-3">
+                <Button as-child variant="outline" size="sm">
+                    <a
+                        :href="`/api/reports/training/${training.id}/record`"
+                        target="_blank"
+                        rel="noopener"
+                        data-testid="export-training-record"
+                    >
+                        Export report (PDF)
+                    </a>
+                </Button>
+                <Link
+                    href="/compliance"
+                    class="text-sm text-muted-foreground hover:underline"
+                >
+                    ← All compliance
+                </Link>
+            </div>
         </div>
 
         <!-- Status tallies double as filters. -->

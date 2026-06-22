@@ -9,6 +9,7 @@ use App\Http\Controllers\CompletionsController;
 use App\Http\Controllers\CspReportController;
 use App\Http\Controllers\ComplianceController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\NotificationsController;
 use App\Http\Controllers\RequirementsController;
@@ -61,6 +62,9 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/compliance/by-requirement', [ComplianceController::class, 'byRequirement'])->name('compliance.by-requirement');
     Route::get('api/compliance/not-required', [ComplianceController::class, 'notRequired'])->name('compliance.not-required');
     Route::get('api/compliance/by-training/{training}/users', [ComplianceController::class, 'trainingUsers'])->name('compliance.training-users');
+
+    // Exportable PDF reports (T1, Manager+).
+    Route::get('api/reports/training/{training}/record', [ReportsController::class, 'trainingRecord'])->name('reports.training-record');
     Route::get('api/compliance/by-requirement/{requirement}/users', [ComplianceController::class, 'requirementUsers'])->name('compliance.requirement-users');
 
     // Save the current user's UI preferences (table column visibility/order +
