@@ -3,6 +3,7 @@ import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TagFilter from '@/components/TagFilter.vue';
+import { Checkbox } from '@/components/ui/checkbox';
 import ClassActionsBar from '@/pages/classes/Partials/ClassActionsBar.vue';
 import NotRequiredDetail from '@/pages/compliance/NotRequiredDetail.vue';
 
@@ -105,5 +106,37 @@ describe('compliance/NotRequiredDetail (via ComplianceDetail)', () => {
         expect(bar.exists()).toBe(true);
         expect(bar.props('createTrainingIds')).toEqual(['t1']);
         expect(bar.props('addTrainingId')).toBe('t1');
+    });
+
+    it('selects every matching row beyond the visible page (#6)', async () => {
+        // First load shows 1 of 3 matching; the bulk fetch returns all 3.
+        let call = 0;
+        (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+            if (url === USERS) {
+                call += 1;
+                const n = call === 1 ? 1 : 3;
+                const data = Array.from({ length: n }, (_, i) => ({
+                    user_id: `u${i + 1}`, name: `User ${i + 1}`, status: 'current',
+                    expires_at: null, last_completed_at: null, employee_number: null,
+                    department: null, location: null, tag_ids: [],
+                }));
+                return Promise.resolve({ data: { data, meta: { ...META, total: 3 } } });
+            }
+            if (url === '/api/tags') return Promise.resolve({ data: [] });
+            return Promise.resolve({ data: [] });
+        });
+
+        const wrapper = await mountPage();
+
+        // Select the visible page (1 row) → banner offers "all 3 matching".
+        wrapper.findAllComponents(Checkbox)[0].vm.$emit('update:modelValue', true);
+        await flushPromises();
+        expect(wrapper.find('[data-testid="selection-bar"]').text()).toContain('1 selected');
+
+        await wrapper.find('[data-testid="select-all-matching"]').trigger('click');
+        await flushPromises();
+
+        expect(wrapper.find('[data-testid="selection-bar"]').text()).toContain('3 selected');
+        expect(wrapper.findComponent(ClassActionsBar).props('selectedUserIds')).toHaveLength(3);
     });
 });

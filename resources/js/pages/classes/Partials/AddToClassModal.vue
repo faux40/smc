@@ -52,6 +52,23 @@ watch(
     },
 );
 
+// Date-only string → "Mar 1, 2026" (built from parts so it doesn't shift by
+// timezone the way `new Date('2026-03-01')` would).
+function formatDate(value: string | null): string {
+    if (!value) {
+        return '—';
+    }
+    const [y, m, d] = value.split('-').map(Number);
+    if (!y || !m || !d) {
+        return value;
+    }
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+}
+
 async function addTo(row: ClassRow): Promise<void> {
     submittingId.value = row.id;
     try {
@@ -106,7 +123,7 @@ async function addTo(row: ClassRow): Promise<void> {
                     <div class="min-w-0">
                         <div class="truncate font-medium">{{ row.name }}</div>
                         <div class="text-xs text-muted-foreground">
-                            {{ row.scheduled_date ?? '—' }} ·
+                            {{ formatDate(row.scheduled_date) }} ·
                             {{ row.enrollments_count }} enrolled
                             <template v-if="row.instructor">
                                 · {{ row.instructor }}

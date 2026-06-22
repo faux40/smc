@@ -19,6 +19,7 @@ vi.mock('@inertiajs/vue3', () => ({
         props: { auth: { user: { org_id: 'o1', isAdmin: true } } },
     }),
 }));
+vi.mock('vue-sonner', () => ({ toast: { success: vi.fn() } }));
 vi.mock('@/routes/classes', () => ({
     showPage: (id: string) => ({ url: `/classes/${id}` }),
 }));
@@ -44,6 +45,10 @@ function stubAxios() {
     (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
         if (url === USERS_URL) return Promise.resolve(usersResponse());
         if (url === '/api/tags') return Promise.resolve({ data: [] });
+        // ClassActionsBar eligibility pre-check → one scheduled class exists.
+        if (url === '/api/classes') {
+            return Promise.resolve({ data: { data: [{ id: 'c1', name: 'A', scheduled_date: null, enrollments_count: 0 }], meta: {} } });
+        }
         return Promise.resolve({ data: [] });
     });
     (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { id: 'c1' } });
@@ -160,7 +165,7 @@ describe('compliance/TrainingDetail', () => {
         expect(routerVisit).toHaveBeenCalledWith({ url: '/classes/c1' });
     });
 
-    it('offers "add to existing class" for the selection and navigates after adding', async () => {
+    it('offers "add to existing class" for the selection and clears it after adding', async () => {
         const wrapper = await mountDetail();
 
         // Disabled with nothing selected, enabled once users are picked.
@@ -172,13 +177,14 @@ describe('compliance/TrainingDetail', () => {
         await flushPromises();
         expect(wrapper.find('[data-testid="add-to-class"]').attributes('disabled')).toBeUndefined();
 
-        // The picker passes along the selected user ids, and adding navigates.
         const modal = wrapper.findComponent(AddToClassModal);
         expect(modal.props('userIds')).toEqual(['u1', 'u2']);
         expect(modal.props('trainingId')).toBe('t1');
 
+        // Adding to an existing class stays on the list and clears the selection.
         modal.vm.$emit('added', 'c9');
         await flushPromises();
-        expect(routerVisit).toHaveBeenCalledWith({ url: '/classes/c9' });
+        expect(routerVisit).not.toHaveBeenCalledWith({ url: '/classes/c9' });
+        expect(wrapper.find('[data-testid="selection-bar"]').exists()).toBe(false);
     });
 });

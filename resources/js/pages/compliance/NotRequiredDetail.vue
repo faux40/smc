@@ -51,7 +51,7 @@ const fetcher = (params: ServerTableQuery) =>
         :badge-status-map="{ overdue: 'expired' }"
         :selectable="canManage"
     >
-        <template #toolbar="{ selectedUserIds }">
+        <template #toolbar="{ selectedUserIds, clear }">
             <ClassActionsBar
                 v-if="canManage"
                 :selected-user-ids="selectedUserIds"
@@ -59,6 +59,7 @@ const fetcher = (params: ServerTableQuery) =>
                 :preset-name="training.name"
                 :add-training-id="training.id"
                 :add-training-name="training.name"
+                @done="clear"
             />
         </template>
     </ComplianceDetail>

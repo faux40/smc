@@ -5,9 +5,13 @@
  * a single training — add them to an existing scheduled class. Shared by the
  * training / requirement / not-required detail screens so the enroll-then-go
  * behaviour lives in one place.
+ *
+ * Creating a class navigates to it (you finish scheduling there). Adding to an
+ * existing class stays put + toasts, so you can keep working through the list.
  */
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
+import { toast } from 'vue-sonner';
 import { Button } from '@/components/ui/button';
 import AddToClassModal from '@/pages/classes/Partials/AddToClassModal.vue';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
@@ -25,10 +29,40 @@ const props = defineProps<{
     addTrainingName?: string;
 }>();
 
+// Emitted after a successful add-to-existing so the page can clear its selection.
+const emit = defineEmits<{ (e: 'done'): void }>();
+
 const classes = useClassesStore();
 const createOpen = ref(false);
 const addOpen = ref(false);
 const count = computed(() => props.selectedUserIds.length);
+
+// #7 — know up front whether any scheduled class includes this training, so the
+// "add to existing" button can disable + explain rather than open to an empty
+// modal. null = not checked yet (single-training screens only).
+const hasEligibleClass = ref<boolean | null>(null);
+async function checkEligibility(): Promise<void> {
+    if (!props.addTrainingId) {
+        return;
+    }
+    try {
+        const list = await classes.fetchForTraining(props.addTrainingId);
+        hasEligibleClass.value = list.length > 0;
+    } catch {
+        hasEligibleClass.value = null; // unknown → don't block the user
+    }
+}
+onMounted(checkEligibility);
+watch(() => props.addTrainingId, checkEligibility);
+
+const addDisabled = computed(
+    () => count.value === 0 || hasEligibleClass.value === false,
+);
+const addHint = computed(() =>
+    hasEligibleClass.value === false
+        ? 'No scheduled class includes this training yet'
+        : undefined,
+);
 
 async function onClassSaved(detail: { id: string }): Promise<void> {
     if (props.selectedUserIds.length > 0) {
@@ -40,8 +74,12 @@ async function onClassSaved(detail: { id: string }): Promise<void> {
     router.visit(showPage(detail.id));
 }
 
-function onAdded(classId: string): void {
-    router.visit(showPage(classId));
+function onAdded(): void {
+    const n = props.selectedUserIds.length;
+    toast.success(`Added ${n} ${n === 1 ? 'person' : 'people'} to the class.`);
+    emit('done');
+    // A newly added class may now have eligibility implications elsewhere; the
+    // count is unaffected, so just stay on the list.
 }
 </script>
 
@@ -51,7 +89,8 @@ function onAdded(classId: string): void {
             v-if="addTrainingId"
             type="button"
             variant="outline"
-            :disabled="count === 0"
+            :disabled="addDisabled"
+            :title="addHint"
             data-testid="add-to-class"
             @click="addOpen = true"
         >

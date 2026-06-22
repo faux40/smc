@@ -3,13 +3,13 @@
  * tab). One row per training a user owes; managers can create a class from the
  * selection (presetting the trainings involved) or add a single row's user to
  * an existing class for that training. */
-import { router, usePage } from '@inertiajs/vue3';
+import { usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { toast } from 'vue-sonner';
 import { Button } from '@/components/ui/button';
 import ComplianceDetail from '@/pages/compliance/Partials/ComplianceDetail.vue';
 import AddToClassModal from '@/pages/classes/Partials/AddToClassModal.vue';
 import ClassActionsBar from '@/pages/classes/Partials/ClassActionsBar.vue';
-import { showPage } from '@/routes/classes';
 import type { ServerTableQuery } from '@/composables/useServerTable';
 import { useComplianceStore } from '@/stores/compliance';
 import type { ComplianceUserRow } from '@/stores/compliance';
@@ -54,8 +54,9 @@ function openAdd(row: ComplianceUserRow): void {
     rowToAdd.value = row;
     addOpen.value = true;
 }
-function onAdded(classId: string): void {
-    router.visit(showPage(classId));
+function onAdded(): void {
+    toast.success(`Added ${rowToAdd.value?.name ?? 'user'} to the class.`);
+    rowToAdd.value = null;
 }
 </script>
 
@@ -70,12 +71,13 @@ function onAdded(classId: string): void {
         show-training
         :selectable="canManage"
     >
-        <template #toolbar="{ selectedUserIds, selectedTrainingIds }">
+        <template #toolbar="{ selectedUserIds, selectedTrainingIds, clear }">
             <ClassActionsBar
                 v-if="canManage"
                 :selected-user-ids="selectedUserIds"
                 :create-training-ids="selectedTrainingIds"
                 :preset-name="requirement.name"
+                @done="clear"
             />
         </template>
 

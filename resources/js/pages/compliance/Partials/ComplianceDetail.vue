@@ -8,8 +8,8 @@
  * owning page supplies those (e.g. ClassActionsBar). TrainingDetail stays its
  * own page but shares the same building blocks.
  */
-import { Head, Link, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, ref, watch } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
@@ -97,6 +97,33 @@ const allChips = computed(() => [
     ...props.statusChips,
 ]);
 
+// #4 — tint each chip by what it represents so the eye lands on the problem.
+const CHIP_TONES: Record<
+    string,
+    { active: string; idle: string; dot: string }
+> = {
+    overdue: { active: 'border-red-400 bg-red-100 text-red-900', idle: 'border-red-200 text-red-700 hover:bg-red-50', dot: 'bg-red-500' },
+    expired: { active: 'border-red-400 bg-red-100 text-red-900', idle: 'border-red-200 text-red-700 hover:bg-red-50', dot: 'bg-red-500' },
+    due_soon: { active: 'border-amber-400 bg-amber-100 text-amber-900', idle: 'border-amber-200 text-amber-700 hover:bg-amber-50', dot: 'bg-amber-500' },
+    current: { active: 'border-emerald-400 bg-emerald-100 text-emerald-900', idle: 'border-emerald-200 text-emerald-700 hover:bg-emerald-50', dot: 'bg-emerald-500' },
+    as_needed: { active: 'border-sky-400 bg-sky-100 text-sky-900', idle: 'border-sky-200 text-sky-700 hover:bg-sky-50', dot: 'bg-sky-500' },
+    not_started: { active: 'border-border bg-muted text-foreground', idle: 'border-border text-muted-foreground hover:bg-muted', dot: 'bg-muted-foreground' },
+};
+function chipClasses(key: string, active: boolean): string {
+    if (key === '') {
+        return active
+            ? 'border-primary bg-primary/10 text-foreground'
+            : 'border-border text-muted-foreground hover:bg-muted';
+    }
+    const tone = CHIP_TONES[key];
+    if (!tone) {
+        return active
+            ? 'border-primary bg-primary/10 text-foreground'
+            : 'border-border text-muted-foreground hover:bg-muted';
+    }
+    return active ? tone.active : tone.idle;
+}
+
 const error = ref<string | null>(null);
 const initialLoading = ref(true);
 const search = ref('');
@@ -132,6 +159,47 @@ function reloadForTags(): void {
     table.reload();
 }
 
+// #6 — "Select all N matching" once a full page is picked. Pulls the matching
+// rows (capped) from the same fetcher and selects them, so bulk actions can act
+// on the whole filtered set, not just the visible page.
+const SELECT_ALL_CAP = 1000;
+const selectingAll = ref(false);
+const canSelectAllMatching = computed(
+    () =>
+        props.selectable &&
+        selection.count.value > 0 &&
+        table.total.value > selection.count.value,
+);
+async function selectAllMatching(): Promise<void> {
+    selectingAll.value = true;
+    try {
+        const cap = Math.min(table.total.value, SELECT_ALL_CAP);
+        const res = await props.fetcher({
+            page: 1,
+            per_page: cap,
+            sort: null,
+            dir: table.dir.value,
+            q: search.value,
+            status: statusFilter.value || undefined,
+            tags: tagFilter.value,
+            tags_mode: tagFilterMode.value,
+        });
+        selection.clear();
+        selection.toggleAllOnPage(res.data);
+    } finally {
+        selectingAll.value = false;
+    }
+}
+
+// #5 — header counts come from the Inertia prop at load; refresh them (only that
+// prop) when the tab regains focus, so they reflect classes/completions made
+// elsewhere without a full reload.
+function onVisible(): void {
+    if (document.visibilityState === 'visible') {
+        router.reload({ only: ['counts'] });
+    }
+}
+
 watch(
     () => table.rows.value,
     (rows) => {
@@ -149,6 +217,8 @@ onMounted(async () => {
         /* surfaced through the store */
     });
 
+    document.addEventListener('visibilitychange', onVisible);
+
     try {
         await table.fetchPage();
     } catch (e) {
@@ -156,6 +226,10 @@ onMounted(async () => {
     } finally {
         initialLoading.value = false;
     }
+});
+
+onUnmounted(() => {
+    document.removeEventListener('visibilitychange', onVisible);
 });
 </script>
 
@@ -165,35 +239,66 @@ onMounted(async () => {
     <div class="flex flex-col gap-6 p-4">
         <div class="flex items-start justify-between gap-4">
             <Heading :title="title" :description="description" />
-            <Link
-                href="/compliance"
-                class="text-sm text-muted-foreground hover:underline"
-            >
-                ← All compliance
-            </Link>
+            <div class="flex items-center gap-3">
+                <slot name="header-actions" />
+                <Link
+                    href="/compliance"
+                    class="text-sm text-muted-foreground hover:underline"
+                >
+                    ← All compliance
+                </Link>
+            </div>
         </div>
 
-        <!-- Status tallies double as filters. -->
+        <!-- Status tallies double as filters; tinted by what they represent. -->
         <div class="flex flex-wrap gap-2">
             <button
                 v-for="chip in allChips"
                 :key="chip.key || 'all'"
                 type="button"
                 :data-testid="`status-chip-${chip.key || 'all'}`"
-                class="rounded-full border px-3 py-1 text-sm"
-                :class="
-                    statusFilter === chip.key
-                        ? 'border-primary bg-primary/10 text-foreground'
-                        : 'border-border text-muted-foreground hover:bg-muted'
-                "
+                class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm"
+                :class="chipClasses(chip.key, statusFilter === chip.key)"
                 @click="setStatus(chip.key)"
             >
+                <span
+                    v-if="chip.key && CHIP_TONES[chip.key]"
+                    class="h-2 w-2 rounded-full"
+                    :class="CHIP_TONES[chip.key].dot"
+                />
                 {{ chip.label }}
-                <span class="ml-1 font-medium">{{ chipCount(chip.key) }}</span>
+                <span class="ml-0.5 font-medium">{{ chipCount(chip.key) }}</span>
             </button>
         </div>
 
         <AsyncState :loading="initialLoading" :error="error">
+            <!-- #6 — reach beyond the visible page when acting in bulk. -->
+            <div
+                v-if="selectable && selection.count.value > 0"
+                data-testid="selection-bar"
+                class="flex items-center gap-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
+            >
+                <span class="font-medium">{{ selection.count.value }} selected</span>
+                <button
+                    v-if="canSelectAllMatching"
+                    type="button"
+                    data-testid="select-all-matching"
+                    class="text-primary hover:underline disabled:opacity-50"
+                    :disabled="selectingAll"
+                    @click="selectAllMatching"
+                >
+                    Select all {{ Math.min(table.total.value, SELECT_ALL_CAP) }} matching
+                </button>
+                <button
+                    type="button"
+                    data-testid="clear-selection"
+                    class="text-muted-foreground hover:underline"
+                    @click="selection.clear"
+                >
+                    Clear
+                </button>
+            </div>
+
             <DataTable
                 :view-id="viewId"
                 :default-columns="columns"
