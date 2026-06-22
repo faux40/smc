@@ -48,6 +48,15 @@ class ComplianceController extends Controller
         );
     }
 
+    public function notRequired(Request $request): JsonResponse
+    {
+        $this->authorizeManager($request);
+
+        return response()->json(
+            $this->compliance->notRequired($request->user()->organization, $this->opts($request)),
+        );
+    }
+
     /** Drill-down: users assigned a training, worst-status first. */
     public function trainingUsers(Request $request, Training $training): JsonResponse
     {

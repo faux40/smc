@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Models\Organization;
 use App\Models\Requirement;
+use App\Models\Training;
 use App\Models\TrainingAssignment;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -45,6 +47,66 @@ class ComplianceQuery
         }
 
         return $this->aggregate($base, 't.id', 't.name', $opts);
+    }
+
+    /**
+     * Per-training rollup of "not required" coverage — trainings people have
+     * but weren't required to: the union of (a) direct-only assignments (no
+     * active requirement source) and (b) completions of a training the user was
+     * never assigned at all. Direct-only rows use the materialized status;
+     * orphan completions derive status from the latest completion's own expiry.
+     *
+     * @param  array<string, mixed>  $opts
+     * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>}
+     */
+    public function notRequired(Organization $org, array $opts = []): array
+    {
+        $today = Date::now()->startOfDay()->toDateString();
+        $boundary = Date::now()->startOfDay()->addDays($org->expiringSoonDays())->toDateString();
+
+        // (a) Direct-only assignments → materialized status.
+        $direct = DB::table('training_assignments as ta')
+            ->where('ta.org_id', $org->id)
+            ->whereNotExists(fn ($q) => $q->from('assignment_sources as s')
+                ->whereColumn('s.training_assignment_id', 'ta.id')
+                ->whereNull('s.removed_at')
+                ->where('s.sourceable_type', Requirement::class))
+            ->select('ta.training_id as training_id', 'ta.status as status');
+
+        // (b) Completions of an unassigned training → status from the latest
+        //     completion's own expiry (no TA exists to carry a bucket).
+        $orphan = DB::table('completions as c')
+            ->where('c.org_id', $org->id)
+            ->where('c.module_type', Training::class)
+            ->whereNotExists(fn ($q) => $q->from('training_assignments as ta2')
+                ->whereColumn('ta2.user_id', 'c.user_id')
+                ->whereColumn('ta2.training_id', 'c.module_id'))
+            ->whereNotExists(fn ($q) => $q->from('completions as c2')
+                ->whereColumn('c2.user_id', 'c.user_id')
+                ->whereColumn('c2.module_id', 'c.module_id')
+                ->where('c2.module_type', Training::class)
+                ->whereColumn('c2.completion_date', '>', 'c.completion_date'))
+            ->selectRaw(
+                "c.module_id as training_id, CASE
+                    WHEN c.expire_date IS NULL THEN 'current'
+                    WHEN c.expire_date < ? THEN 'overdue'
+                    WHEN c.expire_date <= ? THEN 'due_soon'
+                    ELSE 'current' END as status",
+                [$today, $boundary],
+            );
+
+        $facts = $direct->unionAll($orphan);
+
+        $base = DB::query()
+            ->fromSub($facts, 'f')
+            ->join('trainings as t', 't.id', '=', 'f.training_id')
+            ->whereNull('t.deleted_at');
+
+        if ($like = $this->searchLike($opts)) {
+            $base->whereRaw('LOWER(t.name) LIKE ?', [$like]);
+        }
+
+        return $this->aggregate($base, 't.id', 't.name', $opts, 'f.status');
     }
 
     /**
@@ -165,15 +227,15 @@ class ComplianceQuery
      * @param  array<string, mixed>  $opts
      * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>}
      */
-    private function aggregate(Builder $base, string $idCol, string $nameCol, array $opts): array
+    private function aggregate(Builder $base, string $idCol, string $nameCol, array $opts, string $statusCol = 'ta.status'): array
     {
-        $buckets = <<<'SQL'
+        $buckets = <<<SQL
             COUNT(*) as total,
-            SUM(CASE WHEN ta.status = 'overdue' THEN 1 ELSE 0 END) as overdue,
-            SUM(CASE WHEN ta.status = 'due_soon' THEN 1 ELSE 0 END) as due_soon,
-            SUM(CASE WHEN ta.status = 'not_started' THEN 1 ELSE 0 END) as not_started,
-            SUM(CASE WHEN ta.status = 'current' THEN 1 ELSE 0 END) as current,
-            SUM(CASE WHEN ta.status = 'as_needed' THEN 1 ELSE 0 END) as as_needed
+            SUM(CASE WHEN {$statusCol} = 'overdue' THEN 1 ELSE 0 END) as overdue,
+            SUM(CASE WHEN {$statusCol} = 'due_soon' THEN 1 ELSE 0 END) as due_soon,
+            SUM(CASE WHEN {$statusCol} = 'not_started' THEN 1 ELSE 0 END) as not_started,
+            SUM(CASE WHEN {$statusCol} = 'current' THEN 1 ELSE 0 END) as current,
+            SUM(CASE WHEN {$statusCol} = 'as_needed' THEN 1 ELSE 0 END) as as_needed
         SQL;
 
         $query = $base

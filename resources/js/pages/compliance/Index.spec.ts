@@ -33,6 +33,9 @@ function stubAxios() {
         if (url === '/api/compliance/by-requirement') {
             return Promise.resolve({ data: { data: [row('OSHA General')], meta: META } });
         }
+        if (url === '/api/compliance/not-required') {
+            return Promise.resolve({ data: { data: [row('CPR')], meta: META } });
+        }
         if (url.endsWith('/users')) {
             return Promise.resolve({
                 data: {
@@ -106,6 +109,20 @@ describe('compliance/Index', () => {
         expect(paramsFor('/api/compliance/by-training').at(-1)).toMatchObject({
             sort: 'due_soon',
         });
+    });
+
+    it('shows the not-required tab without a drill-down column', async () => {
+        const wrapper = await mountPage();
+
+        await wrapper
+            .find('[data-testid="compliance-tab-not_required"]')
+            .trigger('click');
+        await flushPromises();
+
+        expect(paramsFor('/api/compliance/not-required').length).toBeGreaterThan(0);
+        expect(wrapper.text()).toContain('CPR');
+        // No per-row drill-down on this tab.
+        expect(wrapper.find('[data-testid="drilldown-CPR"]').exists()).toBe(false);
     });
 
     it('expands a row to drill into its users', async () => {

@@ -82,6 +82,9 @@ export const useComplianceStore = defineStore('compliance', () => {
     const byRequirement = (params: ServerTableQuery) =>
         fetchPaged<ComplianceRow>('/api/compliance/by-requirement', params);
 
+    const notRequired = (params: ServerTableQuery) =>
+        fetchPaged<ComplianceRow>('/api/compliance/not-required', params);
+
     // Drill-down: users under one training / requirement.
     const trainingUsers = (id: string, params: ServerTableQuery) =>
         fetchPaged<ComplianceUserRow>(
@@ -95,5 +98,11 @@ export const useComplianceStore = defineStore('compliance', () => {
             params,
         );
 
-    return { byTraining, byRequirement, trainingUsers, requirementUsers };
+    return {
+        byTraining,
+        byRequirement,
+        notRequired,
+        trainingUsers,
+        requirementUsers,
+    };
 });

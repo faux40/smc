@@ -27,7 +27,9 @@ const props = defineProps<{
     fetcher: (
         params: ServerTableQuery,
     ) => Promise<ServerTableResponse<ComplianceRow>>;
-    drilldown: (
+    // Optional: tabs without a sensible per-row drill-down (e.g. not-required,
+    // which mixes assignments + orphan completions) omit it.
+    drilldown?: (
         rowId: string,
     ) => (
         params: ServerTableQuery,
@@ -137,10 +139,12 @@ onMounted(async () => {
             </template>
 
             <template #trail-header>
-                <th class="px-4 py-2 text-right font-medium">Details</th>
+                <th v-if="drilldown" class="px-4 py-2 text-right font-medium">
+                    Details
+                </th>
             </template>
             <template #trail-cells="{ row }">
-                <td class="px-4 py-2 text-right">
+                <td v-if="drilldown" class="px-4 py-2 text-right">
                     <Button
                         type="button"
                         variant="ghost"
@@ -169,7 +173,7 @@ onMounted(async () => {
 
         <!-- Drill-down panel for the expanded row. -->
         <div
-            v-if="expanded"
+            v-if="expanded && drilldown"
             class="rounded-md border border-border"
             data-testid="drilldown-panel"
         >

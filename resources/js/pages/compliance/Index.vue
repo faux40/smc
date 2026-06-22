@@ -24,6 +24,7 @@ const store = useComplianceStore();
 const TABS = [
     { key: 'training', label: 'By training' },
     { key: 'requirement', label: 'By requirement' },
+    { key: 'not_required', label: 'Not required' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -31,25 +32,35 @@ type TabKey = (typeof TABS)[number]['key'];
 const tab = ref<TabKey>('training');
 const isActive = (key: TabKey) => tab.value === key;
 
-const activeConfig = computed(() =>
-    tab.value === 'training'
-        ? {
-              viewId: 'compliance-training',
-              nameLabel: 'Training',
-              searchPlaceholder: 'Search trainings…',
-              fetcher: store.byTraining,
-              drilldown: (id: string) => (params: ServerTableQuery) =>
-                  store.trainingUsers(id, params),
-          }
-        : {
-              viewId: 'compliance-requirement',
-              nameLabel: 'Requirement',
-              searchPlaceholder: 'Search requirements…',
-              fetcher: store.byRequirement,
-              drilldown: (id: string) => (params: ServerTableQuery) =>
-                  store.requirementUsers(id, params),
-          },
-);
+const CONFIGS = {
+    training: {
+        viewId: 'compliance-training',
+        nameLabel: 'Training',
+        searchPlaceholder: 'Search trainings…',
+        fetcher: store.byTraining,
+        drilldown: (id: string) => (params: ServerTableQuery) =>
+            store.trainingUsers(id, params),
+    },
+    requirement: {
+        viewId: 'compliance-requirement',
+        nameLabel: 'Requirement',
+        searchPlaceholder: 'Search requirements…',
+        fetcher: store.byRequirement,
+        drilldown: (id: string) => (params: ServerTableQuery) =>
+            store.requirementUsers(id, params),
+    },
+    // Not-required mixes assignments + orphan completions, so no per-row
+    // drill-down (yet) — the counts stand on their own.
+    not_required: {
+        viewId: 'compliance-not-required',
+        nameLabel: 'Training',
+        searchPlaceholder: 'Search trainings…',
+        fetcher: store.notRequired,
+        drilldown: undefined,
+    },
+} as const;
+
+const activeConfig = computed(() => CONFIGS[tab.value]);
 </script>
 
 <template>

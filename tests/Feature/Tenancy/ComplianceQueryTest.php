@@ -3,6 +3,7 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Models\AssignmentSource;
+use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\Training;
@@ -145,6 +146,43 @@ class ComplianceQueryTest extends TestCase
         $row = $result['data'][0];
         $this->assertSame('OSHA General', $row['name']);
         $this->assertSame(2, $row['total']);
+        $this->assertSame(1, $row['counts']['overdue']);
+        $this->assertSame(1, $row['counts']['current']);
+    }
+
+    public function test_not_required_unions_direct_only_and_orphan_completions(): void
+    {
+        $org = Organization::factory()->create();
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+
+        // (a) Direct-only assignment (no requirement source) → counts, overdue.
+        $this->ta($org, $training, ['status' => 'overdue']);
+
+        // A requirement-sourced assignment → must be EXCLUDED from not-required.
+        $req = Requirement::factory()->for($org, 'organization')->create();
+        $sourced = $this->ta($org, $training, ['status' => 'current']);
+        AssignmentSource::create([
+            'training_assignment_id' => $sourced->id,
+            'sourceable_type' => Requirement::class,
+            'sourceable_id' => $req->id,
+            'added_at' => now(),
+        ]);
+
+        // (b) Orphan completion: a user completed the training but has no TA for
+        //     it → counts, current (no expiry).
+        $orphanUser = User::factory()->for($org, 'organization')->create();
+        Completion::factory()->for($org, 'organization')->for($orphanUser, 'user')->create([
+            'module_type' => Training::class,
+            'module_id' => $training->id,
+            'completion_date' => '2026-01-01',
+            'expire_date' => null,
+        ]);
+
+        $res = (new ComplianceQuery)->notRequired($org);
+
+        $row = collect($res['data'])->firstWhere('name', 'CPR');
+        $this->assertNotNull($row);
+        $this->assertSame(2, $row['total']); // direct-only + orphan; sourced excluded
         $this->assertSame(1, $row['counts']['overdue']);
         $this->assertSame(1, $row['counts']['current']);
     }

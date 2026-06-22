@@ -64,6 +64,13 @@ class ComplianceControllerTest extends TestCase
             ->getJson(route('compliance.by-requirement'))
             ->assertOk()
             ->assertJsonStructure(['data', 'meta' => ['current_page', 'last_page', 'per_page', 'total']]);
+
+        // The direct-only assignments above are "not required".
+        $this->actingAs($manager)
+            ->getJson(route('compliance.not-required'))
+            ->assertOk()
+            ->assertJsonPath('data.0.name', 'Fall Protection')
+            ->assertJsonPath('data.0.total', 2);
     }
 
     public function test_training_drilldown_endpoint_lists_users(): void
@@ -89,6 +96,7 @@ class ComplianceControllerTest extends TestCase
         $this->actingAs($member)->get(route('compliance.page'))->assertForbidden();
         $this->actingAs($member)->getJson(route('compliance.by-training'))->assertForbidden();
         $this->actingAs($member)->getJson(route('compliance.by-requirement'))->assertForbidden();
+        $this->actingAs($member)->getJson(route('compliance.not-required'))->assertForbidden();
     }
 
     public function test_rollups_are_org_scoped(): void
