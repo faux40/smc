@@ -2,13 +2,19 @@ import { flushPromises, mount } from '@vue/test-utils';
 import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Checkbox } from '@/components/ui/checkbox';
+import AddToClassModal from '@/pages/classes/Partials/AddToClassModal.vue';
+import ClassActionsBar from '@/pages/classes/Partials/ClassActionsBar.vue';
 import RequirementDetail from '@/pages/compliance/RequirementDetail.vue';
 
 vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
     Link: { props: ['href'], template: '<a :href="href"><slot /></a>' },
-    usePage: () => ({ props: { auth: { user: { org_id: 'o1' } } } }),
+    router: { visit: vi.fn() },
+    usePage: () => ({
+        props: { auth: { user: { org_id: 'o1', isManager: true } } },
+    }),
 }));
 vi.mock('@/routes/users', () => ({ show: (id: string) => ({ url: `/users/${id}` }) }));
 
@@ -33,6 +39,16 @@ function stubAxios() {
     });
 }
 
+async function mountPage() {
+    const wrapper = mount(RequirementDetail, {
+        props: { requirement: { id: 'r1', name: 'OSHA General' }, counts: { overdue: 1, current: 1, total: 2 } },
+        global: { stubs: { ClassActionsBar: true, AddToClassModal: true } },
+    });
+    await flushPromises();
+
+    return wrapper;
+}
+
 describe('compliance/RequirementDetail', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
@@ -41,17 +57,38 @@ describe('compliance/RequirementDetail', () => {
     });
 
     it('shows a Training column so per-training rows are self-explanatory', async () => {
-        const wrapper = mount(RequirementDetail, {
-            props: { requirement: { id: 'r1', name: 'OSHA General' }, counts: { overdue: 1, current: 1, total: 2 } },
-        });
-        await flushPromises();
-
-        expect(wrapper.text()).toContain('OSHA General');
+        const wrapper = await mountPage();
         const headers = wrapper.findAll('thead th').map((th) => th.text());
         expect(headers.some((h) => h.includes('Training'))).toBe(true);
-
         const body = wrapper.find('tbody').text();
         expect(body).toContain('First Aid');
         expect(body).toContain('Lockout/Tagout');
+    });
+
+    it('passes the distinct selected trainings to the class-actions bar', async () => {
+        const wrapper = await mountPage();
+
+        // Header select-all checkbox picks both rows (same user, two trainings).
+        wrapper.findAllComponents(Checkbox)[0].vm.$emit('update:modelValue', true);
+        await flushPromises();
+
+        const bar = wrapper.findComponent(ClassActionsBar);
+        expect(bar.props('selectedUserIds')).toEqual(['u1']);
+        expect(bar.props('createTrainingIds')).toEqual(['t1', 't2']);
+        // No bulk "add to existing" for a multi-training requirement.
+        expect(bar.props('addTrainingId')).toBeUndefined();
+    });
+
+    it('opens the add-to-class picker for a single row with that row\'s training', async () => {
+        const wrapper = await mountPage();
+
+        await wrapper.find('[data-testid="row-add-to-class-u1-t1"]').trigger('click');
+        await flushPromises();
+
+        const modal = wrapper.findComponent(AddToClassModal);
+        expect(modal.props('open')).toBe(true);
+        expect(modal.props('trainingId')).toBe('t1');
+        expect(modal.props('trainingName')).toBe('First Aid');
+        expect(modal.props('userIds')).toEqual(['u1']);
     });
 });

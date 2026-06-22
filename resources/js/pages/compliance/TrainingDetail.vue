@@ -6,7 +6,7 @@
  * status filter + paging), and lets a manager select users and assemble a
  * class for the training — reusing ClassFormModal + bulk enrollment.
  */
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
@@ -19,14 +19,12 @@ import { Label } from '@/components/ui/label';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
+import { useRowSelection } from '@/composables/useRowSelection';
 import { useServerTable } from '@/composables/useServerTable';
-import AddToClassModal from '@/pages/classes/Partials/AddToClassModal.vue';
-import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
+import ClassActionsBar from '@/pages/classes/Partials/ClassActionsBar.vue';
 import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import type { ComplianceStatus } from '@/pages/users/Partials/ComplianceStatusBadge.vue';
-import { showPage } from '@/routes/classes';
 import { show as userShow } from '@/routes/users';
-import { useClassesStore } from '@/stores/classes';
 import { useComplianceStore } from '@/stores/compliance';
 import type {
     ComplianceCounts,
@@ -52,7 +50,6 @@ defineOptions({
 });
 
 const store = useComplianceStore();
-const classes = useClassesStore();
 const tagsStore = useTagsStore();
 const page = usePage();
 const authUser = computed(
@@ -131,48 +128,12 @@ function onSearch(value: string | number): void {
     table.setQuery(search.value);
 }
 
-// ---- Selection + assemble a class -------------------------------------
-const selected = ref<Set<string>>(new Set());
-const selectedCount = computed(() => selected.value.size);
-const isSelected = (id: string) => selected.value.has(id);
-function toggle(id: string): void {
-    const next = new Set(selected.value);
-    next.has(id) ? next.delete(id) : next.add(id);
-    selected.value = next;
-}
-const allOnPage = computed(
-    () =>
-        table.rows.value.length > 0 &&
-        table.rows.value.every((r) => selected.value.has(r.user_id)),
+// ---- Selection (drives the shared class-actions bar) -------------------
+// One row per user here, so the selection key is the user id.
+const selection = useRowSelection<ComplianceUserRow>((r) => r.user_id);
+const selectedUserIds = computed(() =>
+    selection.items.value.map((r) => r.user_id),
 );
-function toggleAll(): void {
-    const next = new Set(selected.value);
-    if (allOnPage.value) {
-        table.rows.value.forEach((r) => next.delete(r.user_id));
-    } else {
-        table.rows.value.forEach((r) => next.add(r.user_id));
-    }
-    selected.value = next;
-}
-
-const classModalOpen = ref(false);
-const addClassOpen = ref(false);
-
-function onAddedToClass(classId: string): void {
-    router.visit(showPage(classId));
-}
-
-async function onClassSaved(detail: { id: string }): Promise<void> {
-    // Enroll the selected users onto the freshly created class, then go finish
-    // scheduling/closing it on its detail page.
-    if (selected.value.size > 0) {
-        await classes.bulkEnroll(detail.id, {
-            enroll: [...selected.value],
-            unenroll: [],
-        });
-    }
-    router.visit(showPage(detail.id));
-}
 
 // Hydrate the tags store from each fetched page so TagsListCell paints the
 // attached pills without a per-row fetch (same pattern as the users list).
@@ -284,43 +245,34 @@ onMounted(async () => {
                                 @update:mode="reloadForTags"
                             />
                         </div>
-                        <Button
+                        <ClassActionsBar
                             v-if="canManage"
-                            type="button"
-                            variant="outline"
-                            :disabled="selectedCount === 0"
-                            data-testid="add-to-class"
-                            @click="addClassOpen = true"
-                        >
-                            Add to existing class ({{ selectedCount }})
-                        </Button>
-                        <Button
-                            v-if="canManage"
-                            type="button"
-                            :disabled="selectedCount === 0"
-                            data-testid="assemble-class"
-                            @click="classModalOpen = true"
-                        >
-                            Create class with selected ({{ selectedCount }})
-                        </Button>
+                            :selected-user-ids="selectedUserIds"
+                            :create-training-ids="[training.id]"
+                            :preset-name="training.name"
+                            :add-training-id="training.id"
+                            :add-training-name="training.name"
+                        />
                     </div>
                 </template>
 
                 <template #lead-header>
                     <th class="w-10 px-2 py-2">
                         <Checkbox
-                            :model-value="allOnPage"
+                            :model-value="selection.allOnPage(table.rows.value)"
                             aria-label="Select all on page"
-                            @update:model-value="toggleAll"
+                            @update:model-value="
+                                selection.toggleAllOnPage(table.rows.value)
+                            "
                         />
                     </th>
                 </template>
                 <template #lead-cells="{ row }">
                     <td class="w-10 px-2 py-2">
                         <Checkbox
-                            :model-value="isSelected(row.user_id)"
+                            :model-value="selection.isSelected(row)"
                             :aria-label="`Select ${row.name ?? row.user_id}`"
-                            @update:model-value="() => toggle(row.user_id)"
+                            @update:model-value="() => selection.toggle(row)"
                         />
                     </td>
                 </template>
@@ -380,22 +332,5 @@ onMounted(async () => {
                 @update:per-page="table.setPerPage"
             />
         </AsyncState>
-
-        <ClassFormModal
-            v-if="canManage"
-            v-model:open="classModalOpen"
-            :preset-training-ids="[training.id]"
-            :preset-name="training.name"
-            @saved="onClassSaved"
-        />
-
-        <AddToClassModal
-            v-if="canManage"
-            v-model:open="addClassOpen"
-            :training-id="training.id"
-            :training-name="training.name"
-            :user-ids="[...selected]"
-            @added="onAddedToClass"
-        />
     </div>
 </template>

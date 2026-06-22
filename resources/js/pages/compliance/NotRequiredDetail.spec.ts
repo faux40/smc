@@ -3,13 +3,17 @@ import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TagFilter from '@/components/TagFilter.vue';
+import ClassActionsBar from '@/pages/classes/Partials/ClassActionsBar.vue';
 import NotRequiredDetail from '@/pages/compliance/NotRequiredDetail.vue';
 
 vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
     Link: { props: ['href'], template: '<a :href="href"><slot /></a>' },
-    usePage: () => ({ props: { auth: { user: { org_id: 'o1' } } } }),
+    router: { visit: vi.fn() },
+    usePage: () => ({
+        props: { auth: { user: { org_id: 'o1', isManager: true } } },
+    }),
 }));
 vi.mock('@/routes/users', () => ({ show: (id: string) => ({ url: `/users/${id}` }) }));
 
@@ -45,6 +49,7 @@ async function mountPage() {
             training: { id: 't1', name: 'CPR' },
             counts: { current: 3, expired: 2, total: 5 },
         },
+        global: { stubs: { ClassActionsBar: true } },
     });
     await flushPromises();
 
@@ -92,5 +97,13 @@ describe('compliance/NotRequiredDetail (via ComplianceDetail)', () => {
         wrapper.findComponent(TagFilter).vm.$emit('update:tag-ids', ['t1']);
         await flushPromises();
         expect(params().at(-1)).toMatchObject({ tags: ['t1'], tags_mode: 'and' });
+    });
+
+    it('offers single-training class actions (add to existing + create)', async () => {
+        const wrapper = await mountPage();
+        const bar = wrapper.findComponent(ClassActionsBar);
+        expect(bar.exists()).toBe(true);
+        expect(bar.props('createTrainingIds')).toEqual(['t1']);
+        expect(bar.props('addTrainingId')).toBe('t1');
     });
 });

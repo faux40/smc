@@ -1,10 +1,12 @@
 <script setup lang="ts">
 /*
- * Shared compliance detail screen — the read-only "who's listed + their status"
- * view reached from a By-Requirement or Not-Required row. Header status chips
- * (which also filter), a searchable/tag-filterable user table with the profile
- * columns, and paging. The owning page binds the data fetcher + the chip set;
- * TrainingDetail stays its own (richer) page because it also assembles classes.
+ * Shared compliance detail screen — the "who's listed + their status" view
+ * reached from a By-Requirement or Not-Required row. Header status chips (which
+ * also filter), a searchable/tag-filterable user table with the profile
+ * columns, and paging. Optionally selectable (lead checkboxes) with a #toolbar
+ * slot for bulk actions and a #row-actions slot for per-row actions — the
+ * owning page supplies those (e.g. ClassActionsBar). TrainingDetail stays its
+ * own page but shares the same building blocks.
  */
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -12,11 +14,13 @@ import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
 import Pagination from '@/components/Pagination.vue';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
+import { useRowSelection } from '@/composables/useRowSelection';
 import { useServerTable } from '@/composables/useServerTable';
 import type {
     ComplianceUsersQuery,
@@ -44,7 +48,25 @@ const props = defineProps<{
     // Remap a stored status to a different badge (e.g. not-required's stored
     // 'overdue' should read as 'Expired'). Keyed by the raw row status.
     badgeStatusMap?: Record<string, ComplianceStatus>;
+    // Render lead checkboxes + expose selection to the #toolbar slot.
+    selectable?: boolean;
 }>();
+
+// Rows are unique by user + training (a requirement lists one row per training
+// a user owes), so the selection key spans both.
+const selection = useRowSelection<ComplianceUserRow>(
+    (r) => `${r.user_id}::${r.training_id ?? ''}`,
+);
+const selectedUserIds = computed(() => [
+    ...new Set(selection.items.value.map((r) => r.user_id)),
+]);
+const selectedTrainingIds = computed(() => [
+    ...new Set(
+        selection.items.value
+            .map((r) => r.training_id)
+            .filter((id): id is string => Boolean(id)),
+    ),
+]);
 
 const tagsStore = useTagsStore();
 const page = usePage();
@@ -178,7 +200,7 @@ onMounted(async () => {
                 :rows="table.rows.value"
                 :sort-key="null"
                 :sort-dir="table.dir.value"
-                :row-key="(row) => row.user_id"
+                :row-key="(row) => `${row.user_id}::${row.training_id ?? ''}`"
             >
                 <template #filters>
                     <div class="flex items-end gap-3">
@@ -202,7 +224,44 @@ onMounted(async () => {
                                 @update:mode="reloadForTags"
                             />
                         </div>
+                        <slot
+                            name="toolbar"
+                            :selected-rows="selection.items.value"
+                            :selected-user-ids="selectedUserIds"
+                            :selected-training-ids="selectedTrainingIds"
+                            :clear="selection.clear"
+                        />
                     </div>
+                </template>
+
+                <template v-if="selectable" #lead-header>
+                    <th class="w-10 px-2 py-2">
+                        <Checkbox
+                            :model-value="selection.allOnPage(table.rows.value)"
+                            aria-label="Select all on page"
+                            @update:model-value="
+                                selection.toggleAllOnPage(table.rows.value)
+                            "
+                        />
+                    </th>
+                </template>
+                <template v-if="selectable" #lead-cells="{ row }">
+                    <td class="w-10 px-2 py-2">
+                        <Checkbox
+                            :model-value="selection.isSelected(row)"
+                            :aria-label="`Select ${row.name ?? row.user_id}`"
+                            @update:model-value="() => selection.toggle(row)"
+                        />
+                    </td>
+                </template>
+
+                <template v-if="$slots['row-actions']" #trail-header>
+                    <th class="px-2 py-2"></th>
+                </template>
+                <template v-if="$slots['row-actions']" #trail-cells="{ row }">
+                    <td class="px-2 py-2 text-right">
+                        <slot name="row-actions" :row="row" />
+                    </td>
                 </template>
 
                 <template #col-name="{ row }">
