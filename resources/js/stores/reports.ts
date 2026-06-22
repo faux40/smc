@@ -40,6 +40,7 @@ export type CompletionReportQuery = ServerTableQuery & {
     user_q?: string;
     tags?: string[];
     tags_mode?: string;
+    statuses?: string[];
 };
 
 function defaultHeaders(): Record<string, string> {
@@ -79,6 +80,9 @@ export const useReportsStore = defineStore('reports', () => {
         if (params.tags && params.tags.length > 0) {
             query.tags = params.tags;
             query.tags_mode = params.tags_mode ?? 'and';
+        }
+        if (params.statuses && params.statuses.length > 0) {
+            query.statuses = params.statuses;
         }
 
         const { data } = await axios.get<

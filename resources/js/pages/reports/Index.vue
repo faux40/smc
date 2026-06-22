@@ -10,6 +10,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
+import MultiSelectFilter from '@/components/MultiSelectFilter.vue';
 import Pagination from '@/components/Pagination.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
@@ -47,6 +48,13 @@ const COLUMNS = [
 
 const USER_MORPH = 'App\\Models\\User';
 
+// Expiry statuses match ExpiryStatus keys/labels (mirrors the Status column).
+const STATUS_OPTIONS = [
+    { id: 'expired', label: 'Expired' },
+    { id: 'due_soon', label: 'Expires soon' },
+    { id: 'current', label: 'Current' },
+];
+
 const store = useReportsStore();
 const tagsStore = useTagsStore();
 const page = usePage();
@@ -63,6 +71,7 @@ const trainingSearch = ref('');
 const userSearch = ref('');
 const tagFilter = ref<string[]>([]);
 const tagFilterMode = ref<TagFilterMode>('and');
+const statusFilter = ref<string[]>([]);
 
 const table = useServerTable<CompletionReportRow>(
     (params) =>
@@ -74,6 +83,7 @@ const table = useServerTable<CompletionReportRow>(
             user_q: userSearch.value,
             tags: tagFilter.value,
             tags_mode: tagFilterMode.value,
+            statuses: statusFilter.value,
         }),
     { perPage: 25, sort: null, dir: 'desc' },
 );
@@ -92,6 +102,7 @@ const exportHref = computed(() => {
     if (userSearch.value) params.set('user_q', userSearch.value);
     for (const id of tagFilter.value) params.append('tags[]', id);
     if (tagFilter.value.length > 0) params.set('tags_mode', tagFilterMode.value);
+    for (const s of statusFilter.value) params.append('statuses[]', s);
     const qs = params.toString();
     return `/api/reports/completions/export${qs ? `?${qs}` : ''}`;
 });
@@ -198,6 +209,18 @@ onMounted(async () => {
                                 placeholder="Name, EE#, dept…"
                                 class="h-8 w-48"
                                 @update:model-value="(v) => { userSearch = String(v); debouncedReload(); }"
+                            />
+                        </div>
+                        <div class="grid gap-1">
+                            <Label class="text-xs">Status</Label>
+                            <MultiSelectFilter
+                                :options="STATUS_OPTIONS"
+                                :selected="statusFilter"
+                                mode="or"
+                                :show-mode="false"
+                                :searchable="false"
+                                label="statuses"
+                                @update:selected="(v) => { statusFilter = v; reloadNow(); }"
                             />
                         </div>
                         <div class="grid gap-1">

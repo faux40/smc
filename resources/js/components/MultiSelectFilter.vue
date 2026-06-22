@@ -34,8 +34,11 @@ const props = withDefaults(
         label: string;
         modes?: FilterMode[];
         searchable?: boolean;
+        /** Show the &/||/! mode toggle. Off for single-valued fields where
+         * "any of" is the only sensible combination (e.g. expiry status). */
+        showMode?: boolean;
     }>(),
-    { modes: () => ['and', 'or', 'not'], searchable: true },
+    { modes: () => ['and', 'or', 'not'], searchable: true, showMode: true },
 );
 
 const emit = defineEmits<{
@@ -153,7 +156,7 @@ function clear(): void {
         </Popover>
 
         <FilterModeToggle
-            v-if="selected.length > 0"
+            v-if="showMode && selected.length > 0"
             :mode="mode"
             :modes="modes"
             @update:mode="(m) => emit('update:mode', m)"

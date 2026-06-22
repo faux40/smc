@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import MultiSelectFilter from '@/components/MultiSelectFilter.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import ReportsIndex from '@/pages/reports/Index.vue';
 
@@ -99,6 +100,29 @@ describe('reports/Index — completion report', () => {
         wrapper.findComponent(TagFilter).vm.$emit('update:tag-ids', ['tag1']);
         await flushPromises();
         expect(params().at(-1)).toMatchObject({ tags: ['tag1'], tags_mode: 'and' });
+    });
+
+    it('sends the status filter (multi-select, any-of)', async () => {
+        const wrapper = await mountPage();
+        wrapper
+            .findComponent(MultiSelectFilter)
+            .vm.$emit('update:selected', ['expired', 'due_soon']);
+        await flushPromises();
+        expect(params().at(-1)).toMatchObject({
+            statuses: ['expired', 'due_soon'],
+        });
+    });
+
+    it('includes selected statuses in the export link', async () => {
+        const wrapper = await mountPage();
+        wrapper
+            .findComponent(MultiSelectFilter)
+            .vm.$emit('update:selected', ['expired']);
+        await flushPromises();
+        const href = wrapper
+            .find('[data-testid="export-completion-report"]')
+            .attributes('href');
+        expect(href).toContain('statuses%5B%5D=expired');
     });
 
     it('builds the export link from the current filters', async () => {

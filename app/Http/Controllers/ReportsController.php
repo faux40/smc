@@ -165,7 +165,48 @@ class ReportsController extends Controller
             }
         }
 
+        $this->applyStatusFilter($query, $request, $org);
+
         return $query->orderByDesc('completions.completion_date')->orderBy('completions.id');
+    }
+
+    /**
+     * Filter by derived expiry status (any-of). Status isn't stored, so each
+     * selected key maps to an `expire_date` predicate using the same boundaries
+     * as ExpiryStatus: expired = past; due_soon = today..today+soonDays;
+     * current = no expiry OR beyond the window. Multiple statuses are OR'd.
+     *
+     * @param  Builder<Completion>  $query
+     */
+    private function applyStatusFilter(Builder $query, Request $request, Organization $org): void
+    {
+        $statuses = array_values(array_filter(
+            (array) $request->query('statuses', []),
+            fn ($v) => in_array($v, ['expired', 'due_soon', 'current'], true),
+        ));
+        if ($statuses === []) {
+            return;
+        }
+
+        $today = Carbon::now()->startOfDay()->toDateString();
+        $boundary = Carbon::parse($today)->addDays($org->expiringSoonDays())->toDateString();
+        $col = 'completions.expire_date';
+
+        $query->where(function ($outer) use ($statuses, $today, $boundary, $col) {
+            foreach ($statuses as $status) {
+                $outer->orWhere(function ($w) use ($status, $today, $boundary, $col) {
+                    if ($status === 'expired') {
+                        $w->whereNotNull($col)->whereDate($col, '<', $today);
+                    } elseif ($status === 'due_soon') {
+                        $w->whereNotNull($col)
+                            ->whereDate($col, '>=', $today)
+                            ->whereDate($col, '<=', $boundary);
+                    } else { // current — no expiry on record, or beyond the window
+                        $w->whereNull($col)->orWhereDate($col, '>', $boundary);
+                    }
+                });
+            }
+        });
     }
 
     /**
@@ -242,6 +283,14 @@ class ReportsController extends Controller
         }
         if ($uq = trim((string) $request->query('user_q', ''))) {
             $parts[] = 'User: '.$uq;
+        }
+        $statusLabels = ['expired' => 'Expired', 'due_soon' => 'Expires soon', 'current' => 'Current'];
+        $statuses = array_values(array_filter(
+            (array) $request->query('statuses', []),
+            fn ($v) => isset($statusLabels[$v]),
+        ));
+        if ($statuses !== []) {
+            $parts[] = 'Status: '.implode(', ', array_map(fn ($s) => $statusLabels[$s], $statuses));
         }
 
         return $parts === [] ? null : implode('   ·   ', $parts);

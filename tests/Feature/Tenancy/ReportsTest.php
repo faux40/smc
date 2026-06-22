@@ -9,6 +9,7 @@ use App\Models\Training;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Inertia\Testing\AssertableInertia;
 use Spatie\LaravelPdf\Facades\Pdf;
@@ -230,6 +231,36 @@ class ReportsTest extends TestCase
         $this->assertEqualsCanonicalizing([$tagA->id, $tagB->id], $taggedRow['tag_ids']);
         $this->assertSame($tagged->id, $taggedRow['user_id']);
         $this->assertSame([], $untaggedRow['tag_ids']);
+    }
+
+    public function test_completion_report_json_filters_by_expiry_status(): void
+    {
+        Carbon::setTestNow('2026-06-15'); // soonDays=30 → due-soon boundary 2026-07-15.
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+
+        $mk = function (string $lname, ?string $expire) use ($org, $training): void {
+            $u = User::factory()->for($org, 'organization')->create(['l_name' => $lname]);
+            Completion::factory()->for($org, 'organization')->for($u, 'user')->state([
+                'module_type' => Training::class, 'module_id' => $training->id,
+                'completion_date' => '2026-01-01', 'expire_date' => $expire,
+            ])->create();
+        };
+        $mk('Expired', '2026-01-01');   // past → expired
+        $mk('Soon', '2026-07-01');      // within window → due_soon
+        $mk('Current', '2026-12-01');   // beyond window → current
+        $mk('NoExpiry', null);          // null → current (never lapses)
+
+        $statuses = fn (array $s) => collect($this->actingAs($manager)
+            ->getJson(route('reports.completions', ['statuses' => $s]))->assertOk()->json('data'))
+            ->pluck('status')->all();
+
+        $this->assertSame(['Expired'], $statuses(['expired']));
+        $this->assertSame(['Expires soon'], $statuses(['due_soon']));
+        $this->assertEqualsCanonicalizing(['Current', 'Current'], $statuses(['current']));
+        $this->assertEqualsCanonicalizing(['Expired', 'Expires soon'], $statuses(['expired', 'due_soon']));
+        $this->assertCount(4, $statuses([])); // no status filter → everyone
     }
 
     public function test_completion_report_export_pdf(): void
