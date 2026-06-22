@@ -32,6 +32,8 @@ type TabKey = (typeof TABS)[number]['key'];
 const tab = ref<TabKey>('training');
 const isActive = (key: TabKey) => tab.value === key;
 
+type CountColumn = { key: string; label: string };
+
 const CONFIGS = {
     training: {
         viewId: 'compliance-training',
@@ -41,6 +43,8 @@ const CONFIGS = {
         drilldown: (id: string) => (params: ServerTableQuery) =>
             store.trainingUsers(id, params),
         rowHref: (id: string) => `/compliance/training/${id}`,
+        countColumns: undefined as CountColumn[] | undefined,
+        initialSort: undefined as string | undefined,
     },
     requirement: {
         viewId: 'compliance-requirement',
@@ -49,19 +53,26 @@ const CONFIGS = {
         fetcher: store.byRequirement,
         drilldown: (id: string) => (params: ServerTableQuery) =>
             store.requirementUsers(id, params),
-        rowHref: undefined,
+        rowHref: undefined as ((id: string) => string) | undefined,
+        countColumns: undefined as CountColumn[] | undefined,
+        initialSort: undefined as string | undefined,
     },
-    // Not-required mixes assignments + orphan completions, so no per-row
-    // drill-down (yet) — the counts stand on their own.
+    // Not-required: people who took a training without being required to — only
+    // two states matter, Current vs Taken-but-Expired. No drill-down (yet).
     not_required: {
         viewId: 'compliance-not-required',
         nameLabel: 'Training',
         searchPlaceholder: 'Search trainings…',
         fetcher: store.notRequired,
-        drilldown: undefined,
-        rowHref: undefined,
+        drilldown: undefined as undefined,
+        rowHref: undefined as ((id: string) => string) | undefined,
+        countColumns: [
+            { key: 'current', label: 'Current' },
+            { key: 'expired', label: 'Taken but Expired' },
+        ] as CountColumn[] | undefined,
+        initialSort: 'expired' as string | undefined,
     },
-} as const;
+};
 
 const activeConfig = computed(() => CONFIGS[tab.value]);
 </script>
@@ -104,6 +115,8 @@ const activeConfig = computed(() => CONFIGS[tab.value]);
             :fetcher="activeConfig.fetcher"
             :drilldown="activeConfig.drilldown"
             :row-href="activeConfig.rowHref"
+            :count-columns="activeConfig.countColumns"
+            :initial-sort="activeConfig.initialSort"
         />
     </div>
 </template>

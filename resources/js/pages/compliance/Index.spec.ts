@@ -123,6 +123,12 @@ describe('compliance/Index', () => {
         expect(wrapper.text()).toContain('CPR');
         // No per-row drill-down on this tab.
         expect(wrapper.find('[data-testid="drilldown-CPR"]').exists()).toBe(false);
+
+        // Only the two not-required statuses — not the 5 compliance buckets.
+        const headers = wrapper.findAll('thead th').map((th) => th.text());
+        expect(headers.some((h) => h.includes('Taken but Expired'))).toBe(true);
+        expect(headers.some((h) => h.includes('Overdue'))).toBe(false);
+        expect(headers.some((h) => h.includes('Not started'))).toBe(false);
     });
 
     it('expands a row to drill into its users', async () => {

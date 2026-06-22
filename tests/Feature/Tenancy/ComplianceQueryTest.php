@@ -184,8 +184,21 @@ class ComplianceQueryTest extends TestCase
         $row = collect($res['data'])->firstWhere('name', 'CPR');
         $this->assertNotNull($row);
         $this->assertSame(2, $row['total']); // direct-only + orphan; sourced excluded
-        $this->assertSame(1, $row['counts']['overdue']);
-        $this->assertSame(1, $row['counts']['current']);
+        $this->assertSame(1, $row['counts']['expired']); // direct-only overdue → taken-but-expired
+        $this->assertSame(1, $row['counts']['current']); // orphan completion, no expiry
+    }
+
+    public function test_not_required_drops_trainings_with_no_taken_facts(): void
+    {
+        $org = Organization::factory()->create();
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'NeverTaken']);
+        // A direct-only assignment never completed (not_started) — nobody "took"
+        // it, so the training must not appear on the not-required tab.
+        $this->ta($org, $training, ['status' => 'not_started']);
+
+        $res = (new ComplianceQuery)->notRequired($org);
+
+        $this->assertNull(collect($res['data'])->firstWhere('name', 'NeverTaken'));
     }
 
     public function test_users_for_training_drilldown_lists_worst_status_first(): void

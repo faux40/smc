@@ -111,7 +111,46 @@ class ComplianceQuery
             $base->whereRaw('LOWER(t.name) LIKE ?', [$like]);
         }
 
-        return $this->aggregate($base, 't.id', 't.name', $opts, 'f.status');
+        // Not-required only cares whether a *taken* training is still good:
+        // Current (current/due_soon) vs Taken-but-Expired (overdue). Rows with
+        // no taken facts (e.g. a direct assignment never completed) are dropped.
+        $taken = "SUM(CASE WHEN f.status IN ('current','due_soon','overdue') THEN 1 ELSE 0 END)";
+        $query = $base
+            ->groupBy('t.id', 't.name')
+            ->selectRaw(
+                "t.id as id, t.name as name,
+                 SUM(CASE WHEN f.status IN ('current','due_soon') THEN 1 ELSE 0 END) as current,
+                 SUM(CASE WHEN f.status = 'overdue' THEN 1 ELSE 0 END) as expired,
+                 {$taken} as total"
+            )
+            ->havingRaw("{$taken} > 0");
+
+        $sortable = ['name', 'current', 'expired', 'total'];
+        $sort = in_array($opts['sort'] ?? null, $sortable, true) ? $opts['sort'] : 'expired';
+        $dir = ($opts['dir'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+        $query->orderByRaw("{$sort} {$dir}")->orderBy('name');
+
+        $perPage = max(1, min(100, (int) ($opts['per_page'] ?? 25)));
+        $page = max(1, (int) ($opts['page'] ?? 1));
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+        return [
+            'data' => collect($paginator->items())->map(fn ($row) => [
+                'id' => $row->id,
+                'name' => $row->name,
+                'total' => (int) $row->total,
+                'counts' => [
+                    'current' => (int) $row->current,
+                    'expired' => (int) $row->expired,
+                ],
+            ])->all(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        ];
     }
 
     /**

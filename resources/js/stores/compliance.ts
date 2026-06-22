@@ -14,11 +14,13 @@ import type {
 import { realtimeTabId } from '@/echo';
 
 export interface ComplianceCounts {
-    overdue: number;
-    due_soon: number;
-    not_started: number;
-    current: number;
-    as_needed: number;
+    overdue?: number;
+    due_soon?: number;
+    not_started?: number;
+    current?: number;
+    as_needed?: number;
+    // Not-required tab: "taken but expired".
+    expired?: number;
 }
 
 export interface ComplianceRow {

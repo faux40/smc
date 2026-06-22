@@ -6,7 +6,7 @@
  * come straight off the materialized status.
  */
 import { Link } from '@inertiajs/vue3';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
 import Pagination from '@/components/Pagination.vue';
@@ -37,7 +37,19 @@ const props = defineProps<{
     ) => Promise<ServerTableResponse<ComplianceUserRow>>;
     // Optional: make the row name link somewhere (e.g. the training detail).
     rowHref?: (rowId: string) => string;
+    // Optional: the count columns to show (default = the 5 compliance buckets;
+    // the not-required tab passes Current / Taken-but-Expired).
+    countColumns?: Array<{ key: string; label: string }>;
+    initialSort?: string;
 }>();
+
+const DEFAULT_COUNT_COLUMNS = [
+    { key: 'overdue', label: 'Overdue' },
+    { key: 'due_soon', label: 'Due soon' },
+    { key: 'not_started', label: 'Not started' },
+    { key: 'current', label: 'Current' },
+    { key: 'as_needed', label: 'As-needed' },
+];
 
 // Inline drill-down: the row whose users are shown below the table.
 const expanded = ref<{ id: string; name: string } | null>(null);
@@ -46,15 +58,14 @@ function toggleExpand(row: ComplianceRow): void {
         expanded.value?.id === row.id ? null : { id: row.id, name: row.name };
 }
 
-const COLUMNS = [
+const COLUMNS = computed(() => [
     { key: 'name', label: props.nameLabel, sortable: true },
-    { key: 'overdue', label: 'Overdue', sortable: true },
-    { key: 'due_soon', label: 'Due soon', sortable: true },
-    { key: 'not_started', label: 'Not started', sortable: true },
-    { key: 'current', label: 'Current', sortable: true },
-    { key: 'as_needed', label: 'As-needed', sortable: true },
+    ...(props.countColumns ?? DEFAULT_COUNT_COLUMNS).map((c) => ({
+        ...c,
+        sortable: true,
+    })),
     { key: 'total', label: 'Total', sortable: true },
-];
+]);
 
 const error = ref<string | null>(null);
 const initialLoading = ref(true);
@@ -62,7 +73,7 @@ const search = ref('');
 
 const table = useServerTable<ComplianceRow>((params) => props.fetcher(params), {
     perPage: 25,
-    sort: 'overdue',
+    sort: props.initialSort ?? 'overdue',
     dir: 'desc',
 });
 
@@ -119,7 +130,7 @@ onMounted(async () => {
 
             <template #col-overdue="{ row }">
                 <span
-                    v-if="row.counts.overdue > 0"
+                    v-if="(row.counts.overdue ?? 0) > 0"
                     class="font-medium text-red-700 dark:text-red-300"
                 >
                     {{ row.counts.overdue }}
@@ -129,7 +140,7 @@ onMounted(async () => {
 
             <template #col-due_soon="{ row }">
                 <span
-                    v-if="row.counts.due_soon > 0"
+                    v-if="(row.counts.due_soon ?? 0) > 0"
                     class="font-medium text-amber-700 dark:text-amber-300"
                 >
                     {{ row.counts.due_soon }}
@@ -137,12 +148,22 @@ onMounted(async () => {
                 <span v-else class="text-muted-foreground">0</span>
             </template>
 
+            <template #col-expired="{ row }">
+                <span
+                    v-if="(row.counts.expired ?? 0) > 0"
+                    class="font-medium text-red-700 dark:text-red-300"
+                >
+                    {{ row.counts.expired }}
+                </span>
+                <span v-else class="text-muted-foreground">0</span>
+            </template>
+
             <template #col-not_started="{ row }">{{
-                row.counts.not_started
+                row.counts.not_started ?? 0
             }}</template>
-            <template #col-current="{ row }">{{ row.counts.current }}</template>
+            <template #col-current="{ row }">{{ row.counts.current ?? 0 }}</template>
             <template #col-as_needed="{ row }">{{
-                row.counts.as_needed
+                row.counts.as_needed ?? 0
             }}</template>
             <template #col-total="{ row }">
                 <span class="font-medium">{{ row.total }}</span>
