@@ -10,6 +10,7 @@ use App\Notifications\AssignmentOverdue;
 use App\Services\TrainingStatusService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Phase 15.3 daily watchdog, repointed to the TA engine in J4. Walks
@@ -50,6 +51,15 @@ class ScanAssignmentDueStatesCommand extends Command
                         $ta,
                         $windows[$ta->org_id] ?? Organization::DEFAULT_EXPIRING_SOON_DAYS,
                     );
+
+                    // Daily reconcile of the denormalized status — catches
+                    // date-crossings (due_soon → overdue) that fire no event.
+                    // Raw update: no model events, no updated_at churn.
+                    if ($ta->status !== $bucket) {
+                        DB::table('training_assignments')
+                            ->where('id', $ta->id)
+                            ->update(['status' => $bucket]);
+                    }
 
                     $fired += $this->reconcile($ta, $bucket, $status);
                 }

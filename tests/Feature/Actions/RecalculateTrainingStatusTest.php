@@ -92,6 +92,21 @@ class RecalculateTrainingStatusTest extends TestCase
         ]);
     }
 
+    public function test_handle_materializes_the_status_column(): void
+    {
+        ['user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $this->addDirectSource($ta);
+
+        // No completion yet → not_started.
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+        $this->assertSame('not_started', $ta->fresh()->status);
+
+        // Completed, non-repeating training → current (no expiry).
+        $this->complete($ta, '2026-01-01');
+        (new RecalculateTrainingStatus)->handle($user->id, $training->id);
+        $this->assertSame('current', $ta->fresh()->status);
+    }
+
     public function test_requirement_source_uses_element_timing_over_training_timing(): void
     {
         ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();

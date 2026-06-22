@@ -216,6 +216,21 @@ class AssignmentDueStateWatchdogTest extends TestCase
         Notification::assertNotSentTo($this->user, AssignmentDueSoon::class);
     }
 
+    public function test_watchdog_persists_materialized_status_on_date_crossings(): void
+    {
+        $ta = $this->repeatingTa();
+        $this->completeOn('2026-01-01'); // 90-day element → expires 2026-04-01
+
+        // 2026-01-15: 76 days out, amber window 60 → current.
+        $this->runWatchdogAt('2026-01-15');
+        $this->assertSame('current', $ta->fresh()->status);
+
+        // 2026-05-01: past expiry → overdue. No event fired this crossing —
+        // the daily watchdog is what reconciles the stored status.
+        $this->runWatchdogAt('2026-05-01');
+        $this->assertSame('overdue', $ta->fresh()->status);
+    }
+
     public function test_due_soon_to_overdue_fires_overdue(): void
     {
         $ta = $this->repeatingTa();

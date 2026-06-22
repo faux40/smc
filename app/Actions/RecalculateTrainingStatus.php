@@ -3,10 +3,12 @@
 namespace App\Actions;
 
 use App\Models\Completion;
+use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
+use App\Services\TrainingStatusService;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
@@ -63,18 +65,27 @@ class RecalculateTrainingStatus
 
         $training = Training::with('stdFrequency')->find($trainingId);
 
+        // Amber window for the pair's org (all assignments share it), used to
+        // materialize the denormalized status alongside the date columns.
+        $window = Organization::find($assignments->first()->org_id)?->expiringSoonDays()
+            ?? Organization::DEFAULT_EXPIRING_SOON_DAYS;
+        $statusService = new TrainingStatusService;
+
         foreach ($assignments as $assignment) {
             $timings = $this->sourceTimings($training, $assignment);
             [$expiresAt, $lastCompletedAt] = $this->computeStatus($latest, $timings);
 
-            $assignment->update([
-                'expires_at' => $expiresAt,
-                'last_completed_at' => $lastCompletedAt,
-                // As-needed-only TAs are visible but never scheduled (J3).
-                'as_needed_only' => $timings->every(
-                    fn (array $t) => $t['as_needed'] && ! $t['repeating'] && ! $t['initial_only'],
-                ),
-            ]);
+            $assignment->expires_at = $expiresAt;
+            $assignment->last_completed_at = $lastCompletedAt;
+            // As-needed-only TAs are visible but never scheduled (J3).
+            $assignment->as_needed_only = $timings->every(
+                fn (array $t) => $t['as_needed'] && ! $t['repeating'] && ! $t['initial_only'],
+            );
+            // Materialize the bucket from the freshly-set columns (realtime
+            // half of the denormalized status; the daily watchdog reconciles
+            // date-crossings).
+            $assignment->status = $statusService->statusFor($assignment, $window);
+            $assignment->save();
         }
 
         return $assignments;

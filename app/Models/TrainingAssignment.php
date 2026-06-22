@@ -23,6 +23,7 @@ class TrainingAssignment extends Model
         'expires_at',
         'last_completed_at',
         'as_needed_only',
+        'status',
     ];
 
     protected $casts = [
