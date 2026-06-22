@@ -123,6 +123,21 @@ class ComplianceControllerTest extends TestCase
             ->assertJsonPath('data.0.status', 'overdue');
     }
 
+    public function test_not_required_users_drilldown_endpoint(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create();
+        // A direct-only (not required) completed assignment.
+        $this->ta($org, $training, 'current');
+
+        $this->actingAs($manager)
+            ->getJson(route('compliance.not-required-users', $training))
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonStructure(['data' => [['user_id', 'name', 'status']], 'meta']);
+    }
+
     public function test_non_manager_is_forbidden(): void
     {
         $org = Organization::factory()->create();

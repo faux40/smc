@@ -61,6 +61,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/compliance/by-training', [ComplianceController::class, 'byTraining'])->name('compliance.by-training');
     Route::get('api/compliance/by-requirement', [ComplianceController::class, 'byRequirement'])->name('compliance.by-requirement');
     Route::get('api/compliance/not-required', [ComplianceController::class, 'notRequired'])->name('compliance.not-required');
+    Route::get('api/compliance/not-required/{training}/users', [ComplianceController::class, 'notRequiredUsers'])->name('compliance.not-required-users');
     Route::get('api/compliance/by-training/{training}/users', [ComplianceController::class, 'trainingUsers'])->name('compliance.training-users');
 
     // Exportable PDF reports (T1, Manager+).

@@ -58,13 +58,14 @@ const CONFIGS = {
         initialSort: undefined as string | undefined,
     },
     // Not-required: people who took a training without being required to — only
-    // two states matter, Current vs Taken-but-Expired. No drill-down (yet).
+    // two states matter, Current vs Taken-but-Expired. Drill-down lists the EEs.
     not_required: {
         viewId: 'compliance-not-required',
         nameLabel: 'Training',
         searchPlaceholder: 'Search trainings…',
         fetcher: store.notRequired,
-        drilldown: undefined as undefined,
+        drilldown: (id: string) => (params: ServerTableQuery) =>
+            store.notRequiredUsers(id, params),
         rowHref: undefined as ((id: string) => string) | undefined,
         countColumns: [
             { key: 'current', label: 'Current' },

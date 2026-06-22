@@ -214,6 +214,93 @@ class ComplianceQuery
     }
 
     /**
+     * Drill-down for the not-required tab: the people who *took* a training
+     * without being required to — direct-only assignments (no requirement
+     * source) + orphan completions (no assignment). Status is Current (still
+     * valid) or 'overdue' (taken-but-expired). Expired first.
+     *
+     * @param  array<string, mixed>  $opts  page, per_page
+     * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>}
+     */
+    public function notRequiredUsersForTraining(Organization $org, string $trainingId, array $opts = []): array
+    {
+        $today = Date::now()->startOfDay()->toDateString();
+
+        // (a) direct-only assignments that were taken.
+        $direct = DB::table('training_assignments as ta')
+            ->where('ta.org_id', $org->id)
+            ->where('ta.training_id', $trainingId)
+            ->whereNotExists(fn ($q) => $q->from('assignment_sources as s')
+                ->whereColumn('s.training_assignment_id', 'ta.id')
+                ->whereNull('s.removed_at')
+                ->where('s.sourceable_type', Requirement::class))
+            ->whereIn('ta.status', ['current', 'due_soon', 'overdue'])
+            ->selectRaw("ta.user_id as user_id,
+                CASE WHEN ta.status = 'overdue' THEN 'overdue' ELSE 'current' END as status,
+                ta.expires_at as expires_at, ta.last_completed_at as last_completed_at");
+
+        // (b) orphan completions (latest per user) — took it, never assigned.
+        $orphan = DB::table('completions as c')
+            ->where('c.org_id', $org->id)
+            ->where('c.module_type', Training::class)
+            ->where('c.module_id', $trainingId)
+            ->whereNotExists(fn ($q) => $q->from('training_assignments as ta2')
+                ->whereColumn('ta2.user_id', 'c.user_id')
+                ->whereRaw('CAST(ta2.training_id AS text) = c.module_id'))
+            ->whereNotExists(fn ($q) => $q->from('completions as c2')
+                ->whereColumn('c2.user_id', 'c.user_id')
+                ->whereColumn('c2.module_id', 'c.module_id')
+                ->where('c2.module_type', Training::class)
+                ->whereColumn('c2.completion_date', '>', 'c.completion_date'))
+            ->selectRaw("c.user_id as user_id,
+                CASE WHEN c.expire_date IS NOT NULL AND c.expire_date < ? THEN 'overdue' ELSE 'current' END as status,
+                c.expire_date as expires_at, c.completion_date as last_completed_at", [$today]);
+
+        $facts = $direct->unionAll($orphan);
+
+        $perPage = max(1, min(100, (int) ($opts['per_page'] ?? 10)));
+        $page = max(1, (int) ($opts['page'] ?? 1));
+
+        $paginator = DB::query()
+            ->fromSub($facts, 'f')
+            ->join('users as u', 'u.id', '=', 'f.user_id')
+            ->whereNull('u.deleted_at')
+            ->select('f.user_id', 'f.status', 'f.expires_at', 'f.last_completed_at')
+            ->orderByRaw("CASE f.status WHEN 'overdue' THEN 0 ELSE 1 END")
+            ->orderBy('u.l_name')
+            ->orderBy('u.f_name')
+            ->orderBy('f.user_id')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // Hydrate names + profile for the page's users.
+        $users = User::query()
+            ->whereIn('id', collect($paginator->items())->pluck('user_id'))
+            ->with('tags:id')
+            ->get(['id', 'prefix_name', 'f_name', 'm_name', 'l_name', 'suffix_name', 'employee_number', 'department', 'location'])
+            ->keyBy('id');
+
+        return [
+            'data' => collect($paginator->items())->map(fn ($r) => [
+                'user_id' => $r->user_id,
+                'name' => $users->get($r->user_id)?->sort_name,
+                'status' => $r->status,
+                'expires_at' => $r->expires_at,
+                'last_completed_at' => $r->last_completed_at,
+                'employee_number' => $users->get($r->user_id)?->employee_number,
+                'department' => $users->get($r->user_id)?->department,
+                'location' => $users->get($r->user_id)?->location,
+                'tag_ids' => $users->get($r->user_id)?->tags->pluck('id')->all() ?? [],
+            ])->all(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        ];
+    }
+
+    /**
      * Shared drill-down pager: hydrate the user (page-bounded, so the join is
      * cheap), order worst-status first, return {data, meta}.
      *

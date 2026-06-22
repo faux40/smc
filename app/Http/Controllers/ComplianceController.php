@@ -91,6 +91,16 @@ class ComplianceController extends Controller
         );
     }
 
+    /** Drill-down: people who took a training without being required to. */
+    public function notRequiredUsers(Request $request, Training $training): JsonResponse
+    {
+        $this->authorizeManager($request);
+
+        return response()->json(
+            $this->compliance->notRequiredUsersForTraining($request->user()->organization, $training->id, $this->pageOpts($request)),
+        );
+    }
+
     private function authorizeManager(Request $request): void
     {
         abort_unless(

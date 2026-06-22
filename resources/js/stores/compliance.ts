@@ -118,11 +118,19 @@ export const useComplianceStore = defineStore('compliance', () => {
             params,
         );
 
+    // Drill-down: people who took a training without being required to.
+    const notRequiredUsers = (id: string, params: ComplianceUsersQuery) =>
+        fetchPaged<ComplianceUserRow>(
+            `/api/compliance/not-required/${id}/users`,
+            params,
+        );
+
     return {
         byTraining,
         byRequirement,
         notRequired,
         trainingUsers,
         requirementUsers,
+        notRequiredUsers,
     };
 });

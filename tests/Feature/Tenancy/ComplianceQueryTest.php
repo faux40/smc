@@ -312,6 +312,47 @@ class ComplianceQueryTest extends TestCase
         $this->assertSame([$none->id], $ids($not));
     }
 
+    public function test_not_required_users_lists_takers_only(): void
+    {
+        $org = Organization::factory()->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+
+        // Requirement-sourced → excluded from not-required.
+        $sourced = $this->ta($org, $training, ['status' => 'current']);
+        AssignmentSource::create([
+            'training_assignment_id' => $sourced->id,
+            'sourceable_type' => Requirement::class,
+            'sourceable_id' => $req->id,
+            'added_at' => now(),
+        ]);
+        // Direct-only taken: current + expired → included.
+        $directCurrent = $this->ta($org, $training, ['status' => 'current']);
+        $directExpired = $this->ta($org, $training, ['status' => 'overdue']);
+        // Direct-only never completed → excluded (not taken).
+        $this->ta($org, $training, ['status' => 'not_started']);
+        // Orphan completion (no TA) → included.
+        $orphanUser = User::factory()->for($org, 'organization')->create();
+        Completion::factory()->for($org, 'organization')->for($orphanUser, 'user')->create([
+            'module_type' => Training::class, 'module_id' => $training->id,
+            'completion_date' => '2026-01-01', 'expire_date' => null,
+        ]);
+
+        $res = (new ComplianceQuery)->notRequiredUsersForTraining($org, $training->id);
+        $ids = collect($res['data'])->pluck('user_id');
+
+        $this->assertSame(3, $res['meta']['total']);
+        $this->assertTrue($ids->contains($directCurrent->user_id));
+        $this->assertTrue($ids->contains($directExpired->user_id));
+        $this->assertTrue($ids->contains($orphanUser->id));
+        $this->assertFalse($ids->contains($sourced->user_id)); // requirement-sourced excluded
+
+        $byUser = collect($res['data'])->keyBy('user_id');
+        $this->assertSame('overdue', $byUser[$directExpired->user_id]['status']);
+        $this->assertSame('current', $byUser[$directCurrent->user_id]['status']);
+        $this->assertNotNull($byUser[$orphanUser->id]['name']);
+    }
+
     public function test_users_for_requirement_drilldown_only_counts_sourced_assignments(): void
     {
         $org = Organization::factory()->create();

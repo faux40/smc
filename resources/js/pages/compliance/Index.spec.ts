@@ -111,7 +111,7 @@ describe('compliance/Index', () => {
         });
     });
 
-    it('shows the not-required tab without a drill-down column', async () => {
+    it('shows the not-required tab with its two statuses and a drill-down', async () => {
         const wrapper = await mountPage();
 
         await wrapper
@@ -121,14 +121,21 @@ describe('compliance/Index', () => {
 
         expect(paramsFor('/api/compliance/not-required').length).toBeGreaterThan(0);
         expect(wrapper.text()).toContain('CPR');
-        // No per-row drill-down on this tab.
-        expect(wrapper.find('[data-testid="drilldown-CPR"]').exists()).toBe(false);
 
         // Only the two not-required statuses — not the 5 compliance buckets.
         const headers = wrapper.findAll('thead th').map((th) => th.text());
         expect(headers.some((h) => h.includes('Taken but Expired'))).toBe(true);
         expect(headers.some((h) => h.includes('Overdue'))).toBe(false);
         expect(headers.some((h) => h.includes('Not started'))).toBe(false);
+
+        // Drill-down now lists the EEs who took it.
+        await wrapper.find('[data-testid="drilldown-CPR"]').trigger('click');
+        await flushPromises();
+        expect(axios.get as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+            '/api/compliance/not-required/CPR/users',
+            expect.anything(),
+        );
+        expect(wrapper.find('[data-testid="drilldown-panel"]').exists()).toBe(true);
     });
 
     it('expands a row to drill into its users', async () => {
