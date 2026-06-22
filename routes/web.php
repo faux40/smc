@@ -58,6 +58,8 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('compliance', [ComplianceController::class, 'index'])->name('compliance.page');
     Route::get('api/compliance/by-training', [ComplianceController::class, 'byTraining'])->name('compliance.by-training');
     Route::get('api/compliance/by-requirement', [ComplianceController::class, 'byRequirement'])->name('compliance.by-requirement');
+    Route::get('api/compliance/by-training/{training}/users', [ComplianceController::class, 'trainingUsers'])->name('compliance.training-users');
+    Route::get('api/compliance/by-requirement/{requirement}/users', [ComplianceController::class, 'requirementUsers'])->name('compliance.requirement-users');
 
     // Save the current user's UI preferences (table column visibility/order +
     // filter defaults). Self-only — shared back via the auth.user prop.

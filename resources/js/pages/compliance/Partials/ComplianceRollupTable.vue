@@ -9,6 +9,7 @@ import { onMounted, ref } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
 import Pagination from '@/components/Pagination.vue';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useServerTable } from '@/composables/useServerTable';
@@ -16,7 +17,8 @@ import type {
     ServerTableQuery,
     ServerTableResponse,
 } from '@/composables/useServerTable';
-import type { ComplianceRow } from '@/stores/compliance';
+import ComplianceDrilldown from '@/pages/compliance/Partials/ComplianceDrilldown.vue';
+import type { ComplianceRow, ComplianceUserRow } from '@/stores/compliance';
 
 const props = defineProps<{
     viewId: string;
@@ -25,7 +27,19 @@ const props = defineProps<{
     fetcher: (
         params: ServerTableQuery,
     ) => Promise<ServerTableResponse<ComplianceRow>>;
+    drilldown: (
+        rowId: string,
+    ) => (
+        params: ServerTableQuery,
+    ) => Promise<ServerTableResponse<ComplianceUserRow>>;
 }>();
+
+// Inline drill-down: the row whose users are shown below the table.
+const expanded = ref<{ id: string; name: string } | null>(null);
+function toggleExpand(row: ComplianceRow): void {
+    expanded.value =
+        expanded.value?.id === row.id ? null : { id: row.id, name: row.name };
+}
 
 const COLUMNS = [
     { key: 'name', label: props.nameLabel, sortable: true },
@@ -122,6 +136,24 @@ onMounted(async () => {
                 <span class="font-medium">{{ row.total }}</span>
             </template>
 
+            <template #trail-header>
+                <th class="px-4 py-2 text-right font-medium">Details</th>
+            </template>
+            <template #trail-cells="{ row }">
+                <td class="px-4 py-2 text-right">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        :data-testid="`drilldown-${row.id}`"
+                        :aria-expanded="expanded?.id === row.id"
+                        @click="toggleExpand(row)"
+                    >
+                        {{ expanded?.id === row.id ? 'Hide' : 'View users' }}
+                    </Button>
+                </td>
+            </template>
+
             <template #empty>No compliance rows match the current search.</template>
         </DataTable>
 
@@ -134,5 +166,32 @@ onMounted(async () => {
             @update:page="table.setPage"
             @update:per-page="table.setPerPage"
         />
+
+        <!-- Drill-down panel for the expanded row. -->
+        <div
+            v-if="expanded"
+            class="rounded-md border border-border"
+            data-testid="drilldown-panel"
+        >
+            <div
+                class="flex items-center justify-between border-b border-border bg-muted/40 px-3 py-2"
+            >
+                <span class="text-sm font-medium">
+                    {{ nameLabel }}: {{ expanded.name }} — users
+                </span>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    @click="expanded = null"
+                >
+                    Close
+                </Button>
+            </div>
+            <ComplianceDrilldown
+                :key="expanded.id"
+                :fetcher="drilldown(expanded.id)"
+            />
+        </div>
     </AsyncState>
 </template>

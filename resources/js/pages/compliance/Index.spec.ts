@@ -7,6 +7,10 @@ import ComplianceIndex from '@/pages/compliance/Index.vue';
 vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
+    Link: { template: '<a><slot /></a>' },
+}));
+vi.mock('@/routes/users', () => ({
+    show: (id: string) => ({ url: `/users/${id}` }),
 }));
 
 const META = { current_page: 1, last_page: 1, per_page: 25, total: 1 };
@@ -28,6 +32,22 @@ function stubAxios() {
         }
         if (url === '/api/compliance/by-requirement') {
             return Promise.resolve({ data: { data: [row('OSHA General')], meta: META } });
+        }
+        if (url.endsWith('/users')) {
+            return Promise.resolve({
+                data: {
+                    data: [
+                        {
+                            user_id: 'u1',
+                            name: 'Lovelace, Ada',
+                            status: 'overdue',
+                            expires_at: '2026-01-01',
+                            last_completed_at: '2025-01-01',
+                        },
+                    ],
+                    meta: META,
+                },
+            });
         }
         return Promise.reject(new Error(`unexpected GET ${url}`));
     });
@@ -86,5 +106,24 @@ describe('compliance/Index', () => {
         expect(paramsFor('/api/compliance/by-training').at(-1)).toMatchObject({
             sort: 'due_soon',
         });
+    });
+
+    it('expands a row to drill into its users', async () => {
+        const wrapper = await mountPage();
+
+        await wrapper
+            .find('[data-testid="drilldown-Fall Protection"]')
+            .trigger('click');
+        await flushPromises();
+
+        expect(
+            axios.get as ReturnType<typeof vi.fn>,
+        ).toHaveBeenCalledWith(
+            '/api/compliance/by-training/Fall Protection/users',
+            expect.anything(),
+        );
+        const panel = wrapper.find('[data-testid="drilldown-panel"]');
+        expect(panel.exists()).toBe(true);
+        expect(panel.text()).toContain('Lovelace, Ada');
     });
 });

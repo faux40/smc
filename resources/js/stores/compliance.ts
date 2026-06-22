@@ -28,6 +28,15 @@ export interface ComplianceRow {
     counts: ComplianceCounts;
 }
 
+/** Drill-down row: one user under a training/requirement, with their status. */
+export interface ComplianceUserRow {
+    user_id: string;
+    name: string | null;
+    status: string;
+    expires_at: string | null;
+    last_completed_at: string | null;
+}
+
 function defaultHeaders(): Record<string, string> {
     const csrf = document.querySelector<HTMLMetaElement>(
         'meta[name="csrf-token"]',
@@ -42,10 +51,10 @@ function defaultHeaders(): Record<string, string> {
 }
 
 export const useComplianceStore = defineStore('compliance', () => {
-    async function fetchRollup(
+    async function fetchPaged<T>(
         url: string,
         params: ServerTableQuery,
-    ): Promise<ServerTableResponse<ComplianceRow>> {
+    ): Promise<ServerTableResponse<T>> {
         const query: Record<string, string | number> = {
             page: params.page,
             per_page: params.per_page,
@@ -59,19 +68,32 @@ export const useComplianceStore = defineStore('compliance', () => {
             query.q = params.q;
         }
 
-        const { data } = await axios.get<ServerTableResponse<ComplianceRow>>(
-            url,
-            { headers: defaultHeaders(), params: query },
-        );
+        const { data } = await axios.get<ServerTableResponse<T>>(url, {
+            headers: defaultHeaders(),
+            params: query,
+        });
 
         return data;
     }
 
     const byTraining = (params: ServerTableQuery) =>
-        fetchRollup('/api/compliance/by-training', params);
+        fetchPaged<ComplianceRow>('/api/compliance/by-training', params);
 
     const byRequirement = (params: ServerTableQuery) =>
-        fetchRollup('/api/compliance/by-requirement', params);
+        fetchPaged<ComplianceRow>('/api/compliance/by-requirement', params);
 
-    return { byTraining, byRequirement };
+    // Drill-down: users under one training / requirement.
+    const trainingUsers = (id: string, params: ServerTableQuery) =>
+        fetchPaged<ComplianceUserRow>(
+            `/api/compliance/by-training/${id}/users`,
+            params,
+        );
+
+    const requirementUsers = (id: string, params: ServerTableQuery) =>
+        fetchPaged<ComplianceUserRow>(
+            `/api/compliance/by-requirement/${id}/users`,
+            params,
+        );
+
+    return { byTraining, byRequirement, trainingUsers, requirementUsers };
 });

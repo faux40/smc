@@ -148,4 +148,39 @@ class ComplianceQueryTest extends TestCase
         $this->assertSame(1, $row['counts']['overdue']);
         $this->assertSame(1, $row['counts']['current']);
     }
+
+    public function test_users_for_training_drilldown_lists_worst_status_first(): void
+    {
+        $org = Organization::factory()->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+        $this->ta($org, $training, ['status' => 'current']);
+        $this->ta($org, $training, ['status' => 'overdue']);
+
+        $res = (new ComplianceQuery)->usersForTraining($org, $training->id);
+
+        $this->assertSame(2, $res['meta']['total']);
+        $this->assertSame('overdue', $res['data'][0]['status']); // worst first
+        $this->assertNotNull($res['data'][0]['name']);
+    }
+
+    public function test_users_for_requirement_drilldown_only_counts_sourced_assignments(): void
+    {
+        $org = Organization::factory()->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+
+        $sourced = $this->ta($org, $training, ['status' => 'overdue']);
+        $this->ta($org, $training, ['status' => 'current']); // direct, not sourced
+        AssignmentSource::create([
+            'training_assignment_id' => $sourced->id,
+            'sourceable_type' => Requirement::class,
+            'sourceable_id' => $req->id,
+            'added_at' => now(),
+        ]);
+
+        $res = (new ComplianceQuery)->usersForRequirement($org, $req->id);
+
+        $this->assertSame(1, $res['meta']['total']);
+        $this->assertSame($sourced->user_id, $res['data'][0]['user_id']);
+    }
 }

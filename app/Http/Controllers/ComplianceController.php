@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Requirement;
+use App\Models\Training;
 use App\Services\ComplianceQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -46,6 +48,26 @@ class ComplianceController extends Controller
         );
     }
 
+    /** Drill-down: users assigned a training, worst-status first. */
+    public function trainingUsers(Request $request, Training $training): JsonResponse
+    {
+        $this->authorizeManager($request);
+
+        return response()->json(
+            $this->compliance->usersForTraining($request->user()->organization, $training->id, $this->pageOpts($request)),
+        );
+    }
+
+    /** Drill-down: users whose assignment a requirement actively sources. */
+    public function requirementUsers(Request $request, Requirement $requirement): JsonResponse
+    {
+        $this->authorizeManager($request);
+
+        return response()->json(
+            $this->compliance->usersForRequirement($request->user()->organization, $requirement->id, $this->pageOpts($request)),
+        );
+    }
+
     private function authorizeManager(Request $request): void
     {
         abort_unless(
@@ -63,6 +85,17 @@ class ComplianceController extends Controller
             'q' => $request->query('q'),
             'sort' => $request->query('sort'),
             'dir' => $request->query('dir'),
+            'page' => $request->query('page'),
+            'per_page' => $request->query('per_page'),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function pageOpts(Request $request): array
+    {
+        return [
             'page' => $request->query('page'),
             'per_page' => $request->query('per_page'),
         ];

@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Organization;
 use App\Models\Requirement;
+use App\Models\TrainingAssignment;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -69,6 +71,83 @@ class ComplianceQuery
         }
 
         return $this->aggregate($base, 'r.id', 'r.name', $opts);
+    }
+
+    /**
+     * Drill-down: the users assigned a given training, worst-status first.
+     * Paginated; small pages since this backs an inline expand panel.
+     *
+     * @param  array<string, mixed>  $opts  page, per_page
+     * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>}
+     */
+    public function usersForTraining(Organization $org, string $trainingId, array $opts = []): array
+    {
+        $base = TrainingAssignment::query()
+            ->where('org_id', $org->id)
+            ->where('training_id', $trainingId);
+
+        return $this->paginateUsers($base, $opts);
+    }
+
+    /**
+     * Drill-down: the users whose assignment is actively sourced by a given
+     * requirement, worst-status first.
+     *
+     * @param  array<string, mixed>  $opts  page, per_page
+     * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>}
+     */
+    public function usersForRequirement(Organization $org, string $requirementId, array $opts = []): array
+    {
+        $base = TrainingAssignment::query()
+            ->where('org_id', $org->id)
+            ->whereHas('activeSources', fn ($q) => $q
+                ->where('sourceable_type', Requirement::class)
+                ->where('sourceable_id', $requirementId));
+
+        return $this->paginateUsers($base, $opts);
+    }
+
+    /**
+     * Shared drill-down pager: hydrate the user (page-bounded, so the join is
+     * cheap), order worst-status first, return {data, meta}.
+     *
+     * @param  EloquentBuilder<TrainingAssignment>  $base
+     * @param  array<string, mixed>  $opts
+     * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>}
+     */
+    private function paginateUsers(EloquentBuilder $base, array $opts): array
+    {
+        $perPage = max(1, min(100, (int) ($opts['per_page'] ?? 10)));
+        $page = max(1, (int) ($opts['page'] ?? 1));
+
+        // Worst-first by the canonical bucket order, then soonest expiry.
+        $rank = collect(self::BUCKETS)
+            ->map(fn (string $b, int $i) => "WHEN '{$b}' THEN {$i}")
+            ->implode(' ');
+
+        $paginator = $base
+            ->with('user:id,prefix_name,f_name,m_name,l_name,suffix_name')
+            ->orderByRaw("CASE status {$rank} ELSE 99 END")
+            ->orderByRaw('expires_at IS NULL') // non-null expiries first
+            ->orderBy('expires_at')
+            ->orderBy('id')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        return [
+            'data' => collect($paginator->items())->map(fn (TrainingAssignment $ta) => [
+                'user_id' => $ta->user_id,
+                'name' => $ta->user?->sort_name,
+                'status' => $ta->status,
+                'expires_at' => $ta->expires_at?->toDateString(),
+                'last_completed_at' => $ta->last_completed_at?->toDateString(),
+            ])->all(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        ];
     }
 
     /** Normalized LIKE term, or null when no search. */

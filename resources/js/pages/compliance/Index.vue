@@ -9,6 +9,7 @@ import { Head } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
+import type { ServerTableQuery } from '@/composables/useServerTable';
 import ComplianceRollupTable from '@/pages/compliance/Partials/ComplianceRollupTable.vue';
 import { useComplianceStore } from '@/stores/compliance';
 
@@ -37,12 +38,16 @@ const activeConfig = computed(() =>
               nameLabel: 'Training',
               searchPlaceholder: 'Search trainings…',
               fetcher: store.byTraining,
+              drilldown: (id: string) => (params: ServerTableQuery) =>
+                  store.trainingUsers(id, params),
           }
         : {
               viewId: 'compliance-requirement',
               nameLabel: 'Requirement',
               searchPlaceholder: 'Search requirements…',
               fetcher: store.byRequirement,
+              drilldown: (id: string) => (params: ServerTableQuery) =>
+                  store.requirementUsers(id, params),
           },
 );
 </script>
@@ -83,6 +88,7 @@ const activeConfig = computed(() =>
             :name-label="activeConfig.nameLabel"
             :search-placeholder="activeConfig.searchPlaceholder"
             :fetcher="activeConfig.fetcher"
+            :drilldown="activeConfig.drilldown"
         />
     </div>
 </template>

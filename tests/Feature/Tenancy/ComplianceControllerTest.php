@@ -66,6 +66,21 @@ class ComplianceControllerTest extends TestCase
             ->assertJsonStructure(['data', 'meta' => ['current_page', 'last_page', 'per_page', 'total']]);
     }
 
+    public function test_training_drilldown_endpoint_lists_users(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create();
+        $this->ta($org, $training, 'overdue');
+
+        $this->actingAs($manager)
+            ->getJson(route('compliance.training-users', $training))
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.status', 'overdue')
+            ->assertJsonStructure(['data' => [['user_id', 'name', 'status', 'expires_at', 'last_completed_at']], 'meta']);
+    }
+
     public function test_non_manager_is_forbidden(): void
     {
         $org = Organization::factory()->create();
