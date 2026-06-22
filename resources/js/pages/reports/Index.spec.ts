@@ -20,7 +20,7 @@ function stubAxios() {
             return Promise.resolve({
                 data: {
                     data: [
-                        { id: 'c1', user: 'Lee, Sam', training: 'CPR', completion_date: '2026-02-01', expire_date: '—', hours: 4, class: '—', cert_id: 'CERT-1' },
+                        { id: 'c1', user: 'Lee, Sam', employee_number: 'EMP-1', department: 'Ops', location: 'Yard', training: 'CPR', completion_date: '2026-02-01', expire_date: '2020-01-01', status: 'Expired', _band: 'expired', hours: 4, class: '—', cert_id: 'CERT-1' },
                     ],
                     meta: META,
                 },
@@ -51,11 +51,16 @@ describe('reports/Index — completion report', () => {
         stubAxios();
     });
 
-    it('loads completions on mount and renders a row', async () => {
+    it('loads completions on mount and renders a row with identity + status', async () => {
         const wrapper = await mountPage();
         expect(params().length).toBeGreaterThan(0);
-        expect(wrapper.find('tbody').text()).toContain('Lee, Sam');
-        expect(wrapper.find('tbody').text()).toContain('CPR');
+        const body = wrapper.find('tbody').text();
+        expect(body).toContain('Lee, Sam');
+        expect(body).toContain('CPR');
+        // Identifying columns + the expiry status badge (from _band) render.
+        expect(body).toContain('EMP-1');
+        expect(body).toContain('Ops');
+        expect(body).toContain('Expired');
     });
 
     it('sends training search (q) and user search (user_q), debounced', async () => {

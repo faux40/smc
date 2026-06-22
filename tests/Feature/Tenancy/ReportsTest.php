@@ -38,12 +38,15 @@ class ReportsTest extends TestCase
         $org = Organization::factory()->create();
         $manager = $this->manager($org);
         $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
-        $student = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Lee']);
+        $student = User::factory()->for($org, 'organization')->create([
+            'f_name' => 'Sam', 'l_name' => 'Lee',
+            'employee_number' => 'EMP-7', 'department' => 'Ops', 'location' => 'Yard',
+        ]);
         Completion::factory()->for($org, 'organization')->for($student, 'user')->state([
             'module_type' => Training::class,
             'module_id' => $training->id,
             'completion_date' => '2026-01-10',
-            'expire_date' => '2027-01-10',
+            'expire_date' => '2099-01-10', // far future → Current
             'cert_id' => 'CERT-9',
         ])->create();
 
@@ -54,10 +57,56 @@ class ReportsTest extends TestCase
         Pdf::assertRespondedWithPdf(
             fn ($pdf) => $pdf->viewName === 'pdf.report'
                 && $pdf->viewData['subtitle'] === 'CPR'
+                // Identifying columns + a Status column are present.
+                && collect($pdf->viewData['columns'])->pluck('key')->contains('employee_number')
+                && collect($pdf->viewData['columns'])->pluck('key')->contains('status')
                 && (new Collection($pdf->viewData['rows']))->contains(
-                    fn (array $r) => $r['user'] === 'Lee, Sam' && $r['cert_id'] === 'CERT-9',
+                    fn (array $r) => $r['user'] === 'Lee, Sam'
+                        && $r['cert_id'] === 'CERT-9'
+                        && $r['employee_number'] === 'EMP-7'
+                        && $r['department'] === 'Ops'
+                        && $r['location'] === 'Yard'
+                        && $r['status'] === 'Current'
+                        && $r['_band'] === 'current',
                 ),
         );
+    }
+
+    public function test_report_rows_carry_expiry_status_and_colour_band(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'Forklift']);
+
+        $cases = [
+            ['expire' => '2020-01-01', 'band' => 'expired', 'label' => 'Expired'],
+            ['expire' => now()->addDays(5)->toDateString(), 'band' => 'due_soon', 'label' => 'Expires soon'],
+            ['expire' => now()->addYears(5)->toDateString(), 'band' => 'current', 'label' => 'Current'],
+            ['expire' => null, 'band' => 'current', 'label' => 'Current'],
+        ];
+        foreach ($cases as $c) {
+            $u = User::factory()->for($org, 'organization')->create();
+            Completion::factory()->for($org, 'organization')->for($u, 'user')->state([
+                'module_type' => Training::class,
+                'module_id' => $training->id,
+                'completion_date' => '2026-01-01',
+                'expire_date' => $c['expire'],
+            ])->create();
+        }
+
+        $this->actingAs($manager)->get(route('reports.training-record', $training))->assertOk();
+
+        Pdf::assertRespondedWithPdf(function ($pdf) use ($cases) {
+            $rows = new Collection($pdf->viewData['rows']);
+            foreach ($cases as $c) {
+                $hit = $rows->first(fn (array $r) => $r['status'] === $c['label'] && $r['_band'] === $c['band']);
+                if ($hit === null) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
     }
 
     public function test_training_record_renders_even_with_no_completions(): void

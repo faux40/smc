@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useServerTable } from '@/composables/useServerTable';
+import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
+import type { ComplianceStatus } from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import { useReportsStore } from '@/stores/reports';
 import type { CompletionReportRow } from '@/stores/reports';
 import { useTagsStore } from '@/stores/tags';
@@ -29,9 +31,13 @@ defineOptions({
 
 const COLUMNS = [
     { key: 'user', label: 'User', sortable: false },
+    { key: 'employee_number', label: 'Employee #', sortable: false },
+    { key: 'department', label: 'Department', sortable: false },
+    { key: 'location', label: 'Location', sortable: false },
     { key: 'training', label: 'Training', sortable: false },
     { key: 'completion_date', label: 'Completed', sortable: false },
     { key: 'expire_date', label: 'Expires', sortable: false },
+    { key: 'status', label: 'Status', sortable: false },
     { key: 'hours', label: 'Hours', sortable: false },
     { key: 'class', label: 'Class', sortable: false },
     { key: 'cert_id', label: 'Cert ID', sortable: false },
@@ -194,6 +200,10 @@ onMounted(async () => {
                             />
                         </div>
                     </div>
+                </template>
+
+                <template #col-status="{ row }">
+                    <ComplianceStatusBadge :status="(row._band as ComplianceStatus)" />
                 </template>
 
                 <template #empty>No completions match the current filters.</template>

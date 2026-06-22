@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Models\Training;
 use App\Models\User;
 use App\Support\CompletionSerializer;
+use App\Support\ExpiryStatus;
 use App\Support\PdfRenderer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -49,13 +50,13 @@ class ReportsController extends Controller
         $org = $request->user()->organization;
 
         $base = $this->completionsQuery($request, $org)
-            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name', 'rqmtElements:id']);
+            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location', 'rqmtElements:id']);
 
         $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
         $page = $base->paginate($perPage);
 
         return response()->json([
-            'data' => $this->mapCompletionRows($page->getCollection()),
+            'data' => $this->reportRows($page->getCollection(), $org),
             'meta' => [
                 'current_page' => $page->currentPage(),
                 'last_page' => $page->lastPage(),
@@ -72,7 +73,7 @@ class ReportsController extends Controller
         $org = $request->user()->organization;
 
         $all = $this->completionsQuery($request, $org)
-            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name', 'rqmtElements:id'])
+            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location', 'rqmtElements:id'])
             ->limit(self::ROW_CAP + 1)
             ->get();
 
@@ -84,14 +85,18 @@ class ReportsController extends Controller
             subtitle: $this->dateRangeLabel($request),
             columns: [
                 ['key' => 'user', 'label' => 'User'],
+                ['key' => 'employee_number', 'label' => 'Employee #'],
+                ['key' => 'department', 'label' => 'Department'],
+                ['key' => 'location', 'label' => 'Location'],
                 ['key' => 'training', 'label' => 'Training'],
                 ['key' => 'completion_date', 'label' => 'Completed'],
                 ['key' => 'expire_date', 'label' => 'Expires'],
+                ['key' => 'status', 'label' => 'Status'],
                 ['key' => 'hours', 'label' => 'Hours'],
                 ['key' => 'class', 'label' => 'Class'],
                 ['key' => 'cert_id', 'label' => 'Cert ID'],
             ],
-            rows: $this->mapCompletionRows($all->take(self::ROW_CAP)),
+            rows: $this->reportRows($all->take(self::ROW_CAP), $org),
             capped: $capped,
             filename: 'completion-report.pdf',
             filters: $this->filterSummary($request),
@@ -163,26 +168,42 @@ class ReportsController extends Controller
     }
 
     /**
-     * Map a collection of completions to report rows (user + training name).
+     * Map completions to rich report rows — user (+ identifying columns),
+     * training, dates, an expiry Status label, and a `_band` colour key for row
+     * shading. Callers pick which columns to show; extra keys are ignored by the
+     * blade. Users must be eager-loaded (id + name parts + employee_number /
+     * department / location).
      *
      * @param  Collection<int, Completion>  $completions
      * @return array<int, array<string, mixed>>
      */
-    private function mapCompletionRows(Collection $completions): array
+    private function reportRows(Collection $completions, Organization $org): array
     {
-        $names = $completions->pluck('user', 'user_id')->map(fn ($u) => $u?->sort_name);
+        $users = $completions->pluck('user', 'user_id');
+        $soonDays = $org->expiringSoonDays();
+        $today = Carbon::now()->startOfDay()->toDateString();
 
         return collect(CompletionSerializer::collection($completions))
-            ->map(fn (array $r) => [
-                'id' => $r['id'],
-                'user' => $names[$r['user_id']] ?? '—',
-                'training' => $r['training_name'] ?? '—',
-                'completion_date' => $r['completion_date'] ?? '—',
-                'expire_date' => $r['expire_date'] ?? '—',
-                'hours' => $r['hours'] ?? '—',
-                'class' => $r['class_name'] ?? '—',
-                'cert_id' => $r['cert_id'] ?? '—',
-            ])
+            ->map(function (array $r) use ($users, $soonDays, $today) {
+                $u = $users[$r['user_id']] ?? null;
+                $status = ExpiryStatus::for($r['expire_date'] ?? null, $soonDays, $today);
+
+                return [
+                    'id' => $r['id'],
+                    'user' => $u?->sort_name ?? '—',
+                    'employee_number' => $u?->employee_number ?? '—',
+                    'department' => $u?->department ?? '—',
+                    'location' => $u?->location ?? '—',
+                    'training' => $r['training_name'] ?? '—',
+                    'completion_date' => $r['completion_date'] ?? '—',
+                    'expire_date' => $r['expire_date'] ?? '—',
+                    'status' => $status['label'],
+                    'hours' => $r['hours'] ?? '—',
+                    'class' => $r['class_name'] ?? '—',
+                    'cert_id' => $r['cert_id'] ?? '—',
+                    '_band' => $status['key'],
+                ];
+            })
             ->all();
     }
 
@@ -226,7 +247,7 @@ class ReportsController extends Controller
             ->where('org_id', $org->id)
             ->where('module_type', Training::class)
             ->where('module_id', $training->id)
-            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name', 'rqmtElements:id'])
+            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location', 'rqmtElements:id'])
             ->orderByDesc('completion_date')
             ->limit(self::ROW_CAP + 1)
             ->get();
@@ -234,31 +255,23 @@ class ReportsController extends Controller
         $capped = $completions->count() > self::ROW_CAP;
         $completions = $completions->take(self::ROW_CAP);
 
-        $names = $completions->pluck('user', 'user_id')->map(fn ($u) => $u?->sort_name);
-        $rows = collect(CompletionSerializer::collection($completions))
-            ->map(fn (array $r) => [
-                'user' => $names[$r['user_id']] ?? '—',
-                'completion_date' => $r['completion_date'] ?? '—',
-                'expire_date' => $r['expire_date'] ?? '—',
-                'hours' => $r['hours'] ?? '—',
-                'class' => $r['class_name'] ?? '—',
-                'cert_id' => $r['cert_id'] ?? '—',
-            ])
-            ->all();
-
         return $this->tableReport(
             org: $org,
             title: 'Training record',
             subtitle: $training->name,
             columns: [
                 ['key' => 'user', 'label' => 'User'],
+                ['key' => 'employee_number', 'label' => 'Employee #'],
+                ['key' => 'department', 'label' => 'Department'],
+                ['key' => 'location', 'label' => 'Location'],
                 ['key' => 'completion_date', 'label' => 'Completed'],
                 ['key' => 'expire_date', 'label' => 'Expires'],
+                ['key' => 'status', 'label' => 'Status'],
                 ['key' => 'hours', 'label' => 'Hours'],
                 ['key' => 'class', 'label' => 'Class'],
                 ['key' => 'cert_id', 'label' => 'Cert ID'],
             ],
-            rows: $rows,
+            rows: $this->reportRows($completions, $org),
             capped: $capped,
             filename: 'training-record-'.$training->id.'.pdf',
         );
@@ -275,7 +288,7 @@ class ReportsController extends Controller
         $completions = Completion::query()
             ->where('org_id', $user->org_id)
             ->where('user_id', $user->id)
-            ->with('rqmtElements:id')
+            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location', 'rqmtElements:id'])
             ->orderByDesc('completion_date')
             ->limit(self::ROW_CAP + 1)
             ->get();
@@ -283,30 +296,21 @@ class ReportsController extends Controller
         $capped = $completions->count() > self::ROW_CAP;
         $completions = $completions->take(self::ROW_CAP);
 
-        $rows = collect(CompletionSerializer::collection($completions))
-            ->map(fn (array $r) => [
-                'training' => $r['training_name'] ?? '—',
-                'completion_date' => $r['completion_date'] ?? '—',
-                'expire_date' => $r['expire_date'] ?? '—',
-                'hours' => $r['hours'] ?? '—',
-                'class' => $r['class_name'] ?? '—',
-                'cert_id' => $r['cert_id'] ?? '—',
-            ])
-            ->all();
-
         return $this->tableReport(
             org: $user->organization,
             title: 'Training record',
             subtitle: $user->sort_name,
+            // One person → identifying columns live in the subtitle, not the table.
             columns: [
                 ['key' => 'training', 'label' => 'Training'],
                 ['key' => 'completion_date', 'label' => 'Completed'],
                 ['key' => 'expire_date', 'label' => 'Expires'],
+                ['key' => 'status', 'label' => 'Status'],
                 ['key' => 'hours', 'label' => 'Hours'],
                 ['key' => 'class', 'label' => 'Class'],
                 ['key' => 'cert_id', 'label' => 'Cert ID'],
             ],
-            rows: $rows,
+            rows: $this->reportRows($completions, $user->organization),
             capped: $capped,
             filename: 'training-record-user-'.$user->id.'.pdf',
         );

@@ -15,9 +15,15 @@ import { realtimeTabId } from '@/echo';
 export interface CompletionReportRow {
     id: string;
     user: string;
+    employee_number: string;
+    department: string;
+    location: string;
     training: string;
     completion_date: string;
     expire_date: string;
+    status: string;
+    // Expiry colour-band key: 'expired' | 'due_soon' | 'current'.
+    _band: string;
     hours: string | number;
     class: string;
     cert_id: string;

@@ -22,6 +22,17 @@
         <div class="mb-2 text-[11px] text-[#4b5563]">{{ $filters }}</div>
     @endif
 
+    @php
+        // Row colour banding by expiry status (set as `_band` on each row).
+        // Inline styles, not Tailwind classes, so the colours render in the PDF
+        // regardless of which utility classes made it into the compiled CSS.
+        $bands = [
+            'expired' => '#fee2e2',   // light red
+            'due_soon' => '#fef9c3',  // yellow
+            'current' => '#dcfce7',   // green
+        ];
+    @endphp
+
     <table class="w-full border-collapse text-[12px] [&_td]:border [&_td]:border-[#9ca3af] [&_th]:border [&_th]:border-[#9ca3af]">
         <thead>
             <tr class="bg-[#f3f4f6] text-left">
@@ -32,7 +43,8 @@
         </thead>
         <tbody>
             @forelse ($rows as $row)
-                <tr>
+                @php($band = $bands[$row['_band'] ?? ''] ?? null)
+                <tr @if ($band) style="background-color: {{ $band }}" @endif>
                     @foreach ($columns as $col)
                         <td class="px-2 py-1 align-top">{{ $row[$col['key']] ?? '' }}</td>
                     @endforeach
