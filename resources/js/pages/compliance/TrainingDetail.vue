@@ -7,7 +7,7 @@
  * class for the training — reusing ClassFormModal + bulk enrollment.
  */
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import TagsListCell from '@/components/TagsListCell.vue';
 import { useServerTable } from '@/composables/useServerTable';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
@@ -28,6 +29,9 @@ import type {
     ComplianceCounts,
     ComplianceUserRow,
 } from '@/stores/compliance';
+import { useTagsStore } from '@/stores/tags';
+
+const USER_TYPE = 'App\\Models\\User';
 
 interface Counts extends ComplianceCounts {
     total: number;
@@ -46,6 +50,7 @@ defineOptions({
 
 const store = useComplianceStore();
 const classes = useClassesStore();
+const tagsStore = useTagsStore();
 const page = usePage();
 const authUser = computed(
     () =>
@@ -69,8 +74,12 @@ const canManage = computed(() =>
 const COLUMNS = [
     { key: 'name', label: 'User', sortable: false },
     { key: 'status', label: 'Status', sortable: false },
+    { key: 'employee_number', label: 'Employee #', sortable: false },
+    { key: 'department', label: 'Department', sortable: false },
+    { key: 'location', label: 'Location', sortable: false },
     { key: 'expires', label: 'Expires', sortable: false },
     { key: 'last_completed', label: 'Last completed', sortable: false },
+    { key: 'tags', label: 'Tags', sortable: false },
 ];
 
 const STATUS_CHIPS: Array<{ key: string; label: string }> = [
@@ -149,7 +158,26 @@ async function onClassSaved(detail: { id: string }): Promise<void> {
     router.visit(showPage(detail.id));
 }
 
+// Hydrate the tags store from each fetched page so TagsListCell paints the
+// attached pills without a per-row fetch (same pattern as the users list).
+function hydrateTags(rows: ComplianceUserRow[]): void {
+    for (const r of rows) {
+        tagsStore.setAttached({ type: USER_TYPE, id: r.user_id }, r.tag_ids ?? []);
+    }
+}
+watch(
+    () => table.rows.value,
+    (rows) => hydrateTags(rows),
+);
+
 onMounted(async () => {
+    if (authUser.value?.org_id) {
+        tagsStore.subscribe(authUser.value.org_id);
+    }
+    tagsStore.loadLibrary().catch(() => {
+        /* surfaced through the store */
+    });
+
     try {
         await table.fetchPage();
     } catch (e) {
@@ -264,12 +292,31 @@ onMounted(async () => {
                     />
                 </template>
 
+                <template #col-employee_number="{ row }">
+                    {{ row.employee_number ?? '—' }}
+                </template>
+
+                <template #col-department="{ row }">
+                    {{ row.department ?? '—' }}
+                </template>
+
+                <template #col-location="{ row }">
+                    {{ row.location ?? '—' }}
+                </template>
+
                 <template #col-expires="{ row }">
                     {{ row.expires_at ?? '—' }}
                 </template>
 
                 <template #col-last_completed="{ row }">
                     {{ row.last_completed_at ?? 'never' }}
+                </template>
+
+                <template #col-tags="{ row }">
+                    <TagsListCell
+                        :morphable-type="USER_TYPE"
+                        :morphable-id="row.user_id"
+                    />
                 </template>
 
                 <template #empty>No users match this filter.</template>

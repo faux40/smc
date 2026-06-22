@@ -30,8 +30,8 @@ function usersResponse() {
     return {
         data: {
             data: [
-                { user_id: 'u1', name: 'Adams, Amy', status: 'overdue', expires_at: '2026-01-01', last_completed_at: '2025-01-01' },
-                { user_id: 'u2', name: 'Baker, Bob', status: 'current', expires_at: null, last_completed_at: '2026-02-01' },
+                { user_id: 'u1', name: 'Adams, Amy', status: 'overdue', expires_at: '2026-01-01', last_completed_at: '2025-01-01', employee_number: 'EMP-1', department: 'Ops', location: 'Yard 3', tag_ids: [] },
+                { user_id: 'u2', name: 'Baker, Bob', status: 'current', expires_at: null, last_completed_at: '2026-02-01', employee_number: 'EMP-2', department: 'Admin', location: 'HQ', tag_ids: [] },
             ],
             meta: META,
         },
@@ -39,7 +39,11 @@ function usersResponse() {
 }
 
 function stubAxios() {
-    (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue(usersResponse());
+    (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+        if (url === USERS_URL) return Promise.resolve(usersResponse());
+        if (url === '/api/tags') return Promise.resolve({ data: [] });
+        return Promise.resolve({ data: [] });
+    });
     (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { id: 'c1' } });
 }
 
@@ -76,6 +80,10 @@ describe('compliance/TrainingDetail', () => {
 
         expect(wrapper.text()).toContain('Fall Protection');
         expect(wrapper.text()).toContain('Adams, Amy');
+        // Full user info columns (EE# / dept / location) render.
+        expect(wrapper.text()).toContain('EMP-1');
+        expect(wrapper.text()).toContain('Ops');
+        expect(wrapper.text()).toContain('Yard 3');
         // "All" chip shows the total.
         expect(wrapper.find('[data-testid="status-chip-all"]').text()).toContain('5');
         expect(wrapper.find('[data-testid="status-chip-overdue"]').text()).toContain('2');

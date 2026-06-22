@@ -6,6 +6,7 @@ use App\Models\AssignmentSource;
 use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
+use App\Models\Tag;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Models\User;
@@ -221,8 +222,13 @@ class ComplianceQueryTest extends TestCase
         $org = Organization::factory()->create();
         $training = Training::factory()->for($org, 'organization')->create();
 
-        $alice = User::factory()->for($org, 'organization')->create(['f_name' => 'Alice', 'l_name' => 'Adams']);
+        $alice = User::factory()->for($org, 'organization')->create([
+            'f_name' => 'Alice', 'l_name' => 'Adams',
+            'employee_number' => 'EMP-1', 'department' => 'Ops', 'location' => 'Yard 3',
+        ]);
         $bob = User::factory()->for($org, 'organization')->create(['f_name' => 'Bob', 'l_name' => 'Baker']);
+        $tag = Tag::factory()->for($org, 'organization')->create();
+        $alice->tags()->attach($tag->id);
         foreach ([[$alice, 'overdue'], [$bob, 'current']] as [$u, $status]) {
             TrainingAssignment::factory()->create([
                 'org_id' => $org->id, 'user_id' => $u->id, 'training_id' => $training->id,
@@ -234,7 +240,13 @@ class ComplianceQueryTest extends TestCase
 
         $overdue = $cq->usersForTraining($org, $training->id, ['status' => 'overdue']);
         $this->assertSame(1, $overdue['meta']['total']);
-        $this->assertSame($alice->id, $overdue['data'][0]['user_id']);
+        $row = $overdue['data'][0];
+        $this->assertSame($alice->id, $row['user_id']);
+        // The row carries the full user info the detail list shows.
+        $this->assertSame('EMP-1', $row['employee_number']);
+        $this->assertSame('Ops', $row['department']);
+        $this->assertSame('Yard 3', $row['location']);
+        $this->assertSame([$tag->id], $row['tag_ids']);
 
         $search = $cq->usersForTraining($org, $training->id, ['q' => 'baker']);
         $this->assertSame(1, $search['meta']['total']);

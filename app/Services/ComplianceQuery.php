@@ -238,7 +238,10 @@ class ComplianceQuery
             ->implode(' ');
 
         $paginator = $base
-            ->with('user:id,prefix_name,f_name,m_name,l_name,suffix_name')
+            ->with([
+                'user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location',
+                'user.tags:id',
+            ])
             ->orderByRaw("CASE status {$rank} ELSE 99 END")
             ->orderByRaw('expires_at IS NULL') // non-null expiries first
             ->orderBy('expires_at')
@@ -252,6 +255,11 @@ class ComplianceQuery
                 'status' => $ta->status,
                 'expires_at' => $ta->expires_at?->toDateString(),
                 'last_completed_at' => $ta->last_completed_at?->toDateString(),
+                'employee_number' => $ta->user?->employee_number,
+                'department' => $ta->user?->department,
+                'location' => $ta->user?->location,
+                // Feeds TagsListCell (hydrates the tags store; no per-row fetch).
+                'tag_ids' => $ta->user?->tags->pluck('id')->all() ?? [],
             ])->all(),
             'meta' => [
                 'current_page' => $paginator->currentPage(),

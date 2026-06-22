@@ -35,6 +35,10 @@ export interface ComplianceUserRow {
     status: string;
     expires_at: string | null;
     last_completed_at: string | null;
+    employee_number: string | null;
+    department: string | null;
+    location: string | null;
+    tag_ids: string[];
 }
 
 function defaultHeaders(): Record<string, string> {
