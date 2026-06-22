@@ -152,6 +152,29 @@ class ClassesControllerTest extends TestCase
         $this->actingAs($managerA)->getJson('/api/classes')->assertOk()->assertJsonCount(1, 'data');
     }
 
+    public function test_index_filters_by_training_and_status_for_the_add_to_class_picker(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create();
+
+        // A scheduled class that includes the training → eligible.
+        $eligible = TrainingClass::factory()->for($org, 'organization')->create(['status' => 'scheduled']);
+        ClassTraining::factory()->for($eligible, 'trainingClass')->create(['training_id' => $training->id]);
+        // A completed class with the training → excluded by status.
+        $done = TrainingClass::factory()->for($org, 'organization')->create(['status' => 'completed']);
+        ClassTraining::factory()->for($done, 'trainingClass')->create(['training_id' => $training->id]);
+        // A scheduled class WITHOUT the training → excluded by training filter.
+        TrainingClass::factory()->for($org, 'organization')->create(['status' => 'scheduled']);
+
+        $rows = $this->actingAs($manager)
+            ->getJson("/api/classes?training_id={$training->id}&status=scheduled")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame([$eligible->id], collect($rows)->pluck('id')->all());
+    }
+
     public function test_index_paginated_returns_data_and_meta(): void
     {
         $org = Organization::factory()->create();

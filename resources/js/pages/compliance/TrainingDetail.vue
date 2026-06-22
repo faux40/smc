@@ -20,6 +20,7 @@ import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
 import { useServerTable } from '@/composables/useServerTable';
+import AddToClassModal from '@/pages/classes/Partials/AddToClassModal.vue';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import type { ComplianceStatus } from '@/pages/users/Partials/ComplianceStatusBadge.vue';
@@ -155,6 +156,11 @@ function toggleAll(): void {
 }
 
 const classModalOpen = ref(false);
+const addClassOpen = ref(false);
+
+function onAddedToClass(classId: string): void {
+    router.visit(showPage(classId));
+}
 
 async function onClassSaved(detail: { id: string }): Promise<void> {
     // Enroll the selected users onto the freshly created class, then go finish
@@ -281,6 +287,16 @@ onMounted(async () => {
                         <Button
                             v-if="canManage"
                             type="button"
+                            variant="outline"
+                            :disabled="selectedCount === 0"
+                            data-testid="add-to-class"
+                            @click="addClassOpen = true"
+                        >
+                            Add to existing class ({{ selectedCount }})
+                        </Button>
+                        <Button
+                            v-if="canManage"
+                            type="button"
                             :disabled="selectedCount === 0"
                             data-testid="assemble-class"
                             @click="classModalOpen = true"
@@ -371,6 +387,15 @@ onMounted(async () => {
             :preset-training-ids="[training.id]"
             :preset-name="training.name"
             @saved="onClassSaved"
+        />
+
+        <AddToClassModal
+            v-if="canManage"
+            v-model:open="addClassOpen"
+            :training-id="training.id"
+            :training-name="training.name"
+            :user-ids="[...selected]"
+            @added="onAddedToClass"
         />
     </div>
 </template>

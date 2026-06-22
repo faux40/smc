@@ -49,6 +49,17 @@ class ClassesController extends Controller
             });
         }
 
+        // Optional filters — used by the "add to existing class" picker on the
+        // compliance training detail (classes that already include a training,
+        // still open for enrollment).
+        if ($request->filled('training_id')) {
+            $query->whereHas('classTrainings', fn ($q) => $q
+                ->where('training_id', (string) $request->query('training_id')));
+        }
+        if ($request->filled('status')) {
+            $query->where('status', (string) $request->query('status'));
+        }
+
         // Server-side sort. DB columns plus withCount aliases (class_trainings_count,
         // enrollments_count) which are virtual SELECT columns eligible for ORDER BY.
         $sortable = [

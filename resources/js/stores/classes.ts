@@ -167,6 +167,28 @@ export const useClassesStore = defineStore('classes', () => {
         return data;
     }
 
+    /**
+     * Open (scheduled) classes that already include a training — the "add to
+     * existing class" picker on the compliance training detail.
+     */
+    async function fetchForTraining(trainingId: string): Promise<ClassRow[]> {
+        const { data } = await axios.get<ServerTableResponse<ClassRow>>(
+            '/api/classes',
+            {
+                headers: defaultHeaders(),
+                params: {
+                    training_id: trainingId,
+                    status: 'scheduled',
+                    per_page: 100,
+                    sort: 'scheduled_date',
+                    dir: 'asc',
+                },
+            },
+        );
+
+        return data.data;
+    }
+
     async function loadDetail(id: string): Promise<ClassDetail> {
         const { data } = await axios.get<ClassDetail>(`/api/classes/${id}`, {
             headers: defaultHeaders(),
@@ -370,6 +392,7 @@ export const useClassesStore = defineStore('classes', () => {
         detail,
         revision,
         fetchPage,
+        fetchForTraining,
         loadDetail,
         create,
         update,

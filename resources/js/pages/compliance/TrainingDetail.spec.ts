@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TagFilter from '@/components/TagFilter.vue';
 import { Checkbox } from '@/components/ui/checkbox';
+import AddToClassModal from '@/pages/classes/Partials/AddToClassModal.vue';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import TrainingDetail from '@/pages/compliance/TrainingDetail.vue';
 
@@ -62,7 +63,7 @@ async function mountDetail() {
             training: { id: 't1', name: 'Fall Protection' },
             counts: { overdue: 2, due_soon: 1, not_started: 1, current: 1, as_needed: 0, total: 5 },
         },
-        global: { stubs: { ClassFormModal: true } },
+        global: { stubs: { ClassFormModal: true, AddToClassModal: true } },
     });
     await flushPromises();
 
@@ -157,5 +158,27 @@ describe('compliance/TrainingDetail', () => {
             expect.anything(),
         );
         expect(routerVisit).toHaveBeenCalledWith({ url: '/classes/c1' });
+    });
+
+    it('offers "add to existing class" for the selection and navigates after adding', async () => {
+        const wrapper = await mountDetail();
+
+        // Disabled with nothing selected, enabled once users are picked.
+        const addBtn = wrapper.find('[data-testid="add-to-class"]');
+        expect(addBtn.exists()).toBe(true);
+        expect(addBtn.attributes('disabled')).toBeDefined();
+
+        wrapper.findAllComponents(Checkbox)[0].vm.$emit('update:modelValue', true);
+        await flushPromises();
+        expect(wrapper.find('[data-testid="add-to-class"]').attributes('disabled')).toBeUndefined();
+
+        // The picker passes along the selected user ids, and adding navigates.
+        const modal = wrapper.findComponent(AddToClassModal);
+        expect(modal.props('userIds')).toEqual(['u1', 'u2']);
+        expect(modal.props('trainingId')).toBe('t1');
+
+        modal.vm.$emit('added', 'c9');
+        await flushPromises();
+        expect(routerVisit).toHaveBeenCalledWith({ url: '/classes/c9' });
     });
 });
