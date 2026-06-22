@@ -241,8 +241,8 @@ onMounted(async () => {
                             <Input
                                 id="detail_q"
                                 :model-value="search"
-                                placeholder="Search users…"
-                                class="h-8 w-64"
+                                placeholder="Search name, email, EE#, dept, location, tag…"
+                                class="h-8 w-72"
                                 @update:model-value="onSearch"
                             />
                         </div>

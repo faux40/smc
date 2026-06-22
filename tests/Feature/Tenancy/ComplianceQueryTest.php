@@ -227,7 +227,7 @@ class ComplianceQueryTest extends TestCase
             'employee_number' => 'EMP-1', 'department' => 'Ops', 'location' => 'Yard 3',
         ]);
         $bob = User::factory()->for($org, 'organization')->create(['f_name' => 'Bob', 'l_name' => 'Baker']);
-        $tag = Tag::factory()->for($org, 'organization')->create();
+        $tag = Tag::factory()->for($org, 'organization')->create(['name' => 'Welder']);
         $alice->tags()->attach($tag->id);
         foreach ([[$alice, 'overdue'], [$bob, 'current']] as [$u, $status]) {
             TrainingAssignment::factory()->create([
@@ -251,6 +251,13 @@ class ComplianceQueryTest extends TestCase
         $search = $cq->usersForTraining($org, $training->id, ['q' => 'baker']);
         $this->assertSame(1, $search['meta']['total']);
         $this->assertSame($bob->id, $search['data'][0]['user_id']);
+
+        // Search also covers the profile fields + tag names we surface.
+        foreach (['emp-1', 'ops', 'yard 3', 'welder'] as $term) {
+            $hit = $cq->usersForTraining($org, $training->id, ['q' => $term]);
+            $this->assertSame(1, $hit['meta']['total'], "search '{$term}'");
+            $this->assertSame($alice->id, $hit['data'][0]['user_id'], "search '{$term}'");
+        }
     }
 
     public function test_users_for_requirement_drilldown_only_counts_sourced_assignments(): void

@@ -6,6 +6,7 @@ use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Date;
@@ -222,13 +223,24 @@ class ComplianceQuery
             $base->where('status', $opts['status']);
         }
 
-        // Optional user-name/email search — via the relation so there's no
-        // join (and no org_id ambiguity with the users table).
+        // Optional search across the user's name/email + the profile fields the
+        // detail list shows (EE# / dept / location) + tag names. Via the
+        // relation so there's no join (and no org_id ambiguity).
         if ($like = $this->searchLike($opts)) {
             $base->whereHas('user', fn ($u) => $u->where(function ($w) use ($like) {
-                foreach (['f_name', 'm_name', 'l_name', 'email'] as $col) {
+                foreach (['f_name', 'm_name', 'l_name', 'email', 'employee_number', 'department', 'location'] as $col) {
                     $w->orWhereRaw("LOWER({$col}) LIKE ?", [$like]);
                 }
+                // Tag-name match. The morph relation would compare uuid users.id
+                // to varchar taggables.taggable_id (Postgres rejects it), so use
+                // the explicit CAST subquery (same pattern as UsersController).
+                $w->orWhereExists(fn ($sub) => $sub->select(DB::raw(1))
+                    ->from('taggables')
+                    ->join('tags', 'tags.id', '=', 'taggables.tag_id')
+                    ->whereRaw('taggables.taggable_id = CAST(users.id AS text)')
+                    ->where('taggables.taggable_type', User::class)
+                    ->whereNull('tags.deleted_at')
+                    ->whereRaw('LOWER(tags.name) LIKE ?', [$like]));
             }));
         }
 
