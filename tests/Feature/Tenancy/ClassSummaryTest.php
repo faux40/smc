@@ -12,6 +12,7 @@ use App\Support\ClassSummary;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Spatie\LaravelPdf\Facades\Pdf;
 use Tests\TestCase;
 
 class ClassSummaryTest extends TestCase
@@ -22,6 +23,10 @@ class ClassSummaryTest extends TestCase
     {
         parent::setUp();
         $this->seed(RoleSeeder::class);
+        // Fake the PDF driver so the endpoint test asserts the view/response
+        // without shelling out to Browsershot/Chromium (matches the other PDF
+        // feature tests + keeps the suite env-independent).
+        Pdf::fake();
     }
 
     private function manager(Organization $org): User
@@ -246,10 +251,8 @@ class ClassSummaryTest extends TestCase
         $manager = $this->manager($org);
         $class = TrainingClass::factory()->for($org, 'organization')->create();
 
-        $response = $this->actingAs($manager)->get("/api/classes/{$class->id}/summary");
+        $this->actingAs($manager)->get("/api/classes/{$class->id}/summary")->assertOk();
 
-        $response->assertOk();
-        $this->assertSame('application/pdf', $response->headers->get('content-type'));
-        $this->assertStringStartsWith('%PDF', $response->getContent());
+        Pdf::assertRespondedWithPdf(fn ($pdf) => $pdf->viewName === 'pdf.class-summary');
     }
 }
