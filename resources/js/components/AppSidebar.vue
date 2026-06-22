@@ -7,6 +7,7 @@ import {
     ClipboardList,
     GraduationCap,
     LayoutGrid,
+    ShieldCheck,
     Tags as TagsIcon,
     Users,
 } from 'lucide-vue-next';
@@ -54,6 +55,16 @@ const mainNavItems = computed<NavItem[]>(() => {
     ];
 
     const u = authUser.value;
+
+    // Compliance roll-ups sit right under Dashboard, Manager+ (matches the
+    // dashboard widgets + the Compliance controller gate).
+    if (u && (u.isOwner || u.isSuperAdmin || u.isAdmin || u.isManager)) {
+        items.push({
+            title: 'Compliance',
+            href: '/compliance',
+            icon: ShieldCheck,
+        });
+    }
 
     if (u && (u.isOwner || u.isSuperAdmin || u.isAdmin)) {
         items.push({

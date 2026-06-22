@@ -7,6 +7,7 @@ use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\CompletionsController;
 use App\Http\Controllers\CspReportController;
+use App\Http\Controllers\ComplianceController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\NotificationsController;
@@ -51,6 +52,12 @@ Route::get('csrf-token', fn () => response()->json(['token' => csrf_token()]))
 // its own stricter Fortify throttle. Tune as real usage data arrives (16.6).
 Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+
+    // Compliance roll-ups (Manager+), pivoted by training / requirement. Shell
+    // + per-tab paginated JSON; aggregation lives in ComplianceQuery.
+    Route::get('compliance', [ComplianceController::class, 'index'])->name('compliance.page');
+    Route::get('api/compliance/by-training', [ComplianceController::class, 'byTraining'])->name('compliance.by-training');
+    Route::get('api/compliance/by-requirement', [ComplianceController::class, 'byRequirement'])->name('compliance.by-requirement');
 
     // Save the current user's UI preferences (table column visibility/order +
     // filter defaults). Self-only — shared back via the auth.user prop.
