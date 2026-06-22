@@ -34,12 +34,23 @@
             </tr>
         </thead>
         <tbody>
-            @forelse ($rows as $row)
-                <tr>
-                    @foreach ($columns as $col)
-                        <td class="px-2 py-1 align-top">{{ $row[$col['key']] ?? '' }}</td>
-                    @endforeach
-                </tr>
+            @php($items = !empty($groups) ? $groups : array_map(fn ($r) => ['type' => 'row', 'data' => $r], $rows))
+            @forelse ($items as $item)
+                @if ($item['type'] === 'group')
+                    {{-- Group header band: full-width, indented by nesting level. --}}
+                    <tr>
+                        <td class="bg-[#f3f4f6] px-2 py-1 font-bold" colspan="{{ count($columns) }}"
+                            style="padding-left: {{ 0.5 + $item['level'] * 0.75 }}rem">
+                            {{ $item['label'] }} ({{ $item['count'] }})
+                        </td>
+                    </tr>
+                @else
+                    <tr>
+                        @foreach ($columns as $col)
+                            <td class="px-2 py-1 align-top">{{ $item['data'][$col['key']] ?? '' }}</td>
+                        @endforeach
+                    </tr>
+                @endif
             @empty
                 <tr>
                     <td class="px-2 py-2 text-center text-[#6b7280]" colspan="{{ count($columns) }}">

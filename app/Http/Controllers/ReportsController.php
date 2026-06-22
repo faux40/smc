@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\CompletionSerializer;
 use App\Support\ExpiryStatus;
 use App\Support\PdfRenderer;
+use App\Support\ReportGrouping;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -78,16 +79,22 @@ class ReportsController extends Controller
             ->get();
 
         $capped = $all->count() > self::ROW_CAP;
+        $rows = $this->reportRows($all->take(self::ROW_CAP), $org);
+
+        // Optional grouping: `group_by[]` in precedence order. Empty/unknown →
+        // no grouping (flat report). The blade renders group bands from `groups`.
+        $groupBy = ReportGrouping::sanitize((array) $request->query('group_by', []));
 
         return $this->tableReport(
             org: $org,
             title: 'Completion report',
             subtitle: $this->dateRangeLabel($request),
             columns: $this->selectedColumns($request),
-            rows: $this->reportRows($all->take(self::ROW_CAP), $org),
+            rows: $rows,
             capped: $capped,
             filename: 'completion-report.pdf',
             filters: $this->filterSummary($request),
+            groups: $groupBy !== [] ? ReportGrouping::flatten($rows, $groupBy) : [],
         );
     }
 
@@ -413,9 +420,10 @@ class ReportsController extends Controller
      *
      * @param  array<int, array{key: string, label: string}>  $columns
      * @param  array<int, array<string, mixed>>  $rows
+     * @param  array<int, array<string, mixed>>  $groups  flattened group/row render list (empty = flat report)
      */
     private function tableReport(
-        \App\Models\Organization $org,
+        Organization $org,
         string $title,
         ?string $subtitle,
         array $columns,
@@ -423,6 +431,7 @@ class ReportsController extends Controller
         bool $capped,
         string $filename,
         ?string $filters = null,
+        array $groups = [],
     ): PdfBuilder {
         $generatedAt = Carbon::now(config('app.display_timezone'))->format('M j, Y g:i A');
 
@@ -433,6 +442,7 @@ class ReportsController extends Controller
             'filters' => $filters,
             'columns' => $columns,
             'rows' => $rows,
+            'groups' => $groups,
             'capped' => $capped,
             'cap' => self::ROW_CAP,
         ]);

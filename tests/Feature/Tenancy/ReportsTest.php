@@ -351,6 +351,55 @@ class ReportsTest extends TestCase
         }
     }
 
+    public function test_completion_report_export_defaults_to_no_grouping(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $user = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Lee']);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+        Completion::factory()->for($org, 'organization')->for($user, 'user')->state([
+            'module_type' => Training::class, 'module_id' => $training->id, 'completion_date' => '2026-02-01',
+        ])->create();
+
+        $this->actingAs($manager)->get(route('reports.completions-export'))->assertOk();
+
+        // No group_by[] → flat report; blade gets an empty groups list.
+        Pdf::assertRespondedWithPdf(fn ($pdf) => $pdf->viewData['groups'] === []);
+    }
+
+    public function test_completion_report_export_groups_rows_when_requested(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+        $yard1 = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Lee', 'location' => 'Yard']);
+        $yard2 = User::factory()->for($org, 'organization')->create(['f_name' => 'Jane', 'l_name' => 'Doe', 'location' => 'Yard']);
+        $dock = User::factory()->for($org, 'organization')->create(['f_name' => 'Max', 'l_name' => 'Roe', 'location' => 'Dock']);
+        foreach ([$yard1, $yard2, $dock] as $u) {
+            Completion::factory()->for($org, 'organization')->for($u, 'user')->state([
+                'module_type' => Training::class, 'module_id' => $training->id, 'completion_date' => '2026-02-01',
+            ])->create();
+        }
+
+        $this->actingAs($manager)
+            ->get(route('reports.completions-export', ['group_by' => ['location', 'bogus']]))
+            ->assertOk();
+
+        Pdf::assertRespondedWithPdf(function ($pdf) {
+            $groups = (new Collection($pdf->viewData['groups']))
+                ->where('type', 'group')
+                ->map(fn (array $g) => [$g['level'], $g['label'], $g['count']])
+                ->values()
+                ->all();
+
+            // Unknown 'bogus' key dropped; grouped by location, sorted, with counts.
+            return $groups === [
+                [0, 'Location: Dock', 1],
+                [0, 'Location: Yard', 2],
+            ];
+        });
+    }
+
     public function test_completion_report_forbidden_for_non_manager(): void
     {
         $org = Organization::factory()->create();

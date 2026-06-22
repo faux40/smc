@@ -1,7 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import type { VueWrapper } from '@vue/test-utils';
 import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import MultiSelectFilter from '@/components/MultiSelectFilter.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import ReportsIndex from '@/pages/reports/Index.vue';
@@ -17,23 +18,44 @@ const META = { current_page: 1, last_page: 1, per_page: 25, total: 1 };
 const COMPLETIONS = '/api/reports/completions';
 
 function stubAxios() {
-    (axios.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
-        if (url === COMPLETIONS) {
-            return Promise.resolve({
-                data: {
-                    data: [
-                        { id: 'c1', user_id: 'u1', tag_ids: ['t1'], user: 'Lee, Sam', employee_number: 'EMP-1', department: 'Ops', location: 'Yard', training: 'CPR', completion_date: '2026-02-01', expire_date: '2020-01-01', status: 'Expired', _band: 'expired', hours: 4, class: '—', cert_id: 'CERT-1' },
-                    ],
-                    meta: META,
-                },
-            });
-        }
-        if (url === '/api/tags')
-            return Promise.resolve({
-                data: [{ id: 't1', name: 'Night shift', color: '#3b82f6' }],
-            });
-        return Promise.resolve({ data: [] });
-    });
+    (axios.get as ReturnType<typeof vi.fn>).mockImplementation(
+        (url: string) => {
+            if (url === COMPLETIONS) {
+                return Promise.resolve({
+                    data: {
+                        data: [
+                            {
+                                id: 'c1',
+                                user_id: 'u1',
+                                tag_ids: ['t1'],
+                                user: 'Lee, Sam',
+                                employee_number: 'EMP-1',
+                                department: 'Ops',
+                                location: 'Yard',
+                                training: 'CPR',
+                                completion_date: '2026-02-01',
+                                expire_date: '2020-01-01',
+                                status: 'Expired',
+                                _band: 'expired',
+                                hours: 4,
+                                class: '—',
+                                cert_id: 'CERT-1',
+                            },
+                        ],
+                        meta: META,
+                    },
+                });
+            }
+
+            if (url === '/api/tags') {
+                return Promise.resolve({
+                    data: [{ id: 't1', name: 'Night shift', color: '#3b82f6' }],
+                });
+            }
+
+            return Promise.resolve({ data: [] });
+        },
+    );
 }
 
 function params(): Array<Record<string, unknown>> {
@@ -43,17 +65,33 @@ function params(): Array<Record<string, unknown>> {
 }
 
 async function mountPage() {
-    const wrapper = mount(ReportsIndex);
+    const wrapper = mount(ReportsIndex, { attachTo: document.body });
     await flushPromises();
 
     return wrapper;
+}
+
+// The export link lives in the (teleported) grouping modal; open it and read
+// the "Generate report" href from <body>.
+async function exportHref(wrapper: VueWrapper): Promise<string> {
+    await wrapper.find('[data-testid="open-grouping-modal"]').trigger('click');
+    await flushPromises();
+
+    return document.body
+        .querySelector('[data-testid="export-completion-report"]')!
+        .getAttribute('href')!;
 }
 
 describe('reports/Index — completion report', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        document.body.innerHTML = '';
         stubAxios();
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = '';
     });
 
     it('loads completions on mount and renders a row with identity + status', async () => {
@@ -100,7 +138,10 @@ describe('reports/Index — completion report', () => {
         const wrapper = await mountPage();
         wrapper.findComponent(TagFilter).vm.$emit('update:tag-ids', ['tag1']);
         await flushPromises();
-        expect(params().at(-1)).toMatchObject({ tags: ['tag1'], tags_mode: 'and' });
+        expect(params().at(-1)).toMatchObject({
+            tags: ['tag1'],
+            tags_mode: 'and',
+        });
     });
 
     it('sends the status filter (multi-select, any-of)', async () => {
@@ -120,17 +161,12 @@ describe('reports/Index — completion report', () => {
             .findComponent(MultiSelectFilter)
             .vm.$emit('update:selected', ['expired']);
         await flushPromises();
-        const href = wrapper
-            .find('[data-testid="export-completion-report"]')
-            .attributes('href');
-        expect(href).toContain('statuses%5B%5D=expired');
+        expect(await exportHref(wrapper)).toContain('statuses%5B%5D=expired');
     });
 
     it('export link lists all visible columns in order by default', async () => {
         const wrapper = await mountPage();
-        const href = wrapper
-            .find('[data-testid="export-completion-report"]')
-            .attributes('href');
+        const href = await exportHref(wrapper);
         // First and last catalog columns both present.
         expect(href).toContain('columns%5B%5D=user');
         expect(href).toContain('columns%5B%5D=tags');
@@ -143,9 +179,7 @@ describe('reports/Index — completion report', () => {
             visible_columns: { tags: false },
         });
         await flushPromises();
-        const href = wrapper
-            .find('[data-testid="export-completion-report"]')
-            .attributes('href');
+        const href = await exportHref(wrapper);
         expect(href).toContain('columns%5B%5D=user');
         expect(href).not.toContain('columns%5B%5D=tags');
     });
@@ -156,9 +190,27 @@ describe('reports/Index — completion report', () => {
         await wrapper.find('#rep_from').setValue('2026-01-01');
         await flushPromises();
 
-        const href = wrapper.find('[data-testid="export-completion-report"]').attributes('href');
+        const href = await exportHref(wrapper);
         expect(href).toContain('/api/reports/completions/export?');
         expect(href).toContain('q=cpr');
         expect(href).toContain('from=2026-01-01');
+    });
+
+    it('groups via the modal — checked dimensions land in the export link', async () => {
+        const wrapper = await mountPage();
+        await wrapper
+            .find('[data-testid="open-grouping-modal"]')
+            .trigger('click');
+        await flushPromises();
+        document.body
+            .querySelector<HTMLButtonElement>(
+                '[data-testid="group-toggle-location"]',
+            )!
+            .click();
+        await flushPromises();
+        const href = document.body
+            .querySelector('[data-testid="export-completion-report"]')!
+            .getAttribute('href')!;
+        expect(href).toContain('group_by%5B%5D=location');
     });
 });

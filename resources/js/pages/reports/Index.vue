@@ -12,6 +12,7 @@ import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
 import MultiSelectFilter from '@/components/MultiSelectFilter.vue';
 import Pagination from '@/components/Pagination.vue';
+import ReportGroupingModal from '@/components/ReportGroupingModal.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import TagsListCell from '@/components/TagsListCell.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
@@ -77,6 +78,7 @@ const userSearch = ref('');
 const tagFilter = ref<string[]>([]);
 const tagFilterMode = ref<TagFilterMode>('and');
 const statusFilter = ref<string[]>([]);
+const groupingOpen = ref(false);
 
 const table = useServerTable<CompletionReportRow>(
     (params) =>
@@ -159,17 +161,17 @@ onMounted(async () => {
                 title="Reports"
                 description="Completion report — every recorded completion, filterable by date, training, user, and tag. Export the filtered set to PDF."
             />
-            <Button as-child variant="outline" size="sm">
-                <a
-                    :href="exportHref"
-                    target="_blank"
-                    rel="noopener"
-                    data-testid="export-completion-report"
-                >
-                    Export PDF
-                </a>
+            <Button
+                variant="outline"
+                size="sm"
+                data-testid="open-grouping-modal"
+                @click="groupingOpen = true"
+            >
+                Export PDF…
             </Button>
         </div>
+
+        <ReportGroupingModal v-model:open="groupingOpen" :base-href="exportHref" />
 
         <AsyncState :loading="initialLoading" :error="error">
             <DataTable
