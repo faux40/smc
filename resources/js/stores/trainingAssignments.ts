@@ -15,6 +15,10 @@
 import axios from 'axios';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
+import type {
+    ServerTableQuery,
+    ServerTableResponse,
+} from '@/composables/useServerTable';
 import { useRealtime } from '@/composables/useRealtime';
 import { realtimeTabId } from '@/echo';
 
@@ -40,6 +44,30 @@ export interface TrainingAssignmentFilter {
     user_id?: string;
     training_id?: string;
 }
+
+/** One row of the server-paged by-user assignments table. */
+export interface AssignmentUserRow {
+    user_id: string;
+    name: string | null;
+    email: string | null;
+    employee_number: string | null;
+    job_title: string | null;
+    department: string | null;
+    location: string | null;
+    supervisor_name: string | null;
+    tag_ids: string[];
+    assignments_count: number;
+    assignments: TrainingAssignmentRow[];
+}
+
+/** Query for the by-user table: server-table params + the page's filters. */
+export type AssignmentsByUserQuery = ServerTableQuery & {
+    user_q?: string;
+    requirements?: string[];
+    req_mode?: string;
+    tags?: string[];
+    tags_mode?: string;
+};
 
 interface BroadcastPayload {
     id: string;
@@ -75,6 +103,51 @@ export const useTrainingAssignmentsStore = defineStore(
         const rows = ref<TrainingAssignmentRow[]>([]);
         const loadedFilters = ref<Set<string>>(new Set());
         const subscribedOrgId = ref<string | null>(null);
+
+        // Bumped on any mutation/broadcast so the server-paged by-user table
+        // re-pulls its current page.
+        const revision = ref(0);
+
+        /**
+         * Server-paged by-user assignments ({data, meta}). The Index drives it
+         * via useServerTable; does not touch the `rows` cache.
+         */
+        async function fetchByUser(
+            params: AssignmentsByUserQuery,
+        ): Promise<ServerTableResponse<AssignmentUserRow>> {
+            const query: Record<string, string | number | string[]> = {
+                page: params.page,
+                per_page: params.per_page,
+                dir: params.dir,
+            };
+
+            if (params.sort) {
+                query.sort = params.sort;
+            }
+            if (params.q) {
+                query.q = params.q;
+            }
+            if (params.user_q) {
+                query.user_q = params.user_q;
+            }
+            if (params.requirements && params.requirements.length > 0) {
+                query.requirements = params.requirements;
+                query.req_mode = params.req_mode ?? 'or';
+            }
+            if (params.tags && params.tags.length > 0) {
+                query.tags = params.tags;
+                query.tags_mode = params.tags_mode ?? 'and';
+            }
+
+            const { data } = await axios.get<
+                ServerTableResponse<AssignmentUserRow>
+            >('/api/training-assignments/by-user', {
+                headers: defaultHeaders(),
+                params: query,
+            });
+
+            return data;
+        }
 
         const forUser = computed(
             () => (userId: string) =>
@@ -134,6 +207,7 @@ export const useTrainingAssignmentsStore = defineStore(
                 { headers: defaultHeaders() },
             );
             data.forEach((r) => upsert(r));
+            revision.value++;
 
             return data;
         }
@@ -152,6 +226,7 @@ export const useTrainingAssignmentsStore = defineStore(
                 { headers: defaultHeaders() },
             );
             data.forEach((r) => upsert(r));
+            revision.value++;
 
             return data;
         }
@@ -161,6 +236,7 @@ export const useTrainingAssignmentsStore = defineStore(
                 headers: defaultHeaders(),
             });
             rows.value = rows.value.filter((r) => r.id !== id);
+            revision.value++;
         }
 
         async function breakFromRequirement(
@@ -193,6 +269,7 @@ export const useTrainingAssignmentsStore = defineStore(
                     ),
                 };
             });
+            revision.value++;
 
             return data;
         }
@@ -218,20 +295,24 @@ export const useTrainingAssignmentsStore = defineStore(
                     active_sources: payload.active_sources ?? [],
                     can_delete: existing?.can_delete ?? false,
                 });
+                revision.value++;
             });
 
             bind('TrainingAssignmentDeleted', (payload: BroadcastPayload) => {
                 rows.value = rows.value.filter((r) => r.id !== payload.id);
+                revision.value++;
             });
         }
 
         return {
             rows,
+            revision,
             loadedFilters,
             forUser,
             forTraining,
             upsert,
             loadFor,
+            fetchByUser,
             assignDirect,
             assignFromRequirement,
             destroy,
