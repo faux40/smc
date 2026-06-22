@@ -53,6 +53,28 @@ class ComplianceController extends Controller
         );
     }
 
+    /** Per-requirement compliance detail shell + its status tallies. */
+    public function requirementDetail(Request $request, Requirement $requirement): Response
+    {
+        $this->authorizeManager($request);
+
+        return Inertia::render('compliance/RequirementDetail', [
+            'requirement' => ['id' => $requirement->id, 'name' => $requirement->name],
+            'counts' => $this->compliance->requirementCounts($request->user()->organization, $requirement->id),
+        ]);
+    }
+
+    /** Not-required (per-training) detail shell + its Current/Expired tallies. */
+    public function notRequiredDetail(Request $request, Training $training): Response
+    {
+        $this->authorizeManager($request);
+
+        return Inertia::render('compliance/NotRequiredDetail', [
+            'training' => ['id' => $training->id, 'name' => $training->name],
+            'counts' => $this->compliance->notRequiredCountsForTraining($request->user()->organization, $training->id),
+        ]);
+    }
+
     public function byRequirement(Request $request): JsonResponse
     {
         $this->authorizeManager($request);

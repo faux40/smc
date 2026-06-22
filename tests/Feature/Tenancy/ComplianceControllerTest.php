@@ -123,6 +123,51 @@ class ComplianceControllerTest extends TestCase
             ->assertJsonPath('data.0.status', 'overdue');
     }
 
+    public function test_requirement_detail_shell_carries_counts(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create();
+        $req = \App\Models\Requirement::factory()->for($org, 'organization')->create(['name' => 'OSHA General']);
+        $user = User::factory()->for($org, 'organization')->create();
+        $ta = \App\Models\TrainingAssignment::factory()->create([
+            'org_id' => $org->id, 'user_id' => $user->id, 'training_id' => $training->id,
+            'name' => $training->name, 'status' => 'overdue',
+        ]);
+        \App\Models\AssignmentSource::create([
+            'training_assignment_id' => $ta->id,
+            'sourceable_type' => \App\Models\Requirement::class,
+            'sourceable_id' => $req->id,
+            'added_at' => now(),
+        ]);
+
+        $this->actingAs($manager)
+            ->get(route('compliance.requirement', $req))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('compliance/RequirementDetail')
+                ->where('requirement.name', 'OSHA General')
+                ->where('counts.overdue', 1)
+                ->where('counts.total', 1));
+    }
+
+    public function test_not_required_detail_shell_carries_counts(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+        $this->ta($org, $training, 'current'); // direct-only, taken, current
+
+        $this->actingAs($manager)
+            ->get(route('compliance.not-required-detail', $training))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('compliance/NotRequiredDetail')
+                ->where('training.name', 'CPR')
+                ->where('counts.current', 1)
+                ->where('counts.total', 1));
+    }
+
     public function test_not_required_users_drilldown_endpoint(): void
     {
         $org = Organization::factory()->create();

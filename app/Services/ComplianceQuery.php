@@ -214,19 +214,15 @@ class ComplianceQuery
     }
 
     /**
-     * Drill-down for the not-required tab: the people who *took* a training
-     * without being required to — direct-only assignments (no requirement
-     * source) + orphan completions (no assignment). Status is Current (still
-     * valid) or 'overdue' (taken-but-expired). Expired first.
-     *
-     * @param  array<string, mixed>  $opts  page, per_page
-     * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>}
+     * The union of "not-required taken" facts for one training: direct-only
+     * assignments (no requirement source) + latest orphan completions (no
+     * assignment). Each fact carries f.status ('current'|'overdue') + dates.
+     * Shared by the not-required detail list + its header counts.
      */
-    public function notRequiredUsersForTraining(Organization $org, string $trainingId, array $opts = []): array
+    private function notRequiredFactsForTraining(Organization $org, string $trainingId): Builder
     {
         $today = Date::now()->startOfDay()->toDateString();
 
-        // (a) direct-only assignments that were taken.
         $direct = DB::table('training_assignments as ta')
             ->where('ta.org_id', $org->id)
             ->where('ta.training_id', $trainingId)
@@ -239,7 +235,6 @@ class ComplianceQuery
                 CASE WHEN ta.status = 'overdue' THEN 'overdue' ELSE 'current' END as status,
                 ta.expires_at as expires_at, ta.last_completed_at as last_completed_at");
 
-        // (b) orphan completions (latest per user) — took it, never assigned.
         $orphan = DB::table('completions as c')
             ->where('c.org_id', $org->id)
             ->where('c.module_type', Training::class)
@@ -256,15 +251,65 @@ class ComplianceQuery
                 CASE WHEN c.expire_date IS NOT NULL AND c.expire_date < ? THEN 'overdue' ELSE 'current' END as status,
                 c.expire_date as expires_at, c.completion_date as last_completed_at", [$today]);
 
-        $facts = $direct->unionAll($orphan);
+        return $direct->unionAll($orphan);
+    }
 
+    /**
+     * Not-required detail header tallies for one training.
+     *
+     * @return array<string, int>
+     */
+    public function notRequiredCountsForTraining(Organization $org, string $trainingId): array
+    {
+        $row = DB::query()
+            ->fromSub($this->notRequiredFactsForTraining($org, $trainingId), 'f')
+            ->selectRaw("SUM(CASE WHEN f.status = 'current' THEN 1 ELSE 0 END) as current,
+                SUM(CASE WHEN f.status = 'overdue' THEN 1 ELSE 0 END) as expired,
+                COUNT(*) as total")
+            ->first();
+
+        return [
+            'current' => (int) ($row->current ?? 0),
+            'expired' => (int) ($row->expired ?? 0),
+            'total' => (int) ($row->total ?? 0),
+        ];
+    }
+
+    /**
+     * Not-required detail list: the people who took a training without being
+     * required to, with optional status (current|expired) + user search.
+     * Expired first.
+     *
+     * @param  array<string, mixed>  $opts  page, per_page, status, q
+     * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>}
+     */
+    public function notRequiredUsersForTraining(Organization $org, string $trainingId, array $opts = []): array
+    {
         $perPage = max(1, min(100, (int) ($opts['per_page'] ?? 10)));
         $page = max(1, (int) ($opts['page'] ?? 1));
 
-        $paginator = DB::query()
-            ->fromSub($facts, 'f')
+        $base = DB::query()
+            ->fromSub($this->notRequiredFactsForTraining($org, $trainingId), 'f')
             ->join('users as u', 'u.id', '=', 'f.user_id')
-            ->whereNull('u.deleted_at')
+            ->whereNull('u.deleted_at');
+
+        // Chip filter: Current vs Taken-but-Expired (stored as 'overdue').
+        $status = $opts['status'] ?? null;
+        if ($status === 'current') {
+            $base->where('f.status', 'current');
+        } elseif ($status === 'expired') {
+            $base->where('f.status', 'overdue');
+        }
+
+        if ($like = $this->searchLike($opts)) {
+            $base->where(function ($w) use ($like) {
+                foreach (['f_name', 'm_name', 'l_name', 'email', 'employee_number', 'department', 'location'] as $col) {
+                    $w->orWhereRaw("LOWER(u.{$col}) LIKE ?", [$like]);
+                }
+            });
+        }
+
+        $paginator = $base
             ->select('f.user_id', 'f.status', 'f.expires_at', 'f.last_completed_at')
             ->orderByRaw("CASE f.status WHEN 'overdue' THEN 0 ELSE 1 END")
             ->orderBy('u.l_name')
@@ -325,6 +370,42 @@ class ComplianceQuery
                 SUM(CASE WHEN status = 'not_started' THEN 1 ELSE 0 END) as not_started,
                 SUM(CASE WHEN status = 'current' THEN 1 ELSE 0 END) as current,
                 SUM(CASE WHEN status = 'as_needed' THEN 1 ELSE 0 END) as as_needed,
+                COUNT(*) as total
+            SQL)
+            ->first();
+
+        return [
+            'overdue' => (int) ($row->overdue ?? 0),
+            'due_soon' => (int) ($row->due_soon ?? 0),
+            'not_started' => (int) ($row->not_started ?? 0),
+            'current' => (int) ($row->current ?? 0),
+            'as_needed' => (int) ($row->as_needed ?? 0),
+            'total' => (int) ($row->total ?? 0),
+        ];
+    }
+
+    /**
+     * Per-requirement status tallies (the requirement detail header chips) —
+     * over the assignments the requirement actively sources.
+     *
+     * @return array<string, int>
+     */
+    public function requirementCounts(Organization $org, string $requirementId): array
+    {
+        $row = DB::table('training_assignments as ta')
+            ->join('assignment_sources as s', function ($join) use ($requirementId) {
+                $join->on('s.training_assignment_id', '=', 'ta.id')
+                    ->whereNull('s.removed_at')
+                    ->where('s.sourceable_type', '=', Requirement::class)
+                    ->where('s.sourceable_id', '=', $requirementId);
+            })
+            ->where('ta.org_id', $org->id)
+            ->selectRaw(<<<'SQL'
+                SUM(CASE WHEN ta.status = 'overdue' THEN 1 ELSE 0 END) as overdue,
+                SUM(CASE WHEN ta.status = 'due_soon' THEN 1 ELSE 0 END) as due_soon,
+                SUM(CASE WHEN ta.status = 'not_started' THEN 1 ELSE 0 END) as not_started,
+                SUM(CASE WHEN ta.status = 'current' THEN 1 ELSE 0 END) as current,
+                SUM(CASE WHEN ta.status = 'as_needed' THEN 1 ELSE 0 END) as as_needed,
                 COUNT(*) as total
             SQL)
             ->first();

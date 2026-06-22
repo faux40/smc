@@ -58,6 +58,8 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // + per-tab paginated JSON; aggregation lives in ComplianceQuery.
     Route::get('compliance', [ComplianceController::class, 'index'])->name('compliance.page');
     Route::get('compliance/training/{training}', [ComplianceController::class, 'trainingDetail'])->name('compliance.training');
+    Route::get('compliance/requirement/{requirement}', [ComplianceController::class, 'requirementDetail'])->name('compliance.requirement');
+    Route::get('compliance/not-required/{training}', [ComplianceController::class, 'notRequiredDetail'])->name('compliance.not-required-detail');
     Route::get('api/compliance/by-training', [ComplianceController::class, 'byTraining'])->name('compliance.by-training');
     Route::get('api/compliance/by-requirement', [ComplianceController::class, 'byRequirement'])->name('compliance.by-requirement');
     Route::get('api/compliance/not-required', [ComplianceController::class, 'notRequired'])->name('compliance.not-required');

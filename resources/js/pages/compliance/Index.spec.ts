@@ -7,7 +7,7 @@ import ComplianceIndex from '@/pages/compliance/Index.vue';
 vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
-    Link: { template: '<a><slot /></a>' },
+    Link: { props: ['href'], template: '<a :href="href"><slot /></a>' },
 }));
 vi.mock('@/routes/users', () => ({
     show: (id: string) => ({ url: `/users/${id}` }),
@@ -111,7 +111,7 @@ describe('compliance/Index', () => {
         });
     });
 
-    it('shows the not-required tab with its two statuses and a drill-down', async () => {
+    it('shows the not-required tab with its two statuses and a detail link', async () => {
         const wrapper = await mountPage();
 
         await wrapper
@@ -128,32 +128,25 @@ describe('compliance/Index', () => {
         expect(headers.some((h) => h.includes('Overdue'))).toBe(false);
         expect(headers.some((h) => h.includes('Not started'))).toBe(false);
 
-        // Drill-down now lists the EEs who took it.
-        await wrapper.find('[data-testid="drilldown-CPR"]').trigger('click');
-        await flushPromises();
-        expect(axios.get as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
-            '/api/compliance/not-required/CPR/users',
-            expect.anything(),
-        );
-        expect(wrapper.find('[data-testid="drilldown-panel"]').exists()).toBe(true);
+        // No inline drill-down; the name links to the detail screen.
+        expect(wrapper.find('[data-testid="drilldown-CPR"]').exists()).toBe(false);
+        const link = wrapper.find('tbody a[href="/compliance/not-required/CPR"]');
+        expect(link.exists()).toBe(true);
     });
 
-    it('expands a row to drill into its users', async () => {
+    it('links each tab row to its detail screen (no inline drill-down)', async () => {
         const wrapper = await mountPage();
-
-        await wrapper
-            .find('[data-testid="drilldown-Fall Protection"]')
-            .trigger('click');
-        await flushPromises();
-
+        // By training.
         expect(
-            axios.get as ReturnType<typeof vi.fn>,
-        ).toHaveBeenCalledWith(
-            '/api/compliance/by-training/Fall Protection/users',
-            expect.anything(),
-        );
-        const panel = wrapper.find('[data-testid="drilldown-panel"]');
-        expect(panel.exists()).toBe(true);
-        expect(panel.text()).toContain('Lovelace, Ada');
+            wrapper.find('tbody a[href="/compliance/training/Fall Protection"]').exists(),
+        ).toBe(true);
+        expect(wrapper.find('[data-testid="drilldown-Fall Protection"]').exists()).toBe(false);
+
+        // By requirement.
+        await wrapper.find('[data-testid="compliance-tab-requirement"]').trigger('click');
+        await flushPromises();
+        expect(
+            wrapper.find('tbody a[href="/compliance/requirement/OSHA General"]').exists(),
+        ).toBe(true);
     });
 });

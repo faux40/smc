@@ -353,6 +353,54 @@ class ComplianceQueryTest extends TestCase
         $this->assertNotNull($byUser[$orphanUser->id]['name']);
     }
 
+    public function test_requirement_counts_tally_sourced_assignments(): void
+    {
+        $org = Organization::factory()->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+        $req = Requirement::factory()->for($org, 'organization')->create();
+        foreach (['overdue', 'current'] as $status) {
+            $ta = $this->ta($org, $training, ['status' => $status]);
+            AssignmentSource::create([
+                'training_assignment_id' => $ta->id,
+                'sourceable_type' => Requirement::class,
+                'sourceable_id' => $req->id,
+                'added_at' => now(),
+            ]);
+        }
+        // A direct-only TA must NOT count toward the requirement.
+        $this->ta($org, $training, ['status' => 'overdue']);
+
+        $counts = (new ComplianceQuery)->requirementCounts($org, $req->id);
+        $this->assertSame(1, $counts['overdue']);
+        $this->assertSame(1, $counts['current']);
+        $this->assertSame(2, $counts['total']);
+    }
+
+    public function test_not_required_counts_and_user_filters(): void
+    {
+        $org = Organization::factory()->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+        $cur = $this->ta($org, $training, ['status' => 'current']);
+        $exp = $this->ta($org, $training, ['status' => 'overdue']);
+        // give the current user a searchable name
+        $cur->user->update(['f_name' => 'Zelda', 'l_name' => 'Zane']);
+
+        $cq = new ComplianceQuery;
+
+        $counts = $cq->notRequiredCountsForTraining($org, $training->id);
+        $this->assertSame(1, $counts['current']);
+        $this->assertSame(1, $counts['expired']);
+        $this->assertSame(2, $counts['total']);
+
+        // status filter: expired only.
+        $expired = $cq->notRequiredUsersForTraining($org, $training->id, ['status' => 'expired']);
+        $this->assertSame([$exp->user_id], collect($expired['data'])->pluck('user_id')->all());
+
+        // user search.
+        $search = $cq->notRequiredUsersForTraining($org, $training->id, ['q' => 'zelda']);
+        $this->assertSame([$cur->user_id], collect($search['data'])->pluck('user_id')->all());
+    }
+
     public function test_users_for_requirement_drilldown_only_counts_sourced_assignments(): void
     {
         $org = Organization::factory()->create();

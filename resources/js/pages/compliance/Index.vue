@@ -34,14 +34,13 @@ const isActive = (key: TabKey) => tab.value === key;
 
 type CountColumn = { key: string; label: string };
 
+// Each tab's name links to a full detail screen (no inline drill-down).
 const CONFIGS = {
     training: {
         viewId: 'compliance-training',
         nameLabel: 'Training',
         searchPlaceholder: 'Search trainings…',
         fetcher: store.byTraining,
-        drilldown: (id: string) => (params: ServerTableQuery) =>
-            store.trainingUsers(id, params),
         rowHref: (id: string) => `/compliance/training/${id}`,
         countColumns: undefined as CountColumn[] | undefined,
         initialSort: undefined as string | undefined,
@@ -51,22 +50,18 @@ const CONFIGS = {
         nameLabel: 'Requirement',
         searchPlaceholder: 'Search requirements…',
         fetcher: store.byRequirement,
-        drilldown: (id: string) => (params: ServerTableQuery) =>
-            store.requirementUsers(id, params),
-        rowHref: undefined as ((id: string) => string) | undefined,
+        rowHref: (id: string) => `/compliance/requirement/${id}`,
         countColumns: undefined as CountColumn[] | undefined,
         initialSort: undefined as string | undefined,
     },
     // Not-required: people who took a training without being required to — only
-    // two states matter, Current vs Taken-but-Expired. Drill-down lists the EEs.
+    // two states matter, Current vs Taken-but-Expired.
     not_required: {
         viewId: 'compliance-not-required',
         nameLabel: 'Training',
         searchPlaceholder: 'Search trainings…',
         fetcher: store.notRequired,
-        drilldown: (id: string) => (params: ServerTableQuery) =>
-            store.notRequiredUsers(id, params),
-        rowHref: undefined as ((id: string) => string) | undefined,
+        rowHref: (id: string) => `/compliance/not-required/${id}`,
         countColumns: [
             { key: 'current', label: 'Current' },
             { key: 'expired', label: 'Taken but Expired' },
@@ -114,7 +109,6 @@ const activeConfig = computed(() => CONFIGS[tab.value]);
             :name-label="activeConfig.nameLabel"
             :search-placeholder="activeConfig.searchPlaceholder"
             :fetcher="activeConfig.fetcher"
-            :drilldown="activeConfig.drilldown"
             :row-href="activeConfig.rowHref"
             :count-columns="activeConfig.countColumns"
             :initial-sort="activeConfig.initialSort"
