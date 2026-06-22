@@ -14,6 +14,10 @@ import { realtimeTabId } from '@/echo';
 
 export interface CompletionReportRow {
     id: string;
+    user_id: string;
+    // Tag IDs attached to this row's user; hydrates the tags store so the
+    // Tags column renders pills without a per-row fetch.
+    tag_ids: string[];
     user: string;
     employee_number: string;
     department: string;

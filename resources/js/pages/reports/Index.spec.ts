@@ -20,13 +20,16 @@ function stubAxios() {
             return Promise.resolve({
                 data: {
                     data: [
-                        { id: 'c1', user: 'Lee, Sam', employee_number: 'EMP-1', department: 'Ops', location: 'Yard', training: 'CPR', completion_date: '2026-02-01', expire_date: '2020-01-01', status: 'Expired', _band: 'expired', hours: 4, class: '—', cert_id: 'CERT-1' },
+                        { id: 'c1', user_id: 'u1', tag_ids: ['t1'], user: 'Lee, Sam', employee_number: 'EMP-1', department: 'Ops', location: 'Yard', training: 'CPR', completion_date: '2026-02-01', expire_date: '2020-01-01', status: 'Expired', _band: 'expired', hours: 4, class: '—', cert_id: 'CERT-1' },
                     ],
                     meta: META,
                 },
             });
         }
-        if (url === '/api/tags') return Promise.resolve({ data: [] });
+        if (url === '/api/tags')
+            return Promise.resolve({
+                data: [{ id: 't1', name: 'Night shift', color: '#3b82f6' }],
+            });
         return Promise.resolve({ data: [] });
     });
 }
@@ -61,6 +64,16 @@ describe('reports/Index — completion report', () => {
         expect(body).toContain('EMP-1');
         expect(body).toContain('Ops');
         expect(body).toContain('Expired');
+    });
+
+    it('renders the user’s tags in the list (read-only, no add/remove controls)', async () => {
+        const wrapper = await mountPage();
+        const body = wrapper.find('tbody').text();
+        expect(body).toContain('Night shift');
+        // Read-only: no "Remove …" detach buttons in the tags cell.
+        expect(wrapper.find('[aria-label="Remove Night shift"]').exists()).toBe(
+            false,
+        );
     });
 
     it('sends training search (q) and user search (user_q), debounced', async () => {

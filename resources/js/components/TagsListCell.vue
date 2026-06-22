@@ -25,10 +25,15 @@ import TagPill from '@/components/TagPill.vue';
 import { useTagsStore } from '@/stores/tags';
 import type { TagRow } from '@/stores/tags';
 
-const props = defineProps<{
-    morphableType: string;
-    morphableId: string;
-}>();
+const props = withDefaults(
+    defineProps<{
+        morphableType: string;
+        morphableId: string;
+        /** Display-only: render pills, hide the add popover + remove buttons. */
+        readonly?: boolean;
+    }>(),
+    { readonly: false },
+);
 
 const store = useTagsStore();
 
@@ -65,6 +70,7 @@ async function onDetach(tagId: string): Promise<void> {
         >
             <TagPill :tag="tag" size="sm" />
             <button
+                v-if="!readonly"
                 type="button"
                 :aria-label="`Remove ${tag.name}`"
                 :title="`Remove ${tag.name}`"
@@ -75,6 +81,12 @@ async function onDetach(tagId: string): Promise<void> {
             </button>
         </span>
 
-        <TagPickerPopover :available-tags="available" @select="onAttach" />
+        <span v-if="readonly && attached.length === 0" class="text-muted-foreground">—</span>
+
+        <TagPickerPopover
+            v-if="!readonly"
+            :available-tags="available"
+            @select="onAttach"
+        />
     </div>
 </template>

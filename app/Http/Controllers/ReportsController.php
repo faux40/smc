@@ -50,7 +50,7 @@ class ReportsController extends Controller
         $org = $request->user()->organization;
 
         $base = $this->completionsQuery($request, $org)
-            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location', 'rqmtElements:id']);
+            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location', 'user.tags:id', 'rqmtElements:id']);
 
         $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
         $page = $base->paginate($perPage);
@@ -190,6 +190,13 @@ class ReportsController extends Controller
 
                 return [
                     'id' => $r['id'],
+                    'user_id' => $r['user_id'],
+                    // Tag IDs for the on-screen list (hydrates the tags store so
+                    // pills render); only the JSON query eager-loads user.tags —
+                    // PDF callers don't, so guard to avoid an N+1 lazy load.
+                    'tag_ids' => $u && $u->relationLoaded('tags')
+                        ? $u->tags->pluck('id')->all()
+                        : [],
                     'user' => $u?->sort_name ?? '—',
                     'employee_number' => $u?->employee_number ?? '—',
                     'department' => $u?->department ?? '—',

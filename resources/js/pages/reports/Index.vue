@@ -12,6 +12,7 @@ import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
 import Pagination from '@/components/Pagination.vue';
 import TagFilter from '@/components/TagFilter.vue';
+import TagsListCell from '@/components/TagsListCell.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,10 +39,13 @@ const COLUMNS = [
     { key: 'completion_date', label: 'Completed', sortable: false },
     { key: 'expire_date', label: 'Expires', sortable: false },
     { key: 'status', label: 'Status', sortable: false },
+    { key: 'tags', label: 'Tags', sortable: false },
     { key: 'hours', label: 'Hours', sortable: false },
     { key: 'class', label: 'Class', sortable: false },
     { key: 'cert_id', label: 'Cert ID', sortable: false },
 ];
+
+const USER_MORPH = 'App\\Models\\User';
 
 const store = useReportsStore();
 const tagsStore = useTagsStore();
@@ -92,10 +96,17 @@ const exportHref = computed(() => {
     return `/api/reports/completions/export${qs ? `?${qs}` : ''}`;
 });
 
+// Hydrate the tags store for each fetched page so the Tags column renders
+// attached pills without a per-row fetch (same pattern as users/Index).
 watch(
     () => table.rows.value,
-    () => {
-        /* rows render directly; no per-row hydration needed */
+    (rows) => {
+        for (const row of rows) {
+            tagsStore.setAttached(
+                { type: USER_MORPH, id: row.user_id },
+                row.tag_ids ?? [],
+            );
+        }
     },
 );
 
@@ -204,6 +215,14 @@ onMounted(async () => {
 
                 <template #col-status="{ row }">
                     <ComplianceStatusBadge :status="(row._band as ComplianceStatus)" />
+                </template>
+
+                <template #col-tags="{ row }">
+                    <TagsListCell
+                        :morphable-type="USER_MORPH"
+                        :morphable-id="row.user_id"
+                        readonly
+                    />
                 </template>
 
                 <template #empty>No completions match the current filters.</template>

@@ -4,6 +4,7 @@ namespace Tests\Feature\Tenancy;
 
 use App\Models\Completion;
 use App\Models\Organization;
+use App\Models\Tag;
 use App\Models\Training;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
@@ -202,6 +203,33 @@ class ReportsTest extends TestCase
         $byDate = $this->actingAs($manager)->getJson(route('reports.completions', ['from' => '2026-02-01', 'to' => '2026-04-01']))->json('data');
         $this->assertCount(1, $byDate);
         $this->assertSame('Forklift', $byDate[0]['training']);
+    }
+
+    public function test_completion_report_json_carries_each_users_tag_ids(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $tagged = User::factory()->for($org, 'organization')->create(['f_name' => 'Tina', 'l_name' => 'Tagged']);
+        $untagged = User::factory()->for($org, 'organization')->create(['f_name' => 'Una', 'l_name' => 'Untagged']);
+        $tagA = Tag::factory()->for($org, 'organization')->create();
+        $tagB = Tag::factory()->for($org, 'organization')->create();
+        $tagged->tags()->attach([$tagA->id, $tagB->id]);
+
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+        $mk = fn (User $u) => Completion::factory()->for($org, 'organization')->for($u, 'user')->state([
+            'module_type' => Training::class, 'module_id' => $training->id, 'completion_date' => '2026-02-01',
+        ])->create();
+        $mk($tagged);
+        $mk($untagged);
+
+        $rows = collect($this->actingAs($manager)->getJson(route('reports.completions'))->assertOk()->json('data'));
+
+        $taggedRow = $rows->firstWhere('user', 'Tagged, Tina');
+        $untaggedRow = $rows->firstWhere('user', 'Untagged, Una');
+
+        $this->assertEqualsCanonicalizing([$tagA->id, $tagB->id], $taggedRow['tag_ids']);
+        $this->assertSame($tagged->id, $taggedRow['user_id']);
+        $this->assertSame([], $untaggedRow['tag_ids']);
     }
 
     public function test_completion_report_export_pdf(): void
