@@ -11,6 +11,7 @@ use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Models\User;
 use App\Notifications\AssignmentCreatedForYou;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -42,13 +43,18 @@ class TrainingAssignmentService
 
         $this->recalculate->handle($userId, $trainingId);
 
-        event(new TrainingAssignmentCreated($ta->fresh(), actorId: Auth::id()));
+        // recalculate saved fresh date/status columns on a separate instance;
+        // pull them back once (not the two fresh() round-trips this used to do).
+        $wasCreated = $ta->wasRecentlyCreated;
+        $ta->refresh();
 
-        if ($ta->wasRecentlyCreated) {
+        event(new TrainingAssignmentCreated($ta, actorId: Auth::id()));
+
+        if ($wasCreated) {
             $this->notifyAssigned($userId, $ta->name, trainingId: $trainingId);
         }
 
-        return $ta->fresh();
+        return $ta;
     }
 
     /**
@@ -78,9 +84,11 @@ class TrainingAssignmentService
 
             $this->recalculate->handle($userId, $element->module_id);
 
-            event(new TrainingAssignmentCreated($ta->fresh(), actorId: Auth::id()));
+            // One refresh to pick up recalculated columns instead of two fresh().
+            $ta->refresh();
+            event(new TrainingAssignmentCreated($ta, actorId: Auth::id()));
 
-            $created[] = $ta->fresh();
+            $created[] = $ta;
         }
 
         // One inbox nudge per requirement set, not one per exploded training.
@@ -224,7 +232,7 @@ class TrainingAssignmentService
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, TrainingAssignment>  $assignments
+     * @param  Collection<int, TrainingAssignment>  $assignments
      */
     private function broadcastRefreshed($assignments): void
     {

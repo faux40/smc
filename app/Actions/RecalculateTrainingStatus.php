@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Models\AssignmentSource;
 use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
@@ -9,6 +10,7 @@ use App\Models\RqmtElement;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Services\TrainingStatusService;
+use App\Support\RecalcContext;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
@@ -18,6 +20,11 @@ class RecalculateTrainingStatus
      * Recompute all assignments for an org. Returns the number of distinct
      * (user, training) pairs processed. Idempotent — safe to run repeatedly.
      *
+     * The org's trainings, amber window, and requirement elements are loaded
+     * once (RecalcContext) and the per-pair reads are batched, so cost stays a
+     * fixed handful of queries plus one save per assignment — not the ~6
+     * repeated lookups per pair a naive loop would do.
+     *
      * @return array{processed: int}
      */
     public function handleAll(string $orgId): array
@@ -25,11 +32,16 @@ class RecalculateTrainingStatus
         $pairs = TrainingAssignment::where('org_id', $orgId)
             ->select(['user_id', 'training_id'])
             ->distinct()
-            ->get();
+            ->get()
+            ->map(fn ($p) => ['user_id' => $p->user_id, 'training_id' => $p->training_id]);
 
-        foreach ($pairs as $pair) {
-            $this->handle($pair->user_id, $pair->training_id);
+        if ($pairs->isEmpty()) {
+            return ['processed' => 0];
         }
+
+        $context = RecalcContext::forOrg($orgId, $pairs->pluck('training_id'));
+
+        $this->handleMany($pairs, $context);
 
         return ['processed' => $pairs->count()];
     }
@@ -57,35 +69,71 @@ class RecalculateTrainingStatus
             return $assignments;
         }
 
-        $latest = Completion::where('user_id', $userId)
-            ->where('module_type', Training::class)
-            ->where('module_id', $trainingId)
-            ->orderByDesc('completion_date')
-            ->first();
-
+        $latest = $this->latestCompletion($userId, $trainingId);
         $training = Training::with('stdFrequency')->find($trainingId);
-
-        // Amber window for the pair's org (all assignments share it), used to
-        // materialize the denormalized status alongside the date columns.
         $window = Organization::find($assignments->first()->org_id)?->expiringSoonDays()
             ?? Organization::DEFAULT_EXPIRING_SOON_DAYS;
+
         $statusService = new TrainingStatusService;
 
         foreach ($assignments as $assignment) {
-            $timings = $this->sourceTimings($training, $assignment);
-            [$expiresAt, $lastCompletedAt] = $this->computeStatus($latest, $timings);
+            $this->applyStatus($assignment, $latest, $training, $window, null, $statusService);
+        }
 
-            $assignment->expires_at = $expiresAt;
-            $assignment->last_completed_at = $lastCompletedAt;
-            // As-needed-only TAs are visible but never scheduled (J3).
-            $assignment->as_needed_only = $timings->every(
-                fn (array $t) => $t['as_needed'] && ! $t['repeating'] && ! $t['initial_only'],
-            );
-            // Materialize the bucket from the freshly-set columns (realtime
-            // half of the denormalized status; the daily watchdog reconciles
-            // date-crossings).
-            $assignment->status = $statusService->statusFor($assignment, $window);
-            $assignment->save();
+        return $assignments;
+    }
+
+    /**
+     * Batch variant of handle(): recompute a whole set of (user, training)
+     * pairs using preloaded, loop-invariant context. All the assignments and
+     * completion history for the pair set are read in two queries (rather than
+     * two per pair), and the training/org/element lookups come from the
+     * context, so total cost is a fixed constant plus one save per assignment.
+     *
+     * @param  Collection<int, array{user_id: string, training_id: string}>  $pairs
+     * @return Collection<int, TrainingAssignment> the affected assignments
+     */
+    public function handleMany(Collection $pairs, RecalcContext $context): Collection
+    {
+        $pairs = $pairs
+            ->unique(fn (array $p) => $p['user_id'].'|'.$p['training_id'])
+            ->values();
+
+        if ($pairs->isEmpty()) {
+            return collect();
+        }
+
+        $wanted = $pairs->map(fn (array $p) => $p['user_id'].'|'.$p['training_id'])->flip();
+        $userIds = $pairs->pluck('user_id')->unique()->values();
+        $trainingIds = $pairs->pluck('training_id')->unique()->values();
+
+        $assignments = TrainingAssignment::whereIn('user_id', $userIds)
+            ->whereIn('training_id', $trainingIds)
+            ->with('activeSources')
+            ->get()
+            ->filter(fn (TrainingAssignment $ta) => $wanted->has($ta->user_id.'|'.$ta->training_id))
+            ->values();
+
+        if ($assignments->isEmpty()) {
+            return $assignments;
+        }
+
+        // Latest completion per (user, module) — ordered desc so the first row
+        // in each group is the most recent.
+        $completions = Completion::whereIn('user_id', $userIds)
+            ->where('module_type', Training::class)
+            ->whereIn('module_id', $trainingIds)
+            ->orderByDesc('completion_date')
+            ->get()
+            ->groupBy(fn (Completion $c) => $c->user_id.'|'.$c->module_id);
+
+        $statusService = new TrainingStatusService;
+
+        foreach ($assignments as $assignment) {
+            $latest = $completions->get($assignment->user_id.'|'.$assignment->training_id)?->first();
+            $training = $context->trainings->get($assignment->training_id);
+
+            $this->applyStatus($assignment, $latest, $training, $context->window, $context->elements, $statusService);
         }
 
         return $assignments;
@@ -154,6 +202,45 @@ class RecalculateTrainingStatus
     }
 
     /**
+     * The single-assignment compute-and-save shared by handle() and
+     * handleMany(). When $elements is non-null the requirement timing is read
+     * from the preloaded map instead of querying per assignment.
+     *
+     * @param  Collection<string, RqmtElement>|null  $elements
+     */
+    private function applyStatus(
+        TrainingAssignment $assignment,
+        ?Completion $latest,
+        ?Training $training,
+        int $window,
+        ?Collection $elements,
+        TrainingStatusService $statusService,
+    ): void {
+        $timings = $this->sourceTimings($training, $assignment, $elements);
+        [$expiresAt, $lastCompletedAt] = $this->computeStatus($latest, $timings);
+
+        $assignment->expires_at = $expiresAt;
+        $assignment->last_completed_at = $lastCompletedAt;
+        // As-needed-only TAs are visible but never scheduled (J3).
+        $assignment->as_needed_only = $timings->every(
+            fn (array $t) => $t['as_needed'] && ! $t['repeating'] && ! $t['initial_only'],
+        );
+        // Materialize the bucket from the freshly-set columns (realtime half of
+        // the denormalized status; the daily watchdog reconciles date-crossings).
+        $assignment->status = $statusService->statusFor($assignment, $window);
+        $assignment->save();
+    }
+
+    private function latestCompletion(string $userId, string $trainingId): ?Completion
+    {
+        return Completion::where('user_id', $userId)
+            ->where('module_type', Training::class)
+            ->where('module_id', $trainingId)
+            ->orderByDesc('completion_date')
+            ->first();
+    }
+
+    /**
      * @param  Collection<int, array{repeating: bool, repeat_days: int|null, initial_only: bool, as_needed: bool}>  $timings
      * @return array{0: CarbonInterface|null, 1: CarbonInterface|null}
      */
@@ -190,9 +277,10 @@ class RecalculateTrainingStatus
      * longer exists — and a TA with no sources at all — falls back to the
      * template so it keeps behaving like a direct assignment.
      *
+     * @param  Collection<string, RqmtElement>|null  $preloadedElements  keyed "{requirement_id}|{training_id}"; when null, elements are queried
      * @return Collection<int, array{repeating: bool, repeat_days: int|null, initial_only: bool, as_needed: bool}>
      */
-    private function sourceTimings(?Training $training, TrainingAssignment $assignment): Collection
+    private function sourceTimings(?Training $training, TrainingAssignment $assignment, ?Collection $preloadedElements = null): Collection
     {
         $template = [
             'repeating' => (bool) $training?->repeating,
@@ -207,16 +295,7 @@ class RecalculateTrainingStatus
             return collect([$template]);
         }
 
-        $requirementIds = $sources
-            ->where('sourceable_type', Requirement::class)
-            ->pluck('sourceable_id');
-
-        $elements = RqmtElement::whereIn('requirement_id', $requirementIds)
-            ->where('module_type', Training::class)
-            ->where('module_id', $assignment->training_id)
-            ->with('stdFrequency')
-            ->get()
-            ->keyBy('requirement_id');
+        $elements = $this->elementsFor($assignment, $sources, $preloadedElements);
 
         return $sources->map(function ($source) use ($template, $elements) {
             if ($source->sourceable_type !== Requirement::class) {
@@ -236,5 +315,36 @@ class RecalculateTrainingStatus
                 'as_needed' => $element->as_needed,
             ];
         });
+    }
+
+    /**
+     * Requirement elements for this assignment's training, keyed by
+     * requirement_id. Sourced from the preloaded map when present, otherwise
+     * queried for just this assignment.
+     *
+     * @param  Collection<int, AssignmentSource>  $sources
+     * @param  Collection<string, RqmtElement>|null  $preloadedElements
+     * @return Collection<string, RqmtElement>
+     */
+    private function elementsFor(TrainingAssignment $assignment, Collection $sources, ?Collection $preloadedElements): Collection
+    {
+        $requirementIds = $sources
+            ->where('sourceable_type', Requirement::class)
+            ->pluck('sourceable_id');
+
+        if ($preloadedElements !== null) {
+            return $requirementIds
+                ->mapWithKeys(fn ($reqId) => [
+                    $reqId => $preloadedElements->get($reqId.'|'.$assignment->training_id),
+                ])
+                ->filter();
+        }
+
+        return RqmtElement::whereIn('requirement_id', $requirementIds)
+            ->where('module_type', Training::class)
+            ->where('module_id', $assignment->training_id)
+            ->with('stdFrequency')
+            ->get()
+            ->keyBy('requirement_id');
     }
 }

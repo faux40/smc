@@ -13,6 +13,7 @@ use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class RecalculateTrainingStatusTest extends TestCase
@@ -495,5 +496,78 @@ class RecalculateTrainingStatusTest extends TestCase
 
         $otherAssignment->refresh();
         $this->assertEquals('2026-05-01', $otherAssignment->last_completed_at->toDateString());
+    }
+
+    // ------------------------------------------------------------------
+    // Batched core — handleMany / handleAll parity + bounded query cost.
+    // ------------------------------------------------------------------
+
+    public function test_handle_all_matches_per_pair_handle_for_requirement_and_direct_timing(): void
+    {
+        ['org' => $org, 'user' => $user, 'training' => $training, 'assignment' => $ta] = $this->makeContext();
+        $training->update(['repeating' => true, 'std_freq_id' => $this->freq($org, 365)->id]);
+        // Requirement element with a stricter 90-day cycle than the template.
+        $this->addRequirementSource($ta, $training, [
+            'repeating' => true,
+            'std_freq_id' => $this->freq($org, 90)->id,
+        ]);
+        $this->complete($ta, '2026-01-01');
+
+        // A second user with a plain direct source on the same training.
+        $user2 = User::factory()->for($org, 'organization')->create();
+        $ta2 = TrainingAssignment::factory()->create([
+            'org_id' => $org->id, 'user_id' => $user2->id, 'training_id' => $training->id,
+        ]);
+        $this->addDirectSource($ta2);
+        $this->complete($ta2, '2026-01-01');
+
+        (new RecalculateTrainingStatus)->handleAll($org->id);
+
+        // Requirement user gets the strict 90-day cycle…
+        $this->assertEquals('2026-04-01', $ta->fresh()->expires_at->toDateString());
+        // …the direct user gets the 365-day template.
+        $this->assertEquals('2027-01-01', $ta2->fresh()->expires_at->toDateString());
+    }
+
+    public function test_handle_all_query_cost_is_sublinear_in_pairs(): void
+    {
+        $org = Organization::factory()->create();
+        $training = Training::factory()->for($org, 'organization')->create([
+            'repeating' => true, 'std_freq_id' => $this->freq($org, 365)->id,
+        ]);
+
+        $makeUsers = function (int $n) use ($org, $training): void {
+            for ($i = 0; $i < $n; $i++) {
+                $user = User::factory()->for($org, 'organization')->create();
+                $ta = TrainingAssignment::factory()->create([
+                    'org_id' => $org->id, 'user_id' => $user->id, 'training_id' => $training->id,
+                ]);
+                $this->addDirectSource($ta);
+                $this->complete($ta, '2026-01-01');
+            }
+        };
+
+        $count = function () use ($org): int {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            (new RecalculateTrainingStatus)->handleAll($org->id);
+            $n = count(DB::getQueryLog());
+            DB::disableQueryLog();
+
+            return $n;
+        };
+
+        $makeUsers(4);
+        $small = $count();
+
+        $makeUsers(4); // now 8 pairs
+        $large = $count();
+
+        // The loop-invariant lookups (trainings, org window, requirement
+        // elements) plus the batched reads are a fixed handful; only the
+        // per-assignment save scales. Doubling the pairs must add far fewer
+        // than the ~6 queries/pair a naive re-fetching loop would.
+        $this->assertLessThan($small, $large - $small + 1);
+        $this->assertLessThanOrEqual(4, ($large - $small) / 4);
     }
 }
