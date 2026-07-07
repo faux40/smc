@@ -229,7 +229,7 @@ class TrainingManagerPersonaTest extends PersonaTestCase
         // Inside the 30-day expiring-soon window → the "forecast" rows.
         $this->seedAssignmentWithDates($dueSoonUser, $training, now()->subDays(345), now()->addDays(20));
 
-        $rows = collect($this->actingAs($manager)->getJson('/api/dashboard/needs-action')->assertOk()->json());
+        $rows = collect($this->actingAs($manager)->getJson('/api/dashboard/needs-action')->assertOk()->json('data'));
 
         // Dashboard rows carry the sortable (last-name-first) display name.
         $olive = $rows->firstWhere('user_name', 'Overdue, Olive');

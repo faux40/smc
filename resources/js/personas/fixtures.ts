@@ -91,7 +91,17 @@ export function dashboardEndpoints(url: string) {
         case '/api/dashboard/summary':
             return Promise.resolve({ data: summaryPayload });
         case '/api/dashboard/needs-action':
-            return Promise.resolve({ data: needsActionRows });
+            return Promise.resolve({
+                data: {
+                    data: needsActionRows,
+                    meta: {
+                        current_page: 1,
+                        last_page: 1,
+                        per_page: 50,
+                        total: needsActionRows.length,
+                    },
+                },
+            });
         case '/api/dashboard/users-compliance':
             return Promise.resolve({ data: usersComplianceRows });
         case '/api/dashboard/recent-completions':

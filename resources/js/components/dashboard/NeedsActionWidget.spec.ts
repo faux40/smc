@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import axios from 'axios';
+import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import NeedsActionWidget from '@/components/dashboard/NeedsActionWidget.vue';
 
@@ -12,7 +13,7 @@ vi.mock('@/routes/users', () => ({
 }));
 
 // Server order: overdue (worst first) → not_started → due_soon.
-const rows = [
+const allRows = [
     {
         id: 'ta1',
         user_id: 'u1',
@@ -48,16 +49,44 @@ const rows = [
     },
 ];
 
-function mockGet() {
+const META = { current_page: 1, last_page: 1, per_page: 50, total: 3 };
+
+/** Server does the filtering — respond to status + q query params. */
+function mockGet(rows = allRows) {
     (axios.get as ReturnType<typeof vi.fn>).mockImplementation(
-        (url: string) => {
-            if (url === '/api/dashboard/needs-action') {
-                return Promise.resolve({ data: rows });
+        (url: string, config?: { params?: Record<string, string> }) => {
+            if (url !== '/api/dashboard/needs-action') {
+                return Promise.reject(new Error(`unexpected GET ${url}`));
             }
 
-            return Promise.reject(new Error(`unexpected GET ${url}`));
+            let data = rows;
+            const status = config?.params?.status;
+            const q = config?.params?.q?.toLowerCase();
+
+            if (status) {
+                data = data.filter((r) => r.status === status);
+            }
+
+            if (q) {
+                data = data.filter(
+                    (r) =>
+                        (r.user_name ?? '').toLowerCase().includes(q) ||
+                        r.training_name.toLowerCase().includes(q),
+                );
+            }
+
+            return Promise.resolve({
+                data: { data, meta: { ...META, total: data.length } },
+            });
         },
     );
+}
+
+/** Params of each GET to the needs-action endpoint, in call order. */
+function calls(): Array<Record<string, unknown>> {
+    return (axios.get as ReturnType<typeof vi.fn>).mock.calls
+        .filter((c) => c[0] === '/api/dashboard/needs-action')
+        .map((c) => (c[1]?.params ?? {}) as Record<string, unknown>);
 }
 
 async function mountWidget() {
@@ -74,10 +103,17 @@ function groupHeaders(wrapper: ReturnType<typeof mount>): string[] {
 
 describe('NeedsActionWidget', () => {
     beforeEach(() => {
+        setActivePinia(createPinia());
         vi.clearAllMocks();
     });
 
-    it('groups by user by default, preserving worst-first order', async () => {
+    it('fetches page 1 at 50 per page on mount', async () => {
+        await mountWidget();
+
+        expect(calls()[0]).toMatchObject({ page: 1, per_page: 50 });
+    });
+
+    it('groups the page by user by default, preserving worst-first order', async () => {
         const wrapper = await mountWidget();
 
         const headers = groupHeaders(wrapper);
@@ -85,13 +121,13 @@ describe('NeedsActionWidget', () => {
         // Alice owns the most-overdue row → her group leads.
         expect(headers[0]).toContain('Alice Aardvark');
         expect(headers[1]).toContain('Bob Badger');
-        // Rows show the other dimension (training names).
         expect(wrapper.text()).toContain('Fall Protection');
         expect(wrapper.text()).toContain('Forklift');
     });
 
-    it('regroups by training via the toggle', async () => {
+    it('regroups by training via the toggle (no refetch)', async () => {
         const wrapper = await mountWidget();
+        const before = calls().length;
 
         await wrapper.find('[data-test="group-by-training"]').trigger('click');
 
@@ -99,8 +135,8 @@ describe('NeedsActionWidget', () => {
         expect(headers).toHaveLength(2);
         expect(headers[0]).toContain('Fall Protection');
         expect(headers[1]).toContain('Forklift');
-        expect(wrapper.text()).toContain('Alice Aardvark');
-        expect(wrapper.text()).toContain('Bob Badger');
+        // Grouping is client-side over the current page — no new request.
+        expect(calls().length).toBe(before);
     });
 
     it('renders status badge, due date, days and source chips', async () => {
@@ -116,22 +152,29 @@ describe('NeedsActionWidget', () => {
         expect(text).toContain('Direct');
     });
 
-    it('filters by the status select', async () => {
+    it('sends the status filter to the server and resets to page 1', async () => {
         const wrapper = await mountWidget();
 
         await wrapper
             .find('[data-test="status-filter"]')
             .setValue('not_started');
+        await flushPromises();
 
+        expect(calls().at(-1)).toMatchObject({ status: 'not_started', page: 1 });
         expect(wrapper.text()).toContain('Bob Badger');
         expect(wrapper.text()).not.toContain('Forklift');
     });
 
-    it('filters by the search box across user and training names', async () => {
+    it('sends the search term to the server (debounced)', async () => {
         const wrapper = await mountWidget();
 
+        vi.useFakeTimers();
         await wrapper.find('input[type="search"]').setValue('forklift');
+        await vi.advanceTimersByTimeAsync(400);
+        vi.useRealTimers();
+        await flushPromises();
 
+        expect(calls().at(-1)).toMatchObject({ q: 'forklift' });
         const headers = groupHeaders(wrapper);
         expect(headers).toHaveLength(1);
         expect(headers[0]).toContain('Alice Aardvark');
@@ -140,7 +183,7 @@ describe('NeedsActionWidget', () => {
     });
 
     it('shows the all-clear message when nothing needs action', async () => {
-        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
+        mockGet([]);
         const wrapper = mount(NeedsActionWidget);
         await flushPromises();
 

@@ -75,8 +75,6 @@ class DashboardApiTest extends TestCase
         $this->assertSame(2, $response['total_users']);
     }
 
-
-
     public function test_recent_completions_returns_newest_first(): void
     {
         [$org, $manager, $training] = $this->scaffoldOrg();
@@ -165,9 +163,10 @@ class DashboardApiTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
-    // needs-action (K2) — flat actionable rows for the manager widget.
+    // needs-action (K2) — server-paged actionable rows for the manager widget.
     // Status math itself is covered by TrainingStatusServiceTest; here we
-    // cover the envelope, filtering, ordering, chips, window, and scope.
+    // cover the {data, meta} envelope, filtering, ordering, chips, window,
+    // pagination, status filter, search, and scope.
     // -----------------------------------------------------------------------
 
     private function actionTa(
@@ -215,7 +214,7 @@ class DashboardApiTest extends TestCase
         $rows = $this->actingAs($manager)
             ->getJson('/api/dashboard/needs-action')
             ->assertOk()
-            ->json();
+            ->json('data');
 
         $this->assertSame(
             [$overdue->id, $notStarted->id, $dueSoon->id],
@@ -245,7 +244,7 @@ class DashboardApiTest extends TestCase
         $rows = $this->actingAs($manager)
             ->getJson('/api/dashboard/needs-action')
             ->assertOk()
-            ->json();
+            ->json('data');
 
         $this->assertSame([$severe->id, $mild->id], array_column($rows, 'id'));
     }
@@ -262,7 +261,7 @@ class DashboardApiTest extends TestCase
         $rows = collect($this->actingAs($manager)
             ->getJson('/api/dashboard/needs-action')
             ->assertOk()
-            ->json())->keyBy('id');
+            ->json('data'))->keyBy('id');
 
         $this->assertSame(
             [['type' => 'requirement', 'id' => $req->id, 'name' => 'OSHA General']],
@@ -288,7 +287,7 @@ class DashboardApiTest extends TestCase
         $rows = $this->actingAs($manager)
             ->getJson('/api/dashboard/needs-action')
             ->assertOk()
-            ->json();
+            ->json('data');
 
         $this->assertSame([$ta->id], array_column($rows, 'id'));
         $this->assertSame('due_soon', $rows[0]['status']);
@@ -306,8 +305,77 @@ class DashboardApiTest extends TestCase
         $rows = $this->actingAs($managerA)
             ->getJson('/api/dashboard/needs-action')
             ->assertOk()
-            ->json();
+            ->json('data');
 
         $this->assertCount(0, $rows);
+    }
+
+    public function test_needs_action_paginates_with_meta_and_clamps_per_page(): void
+    {
+        [$org, $manager] = $this->scaffoldOrg();
+        $user = User::factory()->for($org, 'organization')->create();
+
+        // 3 overdue rows, 2 per page → 2 pages.
+        foreach (range(1, 3) as $i) {
+            $this->actionTa($org, $user, "Overdue {$i}", [
+                'last_completed_at' => now()->subYear(), 'expires_at' => now()->subDays($i),
+            ]);
+        }
+
+        $this->actingAs($manager)
+            ->getJson('/api/dashboard/needs-action?per_page=2&page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.total', 3)
+            ->assertJsonPath('meta.per_page', 2)
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.last_page', 2);
+
+        $this->actingAs($manager)
+            ->getJson('/api/dashboard/needs-action?per_page=9999')
+            ->assertOk()
+            ->assertJsonPath('meta.per_page', 100);
+    }
+
+    public function test_needs_action_filters_by_status_in_sql(): void
+    {
+        [$org, $manager] = $this->scaffoldOrg();
+        $user = User::factory()->for($org, 'organization')->create();
+
+        $overdue = $this->actionTa($org, $user, 'Overdue T', [
+            'last_completed_at' => now()->subYear(), 'expires_at' => now()->subDays(5),
+        ]);
+        $this->actionTa($org, $user, 'NotStarted T');
+
+        $rows = $this->actingAs($manager)
+            ->getJson('/api/dashboard/needs-action?status=overdue')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame([$overdue->id], array_column($rows, 'id'));
+    }
+
+    public function test_needs_action_searches_user_and_training_name_in_sql(): void
+    {
+        [$org, $manager] = $this->scaffoldOrg();
+        $alice = User::factory()->for($org, 'organization')->create(['f_name' => 'Alice', 'l_name' => 'Aardvark']);
+        $bob = User::factory()->for($org, 'organization')->create(['f_name' => 'Bob', 'l_name' => 'Badger']);
+
+        $forkliftForAlice = $this->actionTa($org, $alice, 'Forklift Safety');
+        $fallForBob = $this->actionTa($org, $bob, 'Fall Protection');
+
+        // Match on training name.
+        $byTraining = $this->actingAs($manager)
+            ->getJson('/api/dashboard/needs-action?q=forklift')
+            ->assertOk()
+            ->json('data');
+        $this->assertSame([$forkliftForAlice->id], array_column($byTraining, 'id'));
+
+        // Match on user name.
+        $byUser = $this->actingAs($manager)
+            ->getJson('/api/dashboard/needs-action?q=badger')
+            ->assertOk()
+            ->json('data');
+        $this->assertSame([$fallForBob->id], array_column($byUser, 'id'));
     }
 }

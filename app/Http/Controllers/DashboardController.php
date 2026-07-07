@@ -66,10 +66,12 @@ class DashboardController extends Controller
     }
 
     /**
-     * K2 — flat actionable rows for the "Needs action" widget: every TA
-     * whose canonical status is overdue / not_started / due_soon, with
-     * user name + source chips, worst first (most-overdue at the top).
-     * Grouping/filtering happens client-side.
+     * K2 — server-paged actionable rows for the "Needs action" widget ({data,
+     * meta}): every TA whose canonical status is overdue / not_started /
+     * due_soon, with user name + source chips, worst first (most-overdue at
+     * the top). Status filter + search across user / training name round-trip
+     * to SQL so a 10k-row org never ships the whole list. The widget groups
+     * the returned page by user/training client-side.
      */
     public function needsAction(Request $request): JsonResponse
     {
@@ -77,34 +79,64 @@ class DashboardController extends Controller
 
         $org = $this->orgFor($request);
 
+        // Optional status-chip filter, restricted to the actionable buckets.
+        $statuses = array_keys(self::ACTION_RANK);
+        if (in_array($request->query('status'), $statuses, true)) {
+            $statuses = [$request->query('status')];
+        }
+
         // Filter + order on the indexed status column; expiry ascending puts
         // the most-overdue (most-negative days) first within each bucket, with
         // nulls (not_started) last. No per-assignment status recomputation.
-        $tas = TrainingAssignment::query()
+        $query = TrainingAssignment::query()
             ->where('org_id', $org->id)
-            ->whereIn('status', array_keys(self::ACTION_RANK))
+            ->whereIn('status', $statuses)
             ->with(['user:id,f_name,m_name,l_name,email', 'activeSources'])
             ->orderByRaw("CASE status WHEN 'overdue' THEN 0 WHEN 'not_started' THEN 1 ELSE 2 END")
             ->orderByRaw('expires_at IS NULL') // non-null expiries first
             ->orderBy('expires_at')
-            ->orderBy('id')
-            ->get();
+            ->orderBy('id');
 
+        // Search across the training's snapshot name + the user's name/email.
+        $q = trim(mb_strtolower((string) $request->query('q', '')));
+        if ($q !== '') {
+            $like = '%'.$q.'%';
+            $query->where(function ($w) use ($like) {
+                $w->orWhereRaw('LOWER(training_assignments.name) LIKE ?', [$like])
+                    ->orWhereHas('user', fn ($u) => $u->where(function ($x) use ($like) {
+                        foreach (['f_name', 'm_name', 'l_name', 'email'] as $col) {
+                            $x->orWhereRaw("LOWER({$col}) LIKE ?", [$like]);
+                        }
+                    }));
+            });
+        }
+
+        $perPage = max(1, min(100, (int) $request->query('per_page', 50)));
+        $page = max(1, (int) $request->query('page', 1));
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+        $tas = $paginator->getCollection();
         $names = SourceChips::names($tas);
 
-        $rows = $tas->map(fn (TrainingAssignment $ta) => [
-            'id' => $ta->id,
-            'user_id' => $ta->user_id,
-            'user_name' => $ta->user?->sort_name,
-            'training_id' => $ta->training_id,
-            'training_name' => $ta->name,
-            'status' => $ta->status,
-            'expires_at' => $ta->expires_at?->toDateString(),
-            'days_until_due' => $this->status->daysUntilDue($ta),
-            'sources' => SourceChips::for($ta, $names),
-        ])->values();
-
-        return response()->json($rows);
+        return response()->json([
+            'data' => $tas->map(fn (TrainingAssignment $ta) => [
+                'id' => $ta->id,
+                'user_id' => $ta->user_id,
+                'user_name' => $ta->user?->sort_name,
+                'training_id' => $ta->training_id,
+                'training_name' => $ta->name,
+                'status' => $ta->status,
+                'expires_at' => $ta->expires_at?->toDateString(),
+                'days_until_due' => $this->status->daysUntilDue($ta),
+                'sources' => SourceChips::for($ta, $names),
+            ])->values(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        ]);
     }
 
     public function recentCompletions(Request $request): JsonResponse
