@@ -45,63 +45,24 @@ class DashboardController extends Controller
     }
 
     /**
-     * Server-paged all-users compliance ({data, meta}). The per-user summary
-     * is computed once, then searched (name/email), sorted, and sliced to a
-     * page so a large org doesn't ship/render thousands of rows at once. Sort
-     * keys: name, status (worst-first), overdue count, due_soon count.
+     * Server-paged all-users compliance ({data, meta}). Search (name/email),
+     * sort (name / status worst-first / overdue / due_soon), and pagination
+     * all run in SQL over the materialized status, so a large org never ships
+     * or hydrates thousands of rows for one page.
      */
     public function usersCompliance(Request $request): JsonResponse
     {
         $this->authorize($request);
 
-        $rows = $this->status->usersComplianceSummary($this->orgFor($request));
-
-        $q = trim(mb_strtolower((string) $request->query('q', '')));
-        if ($q !== '') {
-            $rows = array_values(array_filter($rows, fn (array $r) => str_contains(mb_strtolower((string) $r['name']), $q)
-                || str_contains(mb_strtolower((string) ($r['email'] ?? '')), $q)));
-        }
-
-        // Worst-first status precedence (overdue → … → none last).
-        $statusRank = array_flip(TrainingStatusService::STATUSES);
-        $rankOf = fn (string $s): int => $statusRank[$s] ?? 99;
-
-        $sort = in_array($request->query('sort'), ['name', 'status', 'overdue', 'due_soon'], true)
-            ? $request->query('sort')
-            : 'overdue';
-
-        usort($rows, function (array $a, array $b) use ($sort, $rankOf): int {
-            $primary = match ($sort) {
-                'name' => strcasecmp((string) $a['name'], (string) $b['name']),
-                'status' => $rankOf($a['overall_status']) <=> $rankOf($b['overall_status']),
-                'due_soon' => ($a['counts']['due_soon'] ?? 0) <=> ($b['counts']['due_soon'] ?? 0),
-                default => ($a['counts']['overdue'] ?? 0) <=> ($b['counts']['overdue'] ?? 0),
-            };
-
-            // Stable, page-consistent tiebreak.
-            return $primary !== 0
-                ? $primary
-                : (strcasecmp((string) $a['name'], (string) $b['name']) ?: strcmp((string) $a['user_id'], (string) $b['user_id']));
-        });
-
-        if ($request->query('dir') !== 'asc') {
-            $rows = array_reverse($rows);
-        }
-
-        $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
-        $total = count($rows);
-        $lastPage = max(1, (int) ceil($total / $perPage));
-        $page = max(1, min((int) $request->query('page', 1), $lastPage));
-
-        return response()->json([
-            'data' => array_values(array_slice($rows, ($page - 1) * $perPage, $perPage)),
-            'meta' => [
-                'current_page' => $page,
-                'last_page' => $lastPage,
-                'per_page' => $perPage,
-                'total' => $total,
-            ],
-        ]);
+        return response()->json(
+            $this->status->usersComplianceSummary($this->orgFor($request), [
+                'q' => $request->query('q'),
+                'sort' => $request->query('sort'),
+                'dir' => $request->query('dir'),
+                'page' => $request->query('page'),
+                'per_page' => $request->query('per_page'),
+            ]),
+        );
     }
 
     /**
@@ -115,38 +76,33 @@ class DashboardController extends Controller
         $this->authorize($request);
 
         $org = $this->orgFor($request);
-        $window = $org->expiringSoonDays();
 
+        // Filter + order on the indexed status column; expiry ascending puts
+        // the most-overdue (most-negative days) first within each bucket, with
+        // nulls (not_started) last. No per-assignment status recomputation.
         $tas = TrainingAssignment::query()
             ->where('org_id', $org->id)
+            ->whereIn('status', array_keys(self::ACTION_RANK))
             ->with(['user:id,f_name,m_name,l_name,email', 'activeSources'])
+            ->orderByRaw("CASE status WHEN 'overdue' THEN 0 WHEN 'not_started' THEN 1 ELSE 2 END")
+            ->orderByRaw('expires_at IS NULL') // non-null expiries first
+            ->orderBy('expires_at')
+            ->orderBy('id')
             ->get();
 
         $names = SourceChips::names($tas);
 
-        $rows = $tas
-            ->map(fn (TrainingAssignment $ta) => [
-                'ta' => $ta,
-                'status' => $this->status->statusFor($ta, $window),
-            ])
-            ->filter(fn (array $x) => isset(self::ACTION_RANK[$x['status']]))
-            ->map(fn (array $x) => [
-                'id' => $x['ta']->id,
-                'user_id' => $x['ta']->user_id,
-                'user_name' => $x['ta']->user?->sort_name,
-                'training_id' => $x['ta']->training_id,
-                'training_name' => $x['ta']->name,
-                'status' => $x['status'],
-                'expires_at' => $x['ta']->expires_at?->toDateString(),
-                'days_until_due' => $this->status->daysUntilDue($x['ta']),
-                'sources' => SourceChips::for($x['ta'], $names),
-            ])
-            ->sortBy([
-                fn (array $a, array $b) => self::ACTION_RANK[$a['status']] <=> self::ACTION_RANK[$b['status']],
-                fn (array $a, array $b) => ($a['days_until_due'] ?? PHP_INT_MAX) <=> ($b['days_until_due'] ?? PHP_INT_MAX),
-                fn (array $a, array $b) => strcasecmp((string) $a['user_name'], (string) $b['user_name']),
-            ])
-            ->values();
+        $rows = $tas->map(fn (TrainingAssignment $ta) => [
+            'id' => $ta->id,
+            'user_id' => $ta->user_id,
+            'user_name' => $ta->user?->sort_name,
+            'training_id' => $ta->training_id,
+            'training_name' => $ta->name,
+            'status' => $ta->status,
+            'expires_at' => $ta->expires_at?->toDateString(),
+            'days_until_due' => $this->status->daysUntilDue($ta),
+            'sources' => SourceChips::for($ta, $names),
+        ])->values();
 
         return response()->json($rows);
     }

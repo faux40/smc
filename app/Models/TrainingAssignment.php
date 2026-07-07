@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToOrganization;
+use App\Services\TrainingStatusService;
 use Database\Factories\TrainingAssignmentFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,6 +15,29 @@ class TrainingAssignment extends Model
 {
     /** @use HasFactory<TrainingAssignmentFactory> */
     use BelongsToOrganization, HasFactory, HasUuids;
+
+    /**
+     * The denormalized `status` column is canonical (ComplianceQuery + the
+     * dashboard read it directly). RecalculateTrainingStatus maintains it in
+     * realtime and the daily watchdog reconciles date-crossings, but rows
+     * created outside that path (seeders, direct writes) would otherwise
+     * persist a null bucket and vanish from the aggregates. Materialize it at
+     * creation from the flattened columns + the org's amber window so a TA is
+     * never stored without a status; an explicit status is left untouched.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $ta): void {
+            if ($ta->status !== null || $ta->org_id === null) {
+                return;
+            }
+
+            $window = Organization::find($ta->org_id)?->expiringSoonDays()
+                ?? Organization::DEFAULT_EXPIRING_SOON_DAYS;
+
+            $ta->status = app(TrainingStatusService::class)->statusFor($ta, $window);
+        });
+    }
 
     protected $fillable = [
         'org_id',

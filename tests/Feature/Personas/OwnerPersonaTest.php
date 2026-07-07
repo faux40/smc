@@ -113,6 +113,12 @@ class OwnerPersonaTest extends PersonaTestCase
             ])
             ->assertRedirect('/settings/organization');
 
+        // The dashboard reads the canonical materialized status (same seam as
+        // the Compliance page), so a window change lands once the status is
+        // re-materialized — the daily watchdog reconciles the new boundary.
+        Notification::fake();
+        $this->artisan('assignments:scan-due-states')->assertSuccessful();
+
         $after = $this->actingAs($owner)->getJson('/api/dashboard/summary')->json('counts');
         $this->assertSame(1, $after['due_soon']);
         $this->assertSame(0, $after['current']);
