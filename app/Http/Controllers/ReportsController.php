@@ -155,10 +155,13 @@ class ReportsController extends Controller
             ->where('completions.module_type', Training::class);
 
         if ($from = $request->query('from')) {
-            $query->whereDate('completions.completion_date', '>=', $from);
+            // Normalize to a plain Y-m-d string: completion_date is a `date`
+            // column, and a plain `where` (no `::date` cast) is needed for the
+            // comparison to use completions_org_completion_date_idx.
+            $query->where('completions.completion_date', '>=', Carbon::parse($from)->toDateString());
         }
         if ($to = $request->query('to')) {
-            $query->whereDate('completions.completion_date', '<=', $to);
+            $query->where('completions.completion_date', '<=', Carbon::parse($to)->toDateString());
         }
 
         if ($tq = trim((string) $request->query('q', ''))) {
@@ -233,13 +236,13 @@ class ReportsController extends Controller
             foreach ($statuses as $status) {
                 $outer->orWhere(function ($w) use ($status, $today, $boundary, $col) {
                     if ($status === 'expired') {
-                        $w->whereNotNull($col)->whereDate($col, '<', $today);
+                        $w->whereNotNull($col)->where($col, '<', $today);
                     } elseif ($status === 'due_soon') {
                         $w->whereNotNull($col)
-                            ->whereDate($col, '>=', $today)
-                            ->whereDate($col, '<=', $boundary);
+                            ->where($col, '>=', $today)
+                            ->where($col, '<=', $boundary);
                     } else { // current — no expiry on record, or beyond the window
-                        $w->whereNull($col)->orWhereDate($col, '>', $boundary);
+                        $w->whereNull($col)->orWhere($col, '>', $boundary);
                     }
                 });
             }
