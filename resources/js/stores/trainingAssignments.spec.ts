@@ -125,6 +125,22 @@ describe('useTrainingAssignmentsStore', () => {
         expect(get).toHaveBeenCalledTimes(1);
     });
 
+    // F7: recording a completion recalculates status/expires_at server-side
+    // with no broadcast — callers that just mutated data for a filter they
+    // already loaded need a way to bypass the cache and re-pull it.
+    it('loadFor({ force: true }) refetches even when the filter was already loaded', async () => {
+        const get = axios.get as ReturnType<typeof vi.fn>;
+        get.mockResolvedValueOnce({ data: [ta({ id: 'ta-1', last_completed_at: null })] });
+        get.mockResolvedValueOnce({ data: [ta({ id: 'ta-1', last_completed_at: '2026-07-01' })] });
+
+        const store = useTrainingAssignmentsStore();
+        await store.loadFor({ user_id: 'u1' });
+        await store.loadFor({ user_id: 'u1' }, { force: true });
+
+        expect(get).toHaveBeenCalledTimes(2);
+        expect(store.rows.find((r) => r.id === 'ta-1')?.last_completed_at).toBe('2026-07-01');
+    });
+
     it('assignDirect POSTs with source_type=direct and upserts the response', async () => {
         const post = axios.post as ReturnType<typeof vi.fn>;
         post.mockResolvedValue({ data: [ta({ id: 'ta-1', user_id: 'u1', training_id: 't1' })] });

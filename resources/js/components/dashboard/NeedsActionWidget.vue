@@ -16,6 +16,7 @@ import DashWidget from '@/components/dashboard/DashWidget.vue';
 import Pagination from '@/components/Pagination.vue';
 import { Input } from '@/components/ui/input';
 import { useServerTable } from '@/composables/useServerTable';
+import CompletionFormModal from '@/pages/completions/Partials/CompletionFormModal.vue';
 import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import { show as userShow } from '@/routes/users';
 import { useDashboardStore } from '@/stores/dashboard';
@@ -23,6 +24,8 @@ import type { NeedsActionRow } from '@/stores/dashboard';
 
 type GroupBy = 'user' | 'training';
 type StatusFilter = 'all' | 'overdue' | 'due_soon' | 'not_started';
+
+const emit = defineEmits<{ (e: 'completion-recorded'): void }>();
 
 const store = useDashboardStore();
 
@@ -94,6 +97,26 @@ const groups = computed<Group[]>(() => {
 
     return [...map.values()];
 });
+
+// ── Record completion (F7) — a per-row quick action prefilled from the
+// row itself. Note: row.id is the *assignment* id; row.training_id is the
+// module id CompletionFormModal actually records against.
+const completionModalOpen = ref(false);
+const completionModalUserId = ref<string | null>(null);
+const completionModalTrainingId = ref<string | null>(null);
+
+function openCompletion(row: NeedsActionRow): void {
+    completionModalUserId.value = row.user_id;
+    completionModalTrainingId.value = row.training_id;
+    completionModalOpen.value = true;
+}
+
+async function onCompletionSaved(): Promise<void> {
+    await table.fetchPage();
+    // The summary-stats widget owns its own separate fetch — let the
+    // dashboard page nudge it too if it wants to.
+    emit('completion-recorded');
+}
 </script>
 
 <template>
@@ -239,6 +262,15 @@ const groups = computed<Group[]>(() => {
                                 </span>
                                 <span v-else>never completed</span>
                             </span>
+
+                            <button
+                                type="button"
+                                data-test="row-record-completion"
+                                class="text-xs font-medium text-primary hover:underline"
+                                @click="openCompletion(row)"
+                            >
+                                Record completion
+                            </button>
                         </li>
                     </ul>
                 </section>
@@ -254,5 +286,13 @@ const groups = computed<Group[]>(() => {
                 @update:per-page="table.setPerPage"
             />
         </template>
+
+        <CompletionFormModal
+            v-model:open="completionModalOpen"
+            mode="create"
+            :initial-user-id="completionModalUserId"
+            :initial-training-id="completionModalTrainingId"
+            @saved="onCompletionSaved"
+        />
     </DashWidget>
 </template>

@@ -190,3 +190,35 @@ describe('NeedsActionWidget', () => {
         expect(wrapper.text().toLowerCase()).toContain('nothing needs action');
     });
 });
+
+describe('NeedsActionWidget — Record completion row action (F7)', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+    });
+
+    it('opens the completion modal prefilled with the row user + training id (not the assignment id)', async () => {
+        const wrapper = await mountWidget();
+
+        const rowBtn = wrapper.findAll('[data-test="row-record-completion"]')[0];
+        await rowBtn.trigger('click');
+
+        const modal = wrapper.findComponent({ name: 'CompletionFormModal' });
+        expect(modal.props('open')).toBe(true);
+        expect(modal.props('initialUserId')).toBe('u1');
+        // allRows[0].id is the TA id 'ta1' — must not leak in as the training.
+        expect(modal.props('initialTrainingId')).toBe('t1');
+    });
+
+    it('refetches the current page and notifies the parent after a completion is saved', async () => {
+        const wrapper = await mountWidget();
+        const before = calls().length;
+
+        const modal = wrapper.findComponent({ name: 'CompletionFormModal' });
+        await modal.vm.$emit('saved');
+        await flushPromises();
+
+        expect(calls().length).toBeGreaterThan(before);
+        expect(wrapper.emitted('completion-recorded')).toBeTruthy();
+    });
+});

@@ -15,6 +15,16 @@
  * On edit: user / module identity are locked (CompletionRequest pins
  * them from the existing record server-side). Element multi-select and
  * dates / notes can change; the pivot is re-sync'd by the controller.
+ *
+ * Quick-action prefill (F7): callers with a known user/training in hand
+ * (users/Show row actions, the needs-action dashboard widget) pass
+ * initial-user-id / initial-training-id. Mirrors
+ * TrainingAssignmentFormModal's initial-user-id convention — a supplied
+ * initial value preselects the field AND locks its picker (the same way
+ * edit mode locks user/module), since the caller already knows the
+ * identity and re-picking it would be redundant. The standalone
+ * completions/Index "+ New completion" flow passes neither prop, so both
+ * pickers stay open exactly as before.
  */
 import axios from 'axios';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
@@ -70,6 +80,8 @@ const props = defineProps<{
     open: boolean;
     mode: Mode;
     target?: CompletionRow | null;
+    initialUserId?: string | null;
+    initialTrainingId?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -104,6 +116,15 @@ const fieldErrors = useFieldErrors(FORM_CTX);
 const isEdit = computed(() => props.mode === 'edit');
 const title = computed(() =>
     isEdit.value ? 'Edit completion' : 'New completion',
+);
+
+// Locked exactly like edit mode locks user/module — the caller (a row
+// action) already knows the identity, so the picker is redundant. Only
+// engaged when the corresponding prop is actually supplied, so the
+// standalone create flow is unaffected.
+const userLocked = computed(() => isEdit.value || Boolean(props.initialUserId));
+const moduleLocked = computed(
+    () => isEdit.value || Boolean(props.initialTrainingId),
 );
 
 // Last-name-first ordering via the store's backend-composed sortable name.
@@ -183,9 +204,9 @@ watch(
             form.notes = props.target.notes ?? '';
             await loadCandidates();
         } else {
-            form.user_id = '';
+            form.user_id = props.initialUserId ?? '';
             form.module_type = 'App\\Models\\Training';
-            form.module_id = '';
+            form.module_id = props.initialTrainingId ?? '';
             form.rqmt_element_ids = [];
             form.completion_date = new Date().toISOString().slice(0, 10);
             form.certification_date = '';
@@ -194,6 +215,10 @@ watch(
             form.hours = '';
             form.notes = '';
             candidates.value = [];
+
+            if (form.module_id) {
+                await loadCandidates();
+            }
         }
     },
 );
@@ -306,7 +331,7 @@ function defaultHeaders(): Record<string, string> {
 
                 <div class="grid gap-2">
                     <Label for="c_user">User</Label>
-                    <Select v-model="form.user_id" :disabled="isEdit">
+                    <Select v-model="form.user_id" :disabled="userLocked">
                         <SelectTrigger id="c_user">
                             <SelectValue placeholder="Pick a user…">
                                 {{ form.user_id ? userName(form.user_id) : '' }}
@@ -325,12 +350,18 @@ function defaultHeaders(): Record<string, string> {
                     <p v-if="isEdit" class="text-xs text-muted-foreground">
                         User and module are locked after creation.
                     </p>
+                    <p
+                        v-else-if="initialUserId"
+                        class="text-xs text-muted-foreground"
+                    >
+                        User preselected.
+                    </p>
                     <InputError :message="fieldErrors.message('user_id')" />
                 </div>
 
                 <div class="grid gap-2">
                     <Label for="c_mtype">Module type</Label>
-                    <Select v-model="form.module_type" :disabled="isEdit">
+                    <Select v-model="form.module_type" :disabled="moduleLocked">
                         <SelectTrigger id="c_mtype">
                             <SelectValue placeholder="Pick a module type…" />
                         </SelectTrigger>
@@ -349,7 +380,7 @@ function defaultHeaders(): Record<string, string> {
 
                 <div class="grid gap-2">
                     <Label for="c_mid">Module</Label>
-                    <Select v-model="form.module_id" :disabled="isEdit">
+                    <Select v-model="form.module_id" :disabled="moduleLocked">
                         <SelectTrigger id="c_mid">
                             <SelectValue placeholder="Pick a training…">
                                 {{
@@ -369,6 +400,12 @@ function defaultHeaders(): Record<string, string> {
                             </SelectItem>
                         </SelectContent>
                     </Select>
+                    <p
+                        v-if="!isEdit && initialTrainingId"
+                        class="text-xs text-muted-foreground"
+                    >
+                        Training preselected.
+                    </p>
                     <InputError :message="fieldErrors.message('module_id')" />
                 </div>
 

@@ -28,7 +28,7 @@ const data = ref<SummaryPayload | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
 
-onMounted(async () => {
+async function fetchSummary(): Promise<void> {
     try {
         const { data: resp } = await axios.get<SummaryPayload>(
             '/api/dashboard/summary',
@@ -40,7 +40,14 @@ onMounted(async () => {
     } finally {
         loading.value = false;
     }
-});
+}
+
+// Exposed so a sibling widget's mutation (F7: recording a completion from
+// the needs-action widget) can nudge these counts without this widget
+// giving up its own-fetch independence — Dashboard.vue wires it.
+defineExpose({ refresh: fetchSummary });
+
+onMounted(fetchSummary);
 
 const CARDS: Array<{
     key: keyof SummaryPayload['counts'];

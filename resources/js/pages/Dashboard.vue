@@ -13,7 +13,7 @@
  * org-wide and the backend 403s non-managers anyway).
  */
 import { Head, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import AllUsersComplianceWidget from '@/components/dashboard/AllUsersComplianceWidget.vue';
 import NeedsActionWidget from '@/components/dashboard/NeedsActionWidget.vue';
 import RecentCompletionsWidget from '@/components/dashboard/RecentCompletionsWidget.vue';
@@ -50,6 +50,15 @@ const canSeeWidgets = computed(() =>
         authUser.value?.isManager,
     ),
 );
+
+// F7: NeedsActionWidget records completions inline; the summary counts run
+// off a separate own-fetch (not the shared dashboard store), so nudge them
+// explicitly rather than making SummaryStatsWidget poll or share state.
+const summaryWidget = ref<{ refresh: () => Promise<void> } | null>(null);
+
+function onCompletionRecorded(): void {
+    void summaryWidget.value?.refresh();
+}
 </script>
 
 <template>
@@ -57,9 +66,9 @@ const canSeeWidgets = computed(() =>
 
     <div class="flex flex-col gap-4 p-4">
         <template v-if="canSeeWidgets">
-            <SummaryStatsWidget />
+            <SummaryStatsWidget ref="summaryWidget" />
 
-            <NeedsActionWidget />
+            <NeedsActionWidget @completion-recorded="onCompletionRecorded" />
 
             <AllUsersComplianceWidget />
 

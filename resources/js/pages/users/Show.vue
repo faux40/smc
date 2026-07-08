@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { realtimeTabId } from '@/echo';
 import TrainingAssignmentFormModal from '@/pages/assignments/Partials/TrainingAssignmentFormModal.vue';
+import CompletionFormModal from '@/pages/completions/Partials/CompletionFormModal.vue';
 import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import { index as usersIndex } from '@/routes/users';
@@ -197,6 +198,29 @@ function openTaView(row: TrainingAssignmentRow): void {
     taModalOpen.value = true;
 }
 
+// ── Record completion (F7) — quick action from the header and from a
+// specific overdue/due-soon row. Both share one modal instance; the
+// row action additionally prefills the training so the manager never
+// re-picks it.
+const completionModalOpen = ref(false);
+const completionModalTrainingId = ref<string | null>(null);
+
+function openCompletionCreate(trainingId: string | null = null): void {
+    completionModalTrainingId.value = trainingId;
+    completionModalOpen.value = true;
+}
+
+// The backend recalculates status/expires_at synchronously on completion
+// create (CompletionObserver → RecalculateTrainingStatus) but doesn't
+// broadcast it, so the TA store's per-filter cache would otherwise stay
+// stale for this user until an unrelated reload — force past it here.
+async function onCompletionSaved(): Promise<void> {
+    await Promise.all([
+        load(),
+        taStore.loadFor({ user_id: props.subject.id }, { force: true }),
+    ]);
+}
+
 defineOptions({
     layout: {
         breadcrumbs: [
@@ -288,6 +312,13 @@ const ORDER: Array<{
 
 const groupCount = (key: keyof CompliancePayload['groups']): number =>
     data.value?.groups[key].length ?? 0;
+
+// F7 row action: offering "Record completion" only where it fixes
+// something — overdue / due-soon rows. Current / not-started / as-needed
+// stay read-only here (assigning covers "not started"; recording a
+// completion the user doesn't need yet would be odd).
+const ACTIONABLE_GROUPS: ReadonlySet<keyof CompliancePayload['groups']> =
+    new Set(['overdue', 'due_soon']);
 
 const formatDueLabel = (row: TrainingComplianceRow): string => {
     if (row.expires_at === null) {
@@ -431,15 +462,26 @@ function defaultHeaders(): Record<string, string> {
         <section class="flex flex-col gap-2" data-testid="training-assignments-section">
             <div class="flex items-center justify-between">
                 <h2 class="text-base font-semibold">Training assignments</h2>
-                <Button
-                    v-if="canAssign"
-                    size="sm"
-                    variant="outline"
-                    data-testid="ta-assign-btn"
-                    @click="openTaCreate"
-                >
-                    + Assign
-                </Button>
+                <div class="flex items-center gap-2">
+                    <Button
+                        v-if="canAssign"
+                        size="sm"
+                        variant="outline"
+                        data-testid="record-completion-btn"
+                        @click="openCompletionCreate()"
+                    >
+                        Record completion
+                    </Button>
+                    <Button
+                        v-if="canAssign"
+                        size="sm"
+                        variant="outline"
+                        data-testid="ta-assign-btn"
+                        @click="openTaCreate"
+                    >
+                        + Assign
+                    </Button>
+                </div>
             </div>
 
             <div
@@ -480,6 +522,14 @@ function defaultHeaders(): Record<string, string> {
             :mode="taModalMode"
             :target="taModalTarget"
             :initial-user-id="taModalMode === 'create' ? subject.id : null"
+        />
+
+        <CompletionFormModal
+            v-model:open="completionModalOpen"
+            mode="create"
+            :initial-user-id="subject.id"
+            :initial-training-id="completionModalTrainingId"
+            @saved="onCompletionSaved"
         />
 
         <UserFormModal
@@ -545,6 +595,12 @@ function defaultHeaders(): Record<string, string> {
                                 <th class="px-3 py-2 text-left font-medium">
                                     Status
                                 </th>
+                                <th
+                                    v-if="canAssign && ACTIONABLE_GROUPS.has(group.key)"
+                                    class="px-3 py-2 text-right font-medium"
+                                >
+                                    Actions
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border">
@@ -581,6 +637,19 @@ function defaultHeaders(): Record<string, string> {
                                     <ComplianceStatusBadge
                                         :status="row.status"
                                     />
+                                </td>
+                                <td
+                                    v-if="canAssign && ACTIONABLE_GROUPS.has(group.key)"
+                                    class="px-3 py-2 text-right"
+                                >
+                                    <button
+                                        type="button"
+                                        class="text-xs text-primary hover:underline"
+                                        data-testid="row-record-completion-btn"
+                                        @click="openCompletionCreate(row.training_id)"
+                                    >
+                                        Record completion
+                                    </button>
                                 </td>
                             </tr>
                         </tbody>

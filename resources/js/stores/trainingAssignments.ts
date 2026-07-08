@@ -173,10 +173,15 @@ export const useTrainingAssignmentsStore = defineStore(
 
         async function loadFor(
             filter: TrainingAssignmentFilter = {},
+            opts: { force?: boolean } = {},
         ): Promise<void> {
             const key = filterKey(filter);
 
-            if (loadedFilters.value.has(key)) {
+            // F7: completing a training recalculates status/expires_at
+            // server-side with no broadcast (see CompletionObserver) — a
+            // caller that just recorded one needs to bypass the cache for a
+            // filter it already loaded, rather than living with stale rows.
+            if (loadedFilters.value.has(key) && !opts.force) {
                 return;
             }
 

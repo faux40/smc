@@ -5,11 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RequirementAssignmentChip from '@/components/RequirementAssignmentChip.vue';
 import UsersShow from '@/pages/users/Show.vue';
 import { useRequirementAssignmentsStore } from '@/stores/requirementAssignments';
+import { useTrainingAssignmentsStore } from '@/stores/trainingAssignments';
+
+const { authUser } = vi.hoisted(() => ({
+    authUser: { value: { id: 'me', isAdmin: true } as Record<string, unknown> },
+}));
 
 vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div />' },
-    usePage: () => ({ props: { auth: { user: { id: 'me', isAdmin: true } } } }),
+    usePage: () => ({ props: { auth: { user: authUser.value } } }),
 }));
 vi.mock('@/routes/users', () => ({ index: () => '/users' }));
 vi.mock('@/echo', () => ({ realtimeTabId: () => 'test-tab' }));
@@ -102,6 +107,7 @@ const STUBS = {
     TrainingAssignmentPill: true,
     TrainingAssignmentPillLegend: true,
     TrainingAssignmentFormModal: true,
+    CompletionFormModal: true,
     ComplianceStatusBadge: true,
     Heading: true,
     UserFormModal: true,
@@ -136,6 +142,7 @@ describe('users/Show — requirement assignment chips', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        authUser.value = { id: 'me', isAdmin: true };
     });
 
     it('renders a chip for each requirement-sourced TA', async () => {
@@ -216,6 +223,7 @@ describe('users/Show — status lists + completion history (J3 payload)', () => 
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        authUser.value = { id: 'me', isAdmin: true };
     });
 
     it('fetches the training-compliance endpoint', async () => {
@@ -257,6 +265,7 @@ describe('users/Show — profile edit affordance', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        authUser.value = { id: 'me', isAdmin: true };
     });
 
     it('links the Print-record button to the user transcript PDF endpoint', async () => {
@@ -290,5 +299,74 @@ describe('users/Show — profile edit affordance', () => {
         expect(modal.exists()).toBe(true);
         expect(modal.props('mode')).toBe('edit');
         expect((modal.props('target') as { id: string }).id).toBe('u1');
+    });
+});
+
+describe('users/Show — Record completion quick action (F7)', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+        authUser.value = { id: 'me', isAdmin: true };
+    });
+
+    it('shows a header-level "Record completion" button next to Assign that opens the modal prefilled with just the user', async () => {
+        const wrapper = await mountShow([], richCompliance);
+
+        const btn = wrapper.find('[data-testid="record-completion-btn"]');
+        expect(btn.exists()).toBe(true);
+
+        await btn.trigger('click');
+
+        const modal = wrapper.findComponent({ name: 'CompletionFormModal' });
+        expect(modal.props('open')).toBe(true);
+        expect(modal.props('initialUserId')).toBe('u1');
+        expect(modal.props('initialTrainingId')).toBeFalsy();
+    });
+
+    it('hides the header-level button when the actor cannot assign', async () => {
+        authUser.value = { id: 'me' };
+
+        const wrapper = await mountShow([], richCompliance);
+        expect(wrapper.find('[data-testid="record-completion-btn"]').exists()).toBe(false);
+    });
+
+    it('offers a per-row "Record completion" action in the overdue group, prefilled with the user and that row\'s training', async () => {
+        const wrapper = await mountShow([], richCompliance);
+
+        const rowBtn = wrapper.find(
+            '[data-testid="row-record-completion-btn"]',
+        );
+        expect(rowBtn.exists()).toBe(true);
+
+        await rowBtn.trigger('click');
+
+        const modal = wrapper.findComponent({ name: 'CompletionFormModal' });
+        expect(modal.props('open')).toBe(true);
+        expect(modal.props('initialUserId')).toBe('u1');
+        // Nuance: must be the training id, not the assignment (ta-1) id.
+        expect(modal.props('initialTrainingId')).toBe('t1');
+    });
+
+    it('reloads compliance data and force-refreshes the TA store after a completion is saved', async () => {
+        const wrapper = await mountShow([], richCompliance);
+        const taStore = useTrainingAssignmentsStore();
+        const loadForSpy = vi.spyOn(taStore, 'loadFor').mockResolvedValue();
+        const getCallsBefore = (axios.get as ReturnType<typeof vi.fn>).mock.calls.length;
+
+        const modal = wrapper.findComponent({ name: 'CompletionFormModal' });
+        await modal.vm.$emit('saved');
+        await flushPromises();
+
+        expect(
+            (axios.get as ReturnType<typeof vi.fn>).mock.calls.length,
+        ).toBeGreaterThan(getCallsBefore);
+        expect(axios.get).toHaveBeenLastCalledWith(
+            '/api/users/u1/training-compliance',
+            expect.anything(),
+        );
+        expect(loadForSpy).toHaveBeenCalledWith(
+            { user_id: 'u1' },
+            { force: true },
+        );
     });
 });
