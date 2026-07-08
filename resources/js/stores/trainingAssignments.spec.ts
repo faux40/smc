@@ -182,12 +182,13 @@ describe('useTrainingAssignmentsStore', () => {
     // Reverb — subscribe + handlers
     // ----------------------------------------------------------------
 
-    it('subscribe binds to TrainingAssignmentCreated and TrainingAssignmentDeleted', () => {
+    it('subscribe binds to the Created, Deleted, and BulkChanged events', () => {
         const store = useTrainingAssignmentsStore();
         store.subscribe('org-1');
 
         expect(mockBind).toHaveBeenCalledWith('TrainingAssignmentCreated', expect.any(Function));
         expect(mockBind).toHaveBeenCalledWith('TrainingAssignmentDeleted', expect.any(Function));
+        expect(mockBind).toHaveBeenCalledWith('TrainingAssignmentsBulkChanged', expect.any(Function));
     });
 
     it('subscribe is idempotent — does not re-bind for the same orgId', () => {
@@ -195,7 +196,17 @@ describe('useTrainingAssignmentsStore', () => {
         store.subscribe('org-1');
         store.subscribe('org-1');
 
-        expect(mockBind).toHaveBeenCalledTimes(2); // one Created + one Deleted
+        expect(mockBind).toHaveBeenCalledTimes(3); // Created + Deleted + BulkChanged
+    });
+
+    it('TrainingAssignmentsBulkChanged handler bumps the revision so watchers refetch', () => {
+        const store = useTrainingAssignmentsStore();
+        store.subscribe('org-1');
+
+        const before = store.revision;
+        capturedBindings['TrainingAssignmentsBulkChanged']({ org_id: 'org-1', origin_tab: 'other-tab' });
+
+        expect(store.revision).toBe(before + 1);
     });
 
     it('TrainingAssignmentCreated handler upserts the row', () => {

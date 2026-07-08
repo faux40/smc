@@ -302,6 +302,14 @@ export const useTrainingAssignmentsStore = defineStore(
                 rows.value = rows.value.filter((r) => r.id !== payload.id);
                 revision.value++;
             });
+
+            // A bulk assignment carries no per-row payload (it can touch
+            // hundreds of TAs across pages this tab may not hold) — just bump
+            // the revision so watchers debounce-refetch the current page, the
+            // same path the single-assign event drives.
+            bind('TrainingAssignmentsBulkChanged', () => {
+                revision.value++;
+            });
         }
 
         return {

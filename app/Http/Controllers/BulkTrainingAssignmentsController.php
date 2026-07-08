@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\TrainingAssignmentsBulkChanged;
 use App\Http\Requests\BulkTrainingAssignmentRequest;
-use App\Models\User;
 use App\Services\TrainingAssignmentService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 
 class BulkTrainingAssignmentsController extends Controller
 {
@@ -18,28 +19,19 @@ class BulkTrainingAssignmentsController extends Controller
         $data = $request->validated();
         $orgId = $request->user()->org_id;
 
-        $createdCount = 0;
-        $skippedCount = 0;
+        $result = $data['source_type'] === 'requirement'
+            ? $this->service->bulkAssignFromRequirement($orgId, $data['user_ids'], $data['requirement_id'])
+            : $this->service->bulkAssignDirect($orgId, $data['user_ids'], $data['training_id']);
 
-        foreach ($data['user_ids'] as $userId) {
-            // Ensure the user belongs to this org (prevents cross-tenant write).
-            if (! User::where('id', $userId)->where('org_id', $orgId)->exists()) {
-                $skippedCount++;
-                continue;
-            }
-
-            if ($data['source_type'] === 'requirement') {
-                $results = $this->service->assignFromRequirement($orgId, $userId, $data['requirement_id']);
-                $createdCount += count($results);
-            } else {
-                $this->service->assignDirect($orgId, $userId, $data['training_id']);
-                $createdCount++;
-            }
+        // One org-channel signal for the whole batch instead of a broadcast per
+        // created TA (F4) — peer tabs debounce-refetch their current page.
+        if ($result['created'] > 0) {
+            event(new TrainingAssignmentsBulkChanged($orgId, actorId: Auth::id()));
         }
 
         return response()->json([
-            'created_count' => $createdCount,
-            'skipped_count' => $skippedCount,
+            'created_count' => $result['created'],
+            'skipped_count' => $result['skipped'],
         ], 201);
     }
 }

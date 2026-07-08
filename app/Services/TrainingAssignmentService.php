@@ -11,6 +11,7 @@ use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Models\User;
 use App\Notifications\AssignmentCreatedForYou;
+use App\Support\RecalcContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
@@ -97,6 +98,142 @@ class TrainingAssignmentService
         }
 
         return $created;
+    }
+
+    /**
+     * Assign one training directly to many users in a single batched pass.
+     *
+     * The org-membership filter, the training lookup, the already-assigned
+     * check, the amber window, and the status recalc are all done once (or as
+     * one whereIn) rather than per user, and no per-TA broadcast is emitted —
+     * the caller fires a single TrainingAssignmentsBulkChanged instead (F4).
+     *
+     * @param  array<int, string>  $userIds
+     * @return array{created: int, skipped: int}
+     */
+    public function bulkAssignDirect(string $orgId, array $userIds, string $trainingId): array
+    {
+        $validUserIds = $this->validUserIds($orgId, $userIds);
+        $skipped = count($userIds) - $validUserIds->count();
+
+        if ($validUserIds->isEmpty()) {
+            return ['created' => 0, 'skipped' => $skipped];
+        }
+
+        $training = Training::where('org_id', $orgId)->findOrFail($trainingId);
+        $context = RecalcContext::make($orgId, collect([$training]));
+
+        // One existence check for every (user, training) pair instead of a
+        // per-user firstOrCreate SELECT.
+        $existing = TrainingAssignment::whereIn('user_id', $validUserIds)
+            ->where('training_id', $trainingId)
+            ->get()
+            ->keyBy('user_id');
+
+        $newUserIds = [];
+        foreach ($validUserIds as $userId) {
+            $ta = $existing->get($userId)
+                ?? $this->createAssignment($orgId, $userId, $training, $context->window);
+
+            AssignmentSource::create([
+                'training_assignment_id' => $ta->id,
+                'sourceable_type' => null,
+                'sourceable_id' => null,
+                'added_at' => now(),
+            ]);
+
+            if ($ta->wasRecentlyCreated) {
+                $newUserIds[] = $userId;
+            }
+        }
+
+        $pairs = $validUserIds->map(fn ($id) => ['user_id' => $id, 'training_id' => $trainingId]);
+        $this->recalculate->handleMany($pairs, $context);
+
+        $this->notifyManyAssigned($newUserIds, $training->name, trainingId: $trainingId);
+
+        return ['created' => $validUserIds->count(), 'skipped' => $skipped];
+    }
+
+    /**
+     * Explode a requirement onto many users at once. Same batching contract as
+     * bulkAssignDirect: invariants hoisted, one whereIn existence check, one
+     * batched recalc, no per-TA broadcast.
+     *
+     * @param  array<int, string>  $userIds
+     * @return array{created: int, skipped: int}
+     */
+    public function bulkAssignFromRequirement(string $orgId, array $userIds, string $requirementId): array
+    {
+        $validUserIds = $this->validUserIds($orgId, $userIds);
+        $skipped = count($userIds) - $validUserIds->count();
+
+        if ($validUserIds->isEmpty()) {
+            return ['created' => 0, 'skipped' => $skipped];
+        }
+
+        $requirement = Requirement::with(['elements' => fn ($q) => $q->where('module_type', Training::class)])
+            ->where('org_id', $orgId)
+            ->findOrFail($requirementId);
+
+        $elements = $requirement->elements;
+
+        if ($elements->isEmpty()) {
+            return ['created' => 0, 'skipped' => $skipped];
+        }
+
+        $trainingIds = $elements->pluck('module_id')->unique()->values();
+        $trainings = Training::where('org_id', $orgId)->whereIn('id', $trainingIds)->get();
+        $trainingsById = $trainings->keyBy('id');
+
+        // Element timings feed the recalc's strictest-source resolution.
+        $elements->loadMissing('stdFrequency');
+        $context = RecalcContext::make($orgId, $trainings, $elements);
+
+        $existing = TrainingAssignment::whereIn('user_id', $validUserIds)
+            ->whereIn('training_id', $trainingIds)
+            ->get()
+            ->keyBy(fn (TrainingAssignment $ta) => $ta->user_id.'|'.$ta->training_id);
+
+        $pairs = collect();
+        $newUserIds = [];
+        $created = 0;
+
+        foreach ($validUserIds as $userId) {
+            $userIsNew = false;
+
+            foreach ($elements as $element) {
+                $trainingId = $element->module_id;
+                $key = $userId.'|'.$trainingId;
+
+                $ta = $existing->get($key)
+                    ?? $this->createAssignment($orgId, $userId, $trainingsById->get($trainingId), $context->window);
+                // Cache so a requirement listing the same training twice reuses
+                // the row rather than creating a duplicate.
+                $existing->put($key, $ta);
+
+                AssignmentSource::create([
+                    'training_assignment_id' => $ta->id,
+                    'sourceable_type' => Requirement::class,
+                    'sourceable_id' => $requirement->id,
+                    'added_at' => now(),
+                ]);
+
+                $userIsNew = $userIsNew || $ta->wasRecentlyCreated;
+                $pairs->push(['user_id' => $userId, 'training_id' => $trainingId]);
+                $created++;
+            }
+
+            if ($userIsNew) {
+                $newUserIds[] = $userId;
+            }
+        }
+
+        $this->recalculate->handleMany($pairs, $context);
+
+        $this->notifyManyAssigned($newUserIds, $requirement->name, requirementId: $requirement->id);
+
+        return ['created' => $created, 'skipped' => $skipped];
     }
 
     /**
@@ -269,5 +406,66 @@ class TrainingAssignmentService
             ['user_id' => $userId, 'training_id' => $trainingId],
             ['org_id' => $orgId, 'name' => $training->name],
         );
+    }
+
+    /**
+     * The subset of the requested ids that actually belong to this org, in one
+     * query — replaces the bulk controller's per-user exists() check and
+     * prevents cross-tenant writes.
+     *
+     * @param  array<int, string>  $userIds
+     * @return Collection<int, string>
+     */
+    private function validUserIds(string $orgId, array $userIds): Collection
+    {
+        return User::where('org_id', $orgId)
+            ->whereIn('id', $userIds)
+            ->pluck('id');
+    }
+
+    /**
+     * Create a TA with its status pre-materialized from the preloaded amber
+     * window, so the model's `creating` hook skips its per-row
+     * Organization::find (bda3b77). The batched recalc overwrites status with
+     * the completion-derived bucket immediately after.
+     */
+    private function createAssignment(string $orgId, string $userId, Training $training, int $window): TrainingAssignment
+    {
+        $ta = new TrainingAssignment([
+            'org_id' => $orgId,
+            'user_id' => $userId,
+            'training_id' => $training->id,
+            'name' => $training->name,
+        ]);
+
+        $ta->status = (new TrainingStatusService)->statusFor($ta, $window);
+        $ta->save();
+
+        return $ta;
+    }
+
+    /**
+     * Batched "assigned to you" nudge: one whereIn to hydrate every newly
+     * assigned user (self-actions suppressed) rather than a find() per user.
+     *
+     * @param  array<int, string>  $userIds
+     */
+    private function notifyManyAssigned(
+        array $userIds,
+        string $name,
+        ?string $trainingId = null,
+        ?string $requirementId = null,
+    ): void {
+        $targets = array_values(array_filter($userIds, fn ($id) => $id !== Auth::id()));
+
+        if ($targets === []) {
+            return;
+        }
+
+        User::query()
+            ->withoutGlobalScope('organization')
+            ->whereIn('id', $targets)
+            ->get()
+            ->each(fn (User $u) => $u->notify(new AssignmentCreatedForYou($name, $trainingId, $requirementId)));
     }
 }
