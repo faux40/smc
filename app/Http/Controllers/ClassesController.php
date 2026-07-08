@@ -288,10 +288,29 @@ class ClassesController extends Controller
                 'string',
                 Rule::exists('class_enrollments', 'id')->where('class_id', $class->id),
             ],
+            // Explicit intent flag required to wipe an entire multi-person
+            // roster (see the guard below).
+            'confirm_clear' => ['sometimes', 'boolean'],
         ]);
 
         $enroll = array_values(array_unique($data['enroll'] ?? []));
         $unenroll = array_values(array_unique($data['unenroll'] ?? []));
+
+        // Safety net against a silent mass de-enroll (the "re-open a class and
+        // lose the whole roster" data-loss bug). Removing EVERY member of a
+        // multi-person roster with no additions is only honoured when the
+        // caller explicitly confirms the intent — an accidental full clear
+        // (e.g. a client-side load race) is rejected, not applied. Removing the
+        // last person from a one-person roster stays a normal, unguarded edit.
+        if ($enroll === [] && count($unenroll) >= 2 && ($data['confirm_clear'] ?? false) !== true) {
+            $rosterCount = $class->enrollments()->count();
+
+            abort_if(
+                count($unenroll) >= $rosterCount,
+                422,
+                'Refusing to remove the entire roster without confirmation.',
+            );
+        }
 
         DB::transaction(function () use ($class, $enroll, $unenroll) {
             if ($unenroll !== []) {

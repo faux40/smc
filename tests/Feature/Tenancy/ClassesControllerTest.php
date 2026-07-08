@@ -611,6 +611,67 @@ class ClassesControllerTest extends TestCase
         $this->assertDatabaseHas('class_enrollments', ['id' => $foreign->id]);
     }
 
+    public function test_bulk_full_clear_of_multi_person_roster_requires_confirmation(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $a = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => User::factory()->for($org, 'organization')]);
+        $b = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => User::factory()->for($org, 'organization')]);
+
+        // Wiping an entire multi-person roster with no additions and no
+        // confirm_clear is treated as an accidental mass de-enroll and rejected.
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments/bulk", [
+                'enroll' => [],
+                'unenroll' => [$a->id, $b->id],
+            ])
+            ->assertStatus(422);
+
+        // Nobody was removed.
+        $this->assertDatabaseHas('class_enrollments', ['id' => $a->id]);
+        $this->assertDatabaseHas('class_enrollments', ['id' => $b->id]);
+    }
+
+    public function test_bulk_full_clear_succeeds_with_explicit_confirmation(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $a = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => User::factory()->for($org, 'organization')]);
+        $b = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => User::factory()->for($org, 'organization')]);
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments/bulk", [
+                'enroll' => [],
+                'unenroll' => [$a->id, $b->id],
+                'confirm_clear' => true,
+            ])
+            ->assertOk()
+            ->assertJsonCount(0, 'enrollments');
+
+        $this->assertDatabaseMissing('class_enrollments', ['id' => $a->id]);
+        $this->assertDatabaseMissing('class_enrollments', ['id' => $b->id]);
+    }
+
+    public function test_bulk_removing_the_last_single_enrollee_needs_no_confirmation(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $only = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => User::factory()->for($org, 'organization')]);
+
+        // Removing the last person from a one-person roster is a normal edit.
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments/bulk", [
+                'enroll' => [],
+                'unenroll' => [$only->id],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseMissing('class_enrollments', ['id' => $only->id]);
+    }
+
     public function test_bulk_enrollment_blocked_on_completed_class(): void
     {
         $org = Organization::factory()->create();

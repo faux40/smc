@@ -172,6 +172,139 @@ describe('ManageRosterModal', () => {
         );
     });
 
+    // ── Data-loss regression: a load race must never de-enroll the roster ──
+    // A manager re-opens a completed class to fix a typo; the roster hadn't
+    // finished loading when the modal opened. Closing with no user changes must
+    // NOT unenroll everyone (the reported bug).
+    it('does not unenroll the roster when detail loads after the modal opens', async () => {
+        const store = useClassesStore();
+        // The race: the modal opens before the roster detail has loaded.
+        store.detail = {};
+
+        const wrapper = mount(ManageRosterModal, {
+            props: { open: false, classId: 'c1', users },
+            attachTo: document.body,
+        });
+        await wrapper.setProps({ open: true }); // opens with no detail yet
+        await flushPromises();
+
+        // Roster arrives after the modal is already open.
+        store.detail = { c1: detail };
+        await flushPromises();
+
+        // The user changed nothing → closing must not touch the server at all.
+        findBtn('Done')!.click();
+        await flushPromises();
+
+        expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('bails on close when detail never loaded during the open lifecycle', async () => {
+        const store = useClassesStore();
+        store.detail = {}; // never populates
+
+        const wrapper = mount(ManageRosterModal, {
+            props: { open: false, classId: 'c1', users },
+            attachTo: document.body,
+        });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        findBtn('Done')!.click();
+        await flushPromises();
+
+        expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('unenrolls only the student the user actively removed', async () => {
+        const store = useClassesStore();
+        store.detail = {
+            c1: {
+                ...detail,
+                enrollments: [
+                    detail.enrollments[0], // u1 / e1
+                    {
+                        ...detail.enrollments[0],
+                        id: 'e2',
+                        user_id: 'u2',
+                        user_name: 'Lee, Sam',
+                        user_email: 'sam@x.com',
+                    },
+                ],
+            },
+        };
+
+        const wrapper = mount(ManageRosterModal, {
+            props: { open: false, classId: 'c1', users },
+            attachTo: document.body,
+        });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        // Remove the first enrolled student (u1 / e1) via its × button.
+        const remove = document.body.querySelector<HTMLButtonElement>(
+            'button[aria-label="Remove"]',
+        );
+        remove!.click();
+        await flushPromises();
+
+        findBtn('Done')!.click();
+        await flushPromises();
+
+        expect(axios.post).toHaveBeenCalledWith(
+            '/api/classes/c1/enrollments/bulk',
+            { enroll: [], unenroll: ['e1'] },
+            expect.anything(),
+        );
+    });
+
+    it('flags a full multi-person clear with confirm_clear', async () => {
+        const store = useClassesStore();
+        store.detail = {
+            c1: {
+                ...detail,
+                enrollments: [
+                    detail.enrollments[0], // u1 / e1
+                    {
+                        ...detail.enrollments[0],
+                        id: 'e2',
+                        user_id: 'u2',
+                        user_name: 'Lee, Sam',
+                        user_email: 'sam@x.com',
+                    },
+                ],
+            },
+        };
+
+        const wrapper = mount(ManageRosterModal, {
+            props: { open: false, classId: 'c1', users },
+            attachTo: document.body,
+        });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        // Remove both enrolled students.
+        let remove = document.body.querySelector<HTMLButtonElement>(
+            'button[aria-label="Remove"]',
+        );
+        remove!.click();
+        await flushPromises();
+        remove = document.body.querySelector<HTMLButtonElement>(
+            'button[aria-label="Remove"]',
+        );
+        remove!.click();
+        await flushPromises();
+
+        findBtn('Done')!.click();
+        await flushPromises();
+
+        expect(axios.post).toHaveBeenCalledWith(
+            '/api/classes/c1/enrollments/bulk',
+            { enroll: [], unenroll: ['e1', 'e2'], confirm_clear: true },
+            expect.anything(),
+        );
+    });
+
     it('offers inline add-user controls when the class is editable', async () => {
         await openModal();
         expect(document.body.textContent).toContain('Add a person');

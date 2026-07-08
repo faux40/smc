@@ -318,7 +318,7 @@ export const useClassesStore = defineStore('classes', () => {
      */
     async function bulkEnroll(
         id: string,
-        diff: { enroll: string[]; unenroll: string[] },
+        diff: { enroll: string[]; unenroll: string[]; confirm_clear?: boolean },
     ): Promise<ClassDetail> {
         const { data } = await axios.post<ClassDetail>(
             `/api/classes/${id}/enrollments/bulk`,

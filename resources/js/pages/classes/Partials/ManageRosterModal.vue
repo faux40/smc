@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { ASSIGNABLE_ROLES } from '@/lib/userRoles';
 import UserFormModal from '@/pages/users/Partials/UserFormModal.vue';
 import UsersBulkAddGrid from '@/pages/users/Partials/UsersBulkAddGrid.vue';
+import type { ClassDetail } from '@/stores/classes';
 import { useClassesStore } from '@/stores/classes';
 import type { TagRow } from '@/stores/tags';
 import { useTagsStore } from '@/stores/tags';
@@ -106,22 +107,50 @@ const saving = ref(false);
 // only persisted (diffed against the server roster) when the modal closes.
 const selected = ref<Set<string>>(new Set());
 
+// Snapshot of the roster AT THE MOMENT a loaded detail is first seen during
+// this open lifecycle. commit() diffs against this baseline — never a live
+// `detail` that may still be loading or have swapped underneath us — and bails
+// entirely when it was never captured. This is the guard against the reported
+// data-loss bug: opening before the roster loads must never be read on close
+// as "the user removed everyone".
+const baseline = ref<Set<string> | null>(null);
+// user_id → enrollment_id, captured alongside the baseline so an unenroll maps
+// back to a stable enrollment id without trusting the (possibly-swapped) live
+// detail at commit time.
+const baselineEnrollmentIds = ref<Map<string, string>>(new Map());
+
 // Source-list filters (apply to the Available list only).
 const deptFilter = ref<string>('');
 const tagFilterIds = ref<string[]>([]);
 const tagFilterMode = ref<TagFilterMode>('and');
 
+function seedBaseline(d: ClassDetail): void {
+    baseline.value = new Set(d.enrollments.map((e) => e.user_id));
+    baselineEnrollmentIds.value = new Map(
+        d.enrollments.map((e) => [e.user_id, e.id]),
+    );
+    selected.value = new Set(baseline.value);
+}
+
+// React to BOTH the open toggle and the detail loading. A fresh open resets
+// transient state and drops any stale baseline; the baseline is then seeded
+// once, as soon as a loaded detail is available — which covers "opened before
+// the roster finished loading".
 watch(
-    () => props.open,
-    (open) => {
-        if (open) {
+    [() => props.open, detail],
+    ([open], [prevOpen]) => {
+        if (open && !prevOpen) {
             actionError.value = null;
-            selected.value = new Set(
-                (detail.value?.enrollments ?? []).map((e) => e.user_id),
-            );
+            baseline.value = null;
+            baselineEnrollmentIds.value = new Map();
+            selected.value = new Set();
             deptFilter.value = '';
             tagFilterIds.value = [];
             tagFilterMode.value = 'and';
+        }
+
+        if (open && baseline.value === null && detail.value) {
+            seedBaseline(detail.value);
         }
     },
 );
@@ -232,20 +261,24 @@ function unassign(item: { id: string }): void {
 // Persist the queued add/removes (diff vs the server roster) on close — one
 // bulk request rather than a call per student.
 async function commit(): Promise<void> {
-    const d = detail.value;
-
-    if (!d || !canEdit.value) {
+    // No baseline means we never saw a loaded roster this session (e.g. the
+    // modal was closed before the roster finished loading). Never infer
+    // removals from an absent baseline — bail.
+    if (baseline.value === null || !canEdit.value) {
         return;
     }
 
-    const original = new Map(d.enrollments.map((e) => [e.user_id, e.id]));
-    // Enroll every selected id not already on the roster — derived from the
-    // selection set (not the available pool) so a just-created user enrolls
-    // even before the picker refresh repopulates the lists.
-    const toEnroll = [...selected.value].filter((id) => !original.has(id));
-    const toUnenroll = d.enrollments
-        .filter((e) => !selected.value.has(e.user_id))
-        .map((e) => e.id);
+    const base = baseline.value;
+    // Enroll every selected id not already on the (baseline) roster — derived
+    // from the selection set (not the available pool) so a just-created user
+    // enrolls even before the picker refresh repopulates the lists.
+    const toEnroll = [...selected.value].filter((id) => !base.has(id));
+    // Unenroll = baseline members the user actively shuttled out, mapped back
+    // to their snapshot enrollment ids.
+    const toUnenroll = [...base]
+        .filter((userId) => !selected.value.has(userId))
+        .map((userId) => baselineEnrollmentIds.value.get(userId))
+        .filter((id): id is string => typeof id === 'string');
 
     if (toEnroll.length === 0 && toUnenroll.length === 0) {
         return;
@@ -253,10 +286,20 @@ async function commit(): Promise<void> {
 
     saving.value = true;
 
+    // Belt-and-suspenders: emptying an entire multi-person roster is
+    // catastrophic if it's ever unintended, so the server rejects it unless we
+    // confirm the intent. Flag it only when the user genuinely cleared everyone
+    // (all baseline members removed, nobody added).
+    const clearsWholeRoster =
+        toEnroll.length === 0 &&
+        base.size >= 2 &&
+        toUnenroll.length === base.size;
+
     try {
         await store.bulkEnroll(props.classId, {
             enroll: toEnroll,
             unenroll: toUnenroll,
+            ...(clearsWholeRoster ? { confirm_clear: true } : {}),
         });
     } catch (e) {
         actionError.value =
