@@ -425,6 +425,108 @@ class AssignmentDueStateWatchdogTest extends TestCase
         });
     }
 
+    // ------------------------------------------------------------------
+    // F10 — recurring overdue re-notification.
+    // ------------------------------------------------------------------
+
+    private function setInterval(?int $days): void
+    {
+        $this->org->update(['overdue_reminder_interval_days' => $days]);
+    }
+
+    public function test_overdue_re_fires_after_the_org_interval(): void
+    {
+        $this->setInterval(14);
+        $ta = $this->repeatingTa();
+        $this->completeOn('2026-01-01'); // expires 2026-04-01
+
+        Notification::fake();
+
+        // Enters overdue — edge fire #1, clock stamped.
+        $this->runWatchdogAt('2026-05-01');
+        Notification::assertSentToTimes($this->user, AssignmentOverdue::class, 1);
+        $this->assertSame('2026-05-01', $this->stateFor($ta)->last_notified_at->toDateString());
+
+        // Day 10 — inside the window, no re-fire.
+        $this->runWatchdogAt('2026-05-11');
+        Notification::assertSentToTimes($this->user, AssignmentOverdue::class, 1);
+        $this->assertSame('2026-05-01', $this->stateFor($ta)->last_notified_at->toDateString());
+
+        // Day 15 — past the interval, re-fire #2 and the clock advances.
+        $this->runWatchdogAt('2026-05-16');
+        Notification::assertSentToTimes($this->user, AssignmentOverdue::class, 2);
+        $this->assertSame('2026-05-16', $this->stateFor($ta)->last_notified_at->toDateString());
+    }
+
+    public function test_overdue_does_not_re_fire_when_interval_is_null(): void
+    {
+        $this->setInterval(null);
+        $this->repeatingTa();
+        $this->completeOn('2026-01-01');
+
+        Notification::fake();
+
+        $this->runWatchdogAt('2026-05-01');
+        $this->runWatchdogAt('2026-06-01'); // a month later, still overdue
+
+        Notification::assertSentToTimes($this->user, AssignmentOverdue::class, 1);
+    }
+
+    public function test_re_fire_does_not_double_send_on_the_edge_run(): void
+    {
+        $this->setInterval(1); // tightest possible interval
+        $ta = $this->repeatingTa();
+        $this->completeOn('2026-01-01');
+
+        Notification::fake();
+
+        // Even with a 1-day interval, the edge run fires exactly once — the
+        // re-fire guard suppresses a same-run second send.
+        $this->runWatchdogAt('2026-05-01');
+        Notification::assertSentToTimes($this->user, AssignmentOverdue::class, 1);
+        $this->assertSame('2026-05-01', $this->stateFor($ta)->last_notified_at->toDateString());
+    }
+
+    public function test_due_soon_never_re_fires(): void
+    {
+        $this->setInterval(14);
+        $this->repeatingTa();
+        $this->completeOn('2026-01-01');
+
+        Notification::fake();
+
+        // due_soon at 2026-03-01, still due_soon three weeks on — one send only.
+        $this->runWatchdogAt('2026-03-01');
+        $this->runWatchdogAt('2026-03-22');
+
+        Notification::assertSentToTimes($this->user, AssignmentDueSoon::class, 1);
+    }
+
+    public function test_enabling_interval_on_a_stale_overdue_seeds_the_clock_before_re_firing(): void
+    {
+        // Simulate a row that went overdue before the feature existed: its
+        // last_notified_at is null. Enabling an interval must seed the clock on
+        // the next scan (no immediate storm), then re-fire one interval later.
+        $this->setInterval(null);
+        $ta = $this->repeatingTa();
+        $this->completeOn('2026-01-01');
+
+        Notification::fake();
+        $this->runWatchdogAt('2026-05-01'); // edge fire, clock stamped
+        $this->stateFor($ta)->update(['last_notified_at' => null]); // pretend legacy row
+
+        $this->setInterval(14);
+
+        // First scan after enabling — seeds the clock, does NOT notify.
+        $this->runWatchdogAt('2026-05-10');
+        Notification::assertSentToTimes($this->user, AssignmentOverdue::class, 1);
+        $this->assertSame('2026-05-10', $this->stateFor($ta)->last_notified_at->toDateString());
+
+        // 15 days after the seed — now it re-fires.
+        $this->runWatchdogAt('2026-05-25');
+        Notification::assertSentToTimes($this->user, AssignmentOverdue::class, 2);
+    }
+
     public function test_state_row_cascades_when_ta_is_deleted(): void
     {
         $ta = $this->repeatingTa();

@@ -21,6 +21,11 @@ class AssignmentNotificationState extends Model
         'org_id',
         'training_assignment_id',
         'last_seen_status',
+        'last_notified_at',
+    ];
+
+    protected $casts = [
+        'last_notified_at' => 'datetime',
     ];
 
     public function trainingAssignment(): BelongsTo

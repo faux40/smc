@@ -15,6 +15,7 @@ class Organization extends Model
     use HasFactory, HasUuids, SoftDeletes;
 
     public const DEFAULT_DUE_SOON_DAYS = 60;
+
     public const DEFAULT_EXPIRING_SOON_DAYS = 30;
 
     protected $fillable = [
@@ -23,6 +24,7 @@ class Organization extends Model
         'timezone',
         'manager_digest_sent_at',
         'training_thresholds',
+        'overdue_reminder_interval_days',
     ];
 
     protected $casts = [
@@ -38,6 +40,18 @@ class Organization extends Model
     public function expiringSoonDays(): int
     {
         return $this->training_thresholds['expiring_soon_days'] ?? self::DEFAULT_EXPIRING_SOON_DAYS;
+    }
+
+    /**
+     * The overdue re-notification interval in days, or null when disabled.
+     * A stored 0 also reads as disabled (the settings UI treats blank/0 the
+     * same) so callers only have to check for null / positive.
+     */
+    public function overdueReminderIntervalDays(): ?int
+    {
+        $days = $this->overdue_reminder_interval_days;
+
+        return $days !== null && $days > 0 ? (int) $days : null;
     }
 
     public function users(): HasMany

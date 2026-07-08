@@ -249,6 +249,81 @@ class OrganizationThresholdsTest extends TestCase
         $this->assertSame('due_soon', $ta->fresh()->status);
     }
 
+    // -- F10 overdue reminder interval ---------------------------------
+
+    public function test_overdue_reminder_interval_accessor_normalises_zero_and_null(): void
+    {
+        $this->assertNull(Organization::factory()->create([
+            'overdue_reminder_interval_days' => null,
+        ])->overdueReminderIntervalDays());
+
+        $this->assertNull(Organization::factory()->create([
+            'overdue_reminder_interval_days' => 0,
+        ])->overdueReminderIntervalDays());
+
+        $this->assertSame(14, Organization::factory()->create([
+            'overdue_reminder_interval_days' => 14,
+        ])->overdueReminderIntervalDays());
+    }
+
+    public function test_edit_page_exposes_overdue_reminder_interval(): void
+    {
+        $org = Organization::factory()->create(['overdue_reminder_interval_days' => 21]);
+        $owner = $this->ownerOf($org);
+
+        $this->actingAs($owner)
+            ->get(route('organization.edit'))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('organization.overdue_reminder_interval_days', 21)
+            );
+    }
+
+    public function test_update_persists_overdue_reminder_interval(): void
+    {
+        $org = Organization::factory()->create();
+        $owner = $this->ownerOf($org);
+
+        $this->actingAs($owner)
+            ->patch(route('organization.update'), [
+                'name' => $org->name,
+                'timezone' => $org->timezone,
+                'overdue_reminder_interval_days' => 14,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(14, $org->fresh()->overdueReminderIntervalDays());
+    }
+
+    public function test_update_normalises_zero_interval_to_null(): void
+    {
+        $org = Organization::factory()->create(['overdue_reminder_interval_days' => 14]);
+        $owner = $this->ownerOf($org);
+
+        $this->actingAs($owner)
+            ->patch(route('organization.update'), [
+                'name' => $org->name,
+                'timezone' => $org->timezone,
+                'overdue_reminder_interval_days' => 0,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull($org->fresh()->overdue_reminder_interval_days);
+    }
+
+    public function test_update_rejects_out_of_range_interval(): void
+    {
+        $org = Organization::factory()->create();
+        $owner = $this->ownerOf($org);
+
+        $this->actingAs($owner)
+            ->patch(route('organization.update'), [
+                'name' => $org->name,
+                'timezone' => $org->timezone,
+                'overdue_reminder_interval_days' => 999,
+            ])
+            ->assertSessionHasErrors('overdue_reminder_interval_days');
+    }
+
     // -- Inertia shared org prop ---------------------------------------
 
     public function test_inertia_shares_org_training_thresholds(): void

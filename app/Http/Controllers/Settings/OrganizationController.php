@@ -30,6 +30,7 @@ class OrganizationController extends Controller
                 'timezone' => $org->timezone,
                 'due_soon_days' => $org->training_thresholds['due_soon_days'] ?? null,
                 'expiring_soon_days' => $org->training_thresholds['expiring_soon_days'] ?? null,
+                'overdue_reminder_interval_days' => $org->overdue_reminder_interval_days,
             ],
             'isOwner' => $user->hasRole('Owner'),
             // Full IANA identifier list for the timezone picker.
@@ -52,10 +53,15 @@ class OrganizationController extends Controller
             'expiring_soon_days' => $expiringSoon,
         ], fn ($v) => $v !== null);
 
+        // Blank / 0 both mean "disabled" — normalise to null so the accessor
+        // and the watchdog only ever see null or a positive day count.
+        $interval = $request->validated('overdue_reminder_interval_days');
+
         $org->update([
             'name' => $request->validated('name'),
             'timezone' => $request->validated('timezone'),
             'training_thresholds' => $thresholds ?: null,
+            'overdue_reminder_interval_days' => $interval ?: null,
         ]);
 
         // A widened/narrowed expiring-soon window shifts due_soon⇄current

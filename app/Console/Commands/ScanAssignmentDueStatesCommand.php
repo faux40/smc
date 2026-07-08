@@ -8,8 +8,10 @@ use App\Models\TrainingAssignment;
 use App\Notifications\AssignmentDueSoon;
 use App\Notifications\AssignmentOverdue;
 use App\Services\TrainingStatusService;
+use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -38,18 +40,17 @@ class ScanAssignmentDueStatesCommand extends Command
     {
         $fired = 0;
 
-        // Per-org amber windows, resolved once.
-        $windows = Organization::query()
-            ->get()
-            ->mapWithKeys(fn (Organization $org) => [$org->id => $org->expiringSoonDays()]);
+        // Per-org amber windows + overdue re-fire intervals, resolved once.
+        $orgs = Organization::query()->get()->keyBy('id');
 
         TrainingAssignment::query()
             ->with('user')
-            ->chunkById(200, function (Collection $tas) use ($status, $windows, &$fired): void {
+            ->chunkById(200, function (Collection $tas) use ($status, $orgs, &$fired): void {
                 foreach ($tas as $ta) {
+                    $org = $orgs->get($ta->org_id);
                     $bucket = $status->statusFor(
                         $ta,
-                        $windows[$ta->org_id] ?? Organization::DEFAULT_EXPIRING_SOON_DAYS,
+                        $org?->expiringSoonDays() ?? Organization::DEFAULT_EXPIRING_SOON_DAYS,
                     );
 
                     // Daily reconcile of the denormalized status — catches
@@ -61,7 +62,7 @@ class ScanAssignmentDueStatesCommand extends Command
                             ->update(['status' => $bucket]);
                     }
 
-                    $fired += $this->reconcile($ta, $bucket, $status);
+                    $fired += $this->reconcile($ta, $bucket, $status, $org?->overdueReminderIntervalDays());
                 }
             });
 
@@ -72,10 +73,15 @@ class ScanAssignmentDueStatesCommand extends Command
 
     /**
      * Compare freshly computed status against last-seen, fire on a
-     * qualifying transition, persist the new status. Returns 1 if a
+     * qualifying transition, then — for assignments that sit `overdue` — re-fire
+     * on the org's re-notification interval. Persists the new status and, when a
+     * notification went out, stamps `last_notified_at`. Returns 1 if a
      * notification fired, else 0.
+     *
+     * @param  int|null  $reminderInterval  the org's overdue re-fire interval in
+     *                                      days, or null when disabled.
      */
-    private function reconcile(TrainingAssignment $ta, string $bucket, TrainingStatusService $status): int
+    private function reconcile(TrainingAssignment $ta, string $bucket, TrainingStatusService $status, ?int $reminderInterval): int
     {
         // As-needed trainings are neither tracked nor notified.
         if ($bucket === TrainingStatusService::STATUS_AS_NEEDED) {
@@ -83,31 +89,96 @@ class ScanAssignmentDueStatesCommand extends Command
         }
 
         $state = AssignmentNotificationState::where('training_assignment_id', $ta->id)->first();
-        $fired = 0;
+        $now = Date::now();
+        $notifiedNow = false;
 
+        // Edge transition into due_soon / overdue — the first notification.
         if ($bucket !== $state?->last_seen_status && $ta->user !== null) {
-            $expiresAt = $ta->expires_at?->toDateString();
-            $days = $status->daysUntilDue($ta);
-
             if ($bucket === TrainingStatusService::STATUS_DUE_SOON) {
-                $ta->user->notify(new AssignmentDueSoon($ta->id, $ta->training_id, $ta->name, $expiresAt, $days));
-                $fired = 1;
+                $this->notifyDueSoon($ta, $status);
+                $notifiedNow = true;
             } elseif ($bucket === TrainingStatusService::STATUS_OVERDUE) {
-                $ta->user->notify(new AssignmentOverdue($ta->id, $ta->training_id, $ta->name, $expiresAt, $days));
-                $fired = 1;
+                $this->notifyOverdue($ta, $status);
+                $notifiedNow = true;
             }
         }
 
+        // Recurring overdue re-fire. Only for an assignment that is *still*
+        // overdue this run, has a prior send to measure from, and whose org
+        // opted into an interval. Guarded by `!$notifiedNow` so it can never
+        // double-send on the same run the edge trigger just fired.
+        if (! $notifiedNow
+            && $bucket === TrainingStatusService::STATUS_OVERDUE
+            && $reminderInterval !== null
+            && $state !== null
+            && $state->last_notified_at !== null
+            && $ta->user !== null
+            && $state->last_notified_at->lte($now->copy()->subDays($reminderInterval))
+        ) {
+            $this->notifyOverdue($ta, $status);
+            $notifiedNow = true;
+        }
+
+        $this->persistState($ta, $state, $bucket, $reminderInterval, $notifiedNow, $now);
+
+        return $notifiedNow ? 1 : 0;
+    }
+
+    private function notifyDueSoon(TrainingAssignment $ta, TrainingStatusService $status): void
+    {
+        $ta->user->notify(new AssignmentDueSoon(
+            $ta->id, $ta->training_id, $ta->name, $ta->expires_at?->toDateString(), $status->daysUntilDue($ta),
+        ));
+    }
+
+    private function notifyOverdue(TrainingAssignment $ta, TrainingStatusService $status): void
+    {
+        $ta->user->notify(new AssignmentOverdue(
+            $ta->id, $ta->training_id, $ta->name, $ta->expires_at?->toDateString(), $status->daysUntilDue($ta),
+        ));
+    }
+
+    /**
+     * Upsert the state row: advance last_seen_status, stamp last_notified_at
+     * when a notification just fired, and otherwise seed the re-fire clock for
+     * a freshly-tracked overdue assignment (so enabling an interval doesn't
+     * immediately re-notify every already-overdue assignment).
+     */
+    private function persistState(
+        TrainingAssignment $ta,
+        ?AssignmentNotificationState $state,
+        string $bucket,
+        ?int $reminderInterval,
+        bool $notifiedNow,
+        CarbonInterface $now,
+    ): void {
         if ($state === null) {
             AssignmentNotificationState::create([
                 'org_id' => $ta->org_id,
                 'training_assignment_id' => $ta->id,
                 'last_seen_status' => $bucket,
+                'last_notified_at' => $notifiedNow ? $now : null,
             ]);
-        } elseif ($state->last_seen_status !== $bucket) {
-            $state->update(['last_seen_status' => $bucket]);
+
+            return;
         }
 
-        return $fired;
+        $update = [];
+        if ($state->last_seen_status !== $bucket) {
+            $update['last_seen_status'] = $bucket;
+        }
+        if ($notifiedNow) {
+            $update['last_notified_at'] = $now;
+        } elseif ($bucket === TrainingStatusService::STATUS_OVERDUE
+            && $reminderInterval !== null
+            && $state->last_notified_at === null) {
+            // Seed the clock without notifying — the next interval boundary
+            // measures from now, not from the epoch.
+            $update['last_notified_at'] = $now;
+        }
+
+        if ($update !== []) {
+            $state->update($update);
+        }
     }
 }

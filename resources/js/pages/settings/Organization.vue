@@ -26,6 +26,7 @@ type Props = {
         timezone: string;
         due_soon_days: number | null;
         expiring_soon_days: number | null;
+        overdue_reminder_interval_days: number | null;
     };
     isOwner: boolean;
     timezones: string[];
@@ -146,6 +147,33 @@ const submitDelete = () => {
                     many days. Leave blank to use the default (30 days).
                 </p>
                 <InputError class="mt-2" :message="errors.expiring_soon_days" />
+            </div>
+            <div class="grid gap-2">
+                <Label for="overdue_reminder_interval_days">
+                    Overdue reminder interval (days)
+                </Label>
+                <Input
+                    id="overdue_reminder_interval_days"
+                    name="overdue_reminder_interval_days"
+                    type="number"
+                    min="0"
+                    max="365"
+                    class="mt-1 block w-40"
+                    :default-value="
+                        props.organization.overdue_reminder_interval_days ?? ''
+                    "
+                    placeholder="Off"
+                />
+                <p class="text-xs text-muted-foreground">
+                    Re-send the overdue notification every this many days while
+                    an assignment stays overdue (the employee's supervisor is
+                    copied). Leave blank or 0 to send only the first overdue
+                    alert.
+                </p>
+                <InputError
+                    class="mt-2"
+                    :message="errors.overdue_reminder_interval_days"
+                />
             </div>
             <div class="flex items-center gap-4">
                 <Button :disabled="processing">Save</Button>
