@@ -7,6 +7,7 @@ use App\Actions\Fortify\ResetUserPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -31,6 +32,7 @@ class FortifyServiceProvider extends ServiceProvider
         $this->configureActions();
         $this->configureViews();
         $this->configureRateLimiting();
+        $this->configureGuestRouteThrottling();
     }
 
     /**
@@ -86,6 +88,72 @@ class FortifyServiceProvider extends ServiceProvider
             $throttleKey = Str::transliterate(Str::lower($request->input(Fortify::username())).'|'.$request->ip());
 
             return Limit::perMinute(5)->by($throttleKey);
+        });
+
+        // Guest endpoints below have no auth to protect them, so — unlike
+        // login/two-factor — they're keyed on IP alone rather than
+        // IP+identifier. Registration is scriptable mass org creation;
+        // forgot/reset-password are floodable for email bombing and
+        // enumeration timing. Keying by IP means an attacker can't dodge
+        // the limiter by cycling through emails/tokens from one address,
+        // which is the actual abuse case here.
+        RateLimiter::for('register', function (Request $request) {
+            return Limit::perMinute(5)->by($request->ip());
+        });
+
+        RateLimiter::for('forgot-password', function (Request $request) {
+            return Limit::perMinute(6)->by($request->ip());
+        });
+
+        RateLimiter::for('reset-password', function (Request $request) {
+            return Limit::perMinute(6)->by($request->ip());
+        });
+    }
+
+    /**
+     * Attach `throttle:` middleware to Fortify's registration and
+     * password-reset routes.
+     *
+     * Unlike login/two-factor/verification/passkeys, Fortify's own routes
+     * file (vendor/laravel/fortify/routes/routes.php) never consults
+     * config('fortify.limiters.*') for the register/forgot-password/
+     * reset-password routes — it registers them with no throttle
+     * middleware at all, and there's no config knob to add one. Forking
+     * the whole routes file just to insert three `throttle:` entries would
+     * be far more invasive than the fix warrants, so instead we reach into
+     * the already-registered routes and append the middleware ourselves.
+     *
+     * This runs in an `app()->booted()` callback so it executes after
+     * Fortify's own boot() (where these routes are registered) has run —
+     * package providers boot before app providers, so in practice this is
+     * already true by the time our own boot() runs, but the callback is a
+     * cheap safety net against that ordering assumption ever changing.
+     *
+     * We deliberately look up routes by iterating and comparing
+     * `$route->getName()` rather than `RouteCollection::getByName()`.
+     * `getByName()` reads a `$nameList` cache that Fortify's routes don't
+     * populate until `refreshNameLookups()` runs (queued in a *second*,
+     * later `booted()` callback registered by the framework's own routing
+     * bootstrap) — which fires after this one, so `getByName()` would
+     * still return null here even though the routes already exist and
+     * already have their names set.
+     */
+    private function configureGuestRouteThrottling(): void
+    {
+        $this->app->booted(function () {
+            $throttledRoutes = [
+                'register.store' => 'register',
+                'password.email' => 'forgot-password',
+                'password.update' => 'reset-password',
+            ];
+
+            foreach (Route::getRoutes() as $route) {
+                $limiter = $throttledRoutes[$route->getName()] ?? null;
+
+                if ($limiter !== null) {
+                    $route->middleware('throttle:'.$limiter);
+                }
+            }
         });
     }
 }

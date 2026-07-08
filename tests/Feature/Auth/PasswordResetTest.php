@@ -92,4 +92,72 @@ class PasswordResetTest extends TestCase
 
         $response->assertSessionHasErrors('email');
     }
+
+    public function test_forgot_password_is_rate_limited_per_ip()
+    {
+        Notification::fake();
+
+        for ($i = 0; $i < 6; $i++) {
+            $response = $this->post(route('password.email'), ['email' => 'nobody@example.com']);
+            $this->assertNotEquals(429, $response->getStatusCode());
+        }
+
+        $response = $this->post(route('password.email'), ['email' => 'nobody@example.com']);
+        $response->assertTooManyRequests();
+    }
+
+    public function test_forgot_password_rate_limit_does_not_affect_other_ips()
+    {
+        Notification::fake();
+
+        for ($i = 0; $i < 6; $i++) {
+            $this->post(route('password.email'), ['email' => 'nobody@example.com']);
+        }
+
+        $this->post(route('password.email'), ['email' => 'nobody@example.com'])->assertTooManyRequests();
+
+        $response = $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.9'])
+            ->post(route('password.email'), ['email' => 'nobody@example.com']);
+
+        $this->assertNotEquals(429, $response->getStatusCode());
+    }
+
+    public function test_reset_password_is_rate_limited_per_ip()
+    {
+        $payload = [
+            'token' => 'invalid-token',
+            'email' => 'nobody@example.com',
+            'password' => 'newpassword123',
+            'password_confirmation' => 'newpassword123',
+        ];
+
+        for ($i = 0; $i < 6; $i++) {
+            $response = $this->post(route('password.update'), $payload);
+            $this->assertNotEquals(429, $response->getStatusCode());
+        }
+
+        $response = $this->post(route('password.update'), $payload);
+        $response->assertTooManyRequests();
+    }
+
+    public function test_reset_password_rate_limit_does_not_affect_other_ips()
+    {
+        $payload = [
+            'token' => 'invalid-token',
+            'email' => 'nobody@example.com',
+            'password' => 'newpassword123',
+            'password_confirmation' => 'newpassword123',
+        ];
+
+        for ($i = 0; $i < 6; $i++) {
+            $this->post(route('password.update'), $payload);
+        }
+
+        $this->post(route('password.update'), $payload)->assertTooManyRequests();
+
+        $response = $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.9'])
+            ->post(route('password.update'), $payload);
+
+        $this->assertNotEquals(429, $response->getStatusCode());
+    }
 }
