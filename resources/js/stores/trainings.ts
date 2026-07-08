@@ -26,6 +26,8 @@ export interface TrainingRow {
     repeating: boolean;
     std_freq_id: string | null;
     std_freq_name: string | null;
+    /** Day count behind std_freq_name — F9's completion-form auto-fill math. */
+    std_freq_repeat_days: number | null;
     as_needed: boolean;
     default_hours: string | null;
     cert_title: string | null;
@@ -127,6 +129,7 @@ export const useTrainingsStore = defineStore('trainings', () => {
             {
                 ...data,
                 std_freq_name: null,
+                std_freq_repeat_days: null,
                 can_edit: true,
                 can_delete: true,
             } as TrainingRow,
@@ -175,6 +178,7 @@ export const useTrainingsStore = defineStore('trainings', () => {
                     {
                         ...p,
                         std_freq_name: null,
+                        std_freq_repeat_days: null,
                         can_edit: false,
                         can_delete: false,
                     },

@@ -40,6 +40,7 @@ function training(over: Partial<TrainingRow>): TrainingRow {
         repeating: false,
         std_freq_id: null,
         std_freq_name: null,
+        std_freq_repeat_days: null,
         as_needed: false,
         default_hours: null,
         cert_title: null,

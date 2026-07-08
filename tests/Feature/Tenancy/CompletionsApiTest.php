@@ -10,6 +10,7 @@ use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
+use App\Models\StdFrequency;
 use App\Models\Training;
 use App\Models\TrainingClass;
 use App\Models\User;
@@ -657,6 +658,157 @@ class CompletionsApiTest extends TestCase
                 'rqmt_element_ids' => [$element->id],
             ])
             ->assertStatus(422);
+    }
+
+    // ------------------------------------------------------------------
+    // F9 — expire_date defaults from the training's repeat frequency
+    // (completion_date + repeat_days) when the client omits it, so a
+    // forgotten field can't silently read as "Current" in the reports.
+    // ------------------------------------------------------------------
+
+    /**
+     * A scaffold whose training actually repeats on a known frequency (the
+     * base scaffold()'s training has repeating=true but no std_freq_id, so
+     * it never computes an expiry — that's the "no frequency" case).
+     *
+     * @return array{org: Organization, admin: User, user: User, training: Training, element: RqmtElement}
+     */
+    private function scaffoldWithFrequency(int $repeatDays): array
+    {
+        $s = $this->scaffold();
+        $freq = StdFrequency::factory()->for($s['org'], 'organization')->create(['repeat_days' => $repeatDays]);
+        $s['training']->update(['repeating' => true, 'std_freq_id' => $freq->id]);
+
+        return $s;
+    }
+
+    public function test_store_defaults_expire_date_from_training_frequency(): void
+    {
+        $s = $this->scaffoldWithFrequency(365);
+
+        $this->actingAs($s['admin'])
+            ->postJson('/api/completions', [
+                'user_id' => $s['user']->id,
+                'module_type' => Training::class,
+                'module_id' => $s['training']->id,
+                'completion_date' => '2026-06-01',
+                'rqmt_element_ids' => [$s['element']->id],
+            ])
+            ->assertCreated();
+
+        $this->assertSame(
+            '2027-06-01',
+            Completion::where('user_id', $s['user']->id)->firstOrFail()->expire_date->toDateString(),
+        );
+    }
+
+    public function test_store_default_expiry_crosses_a_leap_day_correctly(): void
+    {
+        $s = $this->scaffoldWithFrequency(365);
+
+        $this->actingAs($s['admin'])
+            ->postJson('/api/completions', [
+                'user_id' => $s['user']->id,
+                'module_type' => Training::class,
+                'module_id' => $s['training']->id,
+                'completion_date' => '2024-01-01',
+                'rqmt_element_ids' => [$s['element']->id],
+            ])
+            ->assertCreated();
+
+        // 2024 is a leap year (366 days) — +365 days from Jan 1 lands one day
+        // short of the next Jan 1, proving real day arithmetic (not a naive
+        // "same date next year" shortcut) drives the default.
+        $this->assertSame(
+            '2024-12-31',
+            Completion::where('user_id', $s['user']->id)->firstOrFail()->expire_date->toDateString(),
+        );
+    }
+
+    public function test_store_respects_an_explicit_expire_date(): void
+    {
+        $s = $this->scaffoldWithFrequency(365);
+
+        $this->actingAs($s['admin'])
+            ->postJson('/api/completions', [
+                'user_id' => $s['user']->id,
+                'module_type' => Training::class,
+                'module_id' => $s['training']->id,
+                'completion_date' => '2026-06-01',
+                'expire_date' => '2026-12-25',
+                'rqmt_element_ids' => [$s['element']->id],
+            ])
+            ->assertCreated();
+
+        $this->assertSame(
+            '2026-12-25',
+            Completion::where('user_id', $s['user']->id)->firstOrFail()->expire_date->toDateString(),
+        );
+    }
+
+    public function test_store_leaves_expire_date_null_for_a_no_frequency_training(): void
+    {
+        // The base scaffold's training repeats but has no std_freq_id set —
+        // genuinely no frequency data to compute from.
+        ['admin' => $admin, 'user' => $user, 'training' => $training, 'element' => $element] = $this->scaffold();
+
+        $this->actingAs($admin)
+            ->postJson('/api/completions', [
+                'user_id' => $user->id,
+                'module_type' => Training::class,
+                'module_id' => $training->id,
+                'completion_date' => '2026-06-01',
+                'rqmt_element_ids' => [$element->id],
+            ])
+            ->assertCreated();
+
+        $this->assertNull(Completion::where('user_id', $user->id)->firstOrFail()->expire_date);
+    }
+
+    public function test_update_defaults_expire_date_when_cleared(): void
+    {
+        $s = $this->scaffoldWithFrequency(180);
+        $completion = Completion::factory()
+            ->for($s['org'], 'organization')
+            ->for($s['user'], 'user')
+            ->state([
+                'module_type' => Training::class,
+                'module_id' => $s['training']->id,
+                'expire_date' => '2026-01-01',
+            ])
+            ->create();
+        $completion->rqmtElements()->sync([$s['element']->id]);
+
+        $this->actingAs($s['admin'])
+            ->patchJson("/api/completions/{$completion->id}", [
+                'completion_date' => '2026-06-01',
+                // expire_date omitted entirely — should default, not stay null.
+                'rqmt_element_ids' => [$s['element']->id],
+            ])
+            ->assertOk();
+
+        $this->assertSame('2026-11-28', $completion->fresh()->expire_date->toDateString());
+    }
+
+    public function test_update_respects_an_explicit_expire_date(): void
+    {
+        $s = $this->scaffoldWithFrequency(180);
+        $completion = Completion::factory()
+            ->for($s['org'], 'organization')
+            ->for($s['user'], 'user')
+            ->state(['module_type' => Training::class, 'module_id' => $s['training']->id])
+            ->create();
+        $completion->rqmtElements()->sync([$s['element']->id]);
+
+        $this->actingAs($s['admin'])
+            ->patchJson("/api/completions/{$completion->id}", [
+                'completion_date' => '2026-06-01',
+                'expire_date' => '2026-08-15',
+                'rqmt_element_ids' => [$s['element']->id],
+            ])
+            ->assertOk();
+
+        $this->assertSame('2026-08-15', $completion->fresh()->expire_date->toDateString());
     }
 
     // ------------------------------------------------------------------

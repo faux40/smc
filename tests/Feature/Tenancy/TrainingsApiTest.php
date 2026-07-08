@@ -195,6 +195,48 @@ class TrainingsApiTest extends TestCase
             ->assertJsonPath('0.nickname', 'FallPro');
     }
 
+    public function test_index_and_list_include_std_freq_repeat_days(): void
+    {
+        // F9 — the completion form's expiry auto-fill needs the actual day
+        // count, not just the frequency's label.
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $freq = StdFrequency::factory()->for($org, 'organization')->create(['repeat_days' => 90]);
+        Training::factory()->for($org, 'organization')->create([
+            'name' => 'Quarterly Safety',
+            'repeating' => true,
+            'std_freq_id' => $freq->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/trainings')
+            ->assertOk()
+            ->assertJsonPath('0.std_freq_repeat_days', 90);
+
+        $this->actingAs($admin)
+            ->getJson('/api/trainings/list')
+            ->assertOk()
+            ->assertJsonPath('data.0.std_freq_repeat_days', 90);
+    }
+
+    public function test_index_std_freq_repeat_days_is_null_when_not_repeating(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        Training::factory()->for($org, 'organization')->create([
+            'name' => 'New Hire Orientation',
+            'initial_only' => true,
+            'repeating' => false,
+            'std_freq_id' => null,
+            'as_needed' => false,
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/trainings')
+            ->assertOk()
+            ->assertJsonPath('0.std_freq_repeat_days', null);
+    }
+
     public function test_admin_can_set_default_hours(): void
     {
         $org = Organization::factory()->create();

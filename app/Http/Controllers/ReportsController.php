@@ -242,6 +242,17 @@ class ReportsController extends Controller
                             ->where($col, '>=', $today)
                             ->where($col, '<=', $boundary);
                     } else { // current — no expiry on record, or beyond the window
+                        // F9 invariant: a null expire_date only remains possible
+                        // for trainings with no repeat frequency (initial-only /
+                        // as-needed) — CompletionsController::store/update/
+                        // bulkStore and CompleteClass all default expire_date to
+                        // completion_date + repeat_days at write time (via
+                        // ExpiryCalculator) whenever the training repeats, so a
+                        // null here means "genuinely never expires", not "field
+                        // left blank". Do not change this bucketing without
+                        // re-verifying that invariant still holds. (Completions
+                        // recorded before this default existed are an untouched
+                        // exception — see the F9 rollout notes.)
                         $w->whereNull($col)->orWhere($col, '>', $boundary);
                     }
                 });

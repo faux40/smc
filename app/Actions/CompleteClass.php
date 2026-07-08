@@ -6,6 +6,7 @@ use App\Models\ClassTraining;
 use App\Models\Completion;
 use App\Models\Training;
 use App\Models\TrainingClass;
+use App\Support\ExpiryCalculator;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -50,15 +51,15 @@ class CompleteClass
             $totalTopics = $class->classTrainings->count();
 
             // Per-training expiry: instructor override, else computed from the
-            // snapshot freq (class date + repeat_days; none for initial/as-needed).
+            // snapshot freq (class date + repeat_days; none for initial/as-needed)
+            // via the same ExpiryCalculator the manual/bulk completion paths use.
             $expiryFor = [];
+            $completionDateStr = $completionDate->toDateString();
 
             foreach ($class->classTrainings as $ct) {
                 $expire = $expireOverrides->has($ct->id)
                     ? $expireOverrides->get($ct->id)
-                    : ($ct->repeating && $ct->repeat_days
-                        ? $completionDate->addDays($ct->repeat_days)->toDateString()
-                        : null);
+                    : ExpiryCalculator::fromRepeatDays($completionDateStr, $ct->repeating, $ct->repeat_days);
                 $ct->update(['expire_date' => $expire]);
                 $expiryFor[$ct->id] = $expire;
             }

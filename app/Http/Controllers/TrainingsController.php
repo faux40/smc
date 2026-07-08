@@ -86,6 +86,9 @@ class TrainingsController extends Controller
             'repeating' => $t->repeating,
             'std_freq_id' => $t->std_freq_id,
             'std_freq_name' => $t->stdFrequency?->name,
+            // F9 — the trainings picker (completion form auto-fill) needs the
+            // actual day count, not just the frequency's label.
+            'std_freq_repeat_days' => $t->stdFrequency?->repeat_days,
             'as_needed' => $t->as_needed,
             'default_hours' => $t->default_hours,
             ...$this->certOutput($t),

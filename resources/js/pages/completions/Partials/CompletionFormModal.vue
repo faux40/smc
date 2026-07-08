@@ -25,9 +25,21 @@
  * identity and re-picking it would be redundant. The standalone
  * completions/Index "+ New completion" flow passes neither prop, so both
  * pickers stay open exactly as before.
+ *
+ * Expiry auto-fill (F9): a blank expire_date used to silently read as
+ * "Current forever" in the compliance reports. When the selected training
+ * repeats on a std frequency, expire_date auto-computes as
+ * completion_date + repeat_days whenever the training or completion_date
+ * changes. Rule for who wins: the moment the admin hand-types into the
+ * expire field, that value sticks for the rest of this open — training/date
+ * changes no longer touch it (simplest to reason about; a hand-typed value
+ * is never silently clobbered again). Re-opening the modal resets the
+ * tracking. In edit mode, opening never overwrites the stored value —
+ * auto-fill only engages after the admin changes completion_date (module is
+ * locked in edit mode, so it can't change there).
  */
 import axios from 'axios';
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -51,6 +63,7 @@ import {
 } from '@/components/ui/select';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import { realtimeTabId } from '@/echo';
+import { addDaysToDateOnly } from '@/lib/dateOnly';
 import { optionalNumber } from '@/lib/forms';
 import { useCompletionsStore } from '@/stores/completions';
 import type {
@@ -169,6 +182,66 @@ const userName = (id: string) => users.displayName(id) || '—';
 const trainingName = (id: string) =>
     trainings.library.find((t) => t.id === id)?.name ?? '—';
 
+// F9 — expire_date auto-fill from the selected training's repeat frequency.
+// See the header comment for the manual-edit rule.
+const selectedTraining = computed(
+    () => trainings.library.find((t) => t.id === form.module_id) ?? null,
+);
+// Mirrors CompleteClass's own `repeating && repeat_days` check — as-needed /
+// initial-only trainings (repeating=false) never expire.
+const repeatDays = computed<number | null>(() => {
+    const t = selectedTraining.value;
+
+    return t?.repeating ? (t.std_freq_repeat_days ?? null) : null;
+});
+// True once the admin has hand-typed into the expire field this time the
+// modal is open — from then on, training/date changes leave it alone.
+const expireDirty = ref(false);
+// True only while the field's current value was actually produced by
+// autoFillExpiry() below (as opposed to a loaded/stored value on edit-mode
+// open) — drives the helper text so it never mislabels a stored value as
+// "Auto".
+const expireAutoFilled = ref(false);
+// Guards the module_id/completion_date watchers below while the open-prop
+// handler is (re)initializing the form, so re-populating those fields on
+// open never itself counts as a "training/date changed" auto-fill trigger.
+let suppressAutoFill = false;
+
+function autoFillExpiry(): void {
+    if (suppressAutoFill || expireDirty.value) {
+        return;
+    }
+
+    if (repeatDays.value === null || !form.completion_date) {
+        form.expire_date = '';
+        expireAutoFilled.value = false;
+
+        return;
+    }
+
+    form.expire_date = addDaysToDateOnly(form.completion_date, repeatDays.value);
+    expireAutoFilled.value = true;
+}
+
+function onExpireInput(value: string | number): void {
+    form.expire_date = String(value);
+    expireDirty.value = true;
+    expireAutoFilled.value = false;
+}
+
+const expireHelper = computed(() => {
+    if (!expireAutoFilled.value || repeatDays.value === null) {
+        return null;
+    }
+
+    const days = repeatDays.value;
+
+    return `Auto: ${days} day${days === 1 ? '' : 's'} from completion (per training frequency)`;
+});
+
+watch(() => form.module_id, autoFillExpiry);
+watch(() => form.completion_date, autoFillExpiry);
+
 async function loadPickers(): Promise<void> {
     try {
         await Promise.all([users.loadPicker(), trainings.load()]);
@@ -217,6 +290,14 @@ watch(
         errorStore.clear(FORM_CTX);
         loadError.value = null;
 
+        // Reset the auto-fill tracking for this open, and suppress the
+        // module_id/completion_date watchers below while we (re)populate the
+        // form — none of these programmatic sets count as a real "training
+        // or date changed" trigger.
+        expireDirty.value = false;
+        expireAutoFilled.value = false;
+        suppressAutoFill = true;
+
         if (isEdit.value && props.target) {
             form.user_id = props.target.user_id;
             form.module_type = props.target.module_type;
@@ -226,11 +307,13 @@ watch(
                 props.target.completion_date ??
                 new Date().toISOString().slice(0, 10);
             form.certification_date = props.target.certification_date ?? '';
+            // Edit mode: never auto-overwrite the stored expiry on open —
+            // auto-fill only re-engages once the admin changes
+            // completion_date (module is locked, so it can't change here).
             form.expire_date = props.target.expire_date ?? '';
             form.cert_ident = props.target.cert_ident ?? '';
             form.hours = props.target.hours ?? '';
             form.notes = props.target.notes ?? '';
-            await loadCandidates();
         } else {
             form.user_id = props.initialUserId ?? '';
             form.module_type = 'App\\Models\\Training';
@@ -243,10 +326,23 @@ watch(
             form.hours = '';
             form.notes = '';
             candidates.value = [];
+        }
 
+        // Let the watchers triggered by the sets above flush while still
+        // suppressed, then release them for genuine post-open changes.
+        await nextTick();
+        suppressAutoFill = false;
+
+        if (isEdit.value && props.target) {
+            await loadCandidates();
+        } else {
             if (form.module_id) {
                 await loadCandidates();
             }
+            // Create/prefill flow only: compute the initial expiry now that
+            // suppression is lifted (a preselected training already has its
+            // frequency known).
+            autoFillExpiry();
         }
     },
 );
@@ -545,8 +641,16 @@ function defaultHeaders(): Record<string, string> {
                         <Input
                             id="c_expire"
                             type="date"
-                            v-model="form.expire_date"
+                            :model-value="form.expire_date"
+                            @update:model-value="onExpireInput"
                         />
+                        <p
+                            v-if="expireHelper"
+                            data-testid="expire-auto-helper"
+                            class="text-xs text-muted-foreground"
+                        >
+                            {{ expireHelper }}
+                        </p>
                         <InputError
                             :message="fieldErrors.message('expire_date')"
                         />

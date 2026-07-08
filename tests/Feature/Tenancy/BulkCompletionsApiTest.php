@@ -8,6 +8,7 @@ use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\RqmtElement;
+use App\Models\StdFrequency;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Models\User;
@@ -41,6 +42,23 @@ class BulkCompletionsApiTest extends TestCase
             ->for($org, 'organization')
             ->for($requirement, 'requirement')
             ->create(['module_type' => Training::class, 'module_id' => $training->id, 'name' => $training->name]);
+
+        return [$training, $element];
+    }
+
+    /**
+     * Same as trainingWithElement(), but the training actually repeats on a
+     * known frequency — trainingWithElement()'s training has repeating=true
+     * but no std_freq_id, so it never computes an expiry (the "no frequency"
+     * case tested separately below).
+     *
+     * @return array{0: Training, 1: RqmtElement}
+     */
+    private function trainingWithFrequency(Organization $org, int $repeatDays): array
+    {
+        [$training, $element] = $this->trainingWithElement($org);
+        $freq = StdFrequency::factory()->for($org, 'organization')->create(['repeat_days' => $repeatDays]);
+        $training->update(['repeating' => true, 'std_freq_id' => $freq->id]);
 
         return [$training, $element];
     }
@@ -348,6 +366,79 @@ class BulkCompletionsApiTest extends TestCase
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('completion_date');
+    }
+
+    // ------------------------------------------------------------------
+    // F9 — expire_date defaults from the training's repeat frequency when
+    // the client omits it (mirrors the single store/update paths).
+    // ------------------------------------------------------------------
+
+    public function test_bulk_defaults_expire_date_from_training_frequency(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        [$training, $element] = $this->trainingWithFrequency($org, 365);
+        $u1 = User::factory()->for($org, 'organization')->create();
+        $u2 = User::factory()->for($org, 'organization')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/completions/bulk', [
+                'user_ids' => [$u1->id, $u2->id],
+                'training_id' => $training->id,
+                'completion_date' => '2026-06-01',
+                'rqmt_element_ids' => [$element->id],
+            ])
+            ->assertCreated();
+
+        foreach ([$u1, $u2] as $u) {
+            $this->assertSame(
+                '2027-06-01',
+                Completion::where('user_id', $u->id)->firstOrFail()->expire_date->toDateString(),
+            );
+        }
+    }
+
+    public function test_bulk_respects_an_explicit_expire_date(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        [$training, $element] = $this->trainingWithFrequency($org, 365);
+        $u = User::factory()->for($org, 'organization')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/completions/bulk', [
+                'user_ids' => [$u->id],
+                'training_id' => $training->id,
+                'completion_date' => '2026-06-01',
+                'expire_date' => '2026-12-25',
+                'rqmt_element_ids' => [$element->id],
+            ])
+            ->assertCreated();
+
+        $this->assertSame(
+            '2026-12-25',
+            Completion::where('user_id', $u->id)->firstOrFail()->expire_date->toDateString(),
+        );
+    }
+
+    public function test_bulk_leaves_expire_date_null_for_a_no_frequency_training(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        // trainingWithElement()'s training repeats but has no std_freq_id.
+        [$training, $element] = $this->trainingWithElement($org);
+        $u = User::factory()->for($org, 'organization')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/completions/bulk', [
+                'user_ids' => [$u->id],
+                'training_id' => $training->id,
+                'completion_date' => '2026-06-01',
+                'rqmt_element_ids' => [$element->id],
+            ])
+            ->assertCreated();
+
+        $this->assertNull(Completion::where('user_id', $u->id)->firstOrFail()->expire_date);
     }
 
     // ------------------------------------------------------------------

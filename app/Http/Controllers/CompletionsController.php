@@ -14,6 +14,7 @@ use App\Models\RqmtElement;
 use App\Models\Training;
 use App\Models\User;
 use App\Support\CompletionSerializer;
+use App\Support\ExpiryCalculator;
 use App\Support\RecalcContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -110,8 +111,14 @@ class CompletionsController extends Controller
     {
         // Authz already ran in CompletionRequest::authorize().
         $data = $request->validated();
+        $expireDate = $this->defaultExpireDate(
+            $data['module_type'],
+            $data['module_id'],
+            $data['completion_date'],
+            $data['expire_date'] ?? null,
+        );
 
-        $completion = DB::transaction(function () use ($data) {
+        $completion = DB::transaction(function () use ($data, $expireDate) {
             $c = Completion::create([
                 'org_id' => Auth::user()->org_id,
                 'user_id' => $data['user_id'],
@@ -119,7 +126,7 @@ class CompletionsController extends Controller
                 'module_id' => $data['module_id'],
                 'completion_date' => $data['completion_date'],
                 'certification_date' => $data['certification_date'] ?? null,
-                'expire_date' => $data['expire_date'] ?? null,
+                'expire_date' => $expireDate,
                 'cert_ident' => $data['cert_ident'] ?? null,
                 'hours' => $data['hours'] ?? null,
                 'notes' => $data['notes'] ?? null,
@@ -173,11 +180,19 @@ class CompletionsController extends Controller
             return response()->json(['created_count' => 0, 'skipped_count' => $skipped], 201);
         }
 
-        DB::transaction(function () use ($validUserIds, $data, $orgId, $trainingId) {
+        // One batched status recalc over every (user, training) pair, with the
+        // training, amber window, and this training's requirement elements
+        // preloaded so requirement-sourced assignments recompute correctly.
+        // Loaded up-front (not after the writes) so the same Training row also
+        // backs the F9 expire_date default below — one query, not N.
+        $training = Training::where('org_id', $orgId)->with('stdFrequency:id,repeat_days')->findOrFail($trainingId);
+        $expireDate = $this->defaultExpireDate(Training::class, $trainingId, $data['completion_date'], $data['expire_date'] ?? null, $training);
+
+        DB::transaction(function () use ($validUserIds, $data, $orgId, $trainingId, $expireDate) {
             // withoutEvents mutes the per-completion CompletionObserver recalc
             // (and the CompletionCreated event) — the batched recalc below runs
             // once for the whole set instead.
-            Completion::withoutEvents(function () use ($validUserIds, $data, $orgId, $trainingId) {
+            Completion::withoutEvents(function () use ($validUserIds, $data, $orgId, $trainingId, $expireDate) {
                 foreach ($validUserIds as $userId) {
                     $c = Completion::create([
                         'org_id' => $orgId,
@@ -186,7 +201,7 @@ class CompletionsController extends Controller
                         'module_id' => $trainingId,
                         'completion_date' => $data['completion_date'],
                         'certification_date' => $data['certification_date'] ?? null,
-                        'expire_date' => $data['expire_date'] ?? null,
+                        'expire_date' => $expireDate,
                         'cert_ident' => $data['cert_ident'] ?? null,
                         'hours' => $data['hours'] ?? null,
                         'notes' => $data['notes'] ?? null,
@@ -196,10 +211,6 @@ class CompletionsController extends Controller
             });
         });
 
-        // One batched status recalc over every (user, training) pair, with the
-        // training, amber window, and this training's requirement elements
-        // preloaded so requirement-sourced assignments recompute correctly.
-        $training = Training::where('org_id', $orgId)->findOrFail($trainingId);
         $elements = RqmtElement::where('org_id', $orgId)
             ->where('module_type', Training::class)
             ->where('module_id', $trainingId)
@@ -222,12 +233,18 @@ class CompletionsController extends Controller
     {
         // Authz already ran in CompletionRequest::authorize().
         $data = $request->validated();
+        $expireDate = $this->defaultExpireDate(
+            $completion->module_type,
+            $completion->module_id,
+            $data['completion_date'],
+            $data['expire_date'] ?? null,
+        );
 
-        DB::transaction(function () use ($completion, $data) {
+        DB::transaction(function () use ($completion, $data, $expireDate) {
             $completion->update([
                 'completion_date' => $data['completion_date'],
                 'certification_date' => $data['certification_date'] ?? null,
-                'expire_date' => $data['expire_date'] ?? null,
+                'expire_date' => $expireDate,
                 'cert_ident' => $data['cert_ident'] ?? null,
                 'hours' => $data['hours'] ?? null,
                 'notes' => $data['notes'] ?? null,
@@ -254,5 +271,41 @@ class CompletionsController extends Controller
         event(new CompletionDeleted($id, $userId, $orgId));
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * F9 — defense-in-depth default for `expire_date`: when the client left
+     * it absent/null, and the module is a Training with a repeat frequency,
+     * default it to completion_date + repeat_days via the shared
+     * ExpiryCalculator (same math CompleteClass uses at class close-out) —
+     * so a forgotten field can no longer silently read as "Current forever"
+     * in the reports (see ReportsController::applyStatusFilter). An explicit
+     * expire_date from the client always wins; a training with no repeat
+     * frequency (initial-only / as-needed) correctly stays null.
+     *
+     * @param  Training|null  $training  pass the already-loaded row when the
+     *                                   caller has one (bulkStore) to avoid
+     *                                   a redundant query.
+     */
+    private function defaultExpireDate(
+        string $moduleType,
+        string $moduleId,
+        string $completionDate,
+        ?string $expireDate,
+        ?Training $training = null,
+    ): ?string {
+        if ($expireDate !== null) {
+            return $expireDate;
+        }
+
+        if ($moduleType !== Training::class) {
+            return null;
+        }
+
+        $training ??= Training::where('org_id', Auth::user()->org_id)
+            ->with('stdFrequency:id,repeat_days')
+            ->find($moduleId);
+
+        return $training ? ExpiryCalculator::forTraining($training, $completionDate) : null;
     }
 }
