@@ -33,6 +33,10 @@ export interface ComplianceRow {
 /** Drill-down row: one user under a training/requirement, with their status. */
 export interface ComplianceUserRow {
     user_id: string;
+    // The training-assignment id (present on training/requirement drill-downs);
+    // backs the F10 "Remind" per-row + bulk actions. Absent on the not-required
+    // tab, whose rows aren't 1:1 with an assignment.
+    training_assignment_id?: string;
     name: string | null;
     status: string;
     // Present on requirement rows (one per training a user owes); the detail

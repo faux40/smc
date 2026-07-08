@@ -501,6 +501,8 @@ class ComplianceQuery
         return [
             'data' => collect($paginator->items())->map(fn (TrainingAssignment $ta) => [
                 'user_id' => $ta->user_id,
+                // The assignment id backs the per-row / bulk "Remind" actions (F10).
+                'training_assignment_id' => $ta->id,
                 'name' => $ta->user?->sort_name,
                 'status' => $ta->status,
                 // The assignment's training (snapshot name) — lets the requirement

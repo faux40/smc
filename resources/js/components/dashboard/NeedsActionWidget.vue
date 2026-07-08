@@ -21,6 +21,7 @@ import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.
 import { show as userShow } from '@/routes/users';
 import { useDashboardStore } from '@/stores/dashboard';
 import type { NeedsActionRow } from '@/stores/dashboard';
+import { useRemind } from '@/composables/useRemind';
 
 type GroupBy = 'user' | 'training';
 type StatusFilter = 'all' | 'overdue' | 'due_soon' | 'not_started';
@@ -117,6 +118,11 @@ async function onCompletionSaved(): Promise<void> {
     // dashboard page nudge it too if it wants to.
     emit('completion-recorded');
 }
+
+// ── Remind (F10) — one-click nudge next to "Record completion". row.id is the
+// assignment id the remind endpoint keys on; overdue reminders CC the
+// supervisor server-side.
+const { remindOne } = useRemind();
 </script>
 
 <template>
@@ -263,14 +269,24 @@ async function onCompletionSaved(): Promise<void> {
                                 <span v-else>never completed</span>
                             </span>
 
-                            <button
-                                type="button"
-                                data-test="row-record-completion"
-                                class="text-xs font-medium text-primary hover:underline"
-                                @click="openCompletion(row)"
-                            >
-                                Record completion
-                            </button>
+                            <span class="flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    data-test="row-remind"
+                                    class="text-xs font-medium text-primary hover:underline"
+                                    @click="remindOne(row.id)"
+                                >
+                                    Remind
+                                </button>
+                                <button
+                                    type="button"
+                                    data-test="row-record-completion"
+                                    class="text-xs font-medium text-primary hover:underline"
+                                    @click="openCompletion(row)"
+                                >
+                                    Record completion
+                                </button>
+                            </span>
                         </li>
                     </ul>
                 </section>

@@ -11,6 +11,10 @@ vi.mock('@inertiajs/vue3', () => ({
 vi.mock('@/routes/users', () => ({
     show: (id: string) => ({ url: `/users/${id}` }),
 }));
+vi.mock('vue-sonner', () => ({
+    toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
+vi.mock('@/echo', () => ({ realtimeTabId: () => 'test-tab' }));
 
 // Server order: overdue (worst first) → not_started → due_soon.
 const allRows = [
@@ -220,5 +224,31 @@ describe('NeedsActionWidget — Record completion row action (F7)', () => {
 
         expect(calls().length).toBeGreaterThan(before);
         expect(wrapper.emitted('completion-recorded')).toBeTruthy();
+    });
+});
+
+describe('NeedsActionWidget — Remind row action (F10)', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+    });
+
+    it('reminds the row via the assignment remind endpoint (row.id is the TA id)', async () => {
+        const { toast } = await import('vue-sonner');
+        (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { sent: true, status: 'overdue', supervisor_notified: false },
+        });
+
+        const wrapper = await mountWidget();
+
+        await wrapper.findAll('[data-test="row-remind"]')[0].trigger('click');
+        await flushPromises();
+
+        expect(axios.post).toHaveBeenCalledWith(
+            '/api/assignments/ta1/remind',
+            {},
+            expect.anything(),
+        );
+        expect(toast.success).toHaveBeenCalledWith('Reminder sent.');
     });
 });

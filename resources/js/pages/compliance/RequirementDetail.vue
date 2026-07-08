@@ -13,6 +13,7 @@ import ClassActionsBar from '@/pages/classes/Partials/ClassActionsBar.vue';
 import type { ServerTableQuery } from '@/composables/useServerTable';
 import { useComplianceStore } from '@/stores/compliance';
 import type { ComplianceUserRow } from '@/stores/compliance';
+import { useRemind } from '@/composables/useRemind';
 
 const props = defineProps<{
     requirement: { id: string; name: string };
@@ -58,6 +59,27 @@ function onAdded(): void {
     toast.success(`Added ${rowToAdd.value?.name ?? 'user'} to the class.`);
     rowToAdd.value = null;
 }
+
+// F10 — per-row / bulk "Remind" nudges.
+const { remindOne, remindMany } = useRemind();
+
+function taIdsOf(rows: ComplianceUserRow[]): string[] {
+    return rows
+        .map((r) => r.training_assignment_id)
+        .filter((id): id is string => Boolean(id));
+}
+
+async function remindSelected(
+    rows: ComplianceUserRow[],
+    clear: () => void,
+    reload: () => void,
+): Promise<void> {
+    const ok = await remindMany(taIdsOf(rows));
+    if (ok) {
+        clear();
+        reload();
+    }
+}
 </script>
 
 <template>
@@ -71,27 +93,49 @@ function onAdded(): void {
         show-training
         :selectable="canManage"
     >
-        <template #toolbar="{ selectedUserIds, selectedTrainingIds, clear }">
-            <ClassActionsBar
-                v-if="canManage"
-                :selected-user-ids="selectedUserIds"
-                :create-training-ids="selectedTrainingIds"
-                :preset-name="requirement.name"
-                @done="clear"
-            />
+        <template
+            #toolbar="{ selectedRows, selectedUserIds, selectedTrainingIds, clear, reload }"
+        >
+            <template v-if="canManage">
+                <ClassActionsBar
+                    :selected-user-ids="selectedUserIds"
+                    :create-training-ids="selectedTrainingIds"
+                    :preset-name="requirement.name"
+                    @done="clear"
+                />
+                <Button
+                    type="button"
+                    variant="outline"
+                    :disabled="selectedRows.length === 0"
+                    data-testid="remind-selected"
+                    @click="remindSelected(selectedRows, clear, reload)"
+                >
+                    Remind selected ({{ selectedRows.length }})
+                </Button>
+            </template>
         </template>
 
         <template #row-actions="{ row }">
-            <Button
-                v-if="canManage"
-                type="button"
-                size="sm"
-                variant="outline"
-                :data-testid="`row-add-to-class-${row.user_id}-${row.training_id}`"
-                @click="openAdd(row)"
-            >
-                Add to class
-            </Button>
+            <div v-if="canManage" class="flex items-center justify-end gap-2">
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    :data-testid="`row-add-to-class-${row.user_id}-${row.training_id}`"
+                    @click="openAdd(row)"
+                >
+                    Add to class
+                </Button>
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    :data-testid="`row-remind-${row.user_id}-${row.training_id}`"
+                    @click="remindOne(row.training_assignment_id ?? '')"
+                >
+                    Remind
+                </Button>
+            </div>
         </template>
     </ComplianceDetail>
 

@@ -35,8 +35,8 @@ function usersResponse() {
     return {
         data: {
             data: [
-                { user_id: 'u1', name: 'Adams, Amy', status: 'overdue', expires_at: '2026-01-01', last_completed_at: '2025-01-01', employee_number: 'EMP-1', department: 'Ops', location: 'Yard 3', tag_ids: [] },
-                { user_id: 'u2', name: 'Baker, Bob', status: 'current', expires_at: null, last_completed_at: '2026-02-01', employee_number: 'EMP-2', department: 'Admin', location: 'HQ', tag_ids: [] },
+                { user_id: 'u1', training_assignment_id: 'ta-u1', name: 'Adams, Amy', status: 'overdue', expires_at: '2026-01-01', last_completed_at: '2025-01-01', employee_number: 'EMP-1', department: 'Ops', location: 'Yard 3', tag_ids: [] },
+                { user_id: 'u2', training_assignment_id: 'ta-u2', name: 'Baker, Bob', status: 'current', expires_at: null, last_completed_at: '2026-02-01', employee_number: 'EMP-2', department: 'Admin', location: 'HQ', tag_ids: [] },
             ],
             meta: META,
         },
@@ -53,7 +53,19 @@ function stubAxios() {
         }
         return Promise.resolve({ data: [] });
     });
-    (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { id: 'c1' } });
+    (axios.post as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+        if (url === '/api/assignments/remind-bulk') {
+            return Promise.resolve({
+                data: { reminded_count: 1, skipped_count: 1, supervisors_notified_count: 1 },
+            });
+        }
+        if (/^\/api\/assignments\/.+\/remind$/.test(url)) {
+            return Promise.resolve({
+                data: { sent: true, status: 'overdue', supervisor_notified: true },
+            });
+        }
+        return Promise.resolve({ data: { id: 'c1' } });
+    });
 }
 
 const USERS_URL = '/api/compliance/by-training/t1/users';
@@ -238,6 +250,49 @@ describe('compliance/TrainingDetail', () => {
             'Recorded 2 completions · 1 skipped.',
         );
         // Selection cleared and the table refetched so statuses re-render.
+        expect(wrapper.find('[data-testid="selection-bar"]').exists()).toBe(false);
+        expect(getParams().length).toBeGreaterThan(before);
+    });
+
+    // ── F10 Remind ────────────────────────────────────────────────────
+
+    it('reminds a single row via the assignment remind endpoint', async () => {
+        const wrapper = await mountDetail();
+
+        await wrapper.find('[data-testid="row-remind-u1"]').trigger('click');
+        await flushPromises();
+
+        expect(axios.post).toHaveBeenCalledWith(
+            '/api/assignments/ta-u1/remind',
+            {},
+            expect.anything(),
+        );
+        expect(toast.success).toHaveBeenCalledWith('Reminder sent (supervisor CC’d).');
+    });
+
+    it('reminds the selection in bulk, then clears it and refetches', async () => {
+        const wrapper = await mountDetail();
+
+        // Disabled until a row is picked.
+        const btn = wrapper.find('[data-testid="remind-selected"]');
+        expect(btn.attributes('disabled')).toBeDefined();
+
+        wrapper.findAllComponents(Checkbox)[0].vm.$emit('update:modelValue', true);
+        await flushPromises();
+
+        const before = getParams().length;
+        await wrapper.find('[data-testid="remind-selected"]').trigger('click');
+        await flushPromises();
+
+        expect(axios.post).toHaveBeenCalledWith(
+            '/api/assignments/remind-bulk',
+            { training_assignment_ids: ['ta-u1', 'ta-u2'] },
+            expect.anything(),
+        );
+        expect(toast.success).toHaveBeenCalledWith(
+            'Reminder sent to 1 person (1 supervisor CC’d) · 1 skipped.',
+        );
+        // Selection cleared + table refetched.
         expect(wrapper.find('[data-testid="selection-bar"]').exists()).toBe(false);
         expect(getParams().length).toBeGreaterThan(before);
     });

@@ -195,6 +195,53 @@ describe('useTrainingAssignmentsStore', () => {
     });
 
     // ----------------------------------------------------------------
+    // remind / remindBulk (F10)
+    // ----------------------------------------------------------------
+
+    it('remind POSTs to the assignment remind endpoint and returns the result', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({
+            data: { sent: true, status: 'overdue', supervisor_notified: true },
+        });
+
+        const store = useTrainingAssignmentsStore();
+        const result = await store.remind('ta-9');
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/assignments/ta-9/remind',
+            {},
+            expect.any(Object),
+        );
+        expect(result).toEqual({
+            sent: true,
+            status: 'overdue',
+            supervisor_notified: true,
+        });
+    });
+
+    it('remindBulk POSTs the ids array and returns the tallies', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({
+            data: {
+                reminded_count: 3,
+                skipped_count: 1,
+                supervisors_notified_count: 2,
+            },
+        });
+
+        const store = useTrainingAssignmentsStore();
+        const result = await store.remindBulk(['ta-1', 'ta-2', 'ta-3', 'ta-4']);
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/assignments/remind-bulk',
+            { training_assignment_ids: ['ta-1', 'ta-2', 'ta-3', 'ta-4'] },
+            expect.any(Object),
+        );
+        expect(result.reminded_count).toBe(3);
+        expect(result.supervisors_notified_count).toBe(2);
+    });
+
+    // ----------------------------------------------------------------
     // Reverb — subscribe + handlers
     // ----------------------------------------------------------------
 

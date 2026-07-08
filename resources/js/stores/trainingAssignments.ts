@@ -69,6 +69,20 @@ export type AssignmentsByUserQuery = ServerTableQuery & {
     tags_mode?: string;
 };
 
+/** Result of a single manual "Remind" (F10). */
+export interface RemindResult {
+    sent: boolean;
+    status: string;
+    supervisor_notified: boolean;
+}
+
+/** Result of a "Remind selected" bulk nudge (F10). */
+export interface RemindBulkResult {
+    reminded_count: number;
+    skipped_count: number;
+    supervisors_notified_count: number;
+}
+
 interface BroadcastPayload {
     id: string;
     user_id?: string;
@@ -279,6 +293,30 @@ export const useTrainingAssignmentsStore = defineStore(
             return data;
         }
 
+        // F10 — nudge the person about one assignment now. Re-sends the
+        // notification matching its current status; overdue reminders CC the
+        // supervisor server-side. Rejects (422) when there's nothing to remind.
+        async function remind(taId: string): Promise<RemindResult> {
+            const { data } = await axios.post<RemindResult>(
+                `/api/assignments/${taId}/remind`,
+                {},
+                { headers: defaultHeaders() },
+            );
+
+            return data;
+        }
+
+        // F10 — "Remind selected": one org-scoped call over many assignments.
+        async function remindBulk(taIds: string[]): Promise<RemindBulkResult> {
+            const { data } = await axios.post<RemindBulkResult>(
+                '/api/assignments/remind-bulk',
+                { training_assignment_ids: taIds },
+                { headers: defaultHeaders() },
+            );
+
+            return data;
+        }
+
         function subscribe(orgId: string): void {
             if (subscribedOrgId.value === orgId) {
                 return;
@@ -330,6 +368,8 @@ export const useTrainingAssignmentsStore = defineStore(
             assignFromRequirement,
             destroy,
             breakFromRequirement,
+            remind,
+            remindBulk,
             subscribe,
         };
     },

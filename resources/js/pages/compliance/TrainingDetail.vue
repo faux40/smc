@@ -16,6 +16,8 @@ import CompletionFormModal from '@/pages/completions/Partials/CompletionFormModa
 import type { ServerTableQuery } from '@/composables/useServerTable';
 import type { CompletionBulkResult } from '@/stores/completions';
 import { useComplianceStore } from '@/stores/compliance';
+import type { ComplianceUserRow } from '@/stores/compliance';
+import { useRemind } from '@/composables/useRemind';
 
 const props = defineProps<{
     training: { id: string; name: string };
@@ -79,6 +81,28 @@ function onRecordSaved(result?: CompletionBulkResult): void {
     onRecorded?.();
     onRecorded = null;
 }
+
+// F10 — "Remind": nudge one person, or everyone in the selection. Overdue
+// reminders CC the supervisor server-side; the toast reports the tally.
+const { remindOne, remindMany } = useRemind();
+
+function taIdsOf(rows: ComplianceUserRow[]): string[] {
+    return rows
+        .map((r) => r.training_assignment_id)
+        .filter((id): id is string => Boolean(id));
+}
+
+async function remindSelected(
+    rows: ComplianceUserRow[],
+    clear: () => void,
+    reload: () => void,
+): Promise<void> {
+    const ok = await remindMany(taIdsOf(rows));
+    if (ok) {
+        clear();
+        reload();
+    }
+}
 </script>
 
 <template>
@@ -104,7 +128,7 @@ function onRecordSaved(result?: CompletionBulkResult): void {
             </Button>
         </template>
 
-        <template #toolbar="{ selectedUserIds, clear, reload }">
+        <template #toolbar="{ selectedRows, selectedUserIds, clear, reload }">
             <template v-if="canManage">
                 <ClassActionsBar
                     :selected-user-ids="selectedUserIds"
@@ -123,7 +147,29 @@ function onRecordSaved(result?: CompletionBulkResult): void {
                 >
                     Record completion for selected ({{ selectedUserIds.length }})
                 </Button>
+                <Button
+                    type="button"
+                    variant="outline"
+                    :disabled="selectedRows.length === 0"
+                    data-testid="remind-selected"
+                    @click="remindSelected(selectedRows, clear, reload)"
+                >
+                    Remind selected ({{ selectedRows.length }})
+                </Button>
             </template>
+        </template>
+
+        <template #row-actions="{ row }">
+            <Button
+                v-if="canManage"
+                type="button"
+                size="sm"
+                variant="ghost"
+                :data-testid="`row-remind-${row.user_id}`"
+                @click="remindOne(row.training_assignment_id ?? '')"
+            >
+                Remind
+            </Button>
         </template>
     </ComplianceDetail>
 
