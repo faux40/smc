@@ -7,6 +7,7 @@
  *
  * Uploads route through the attachments store (one request per file).
  */
+import axios from 'axios';
 import { computed, ref, watch } from 'vue';
 import AttachmentInfoFields from '@/components/AttachmentInfoFields.vue';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,13 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { useAttachmentsStore } from '@/stores/attachments';
+
+// Kept in sync with the server allowlist in
+// AttachmentsController::ALLOWED_UPLOAD_EXTENSIONS — this is early feedback
+// only (the file picker filter); the server is the source of truth and
+// re-validates by sniffed content, not extension.
+const ACCEPT_EXTENSIONS =
+    '.pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.txt';
 
 const props = defineProps<{
     open: boolean;
@@ -112,6 +120,23 @@ function copyFirstToAll(): void {
     }
 }
 
+/**
+ * Prefer the server's 422 validation message (e.g. "The file field must be a
+ * file of type: pdf, png, ...") over axios's generic "Request failed with
+ * status code 422" so a rejected upload tells the user why.
+ */
+function uploadErrorMessage(e: unknown): string {
+    if (axios.isAxiosError(e)) {
+        const message = e.response?.data?.message;
+
+        if (typeof message === 'string' && message) {
+            return message;
+        }
+    }
+
+    return e instanceof Error ? e.message : 'Upload failed.';
+}
+
 async function submit(): Promise<void> {
     if (rows.value.length === 0) {
         return;
@@ -130,7 +155,7 @@ async function submit(): Promise<void> {
 
         emit('update:open', false);
     } catch (e) {
-        error.value = (e as Error).message;
+        error.value = uploadErrorMessage(e);
     } finally {
         submitting.value = false;
     }
@@ -182,6 +207,7 @@ async function submit(): Promise<void> {
                     ref="fileInput"
                     type="file"
                     multiple
+                    :accept="ACCEPT_EXTENSIONS"
                     class="hidden"
                     @change="onPicked"
                 />

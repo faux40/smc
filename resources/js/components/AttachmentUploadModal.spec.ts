@@ -101,4 +101,30 @@ describe('AttachmentUploadModal', () => {
         await drop([new File(['a'], 'a.pdf', { type: 'application/pdf' })]);
         expect(saveBtn().disabled).toBe(false);
     });
+
+    it('surfaces the server 422 validation message on a rejected upload', async () => {
+        await openModal();
+        const store = useAttachmentsStore();
+        vi.spyOn(store, 'upload').mockRejectedValue({
+            isAxiosError: true,
+            response: {
+                status: 422,
+                data: {
+                    message: 'The file field must be a file of type: pdf, png, jpg, jpeg, gif, webp, doc, docx, xls, xlsx, txt.',
+                    errors: { file: ['The file field must be a file of type: ...'] },
+                },
+            },
+        });
+        (axios.isAxiosError as unknown as ReturnType<typeof vi.fn>) = vi
+            .fn()
+            .mockReturnValue(true);
+
+        await drop([new File(['a'], 'a.html', { type: 'text/html' })]);
+        saveBtn().click();
+        await flushPromises();
+
+        expect(document.body.textContent).toContain(
+            'The file field must be a file of type: pdf, png, jpg, jpeg, gif, webp, doc, docx, xls, xlsx, txt.',
+        );
+    });
 });

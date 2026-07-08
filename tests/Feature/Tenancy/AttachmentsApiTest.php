@@ -13,6 +13,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AttachmentsApiTest extends TestCase
@@ -506,5 +508,235 @@ class AttachmentsApiTest extends TestCase
 
         Event::assertDispatched(AttachmentCreated::class);
         Event::assertDispatched(AttachmentDeleted::class);
+    }
+
+    /**
+     * Storage::fake()'s built-in temporaryUrl callback only declares
+     * ($path, $expiration) and silently drops the $options array, so the
+     * disposition/content-type we pass never reaches the resulting URL.
+     * Install our own callback (declaring all 3 params) to capture what the
+     * controller actually asked for.
+     */
+    private function installDispositionCapture(array &$captured): void
+    {
+        Storage::disk('linode')->buildTemporaryUrlsUsing(
+            function ($path, $expiration, array $options = []) use (&$captured) {
+                $captured = $options;
+
+                return URL::to($path);
+            }
+        );
+    }
+
+    public static function disallowedFileProvider(): array
+    {
+        return [
+            'html' => ['evil.html'],
+            'svg' => ['evil.svg'],
+            'exe' => ['evil.exe'],
+        ];
+    }
+
+    #[DataProvider('disallowedFileProvider')]
+    public function test_upload_rejects_disallowed_file_type(string $filename): void
+    {
+        $org = Organization::factory()->create();
+        $uploader = User::factory()->for($org, 'organization')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+        $file = UploadedFile::fake()->create($filename, 10);
+
+        $this->actingAs($uploader)
+            ->post('/api/attachments', [
+                'attachable_type' => User::class,
+                'attachable_id' => $target->id,
+                'file' => $file,
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('file');
+
+        $this->assertSame(0, Attachment::count());
+    }
+
+    public function test_upload_allows_each_allowlisted_extension(): void
+    {
+        $org = Organization::factory()->create();
+        $uploader = User::factory()->for($org, 'organization')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+
+        foreach (['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'doc', 'docx', 'xls', 'xlsx', 'txt'] as $ext) {
+            $file = UploadedFile::fake()->create("doc.{$ext}", 10);
+
+            $this->actingAs($uploader)
+                ->post('/api/attachments', [
+                    'attachable_type' => User::class,
+                    'attachable_id' => $target->id,
+                    'file' => $file,
+                ], ['Accept' => 'application/json'])
+                ->assertCreated();
+        }
+
+        $this->assertSame(11, Attachment::count());
+    }
+
+    public function test_upload_stores_server_derived_mime_not_client_mime(): void
+    {
+        $org = Organization::factory()->create();
+        $uploader = User::factory()->for($org, 'organization')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+
+        // Filename extension (.pdf) drives the fake's simulated *client*
+        // mime; the explicit third argument simulates the real, sniffed
+        // (magic-byte) mime — here deliberately different, so a stored
+        // value equal to it (rather than the client one) proves the
+        // controller reads getMimeType() and not getClientMimeType().
+        $file = UploadedFile::fake()->create('resume.pdf', 10, 'image/png');
+        $this->assertSame('application/pdf', $file->getClientMimeType());
+        $this->assertSame('image/png', $file->getMimeType());
+
+        $this->actingAs($uploader)
+            ->post('/api/attachments', [
+                'attachable_type' => User::class,
+                'attachable_id' => $target->id,
+                'file' => $file,
+            ], ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $row = Attachment::firstOrFail();
+        $this->assertSame('image/png', $row->mime);
+    }
+
+    public function test_view_serves_inline_disposition_for_inline_safe_mime(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('None')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+        Storage::disk('linode')->put('attachments/inline.pdf', 'data');
+        $att = $target->attachments()->create([
+            'org_id' => $org->id,
+            'uploaded_by_user_id' => $member->id,
+            'filename' => 'inline.pdf',
+            'mime' => 'application/pdf',
+            'size' => 4,
+            'disk' => 'linode',
+            'path' => 'attachments/inline.pdf',
+        ]);
+
+        $captured = [];
+        $this->installDispositionCapture($captured);
+
+        $this->actingAs($member)
+            ->get("/api/attachments/{$att->id}/view")
+            ->assertRedirect();
+
+        $this->assertStringStartsWith('inline;', $captured['ResponseContentDisposition']);
+    }
+
+    public function test_view_serves_attachment_disposition_for_non_inline_safe_mime(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('None')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+        Storage::disk('linode')->put('attachments/doc.docx', 'data');
+        $att = $target->attachments()->create([
+            'org_id' => $org->id,
+            'uploaded_by_user_id' => $member->id,
+            'filename' => 'doc.docx',
+            'mime' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'size' => 4,
+            'disk' => 'linode',
+            'path' => 'attachments/doc.docx',
+        ]);
+
+        $captured = [];
+        $this->installDispositionCapture($captured);
+
+        $this->actingAs($member)
+            ->get("/api/attachments/{$att->id}/view")
+            ->assertRedirect();
+
+        $this->assertStringStartsWith('attachment;', $captured['ResponseContentDisposition']);
+    }
+
+    public function test_view_treats_unknown_mime_as_attachment_disposition(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('None')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+        Storage::disk('linode')->put('attachments/legacy.bin', 'data');
+        $att = $target->attachments()->create([
+            'org_id' => $org->id,
+            'uploaded_by_user_id' => $member->id,
+            'filename' => 'legacy.bin',
+            'mime' => null,
+            'size' => 4,
+            'disk' => 'linode',
+            'path' => 'attachments/legacy.bin',
+        ]);
+
+        $captured = [];
+        $this->installDispositionCapture($captured);
+
+        $this->actingAs($member)
+            ->get("/api/attachments/{$att->id}/view")
+            ->assertRedirect();
+
+        $this->assertStringStartsWith('attachment;', $captured['ResponseContentDisposition']);
+    }
+
+    public function test_download_always_forces_attachment_disposition_even_for_inline_safe_mime(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('None')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+        Storage::disk('linode')->put('attachments/dl.png', 'data');
+        $att = $target->attachments()->create([
+            'org_id' => $org->id,
+            'uploaded_by_user_id' => $member->id,
+            'filename' => 'dl.png',
+            'mime' => 'image/png',
+            'size' => 4,
+            'disk' => 'linode',
+            'path' => 'attachments/dl.png',
+        ]);
+
+        $captured = [];
+        $this->installDispositionCapture($captured);
+
+        $this->actingAs($member)
+            ->get("/api/attachments/{$att->id}/download")
+            ->assertRedirect();
+
+        $this->assertStringStartsWith('attachment;', $captured['ResponseContentDisposition']);
+    }
+
+    public function test_view_sanitizes_filename_with_quotes_and_crlf_in_disposition(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('None')->create();
+        $target = User::factory()->for($org, 'organization')->create();
+        Storage::disk('linode')->put('attachments/x.pdf', 'data');
+        $att = $target->attachments()->create([
+            'org_id' => $org->id,
+            'uploaded_by_user_id' => $member->id,
+            'filename' => "evil\"\r\nX-Injected: 1\r\n.pdf",
+            'mime' => 'application/pdf',
+            'size' => 4,
+            'disk' => 'linode',
+            'path' => 'attachments/x.pdf',
+        ]);
+
+        $captured = [];
+        $this->installDispositionCapture($captured);
+
+        $this->actingAs($member)
+            ->get("/api/attachments/{$att->id}/view")
+            ->assertRedirect();
+
+        $disposition = $captured['ResponseContentDisposition'];
+        // Exactly the pair of quotes delimiting filename="..." — no
+        // attacker-supplied quote survived to break out of it.
+        $this->assertSame(2, substr_count($disposition, '"'));
+        $this->assertStringNotContainsString("\r", $disposition);
+        $this->assertStringNotContainsString("\n", $disposition);
     }
 }

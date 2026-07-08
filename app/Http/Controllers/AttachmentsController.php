@@ -36,6 +36,28 @@ class AttachmentsController extends Controller
 
     private const MAX_UPLOAD_KB = 25 * 1024; // 25 MB
 
+    /**
+     * Allowlisted upload extensions for Laravel's `mimes` rule, which checks
+     * the *guessed* extension from the file's sniffed (magic-byte) MIME type
+     * — not the client-declared one. Deliberately excludes anything
+     * script-capable (notably SVG, which can carry inline <script>).
+     */
+    private const ALLOWED_UPLOAD_EXTENSIONS = 'pdf,png,jpg,jpeg,gif,webp,doc,docx,xls,xlsx,txt';
+
+    /**
+     * MIME types safe to render inline in the browser (raster images + PDF).
+     * Everything else — including any legacy/unknown/absent mime — is served
+     * with Content-Disposition: attachment so it can never execute as active
+     * content from the storage origin.
+     */
+    private const INLINE_SAFE_MIMES = [
+        'application/pdf',
+        'image/png',
+        'image/jpeg',
+        'image/gif',
+        'image/webp',
+    ];
+
     public function index(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -92,7 +114,7 @@ class AttachmentsController extends Controller
         $data = $request->validate([
             'attachable_type' => ['required', 'string', Rule::in(self::ALLOWED_ATTACHABLE_TYPES)],
             'attachable_id' => ['required', 'string'],
-            'file' => ['required', 'file', 'max:'.self::MAX_UPLOAD_KB],
+            'file' => ['required', 'file', 'max:'.self::MAX_UPLOAD_KB, 'mimes:'.self::ALLOWED_UPLOAD_EXTENSIONS],
             // Optional uploader metadata: a free-text org vocabulary "type"
             // (e.g. "Sign-in sheet") and a freeform description.
             'type' => ['nullable', 'string', 'max:100'],
@@ -128,7 +150,9 @@ class AttachmentsController extends Controller
             'filename' => $file->getClientOriginalName(),
             'type' => $data['type'] ?? null,
             'description' => $data['description'] ?? null,
-            'mime' => $file->getClientMimeType(),
+            // Server-derived (magic-byte sniffed) MIME — never trust the
+            // client-declared one, which is attacker-controlled.
+            'mime' => $file->getMimeType(),
             'size' => $file->getSize(),
             'disk' => self::STORAGE_DISK,
             'path' => $path,
@@ -212,18 +236,25 @@ class AttachmentsController extends Controller
     }
 
     /**
-     * Mint a 5-minute signed URL for the blob with the given disposition
-     * ('inline' to preview, 'attachment' to download). A signed-URL failure
-     * (object store unreachable) shouldn't surface as a 500 — degrade to a
-     * clean "try again" the UI can show.
+     * Mint a 5-minute signed URL for the blob with the given requested
+     * disposition ('inline' to preview, 'attachment' to download). 'inline'
+     * is only honored when the stored MIME is in the inline-safe allowlist
+     * (raster images + PDF) — anything else (including a legacy/unknown/
+     * absent mime) is downgraded to 'attachment' so it can never render as
+     * active content (HTML/SVG/etc.) from the storage origin. A signed-URL
+     * failure (object store unreachable) shouldn't surface as a 500 —
+     * degrade to a clean "try again" the UI can show.
      */
     private function signedBlobUrl(Attachment $attachment, string $disposition): string
     {
-        // Strip quotes/CRLF so the filename can't break out of the header.
-        $safeName = str_replace(['"', "\r", "\n"], '', (string) $attachment->filename);
+        $effectiveDisposition = $disposition === 'inline' && in_array($attachment->mime, self::INLINE_SAFE_MIMES, true)
+            ? 'inline'
+            : 'attachment';
+
+        $safeName = $this->sanitizeDispositionFilename((string) $attachment->filename);
 
         $options = [
-            'ResponseContentDisposition' => $disposition.'; filename="'.$safeName.'"',
+            'ResponseContentDisposition' => $effectiveDisposition.'; filename="'.$safeName.'"',
         ];
 
         if ($attachment->mime) {
@@ -240,6 +271,24 @@ class AttachmentsController extends Controller
             report($e);
             abort(503, 'File storage is temporarily unavailable. Please try again.');
         }
+    }
+
+    /**
+     * Sanitize a user-supplied filename for embedding in a quoted
+     * Content-Disposition parameter: strip control characters (CR/LF and
+     * friends, which could otherwise inject extra header lines) and quotes
+     * (which could break out of the quoted string), and fold non-ASCII down
+     * to '_' since the bare `filename="..."` form isn't a safe carrier for
+     * it.
+     */
+    private function sanitizeDispositionFilename(string $name): string
+    {
+        $name = preg_replace('/[\x00-\x1F\x7F]/', '', $name) ?? '';
+        $name = str_replace('"', '', $name);
+        $name = preg_replace('/[^\x20-\x7E]/', '_', $name) ?? '';
+        $name = trim($name);
+
+        return $name !== '' ? $name : 'download';
     }
 
     private function authorizeSameOrgMorphable(string $type, string $id): void
