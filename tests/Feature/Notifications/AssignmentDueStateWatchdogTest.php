@@ -15,6 +15,7 @@ use App\Models\TrainingAssignment;
 use App\Models\User;
 use App\Notifications\AssignmentDueSoon;
 use App\Notifications\AssignmentOverdue;
+use App\Notifications\AssignmentOverdueSupervisor;
 use App\Services\TrainingStatusService;
 use Carbon\CarbonImmutable;
 use Database\Seeders\RoleSeeder;
@@ -525,6 +526,28 @@ class AssignmentDueStateWatchdogTest extends TestCase
         // 15 days after the seed — now it re-fires.
         $this->runWatchdogAt('2026-05-25');
         Notification::assertSentToTimes($this->user, AssignmentOverdue::class, 2);
+    }
+
+    public function test_overdue_re_fire_escalates_to_supervisor_but_first_edge_does_not(): void
+    {
+        $supervisor = User::factory()->for($this->org, 'organization')->create();
+        $this->user->update(['supervisor_id' => $supervisor->id]);
+
+        $this->setInterval(14);
+        $ta = $this->repeatingTa();
+        $this->completeOn('2026-01-01');
+
+        Notification::fake();
+
+        // First edge into overdue — employee only.
+        $this->runWatchdogAt('2026-05-01');
+        Notification::assertSentToTimes($this->user, AssignmentOverdue::class, 1);
+        Notification::assertNotSentTo($supervisor, AssignmentOverdueSupervisor::class);
+
+        // Re-fire after the interval escalates to the supervisor.
+        $this->runWatchdogAt('2026-05-16');
+        Notification::assertSentToTimes($this->user, AssignmentOverdue::class, 2);
+        Notification::assertSentToTimes($supervisor, AssignmentOverdueSupervisor::class, 1);
     }
 
     public function test_state_row_cascades_when_ta_is_deleted(): void

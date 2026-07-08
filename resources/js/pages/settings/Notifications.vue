@@ -52,6 +52,12 @@ const TYPE_META: { key: string; label: string; description: string }[] = [
         description: 'When one of your requirements becomes overdue.',
     },
     {
+        key: 'assignment_overdue_supervisor',
+        label: 'Team member overdue',
+        description:
+            'When someone you supervise is reminded about an overdue training.',
+    },
+    {
         key: 'manager_digest',
         label: 'Weekly manager digest',
         description:

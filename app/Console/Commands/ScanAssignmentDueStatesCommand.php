@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Models\TrainingAssignment;
 use App\Notifications\AssignmentDueSoon;
 use App\Notifications\AssignmentOverdue;
+use App\Services\AssignmentReminderService;
 use App\Services\TrainingStatusService;
 use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
@@ -36,7 +37,7 @@ class ScanAssignmentDueStatesCommand extends Command
 
     protected $description = 'Daily watchdog: fire AssignmentDueSoon / AssignmentOverdue on edge transitions.';
 
-    public function handle(TrainingStatusService $status): int
+    public function handle(TrainingStatusService $status, AssignmentReminderService $reminder): int
     {
         $fired = 0;
 
@@ -44,8 +45,8 @@ class ScanAssignmentDueStatesCommand extends Command
         $orgs = Organization::query()->get()->keyBy('id');
 
         TrainingAssignment::query()
-            ->with('user')
-            ->chunkById(200, function (Collection $tas) use ($status, $orgs, &$fired): void {
+            ->with('user.supervisor')
+            ->chunkById(200, function (Collection $tas) use ($status, $reminder, $orgs, &$fired): void {
                 foreach ($tas as $ta) {
                     $org = $orgs->get($ta->org_id);
                     $bucket = $status->statusFor(
@@ -62,7 +63,7 @@ class ScanAssignmentDueStatesCommand extends Command
                             ->update(['status' => $bucket]);
                     }
 
-                    $fired += $this->reconcile($ta, $bucket, $status, $org?->overdueReminderIntervalDays());
+                    $fired += $this->reconcile($ta, $bucket, $status, $reminder, $org?->overdueReminderIntervalDays());
                 }
             });
 
@@ -81,7 +82,7 @@ class ScanAssignmentDueStatesCommand extends Command
      * @param  int|null  $reminderInterval  the org's overdue re-fire interval in
      *                                      days, or null when disabled.
      */
-    private function reconcile(TrainingAssignment $ta, string $bucket, TrainingStatusService $status, ?int $reminderInterval): int
+    private function reconcile(TrainingAssignment $ta, string $bucket, TrainingStatusService $status, AssignmentReminderService $reminder, ?int $reminderInterval): int
     {
         // As-needed trainings are neither tracked nor notified.
         if ($bucket === TrainingStatusService::STATUS_AS_NEEDED) {
@@ -116,6 +117,8 @@ class ScanAssignmentDueStatesCommand extends Command
             && $state->last_notified_at->lte($now->copy()->subDays($reminderInterval))
         ) {
             $this->notifyOverdue($ta, $status);
+            // Escalate to the supervisor on the re-fire (not the first edge).
+            $reminder->notifyOverdueSupervisor($ta);
             $notifiedNow = true;
         }
 

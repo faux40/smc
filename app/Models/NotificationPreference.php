@@ -27,6 +27,7 @@ class NotificationPreference extends Model
         'completion_recorded',
         'assignment_due_soon',
         'assignment_overdue',
+        'assignment_overdue_supervisor',
         'manager_digest',
     ];
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AssignmentRemindController;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\BulkTrainingAssignmentsController;
 use App\Http\Controllers\ClassDocumentsController;
@@ -241,6 +242,13 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::delete('api/training-assignments/{trainingAssignment}/from-requirement', [TrainingAssignmentsController::class, 'breakFromRequirement'])->name('training-assignments.break-from-requirement');
     Route::delete('api/training-assignments/{trainingAssignment}', [TrainingAssignmentsController::class, 'destroy'])->name('training-assignments.destroy');
     Route::post('api/bulk-training-assignments', [BulkTrainingAssignmentsController::class, 'store'])->name('bulk-training-assignments.store');
+
+    // F10 — manual "Remind" nudges (Manager+). Static `remind-bulk` segment is
+    // declared before the `{trainingAssignment}` binding so it isn't treated as
+    // an id. Re-sends the notification matching the assignment's current status;
+    // overdue reminders CC the employee's supervisor.
+    Route::post('api/assignments/remind-bulk', [AssignmentRemindController::class, 'bulk'])->name('assignments.remind-bulk');
+    Route::post('api/assignments/{trainingAssignment}/remind', [AssignmentRemindController::class, 'store'])->name('assignments.remind');
 
     // Completions — flat API with optional ?user_id filter. Pivot to
     // rqmt_elements is sync()'d from the rqmt_element_ids array in the
