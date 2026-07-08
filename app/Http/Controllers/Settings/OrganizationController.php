@@ -7,6 +7,7 @@ use App\Events\OrganizationUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\OrganizationDeleteRequest;
 use App\Http\Requests\Settings\OrganizationUpdateRequest;
+use App\Jobs\ResyncOrgTrainingStatus;
 use App\Models\Organization;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -40,6 +41,10 @@ class OrganizationController extends Controller
     {
         $org = Organization::findOrFail($request->user()->org_id);
 
+        // The amber window feeds every materialized TA status, so remember it
+        // before the write to decide whether a resync is needed (F1 follow-up).
+        $oldWindow = $org->expiringSoonDays();
+
         $dueSoon = $request->validated('due_soon_days');
         $expiringSoon = $request->validated('expiring_soon_days');
         $thresholds = array_filter([
@@ -52,6 +57,13 @@ class OrganizationController extends Controller
             'timezone' => $request->validated('timezone'),
             'training_thresholds' => $thresholds ?: null,
         ]);
+
+        // A widened/narrowed expiring-soon window shifts due_soon⇄current
+        // boundaries; re-materialize the org's statuses off-request so the
+        // dashboard reflects it now instead of at the next nightly watchdog.
+        if ($org->fresh()->expiringSoonDays() !== $oldWindow) {
+            ResyncOrgTrainingStatus::dispatch($org->id);
+        }
 
         event(new OrganizationUpdated($org->fresh()));
 

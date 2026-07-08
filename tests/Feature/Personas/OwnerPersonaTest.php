@@ -92,19 +92,29 @@ class OwnerPersonaTest extends PersonaTestCase
         $training = $this->repeatingTraining('Fall Protection', $freq);
         $worker = User::factory()->for($this->org, 'organization')->create();
 
-        // Expires in 45 days — outside the default 30-day window…
         TrainingAssignment::create([
             'org_id' => $this->org->id, 'user_id' => $worker->id,
             'training_id' => $training->id, 'name' => $training->name,
-            'last_completed_at' => now()->subDays(320)->toDateString(),
-            'expires_at' => now()->addDays(45)->toDateString(),
+        ]);
+
+        // A completion 320 days ago on the annual (365-day) training expires in
+        // 45 days — the resync recomputes dates from completion history, so this
+        // has to be real rather than a hand-set expires_at. Outside the default
+        // 30-day amber window, so the worker reads "current" for now.
+        Completion::factory()->create([
+            'org_id' => $this->org->id, 'user_id' => $worker->id,
+            'module_type' => Training::class, 'module_id' => $training->id,
+            'completion_date' => now()->subDays(320)->toDateString(),
         ]);
 
         $before = $this->actingAs($owner)->getJson('/api/dashboard/summary')->json('counts');
         $this->assertSame(0, $before['due_soon']);
         $this->assertSame(1, $before['current']);
 
-        // …until the boss widens the expiring-soon threshold to 60 days.
+        // …until the boss widens the expiring-soon threshold to 60 days. The
+        // window change dispatches a resync job (sync queue in tests) that
+        // re-materializes the org's statuses, so the dashboard reflects it
+        // immediately — no waiting for the nightly watchdog.
         $this->actingAs($owner)
             ->patch('/settings/organization', [
                 'name' => $this->org->name,
@@ -112,12 +122,6 @@ class OwnerPersonaTest extends PersonaTestCase
                 'expiring_soon_days' => 60,
             ])
             ->assertRedirect('/settings/organization');
-
-        // The dashboard reads the canonical materialized status (same seam as
-        // the Compliance page), so a window change lands once the status is
-        // re-materialized — the daily watchdog reconciles the new boundary.
-        Notification::fake();
-        $this->artisan('assignments:scan-due-states')->assertSuccessful();
 
         $after = $this->actingAs($owner)->getJson('/api/dashboard/summary')->json('counts');
         $this->assertSame(1, $after['due_soon']);

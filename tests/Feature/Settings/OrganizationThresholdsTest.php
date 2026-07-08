@@ -2,10 +2,17 @@
 
 namespace Tests\Feature\Settings;
 
+use App\Actions\RecalculateTrainingStatus;
+use App\Jobs\ResyncOrgTrainingStatus;
+use App\Models\Completion;
 use App\Models\Organization;
+use App\Models\StdFrequency;
+use App\Models\Training;
+use App\Models\TrainingAssignment;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -165,6 +172,81 @@ class OrganizationThresholdsTest extends TestCase
                 'due_soon_days' => 999,
             ])
             ->assertSessionHasErrors('due_soon_days');
+    }
+
+    // -- Amber-window change → resync job (F1 follow-up) ----------------
+
+    public function test_changing_expiring_soon_window_dispatches_resync_job(): void
+    {
+        Queue::fake();
+
+        $org = Organization::factory()->create(['training_thresholds' => ['expiring_soon_days' => 30]]);
+        $owner = $this->ownerOf($org);
+
+        $this->actingAs($owner)
+            ->patch(route('organization.update'), [
+                'name' => $org->name,
+                'timezone' => $org->timezone,
+                'expiring_soon_days' => 60,
+            ])
+            ->assertSessionHasNoErrors();
+
+        Queue::assertPushed(
+            ResyncOrgTrainingStatus::class,
+            fn (ResyncOrgTrainingStatus $job) => $job->orgId === $org->id,
+        );
+    }
+
+    public function test_non_window_settings_change_does_not_dispatch_resync_job(): void
+    {
+        Queue::fake();
+
+        $org = Organization::factory()->create(['training_thresholds' => ['expiring_soon_days' => 30]]);
+        $owner = $this->ownerOf($org);
+
+        // Rename + retune due_soon (a different threshold) but leave the amber
+        // window untouched — nothing to re-materialize.
+        $this->actingAs($owner)
+            ->patch(route('organization.update'), [
+                'name' => 'Renamed Org',
+                'timezone' => 'America/New_York',
+                'due_soon_days' => 10,
+                'expiring_soon_days' => 30,
+            ])
+            ->assertSessionHasNoErrors();
+
+        Queue::assertNotPushed(ResyncOrgTrainingStatus::class);
+    }
+
+    public function test_resync_job_re_materializes_status_for_the_new_window(): void
+    {
+        $org = Organization::factory()->create(['training_thresholds' => ['expiring_soon_days' => 30]]);
+        $freq = StdFrequency::factory()->for($org, 'organization')->create(['repeat_days' => 365]);
+        $training = Training::factory()->for($org, 'organization')->create([
+            'repeating' => true, 'initial_only' => false, 'as_needed' => false, 'std_freq_id' => $freq->id,
+        ]);
+        $user = User::factory()->for($org, 'organization')->create();
+
+        $ta = TrainingAssignment::factory()->create([
+            'org_id' => $org->id, 'user_id' => $user->id,
+            'training_id' => $training->id, 'name' => $training->name,
+        ]);
+
+        // Completed 320 days ago on an annual training → expires in 45 days:
+        // outside a 30-day amber window (current), inside a 60-day one
+        // (due_soon). The completion observer materializes "current" now.
+        Completion::factory()->create([
+            'org_id' => $org->id, 'user_id' => $user->id,
+            'module_type' => Training::class, 'module_id' => $training->id,
+            'completion_date' => now()->subDays(320)->toDateString(),
+        ]);
+        $this->assertSame('current', $ta->fresh()->status);
+
+        $org->update(['training_thresholds' => ['expiring_soon_days' => 60]]);
+
+        (new ResyncOrgTrainingStatus($org->id))->handle(app(RecalculateTrainingStatus::class));
+
+        $this->assertSame('due_soon', $ta->fresh()->status);
     }
 
     // -- Inertia shared org prop ---------------------------------------
