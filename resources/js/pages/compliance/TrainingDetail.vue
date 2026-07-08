@@ -6,12 +6,15 @@
  * Thin wrapper over the shared ComplianceDetail — one training, so it offers the
  * single-training add-to-existing path.
  */
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import { toast } from 'vue-sonner';
 import { Button } from '@/components/ui/button';
 import ComplianceDetail from '@/pages/compliance/Partials/ComplianceDetail.vue';
 import ClassActionsBar from '@/pages/classes/Partials/ClassActionsBar.vue';
+import CompletionFormModal from '@/pages/completions/Partials/CompletionFormModal.vue';
 import type { ServerTableQuery } from '@/composables/useServerTable';
+import type { CompletionBulkResult } from '@/stores/completions';
 import { useComplianceStore } from '@/stores/compliance';
 
 const props = defineProps<{
@@ -45,6 +48,37 @@ const STATUS_CHIPS = [
 
 const fetcher = (params: ServerTableQuery) =>
     store.trainingUsers(props.training.id, params);
+
+// F8 — "record completion for the selected people" without the class workflow.
+// The modal opens in multi-user mode (this one training × the selected users);
+// on success we toast the created/skipped tallies, clear the selection, and
+// refetch the table so statuses re-render.
+const recordOpen = ref(false);
+const recordUserIds = ref<string[]>([]);
+let onRecorded: (() => void) | null = null;
+
+function openRecord(userIds: string[], clear: () => void, reload: () => void): void {
+    recordUserIds.value = userIds;
+    onRecorded = () => {
+        clear();
+        reload();
+    };
+    recordOpen.value = true;
+}
+
+function onRecordSaved(result?: CompletionBulkResult): void {
+    if (result) {
+        const { created_count, skipped_count } = result;
+        const noun = created_count === 1 ? 'completion' : 'completions';
+        toast.success(
+            skipped_count > 0
+                ? `Recorded ${created_count} ${noun} · ${skipped_count} skipped.`
+                : `Recorded ${created_count} ${noun}.`,
+        );
+    }
+    onRecorded?.();
+    onRecorded = null;
+}
 </script>
 
 <template>
@@ -70,16 +104,34 @@ const fetcher = (params: ServerTableQuery) =>
             </Button>
         </template>
 
-        <template #toolbar="{ selectedUserIds, clear }">
-            <ClassActionsBar
-                v-if="canManage"
-                :selected-user-ids="selectedUserIds"
-                :create-training-ids="[training.id]"
-                :preset-name="training.name"
-                :add-training-id="training.id"
-                :add-training-name="training.name"
-                @done="clear"
-            />
+        <template #toolbar="{ selectedUserIds, clear, reload }">
+            <template v-if="canManage">
+                <ClassActionsBar
+                    :selected-user-ids="selectedUserIds"
+                    :create-training-ids="[training.id]"
+                    :preset-name="training.name"
+                    :add-training-id="training.id"
+                    :add-training-name="training.name"
+                    @done="clear"
+                />
+                <Button
+                    type="button"
+                    variant="outline"
+                    :disabled="selectedUserIds.length === 0"
+                    data-testid="record-completion"
+                    @click="openRecord(selectedUserIds, clear, reload)"
+                >
+                    Record completion for selected ({{ selectedUserIds.length }})
+                </Button>
+            </template>
         </template>
     </ComplianceDetail>
+
+    <CompletionFormModal
+        v-model:open="recordOpen"
+        mode="create"
+        :initial-training-id="training.id"
+        :user-ids="recordUserIds"
+        @saved="onRecordSaved"
+    />
 </template>

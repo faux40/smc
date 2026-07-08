@@ -162,3 +162,72 @@ describe('CompletionFormModal — prefill props (F7)', () => {
         expect(moduleIdSelect.props('modelValue')).toBe('');
     });
 });
+
+describe('CompletionFormModal — multi-user mode (F8)', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+    });
+
+    it('replaces the user picker with a read-only summary of the selected users', async () => {
+        const wrapper = await mountModal({
+            userIds: ['u1', 'u2'],
+            initialTrainingId: 't2',
+        });
+
+        const summary = wrapper.find('[data-testid="multi-user-summary"]');
+        expect(summary.exists()).toBe(true);
+        expect(summary.text()).toContain('Recording for 2 selected users');
+
+        // No user <Select> in multi mode — only the two module selects remain.
+        expect(selects(wrapper)).toHaveLength(2);
+    });
+
+    it('locks the training and submits via bulkCreate with the selected user ids', async () => {
+        const store = useCompletionsStore();
+        const bulkSpy = vi
+            .spyOn(store, 'bulkCreate')
+            .mockResolvedValue({ created_count: 2, skipped_count: 0 });
+
+        const wrapper = await mountModal({
+            userIds: ['u1', 'u2'],
+            initialTrainingId: 't2',
+        });
+
+        // The module pickers are still locked from initialTrainingId.
+        const [moduleTypeSelect, moduleIdSelect] = selects(wrapper);
+        expect(moduleTypeSelect.props('disabled')).toBe(true);
+        expect(moduleIdSelect.props('disabled')).toBe(true);
+
+        await wrapper.find('form').trigger('submit');
+        await flushPromises();
+
+        expect(bulkSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                user_ids: ['u1', 'u2'],
+                training_id: 't2',
+                completion_date: expect.any(String),
+            }),
+        );
+    });
+
+    it('emits saved with the bulk result and closes on success', async () => {
+        const store = useCompletionsStore();
+        vi.spyOn(store, 'bulkCreate').mockResolvedValue({
+            created_count: 3,
+            skipped_count: 1,
+        });
+
+        const wrapper = await mountModal({
+            userIds: ['u1', 'u2', 'u3'],
+            initialTrainingId: 't2',
+        });
+        await wrapper.find('form').trigger('submit');
+        await flushPromises();
+
+        expect(wrapper.emitted('saved')).toEqual([
+            [{ created_count: 3, skipped_count: 1 }],
+        ]);
+        expect(wrapper.emitted('update:open')).toEqual([[false]]);
+    });
+});

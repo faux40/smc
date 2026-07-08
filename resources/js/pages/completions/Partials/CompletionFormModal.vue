@@ -53,7 +53,10 @@ import { useFieldErrors } from '@/composables/useFieldErrors';
 import { realtimeTabId } from '@/echo';
 import { optionalNumber } from '@/lib/forms';
 import { useCompletionsStore } from '@/stores/completions';
-import type { CompletionRow } from '@/stores/completions';
+import type {
+    CompletionBulkResult,
+    CompletionRow,
+} from '@/stores/completions';
 import { useErrorStore } from '@/stores/errors';
 import { useTrainingsStore } from '@/stores/trainings';
 import { useUsersStore } from '@/stores/users';
@@ -82,11 +85,16 @@ const props = defineProps<{
     target?: CompletionRow | null;
     initialUserId?: string | null;
     initialTrainingId?: string | null;
+    // F8 multi-user mode: record this one training for a set of already-picked
+    // users at once. When non-empty, the single user picker is replaced by a
+    // read-only summary and save posts to the bulk endpoint. Pair with
+    // initialTrainingId so the module is locked too.
+    userIds?: string[] | null;
 }>();
 
 const emit = defineEmits<{
     (e: 'update:open', v: boolean): void;
-    (e: 'saved'): void;
+    (e: 'saved', result?: CompletionBulkResult): void;
 }>();
 
 const store = useCompletionsStore();
@@ -114,9 +122,29 @@ const errorStore = useErrorStore();
 const fieldErrors = useFieldErrors(FORM_CTX);
 
 const isEdit = computed(() => props.mode === 'edit');
-const title = computed(() =>
-    isEdit.value ? 'Edit completion' : 'New completion',
+// Multi-user (bulk) mode: a non-empty userIds list means "record this training
+// for all of them at once". Never on in edit mode.
+const isMulti = computed(
+    () => !isEdit.value && (props.userIds?.length ?? 0) > 0,
 );
+const multiCount = computed(() => props.userIds?.length ?? 0);
+const title = computed(() => {
+    if (isEdit.value) {
+        return 'Edit completion';
+    }
+    if (isMulti.value) {
+        return `Record completion for ${multiCount.value} ${multiCount.value === 1 ? 'user' : 'users'}`;
+    }
+    return 'New completion';
+});
+
+// A short, read-only preview of who's being recorded (first few names, then a
+// "+N more" tail) — the picker is redundant when the caller already chose them.
+const MULTI_PREVIEW = 5;
+const multiNames = computed(() =>
+    (props.userIds ?? []).slice(0, MULTI_PREVIEW).map((id) => userName(id)),
+);
+const multiMore = computed(() => Math.max(0, multiCount.value - MULTI_PREVIEW));
 
 // Locked exactly like edit mode locks user/module — the caller (a row
 // action) already knows the identity, so the picker is redundant. Only
@@ -278,11 +306,25 @@ const submit = async () => {
                 ...editPayload
             } = payload;
             await store.update(props.target.id, editPayload);
+            emit('saved');
+        } else if (isMulti.value) {
+            const {
+                user_id: _u,
+                module_type: _t,
+                module_id: _m,
+                ...fields
+            } = payload;
+            const result = await store.bulkCreate({
+                user_ids: props.userIds ?? [],
+                training_id: form.module_id,
+                ...fields,
+            });
+            emit('saved', result);
         } else {
             await store.create(payload);
+            emit('saved');
         }
 
-        emit('saved');
         emit('update:open', false);
     } catch (e) {
         errorStore.reportFromAxios(e, FORM_CTX, {
@@ -329,7 +371,26 @@ function defaultHeaders(): Record<string, string> {
                     {{ loadError }}
                 </p>
 
-                <div class="grid gap-2">
+                <!-- Multi-user (bulk) mode: a read-only summary stands in for
+                     the picker — the caller already chose the roster. -->
+                <div v-if="isMulti" class="grid gap-2" data-testid="multi-user-summary">
+                    <Label>Users</Label>
+                    <div
+                        class="rounded border border-border bg-muted/30 p-3 text-sm"
+                    >
+                        <p class="font-medium">
+                            Recording for {{ multiCount }}
+                            {{ multiCount === 1 ? 'selected user' : 'selected users' }}
+                        </p>
+                        <p class="mt-1 text-xs text-muted-foreground">
+                            {{ multiNames.join(', ')
+                            }}<template v-if="multiMore > 0">
+                                and {{ multiMore }} more</template
+                            >
+                        </p>
+                    </div>
+                </div>
+                <div v-else class="grid gap-2">
                     <Label for="c_user">User</Label>
                     <Select v-model="form.user_id" :disabled="userLocked">
                         <SelectTrigger id="c_user">

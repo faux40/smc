@@ -57,14 +57,16 @@ class CompletionRequest extends FormRequest
     }
 
     /**
+     * The completion fields shared by single create/update and the bulk
+     * (one training × many users) endpoint — everything except the module +
+     * user identity. Kept here so BulkCompletionRequest reuses one source of
+     * truth for the payload shape.
+     *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
-    public function rules(): array
+    public static function completionFieldRules(): array
     {
-        $orgId = Auth::user()->org_id;
-        $isCreate = $this->isMethod('post');
-
-        $rules = [
+        return [
             'completion_date' => ['required', 'date'],
             'certification_date' => ['nullable', 'date'],
             'expire_date' => ['nullable', 'date'],
@@ -74,6 +76,73 @@ class CompletionRequest extends FormRequest
             'rqmt_element_ids' => ['required', 'array', 'min:1'],
             'rqmt_element_ids.*' => ['string', 'distinct'],
         ];
+    }
+
+    /**
+     * Assert every requested element exists, belongs to the org, and points at
+     * the same module as the completion. Shared by the single and bulk
+     * validators. Adds errors to the validator; short-circuits on the first
+     * failure per field.
+     *
+     * @param  array<int, string>  $ids
+     */
+    public static function validateElementsBelongToModule(
+        Validator $v,
+        string $orgId,
+        ?string $moduleType,
+        ?string $moduleId,
+        array $ids,
+    ): void {
+        if (! $ids) {
+            return;
+        }
+
+        $elements = RqmtElement::query()
+            ->withoutGlobalScope('organization')
+            ->whereIn('id', $ids)
+            ->get();
+
+        // Existence — assertion that every requested id resolved.
+        if ($elements->count() !== count(array_unique($ids))) {
+            $v->errors()->add('rqmt_element_ids', 'One or more elements could not be found.');
+
+            return;
+        }
+
+        foreach ($elements as $element) {
+            if ($element->org_id !== $orgId) {
+                $v->errors()->add('rqmt_element_ids', 'Every element must belong to your organization.');
+
+                return;
+            }
+            if ($moduleType && $element->module_type !== $moduleType) {
+                $v->errors()->add(
+                    'rqmt_element_ids',
+                    'Every element must point at the same module as the completion.',
+                );
+
+                return;
+            }
+            if ($moduleId && $element->module_id !== $moduleId) {
+                $v->errors()->add(
+                    'rqmt_element_ids',
+                    'Every element must point at the same module as the completion.',
+                );
+
+                return;
+            }
+        }
+    }
+
+    /**
+     * @return array<string, ValidationRule|array<mixed>|string>
+     */
+    public function rules(): array
+    {
+        $orgId = Auth::user()->org_id;
+        $isCreate = $this->isMethod('post');
+
+        $rules = self::completionFieldRules();
 
         if ($isCreate) {
             $rules['user_id'] = [
@@ -119,45 +188,8 @@ class CompletionRequest extends FormRequest
             }
 
             $ids = (array) ($data['rqmt_element_ids'] ?? []);
-            if (! $ids) {
-                return;
-            }
 
-            $elements = RqmtElement::query()
-                ->withoutGlobalScope('organization')
-                ->whereIn('id', $ids)
-                ->get();
-
-            // Existence — assertion that every requested id resolved.
-            if ($elements->count() !== count(array_unique($ids))) {
-                $v->errors()->add('rqmt_element_ids', 'One or more elements could not be found.');
-
-                return;
-            }
-
-            foreach ($elements as $element) {
-                if ($element->org_id !== $orgId) {
-                    $v->errors()->add('rqmt_element_ids', 'Every element must belong to your organization.');
-
-                    return;
-                }
-                if ($moduleType && $element->module_type !== $moduleType) {
-                    $v->errors()->add(
-                        'rqmt_element_ids',
-                        'Every element must point at the same module as the completion.',
-                    );
-
-                    return;
-                }
-                if ($moduleId && $element->module_id !== $moduleId) {
-                    $v->errors()->add(
-                        'rqmt_element_ids',
-                        'Every element must point at the same module as the completion.',
-                    );
-
-                    return;
-                }
-            }
+            self::validateElementsBelongToModule($v, $orgId, $moduleType, $moduleId, $ids);
         });
     }
 }

@@ -6,12 +6,12 @@ use App\Http\Controllers\ClassDocumentsController;
 use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\CommentsController;
 use App\Http\Controllers\CompletionsController;
-use App\Http\Controllers\CspReportController;
 use App\Http\Controllers\ComplianceController;
+use App\Http\Controllers\CspReportController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\NotificationsController;
+use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\RequirementsController;
 use App\Http\Controllers\RqmtElementsController;
 use App\Http\Controllers\StdFrequenciesController;
@@ -249,6 +249,9 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/completions', [CompletionsController::class, 'index'])->name('completions.index');
     Route::get('api/completions/{completion}/certificate', [ClassDocumentsController::class, 'completionCertificate'])->name('completions.certificate');
     Route::post('api/completions', [CompletionsController::class, 'store'])->name('completions.store');
+    // F8 — record one training for many users at once (paper-roster case).
+    // Manager+ via the CompletionPolicy create gate, same as the single store.
+    Route::post('api/completions/bulk', [CompletionsController::class, 'bulkStore'])->name('completions.bulk');
     Route::patch('api/completions/{completion}', [CompletionsController::class, 'update'])->name('completions.update');
     Route::delete('api/completions/{completion}', [CompletionsController::class, 'destroy'])->name('completions.destroy');
 

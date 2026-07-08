@@ -61,6 +61,28 @@ export type CompletionUpdatePayload = Omit<
     'user_id' | 'module_type' | 'module_id'
 >;
 
+/**
+ * F8 — record one training for many users at once. Carries a flat
+ * `training_id` + `user_ids[]` (module_type is always Training server-side)
+ * plus the shared completion fields.
+ */
+export interface CompletionBulkCreatePayload {
+    user_ids: string[];
+    training_id: string;
+    completion_date: string;
+    certification_date: string | null;
+    expire_date: string | null;
+    cert_ident: string | null;
+    hours: number | null;
+    notes: string | null;
+    rqmt_element_ids: string[];
+}
+
+export interface CompletionBulkResult {
+    created_count: number;
+    skipped_count: number;
+}
+
 function defaultHeaders(): Record<string, string> {
     const csrf = document.querySelector<HTMLMetaElement>(
         'meta[name="csrf-token"]',
@@ -126,6 +148,24 @@ export const useCompletionsStore = defineStore('completions', () => {
         return data;
     }
 
+    /**
+     * Record one training for many users in a single request. Returns the
+     * created/skipped tallies (non-org / inactive users are skipped); the
+     * server fires one CompletionsBulkChanged broadcast so open Index tabs
+     * refetch.
+     */
+    async function bulkCreate(
+        payload: CompletionBulkCreatePayload,
+    ): Promise<CompletionBulkResult> {
+        const { data } = await axios.post<CompletionBulkResult>(
+            '/api/completions/bulk',
+            payload,
+            { headers: defaultHeaders() },
+        );
+
+        return data;
+    }
+
     async function update(
         id: string,
         payload: CompletionUpdatePayload,
@@ -159,12 +199,16 @@ export const useCompletionsStore = defineStore('completions', () => {
         bind('CompletionCreated', () => revision.value++);
         bind('CompletionUpdated', () => revision.value++);
         bind('CompletionDeleted', () => revision.value++);
+        // A bulk record carries no per-row payload (it can touch many users on
+        // pages this tab hasn't loaded) — just nudge the open page to refetch.
+        bind('CompletionsBulkChanged', () => revision.value++);
     }
 
     return {
         revision,
         fetchPage,
         create,
+        bulkCreate,
         update,
         destroy,
         subscribe,

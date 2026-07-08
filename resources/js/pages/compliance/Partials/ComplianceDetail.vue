@@ -335,6 +335,7 @@ onUnmounted(() => {
                             :selected-user-ids="selectedUserIds"
                             :selected-training-ids="selectedTrainingIds"
                             :clear="selection.clear"
+                            :reload="table.reload"
                         />
                     </div>
                 </template>

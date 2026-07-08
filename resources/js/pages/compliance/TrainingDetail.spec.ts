@@ -4,8 +4,10 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TagFilter from '@/components/TagFilter.vue';
 import { Checkbox } from '@/components/ui/checkbox';
+import { toast } from 'vue-sonner';
 import AddToClassModal from '@/pages/classes/Partials/AddToClassModal.vue';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
+import CompletionFormModal from '@/pages/completions/Partials/CompletionFormModal.vue';
 import TrainingDetail from '@/pages/compliance/TrainingDetail.vue';
 
 const { routerVisit } = vi.hoisted(() => ({ routerVisit: vi.fn() }));
@@ -68,7 +70,13 @@ async function mountDetail() {
             training: { id: 't1', name: 'Fall Protection' },
             counts: { overdue: 2, due_soon: 1, not_started: 1, current: 1, as_needed: 0, total: 5 },
         },
-        global: { stubs: { ClassFormModal: true, AddToClassModal: true } },
+        global: {
+            stubs: {
+                ClassFormModal: true,
+                AddToClassModal: true,
+                CompletionFormModal: true,
+            },
+        },
     });
     await flushPromises();
 
@@ -186,5 +194,51 @@ describe('compliance/TrainingDetail', () => {
         await flushPromises();
         expect(routerVisit).not.toHaveBeenCalledWith({ url: '/classes/c9' });
         expect(wrapper.find('[data-testid="selection-bar"]').exists()).toBe(false);
+    });
+
+    it('opens the completion modal in multi-user mode for the selection', async () => {
+        const wrapper = await mountDetail();
+
+        // Disabled until users are selected.
+        const btn = wrapper.find('[data-testid="record-completion"]');
+        expect(btn.exists()).toBe(true);
+        expect(btn.attributes('disabled')).toBeDefined();
+
+        wrapper.findAllComponents(Checkbox)[0].vm.$emit('update:modelValue', true);
+        await flushPromises();
+        expect(
+            wrapper.find('[data-testid="record-completion"]').attributes('disabled'),
+        ).toBeUndefined();
+
+        await wrapper.find('[data-testid="record-completion"]').trigger('click');
+        await flushPromises();
+
+        const modal = wrapper.findComponent(CompletionFormModal);
+        expect(modal.props('open')).toBe(true);
+        expect(modal.props('userIds')).toEqual(['u1', 'u2']);
+        expect(modal.props('initialTrainingId')).toBe('t1');
+    });
+
+    it('toasts the tallies, clears the selection, and refetches after recording', async () => {
+        const wrapper = await mountDetail();
+
+        wrapper.findAllComponents(Checkbox)[0].vm.$emit('update:modelValue', true);
+        await flushPromises();
+        await wrapper.find('[data-testid="record-completion"]').trigger('click');
+        await flushPromises();
+
+        const before = getParams().length;
+
+        wrapper
+            .findComponent(CompletionFormModal)
+            .vm.$emit('saved', { created_count: 2, skipped_count: 1 });
+        await flushPromises();
+
+        expect(toast.success).toHaveBeenCalledWith(
+            'Recorded 2 completions · 1 skipped.',
+        );
+        // Selection cleared and the table refetched so statuses re-render.
+        expect(wrapper.find('[data-testid="selection-bar"]').exists()).toBe(false);
+        expect(getParams().length).toBeGreaterThan(before);
     });
 });
