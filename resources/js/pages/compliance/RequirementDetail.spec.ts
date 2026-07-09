@@ -43,6 +43,7 @@ async function mountPage() {
     const wrapper = mount(RequirementDetail, {
         props: { requirement: { id: 'r1', name: 'OSHA General' }, counts: { overdue: 1, current: 1, total: 2 } },
         global: { stubs: { ClassActionsBar: true, AddToClassModal: true } },
+        attachTo: document.body,
     });
     await flushPromises();
 
@@ -53,6 +54,7 @@ describe('compliance/RequirementDetail', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        document.body.innerHTML = '';
         stubAxios();
     });
 
@@ -90,5 +92,23 @@ describe('compliance/RequirementDetail', () => {
         expect(modal.props('trainingId')).toBe('t1');
         expect(modal.props('trainingName')).toBe('First Aid');
         expect(modal.props('userIds')).toEqual(['u1']);
+    });
+
+    it('exports a compliance-status snapshot scoped to this requirement', async () => {
+        const wrapper = await mountPage();
+
+        await wrapper.find('[data-testid="open-requirement-export"]').trigger('click');
+        await flushPromises();
+
+        const pdfHref = document.body
+            .querySelector('[data-testid="export-completion-report"]')!
+            .getAttribute('href')!;
+        const csvHref = document.body
+            .querySelector('[data-testid="export-completion-report-csv"]')!
+            .getAttribute('href')!;
+
+        expect(pdfHref).toContain('/api/reports/compliance-status/export?');
+        expect(pdfHref).toContain('requirement_id=r1');
+        expect(csvHref).toBe(`${pdfHref}&format=csv`);
     });
 });

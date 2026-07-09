@@ -61,4 +61,53 @@ describe('reports store', () => {
         const params = (axios.get as ReturnType<typeof vi.fn>).mock.calls[0][1].params;
         expect(params).toEqual({ page: 1, per_page: 25 });
     });
+
+    it('fetchComplianceStatus GETs with all filters + scope', async () => {
+        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { data: [{ id: 'a1' }], meta: META },
+        });
+        const store = useReportsStore();
+
+        const res = await store.fetchComplianceStatus({
+            page: 3,
+            per_page: 50,
+            sort: null,
+            dir: 'desc',
+            q: 'lee',
+            statuses: ['overdue', 'not_started'],
+            tags: ['t1'],
+            tags_mode: 'or',
+            requirement_id: 'r1',
+            training_id: 'tr1',
+        });
+
+        expect(axios.get).toHaveBeenCalledWith(
+            '/api/reports/compliance-status',
+            expect.objectContaining({
+                params: {
+                    page: 3,
+                    per_page: 50,
+                    q: 'lee',
+                    statuses: ['overdue', 'not_started'],
+                    tags: ['t1'],
+                    tags_mode: 'or',
+                    requirement_id: 'r1',
+                    training_id: 'tr1',
+                },
+            }),
+        );
+        expect(res.meta.total).toBe(1);
+    });
+
+    it('fetchComplianceStatus omits empty optional params', async () => {
+        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { data: [], meta: { ...META, total: 0 } },
+        });
+        const store = useReportsStore();
+
+        await store.fetchComplianceStatus({ page: 1, per_page: 25, sort: null, dir: 'desc', q: '' });
+
+        const params = (axios.get as ReturnType<typeof vi.fn>).mock.calls[0][1].params;
+        expect(params).toEqual({ page: 1, per_page: 25 });
+    });
 });

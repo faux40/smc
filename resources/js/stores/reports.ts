@@ -43,6 +43,39 @@ export type CompletionReportQuery = ServerTableQuery & {
     statuses?: string[];
 };
 
+/**
+ * Compliance-status report row — one (user, assigned training) with its
+ * current status, due date, days-until-due, and source (F12 audit document).
+ */
+export interface ComplianceStatusRow {
+    id: string;
+    user_id: string;
+    training_id: string;
+    tag_ids: string[];
+    user: string;
+    employee_number: string;
+    department: string;
+    location: string;
+    training: string;
+    // Human status label ("Overdue", "Not started", …).
+    status: string;
+    // Raw bucket key for the status badge ('overdue' | 'not_started' | …).
+    status_key: string;
+    _band: string;
+    expires_at: string;
+    days_until_due: string;
+    source: string;
+}
+
+/** Compliance-status query: server-table params + the report filters/scope. */
+export type ComplianceStatusQuery = ServerTableQuery & {
+    statuses?: string[];
+    tags?: string[];
+    tags_mode?: string;
+    requirement_id?: string;
+    training_id?: string;
+};
+
 function defaultHeaders(): Record<string, string> {
     const csrf = document.querySelector<HTMLMetaElement>(
         'meta[name="csrf-token"]',
@@ -92,5 +125,40 @@ export const useReportsStore = defineStore('reports', () => {
         return data;
     }
 
-    return { fetchCompletions };
+    async function fetchComplianceStatus(
+        params: ComplianceStatusQuery,
+    ): Promise<ServerTableResponse<ComplianceStatusRow>> {
+        const query: Record<string, string | number | string[]> = {
+            page: params.page,
+            per_page: params.per_page,
+        };
+
+        if (params.q) {
+            query.q = params.q;
+        }
+        if (params.statuses && params.statuses.length > 0) {
+            query.statuses = params.statuses;
+        }
+        if (params.tags && params.tags.length > 0) {
+            query.tags = params.tags;
+            query.tags_mode = params.tags_mode ?? 'and';
+        }
+        if (params.requirement_id) {
+            query.requirement_id = params.requirement_id;
+        }
+        if (params.training_id) {
+            query.training_id = params.training_id;
+        }
+
+        const { data } = await axios.get<
+            ServerTableResponse<ComplianceStatusRow>
+        >('/api/reports/compliance-status', {
+            headers: defaultHeaders(),
+            params: query,
+        });
+
+        return data;
+    }
+
+    return { fetchCompletions, fetchComplianceStatus };
 });

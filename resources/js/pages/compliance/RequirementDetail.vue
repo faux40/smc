@@ -7,6 +7,7 @@ import { usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 import { Button } from '@/components/ui/button';
+import ReportGroupingModal from '@/components/ReportGroupingModal.vue';
 import ComplianceDetail from '@/pages/compliance/Partials/ComplianceDetail.vue';
 import AddToClassModal from '@/pages/classes/Partials/AddToClassModal.vue';
 import ClassActionsBar from '@/pages/classes/Partials/ClassActionsBar.vue';
@@ -60,6 +61,21 @@ function onAdded(): void {
     rowToAdd.value = null;
 }
 
+// F12 — export this requirement's compliance-status snapshot (PDF + CSV),
+// scoped to the requirement so the document shows just its people. Reuses the
+// same grouping modal/href pattern as the Reports page.
+const exportOpen = ref(false);
+const GROUP_OPTIONS = [
+    { key: 'department', label: 'Department' },
+    { key: 'location', label: 'Location' },
+    { key: 'status', label: 'Status' },
+    { key: 'training', label: 'Training' },
+];
+const exportBaseHref = computed(
+    () =>
+        `/api/reports/compliance-status/export?requirement_id=${encodeURIComponent(props.requirement.id)}`,
+);
+
 // F10 — per-row / bulk "Remind" nudges.
 const { remindOne, remindMany } = useRemind();
 
@@ -93,6 +109,18 @@ async function remindSelected(
         show-training
         :selectable="canManage"
     >
+        <template #header-actions>
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="open-requirement-export"
+                @click="exportOpen = true"
+            >
+                Export…
+            </Button>
+        </template>
+
         <template
             #toolbar="{ selectedRows, selectedUserIds, selectedTrainingIds, clear, reload }"
         >
@@ -146,5 +174,11 @@ async function remindSelected(
         :training-name="rowToAdd?.training ?? ''"
         :user-ids="rowToAdd ? [rowToAdd.user_id] : []"
         @added="onAdded"
+    />
+
+    <ReportGroupingModal
+        v-model:open="exportOpen"
+        :base-href="exportBaseHref"
+        :options="GROUP_OPTIONS"
     />
 </template>

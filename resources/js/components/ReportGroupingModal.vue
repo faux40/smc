@@ -32,21 +32,32 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 
-const props = defineProps<{
-    open: boolean;
-    /** Export URL with filters + columns already applied (no group_by). */
-    baseHref: string;
-}>();
+const props = withDefaults(
+    defineProps<{
+        open: boolean;
+        /** Export URL with filters + columns already applied (no group_by). */
+        baseHref: string;
+        /**
+         * Groupable dimensions offered, in canonical order. Keys mirror
+         * ReportGrouping::LABELS on the backend. Defaults to the completion
+         * report's set; the compliance-status report passes its own (e.g.
+         * dept/location/status/training/source).
+         */
+        options?: Array<{ key: string; label: string }>;
+    }>(),
+    {
+        options: () => [
+            { key: 'training', label: 'Training' },
+            { key: 'status', label: 'Status' },
+            { key: 'user', label: 'User' },
+            { key: 'location', label: 'Location' },
+            { key: 'department', label: 'Department' },
+        ],
+    },
+);
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
 
-// Keys mirror ReportGrouping::LABELS on the backend.
-const OPTIONS = [
-    { key: 'training', label: 'Training' },
-    { key: 'status', label: 'Status' },
-    { key: 'user', label: 'User' },
-    { key: 'location', label: 'Location' },
-    { key: 'department', label: 'Department' },
-];
+const OPTIONS = computed(() => props.options);
 
 // Ordered list of checked keys; order is the nesting precedence.
 const selected = ref<string[]>([]);
@@ -64,9 +75,9 @@ watch(
 // Checked options first (in precedence order), then the rest in canonical order.
 const ordered = computed(() => {
     const chosen = selected.value
-        .map((key) => OPTIONS.find((o) => o.key === key))
-        .filter((o): o is (typeof OPTIONS)[number] => Boolean(o));
-    const rest = OPTIONS.filter((o) => !selected.value.includes(o.key));
+        .map((key) => OPTIONS.value.find((o) => o.key === key))
+        .filter((o): o is { key: string; label: string } => Boolean(o));
+    const rest = OPTIONS.value.filter((o) => !selected.value.includes(o.key));
 
     return [...chosen, ...rest];
 });

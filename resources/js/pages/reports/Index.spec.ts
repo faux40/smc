@@ -16,6 +16,7 @@ vi.mock('@inertiajs/vue3', () => ({
 
 const META = { current_page: 1, last_page: 1, per_page: 25, total: 1 };
 const COMPLETIONS = '/api/reports/completions';
+const COMPLIANCE = '/api/reports/compliance-status';
 
 function stubAxios() {
     (axios.get as ReturnType<typeof vi.fn>).mockImplementation(
@@ -40,6 +41,33 @@ function stubAxios() {
                                 hours: 4,
                                 class: '—',
                                 cert_id: 'CERT-1',
+                            },
+                        ],
+                        meta: META,
+                    },
+                });
+            }
+
+            if (url === COMPLIANCE) {
+                return Promise.resolve({
+                    data: {
+                        data: [
+                            {
+                                id: 'a1',
+                                user_id: 'u9',
+                                training_id: 't9',
+                                tag_ids: [],
+                                user: 'Ng, Ada',
+                                employee_number: 'EMP-9',
+                                department: 'Ops',
+                                location: 'Dock',
+                                training: 'Lockout',
+                                status: 'Not started',
+                                status_key: 'not_started',
+                                _band: 'not_started',
+                                expires_at: '—',
+                                days_until_due: '—',
+                                source: 'Direct',
                             },
                         ],
                         meta: META,
@@ -212,5 +240,26 @@ describe('reports/Index — completion report', () => {
             .querySelector('[data-testid="export-completion-report"]')!
             .getAttribute('href')!;
         expect(href).toContain('group_by%5B%5D=location');
+    });
+
+    it('defaults to the Completions tab, not the compliance-status endpoint', async () => {
+        await mountPage();
+        const compliance = (axios.get as ReturnType<typeof vi.fn>).mock.calls
+            .filter((c) => c[0] === COMPLIANCE);
+        expect(params().length).toBeGreaterThan(0);
+        expect(compliance.length).toBe(0);
+    });
+
+    it('switching to the Compliance status tab fetches the snapshot', async () => {
+        const wrapper = await mountPage();
+        await wrapper
+            .find('[data-testid="reports-tab-compliance"]')
+            .trigger('click');
+        await flushPromises();
+
+        const compliance = (axios.get as ReturnType<typeof vi.fn>).mock.calls
+            .filter((c) => c[0] === COMPLIANCE);
+        expect(compliance.length).toBeGreaterThan(0);
+        expect(wrapper.find('tbody').text()).toContain('Ng, Ada');
     });
 });
