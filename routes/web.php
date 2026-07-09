@@ -35,8 +35,9 @@ Route::inertia('/', 'Welcome', [
 // complements the framework's boots-only `/up`.
 Route::get('health/detailed', [HealthController::class, 'detailed'])->name('health.detailed');
 
-// CSP violation sink (Content-Security-Policy-Report-Only). Public + CSRF-exempt
-// (browsers send no token) + throttled to bound log volume.
+// CSP violation sink (Content-Security-Policy `report-uri`, enforcing since
+// F13). Public + CSRF-exempt (browsers send no token) + throttled to bound
+// log volume.
 Route::post('api/csp-report', [CspReportController::class, 'store'])
     ->middleware('throttle:120,1')
     ->name('csp.report');

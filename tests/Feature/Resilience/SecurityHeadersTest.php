@@ -26,7 +26,6 @@ class SecurityHeadersTest extends TestCase
         parent::tearDown();
     }
 
-
     public function test_baseline_security_headers_are_present(): void
     {
         $response = $this->get('/');
@@ -42,7 +41,7 @@ class SecurityHeadersTest extends TestCase
         $this->get('/')->assertHeaderMissing('Strict-Transport-Security');
     }
 
-    public function test_csp_is_report_only_and_allows_configured_external_origins(): void
+    public function test_csp_is_enforcing_and_allows_configured_external_origins(): void
     {
         // External hosts are config-sourced (no hard-coded URLs) — set them so
         // the assertions don't depend on the local .env.
@@ -57,22 +56,25 @@ class SecurityHeadersTest extends TestCase
 
         $response = $this->get('/');
 
-        $csp = $response->headers->get('Content-Security-Policy-Report-Only');
-        $this->assertNotNull($csp, 'Report-Only CSP header should be present');
+        $csp = $response->headers->get('Content-Security-Policy');
+        $this->assertNotNull($csp, 'Enforcing CSP header should be present');
 
-        // Rollout is Report-Only first — not enforcing yet.
-        $response->assertHeaderMissing('Content-Security-Policy');
+        // The audit is complete — CSP now blocks, it no longer just reports.
+        $response->assertHeaderMissing('Content-Security-Policy-Report-Only');
 
         $this->assertStringContainsString("default-src 'self'", $csp);
+        $this->assertStringContainsString("script-src 'self'", $csp);
         $this->assertStringContainsString("object-src 'none'", $csp);
         $this->assertStringContainsString("base-uri 'self'", $csp);
+        $this->assertStringContainsString("frame-ancestors 'self'", $csp);
         // Linode endpoint allowed for AttachmentViewer previews.
         $this->assertStringContainsString('https://objects.example.test', $csp);
         $this->assertMatchesRegularExpression('/frame-src[^;]*objects\.example\.test/', $csp);
         $this->assertMatchesRegularExpression('/img-src[^;]*objects\.example\.test/', $csp);
+        $this->assertMatchesRegularExpression('/media-src[^;]*objects\.example\.test/', $csp);
         // Reverb websocket allowed for realtime.
         $this->assertMatchesRegularExpression('/connect-src[^;]*wss:\/\/ws\.example\.test/', $csp);
-        // Violations are reported somewhere.
+        // Violations are still reported, post-flip.
         $this->assertStringContainsString('report-uri /api/csp-report', $csp);
     }
 
@@ -98,7 +100,7 @@ class SecurityHeadersTest extends TestCase
 
         $this->app->detectEnvironment(fn () => 'local');
 
-        $csp = $this->get('/')->headers->get('Content-Security-Policy-Report-Only');
+        $csp = $this->get('/')->headers->get('Content-Security-Policy');
         $this->assertNotNull($csp);
 
         // All three directives that load Vite assets must include the origin.
@@ -121,7 +123,7 @@ class SecurityHeadersTest extends TestCase
             unlink($this->hotFile);
         }
 
-        $csp = $this->get('/')->headers->get('Content-Security-Policy-Report-Only');
+        $csp = $this->get('/')->headers->get('Content-Security-Policy');
         $this->assertNotNull($csp);
 
         // No dev-server port should appear at all.

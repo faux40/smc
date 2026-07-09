@@ -9,13 +9,16 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Phase 16.4 — baseline security response headers + Content-Security-Policy.
  *
- * The CSP ships as **Report-Only first** (Content-Security-Policy-Report-Only):
- * the browser reports violations to /api/csp-report but blocks nothing, so a
- * missed directive can't white-screen prod. Flip to the enforcing
- * `Content-Security-Policy` header once reports are clean. External origins
- * (Linode object store, Reverb websocket) are sourced from config, never
- * hard-coded, so swapping providers is an env change. HSTS is only emitted
- * over HTTPS so local http dev is unaffected.
+ * F13 — the CSP ran Report-Only first (Content-Security-Policy-Report-Only)
+ * while violations were collected at /api/csp-report; a static audit found
+ * the policy complete (no inline scripts, no external CDNs/fonts/analytics,
+ * no eval/worker/blob outside local dev), so it now ships as the enforcing
+ * `Content-Security-Policy` header — the browser blocks non-conforming
+ * resources instead of merely reporting them. Violations still POST to
+ * /api/csp-report via `report-uri` so regressions are caught. External
+ * origins (Linode object store, Reverb websocket) are sourced from config,
+ * never hard-coded, so swapping providers is an env change. HSTS is only
+ * emitted over HTTPS so local http dev is unaffected.
  */
 class SecurityHeaders
 {
@@ -29,7 +32,7 @@ class SecurityHeaders
         $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('X-Permitted-Cross-Domain-Policies', 'none');
-        $response->headers->set('Content-Security-Policy-Report-Only', $this->contentSecurityPolicy());
+        $response->headers->set('Content-Security-Policy', $this->contentSecurityPolicy());
 
         if ($request->isSecure()) {
             $response->headers->set(
