@@ -383,6 +383,43 @@ export const useClassesStore = defineStore('classes', () => {
         return cache(data);
     }
 
+    /**
+     * Revoke a single issued certificate on a re-opened class. Soft-deletes the
+     * completion server-side (kept for audit with an optional reason) and marks
+     * that topic non-pass so re-close won't resurrect it. Refreshes cached detail.
+     */
+    async function revokeCertificate(
+        id: string,
+        completionId: string,
+        reason?: string | null,
+    ): Promise<ClassDetail> {
+        const { data } = await axios.post<ClassDetail>(
+            `/api/classes/${id}/completions/${completionId}/revoke`,
+            reason ? { reason } : {},
+            { headers: defaultHeaders() },
+        );
+
+        return cache(data);
+    }
+
+    /**
+     * Issue a single certificate to a (possibly un-rostered) person on a
+     * re-opened class — enrolls them if needed, mints the next number in the
+     * class's date sequence, and marks the topic pass. Refreshes cached detail.
+     */
+    async function issueCertificate(
+        id: string,
+        body: { user_id: string; class_training_id: string },
+    ): Promise<ClassDetail> {
+        const { data } = await axios.post<ClassDetail>(
+            `/api/classes/${id}/completions/issue`,
+            body,
+            { headers: defaultHeaders() },
+        );
+
+        return cache(data);
+    }
+
     function subscribe(orgId: string): void {
         if (subscribedOrgId.value === orgId) {
             return;
@@ -427,6 +464,8 @@ export const useClassesStore = defineStore('classes', () => {
         complete,
         reopen,
         reissueCertificates,
+        revokeCertificate,
+        issueCertificate,
         subscribe,
     };
 });

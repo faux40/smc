@@ -244,4 +244,51 @@ describe('useClassesStore', () => {
             expect.anything(),
         );
     });
+
+    it('revokeCertificate() posts the reason and caches the returned detail', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({ data: detailA });
+        const store = useClassesStore();
+
+        await store.revokeCertificate('c1', 'cp9', 'Wrong session');
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/classes/c1/completions/cp9/revoke',
+            { reason: 'Wrong session' },
+            expect.anything(),
+        );
+        expect(store.detail.c1.id).toBe('c1');
+    });
+
+    it('revokeCertificate() omits the reason body when none is given', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({ data: detailA });
+        const store = useClassesStore();
+
+        await store.revokeCertificate('c1', 'cp9');
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/classes/c1/completions/cp9/revoke',
+            {},
+            expect.anything(),
+        );
+    });
+
+    it('issueCertificate() posts the user + topic and caches the detail', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({ data: detailA });
+        const store = useClassesStore();
+
+        await store.issueCertificate('c1', {
+            user_id: 'u5',
+            class_training_id: 'ct1',
+        });
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/classes/c1/completions/issue',
+            { user_id: 'u5', class_training_id: 'ct1' },
+            expect.anything(),
+        );
+        expect(store.detail.c1.id).toBe('c1');
+    });
 });

@@ -189,6 +189,117 @@ async function reissue(): Promise<void> {
     }
 }
 
+// Single-cert corrections (revoke / issue) — only on a re-opened class that was
+// previously completed (it holds a completion_date + issued credit). Both keep
+// the enrollment results map in step server-side so the next re-close preserves
+// the change.
+const canManageCerts = computed(
+    () => canEditDetails.value && detail.value?.completion_date != null,
+);
+
+// Revoke a single awarded credit.
+const revokeOpen = ref(false);
+const revoking = ref(false);
+const revokeReason = ref('');
+const revokeTarget = ref<{
+    completionId: string;
+    userId: string;
+    userName: string | null;
+    topicName: string;
+} | null>(null);
+const REVOKE_CTX = 'form:class-revoke';
+
+function openRevoke(
+    topicName: string,
+    cr: { completion_id: string; user_id: string; user_name: string | null },
+): void {
+    revokeTarget.value = {
+        completionId: cr.completion_id,
+        userId: cr.user_id,
+        userName: cr.user_name,
+        topicName,
+    };
+    revokeReason.value = '';
+    errorStore.clear(REVOKE_CTX);
+    revokeOpen.value = true;
+}
+
+async function revoke(): Promise<void> {
+    if (!revokeTarget.value) {
+        return;
+    }
+
+    revoking.value = true;
+    errorStore.clear(REVOKE_CTX);
+
+    try {
+        await store.revokeCertificate(
+            props.classId,
+            revokeTarget.value.completionId,
+            revokeReason.value.trim() || null,
+        );
+        revokeOpen.value = false;
+    } catch (e) {
+        errorStore.reportFromAxios(e, REVOKE_CTX, {
+            fallback: 'Failed to revoke the certificate.',
+        });
+    } finally {
+        revoking.value = false;
+    }
+}
+
+// Issue a single certificate to a missed person (user + topic).
+const issueOpen = ref(false);
+const issuing = ref(false);
+const issueUserId = ref('');
+const issueTopicId = ref('');
+const ISSUE_CTX = 'form:class-issue';
+
+// Everyone in the org is a candidate — the point is to credit someone who was
+// missed (possibly never rostered). Sorted last-name-first for scanning.
+const issueUserOptions = computed(() =>
+    [...users.users]
+        .map((u) => ({
+            id: u.id,
+            label: u.sort_name || u.name || u.email || u.id,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+);
+
+function openIssue(): void {
+    issueUserId.value = '';
+    issueTopicId.value = detail.value?.trainings[0]?.id ?? '';
+    errorStore.clear(ISSUE_CTX);
+    issueOpen.value = true;
+}
+
+const canSubmitIssue = computed(
+    () => issueUserId.value !== '' && issueTopicId.value !== '',
+);
+
+async function issue(): Promise<void> {
+    if (!canSubmitIssue.value) {
+        return;
+    }
+
+    issuing.value = true;
+    errorStore.clear(ISSUE_CTX);
+
+    try {
+        await store.issueCertificate(props.classId, {
+            user_id: issueUserId.value,
+            class_training_id: issueTopicId.value,
+        });
+        issueOpen.value = false;
+    } catch (e) {
+        errorStore.reportFromAxios(e, ISSUE_CTX, {
+            fallback: 'Failed to issue the certificate.',
+        });
+    } finally {
+        issuing.value = false;
+    }
+}
+
 const isDirty = computed(() => {
     const d = detail.value;
 
@@ -292,6 +403,14 @@ const totalHoursLabel = computed(
                     </Badge>
                     <Button v-if="canComplete" @click="completeOpen = true">
                         Complete class
+                    </Button>
+                    <Button
+                        v-if="canManageCerts"
+                        variant="outline"
+                        data-testid="issue-open"
+                        @click="openIssue"
+                    >
+                        Issue certificate
                     </Button>
                     <Button
                         v-if="canReissue"
@@ -499,15 +618,25 @@ const totalHoursLabel = computed(
                             </template>
                         </section>
 
-                        <!-- M3: completed class — who earned each credit -->
+                        <!-- M3: completed class — who earned each credit. Also
+                             shown on a re-opened (scheduled) class that still
+                             holds issued credit, where each row can be revoked. -->
                         <section
-                            v-if="detail.status === 'completed'"
+                            v-if="detail.status === 'completed' || hasIssuedCerts"
                             data-testid="credits-awarded"
                             class="space-y-3 rounded-md border border-border p-4"
                         >
                             <h2 class="text-sm font-semibold">
                                 Credits awarded
                             </h2>
+                            <p
+                                v-if="canManageCerts"
+                                class="text-xs text-muted-foreground"
+                            >
+                                Wrong spelling? Edit the person's profile —
+                                certificates show their current name, so the
+                                number won't change.
+                            </p>
                             <div
                                 v-for="t in detail.trainings"
                                 :key="t.id"
@@ -538,13 +667,26 @@ const totalHoursLabel = computed(
                                             {{ cr.user_name ?? 'Unknown user' }}
                                         </a>
                                         <span
-                                            class="text-xs text-muted-foreground"
+                                            class="ml-auto text-xs text-muted-foreground"
                                         >
                                             {{ cr.cert_id ?? '—' }}
                                             <template v-if="cr.expire_date">
                                                 · expires {{ cr.expire_date }}
                                             </template>
                                         </span>
+                                        <Button
+                                            v-if="canManageCerts"
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="h-6 px-2 text-xs text-destructive hover:text-destructive"
+                                            data-testid="revoke-cert"
+                                            @click="
+                                                openRevoke(t.training_name, cr)
+                                            "
+                                        >
+                                            Revoke
+                                        </Button>
                                     </li>
                                 </ul>
                                 <p v-else class="text-xs text-muted-foreground">
@@ -817,6 +959,156 @@ const totalHoursLabel = computed(
                                 @click="reissue"
                             >
                                 Re-issue
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <!-- Revoke a single certificate -->
+                <Dialog v-model:open="revokeOpen">
+                    <DialogContent data-testid="revoke-dialog">
+                        <DialogHeader>
+                            <DialogTitle>Revoke this certificate?</DialogTitle>
+                            <DialogDescription>
+                                <template v-if="revokeTarget">
+                                    {{ revokeTarget.userName ?? 'This person' }}'s
+                                    certificate for “{{ revokeTarget.topicName }}”
+                                    will be removed from their record (kept for
+                                    audit). Optionally note why.
+                                </template>
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div class="space-y-2">
+                            <label
+                                for="revoke-reason"
+                                class="text-sm font-medium"
+                            >
+                                Reason (optional)
+                            </label>
+                            <textarea
+                                id="revoke-reason"
+                                v-model="revokeReason"
+                                rows="3"
+                                maxlength="500"
+                                data-testid="revoke-reason"
+                                class="w-full rounded border border-input bg-background px-3 py-2 text-sm"
+                                placeholder="e.g. Attended the wrong session"
+                            />
+                            <p
+                                v-if="revokeTarget"
+                                class="text-xs text-muted-foreground"
+                            >
+                                Wrong spelling? Instead of revoking,
+                                <a
+                                    :href="`/users/${revokeTarget.userId}`"
+                                    class="text-primary hover:underline"
+                                >
+                                    edit the person's profile </a
+                                >— certificates show their current name, so the
+                                number won't change.
+                            </p>
+                        </div>
+
+                        <ErrorBanner :context="REVOKE_CTX" />
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                :disabled="revoking"
+                                @click="revokeOpen = false"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                :disabled="revoking"
+                                data-testid="revoke-confirm"
+                                @click="revoke"
+                            >
+                                Revoke
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <!-- Issue a single certificate to a missed person -->
+                <Dialog v-model:open="issueOpen">
+                    <DialogContent data-testid="issue-dialog">
+                        <DialogHeader>
+                            <DialogTitle>Issue a certificate</DialogTitle>
+                            <DialogDescription>
+                                Credit someone who was missed for a topic. They
+                                are enrolled if needed and given the next
+                                certificate number in this class's sequence.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div class="space-y-3">
+                            <div class="space-y-1">
+                                <label
+                                    for="issue-user"
+                                    class="text-sm font-medium"
+                                >
+                                    Person
+                                </label>
+                                <Select v-model="issueUserId">
+                                    <SelectTrigger id="issue-user">
+                                        <SelectValue
+                                            placeholder="Choose a person"
+                                        />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem
+                                            v-for="u in issueUserOptions"
+                                            :key="u.id"
+                                            :value="u.id"
+                                        >
+                                            {{ u.label }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div class="space-y-1">
+                                <label
+                                    for="issue-topic"
+                                    class="text-sm font-medium"
+                                >
+                                    Topic
+                                </label>
+                                <Select v-model="issueTopicId">
+                                    <SelectTrigger id="issue-topic">
+                                        <SelectValue
+                                            placeholder="Choose a topic"
+                                        />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem
+                                            v-for="t in detail.trainings"
+                                            :key="t.id"
+                                            :value="t.id"
+                                        >
+                                            {{ t.training_name }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <ErrorBanner :context="ISSUE_CTX" />
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                :disabled="issuing"
+                                @click="issueOpen = false"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                :disabled="issuing || !canSubmitIssue"
+                                data-testid="issue-confirm"
+                                @click="issue"
+                            >
+                                Issue certificate
                             </Button>
                         </DialogFooter>
                     </DialogContent>

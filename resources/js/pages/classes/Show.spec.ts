@@ -386,3 +386,102 @@ describe('classes/Show — re-issue certificates', () => {
         expect(labels).not.toContain('Re-issue certificates');
     });
 });
+
+// Single-cert corrections (Pass 2) — revoke an awarded credit + issue a missed
+// person, only on a re-opened (previously completed) class.
+describe('classes/Show — revoke a single certificate', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+        mockGet(reopenedDetail);
+    });
+
+    it('shows the credits with a Revoke action and the name-spelling hint', async () => {
+        const wrapper = await mountShow();
+
+        const credits = wrapper.find('[data-testid="credits-awarded"]');
+        expect(credits.exists()).toBe(true);
+        expect(credits.text()).toContain('Dana Reed');
+        expect(credits.text()).toContain("Wrong spelling?");
+        expect(
+            wrapper.find('[data-testid="revoke-cert"]').exists(),
+        ).toBe(true);
+    });
+
+    it('confirming a revoke posts to the completion revoke endpoint', async () => {
+        (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: reopenedDetail,
+        });
+        const wrapper = await mountShow();
+
+        await wrapper.find('[data-testid="revoke-cert"]').trigger('click');
+        await flushPromises();
+
+        const dialog = document.body.querySelector(
+            '[data-testid="revoke-dialog"]',
+        );
+        expect(dialog).not.toBeNull();
+
+        const reason = document.body.querySelector<HTMLTextAreaElement>(
+            '[data-testid="revoke-reason"]',
+        )!;
+        reason.value = 'Attended the wrong session';
+        reason.dispatchEvent(new Event('input', { bubbles: true }));
+        await flushPromises();
+
+        document.body
+            .querySelector<HTMLButtonElement>('[data-testid="revoke-confirm"]')!
+            .click();
+        await flushPromises();
+
+        // completion cp1 (Dana's Fall Protection Basics credit) is revoked.
+        expect(axios.post).toHaveBeenCalledWith(
+            '/api/classes/c1/completions/cp1/revoke',
+            { reason: 'Attended the wrong session' },
+            expect.anything(),
+        );
+    });
+
+    it('hides Revoke on a completed (locked) class', async () => {
+        mockGet(completedDetail);
+        const wrapper = await mountShow();
+        expect(wrapper.find('[data-testid="revoke-cert"]').exists()).toBe(false);
+    });
+});
+
+describe('classes/Show — issue a single certificate', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+        mockGet(reopenedDetail);
+    });
+
+    it('offers Issue certificate on a re-opened class and opens the modal', async () => {
+        const wrapper = await mountShow();
+
+        const open = wrapper
+            .findAll('button')
+            .find((b) => b.text() === 'Issue certificate');
+        expect(open).toBeTruthy();
+
+        await open!.trigger('click');
+        await flushPromises();
+
+        expect(
+            document.body.querySelector('[data-testid="issue-dialog"]'),
+        ).not.toBeNull();
+        // The confirm is disabled until a person is chosen.
+        expect(
+            document.body
+                .querySelector('[data-testid="issue-confirm"]')
+                ?.getAttribute('disabled'),
+        ).not.toBeNull();
+    });
+
+    it('hides Issue certificate on a never-completed scheduled class', async () => {
+        mockGet({ ...reopenedDetail, completion_date: null });
+        const wrapper = await mountShow();
+        const labels = wrapper.findAll('button').map((b) => b.text());
+        expect(labels).not.toContain('Issue certificate');
+    });
+});
