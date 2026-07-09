@@ -117,6 +117,46 @@ class UsersPickerApiTest extends TestCase
         $this->assertNotContains($disabled->id, $ids, 'Disabled users should not appear in the picker list.');
     }
 
+    /**
+     * The class roster needs the full active+disabled pool so a manager can
+     * enroll a disabled/inactive person (e.g. recording history, someone on
+     * leave). Opt-in via ?include_disabled=1, mirroring the users list
+     * endpoint's filter — the plain-request default (above) stays unchanged.
+     */
+    public function test_include_disabled_query_param_includes_disabled_users(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $disabled = User::factory()->for($org, 'organization')->disabled()->create();
+
+        $rows = $this->actingAs($manager)
+            ->getJson('/api/users?include_disabled=1')
+            ->assertOk()
+            ->json();
+
+        $ids = collect($rows)->pluck('id')->all();
+        $this->assertContains($manager->id, $ids);
+        $this->assertContains($disabled->id, $ids);
+    }
+
+    public function test_picker_rows_carry_the_status_field(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $disabled = User::factory()->for($org, 'organization')->disabled()->create();
+
+        $rows = $this->actingAs($manager)
+            ->getJson('/api/users?include_disabled=1')
+            ->assertOk()
+            ->json();
+
+        $managerRow = collect($rows)->firstWhere('id', $manager->id);
+        $disabledRow = collect($rows)->firstWhere('id', $disabled->id);
+
+        $this->assertSame('active', $managerRow['status']);
+        $this->assertSame('disabled', $disabledRow['status']);
+    }
+
     public function test_org_scoped(): void
     {
         $orgA = Organization::factory()->create();

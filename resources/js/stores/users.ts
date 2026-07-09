@@ -91,6 +91,7 @@ export type PickerUserRow = Pick<
     | 'supervisor_name'
     | 'supervisor_sort_name'
     | 'tag_ids'
+    | 'status'
 >;
 
 /** One row submitted by the BULK USER ADD grid. */
@@ -267,15 +268,26 @@ export const useUsersStore = defineStore('users', () => {
      * pages that aren't the users Index and so never received the full list
      * via Inertia hydrate — e.g. the user-detail edit modal needs the org
      * roster to populate its supervisor dropdown. No-op if the cache is
-     * already populated (navigating in from the Index keeps its richer rows).
+     * already populated (navigating in from the Index keeps its richer rows),
+     * unless `force` is set.
+     *
+     * `includeDisabled` requests the fuller active+disabled pool (e.g. the
+     * class roster, which lets a manager enroll a disabled/inactive person
+     * for historical record-keeping). Pass `force: true` alongside it if the
+     * cache may already hold the active-only default — otherwise a prior
+     * page's plain loadPicker() call wins and disabled rows never arrive.
      */
-    async function loadPicker(force = false): Promise<void> {
+    async function loadPicker(
+        force = false,
+        includeDisabled = false,
+    ): Promise<void> {
         if (users.value.length > 0 && !force) {
             return;
         }
 
         const { data } = await axios.get<PickerUserRow[]>('/api/users', {
             headers: writeHeaders(),
+            params: includeDisabled ? { include_disabled: 1 } : undefined,
         });
 
         // Picker rows carry only a subset of UserRow; pad the rest with
@@ -291,7 +303,7 @@ export const useUsersStore = defineStore('users', () => {
             prefix_name: null,
             suffix_name: null,
             email: u.email ?? null,
-            status: 'active',
+            status: u.status ?? 'active',
             role: null,
             department: u.department ?? null,
             location: u.location ?? null,

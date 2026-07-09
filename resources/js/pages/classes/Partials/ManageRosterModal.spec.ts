@@ -345,6 +345,148 @@ describe('ManageRosterModal', () => {
         );
     });
 
+    // ── Disabled-user toggle ────────────────────────────────────────────────
+    // A manager needs to enroll a disabled/inactive person occasionally (e.g.
+    // recording history, someone on leave). Disabled people are hidden from
+    // the Available pool by default; a toggle reveals them.
+    const usersWithDisabled = [
+        {
+            id: 'u1',
+            sort_name: 'Reed, Dana',
+            email: 'dana@x.com',
+            tag_ids: [],
+            status: 'active' as const,
+        },
+        {
+            id: 'u2',
+            sort_name: 'Lee, Sam',
+            email: 'sam@x.com',
+            tag_ids: [],
+            status: 'active' as const,
+        },
+        {
+            id: 'u3',
+            sort_name: 'Kim, Pat',
+            email: 'pat@x.com',
+            tag_ids: [],
+            status: 'disabled' as const,
+        },
+    ];
+
+    it('hides disabled users from the Available list by default', async () => {
+        const wrapper = mount(ManageRosterModal, {
+            props: { open: false, classId: 'c1', users: usersWithDisabled },
+            attachTo: document.body,
+        });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        // u1 is enrolled (baseline) → Available candidates are u2 (active)
+        // and u3 (disabled). u3 must be hidden by default.
+        const availRows = document.body
+            .querySelectorAll('table')[1]
+            .querySelectorAll('tbody tr');
+        expect(availRows).toHaveLength(1);
+        expect(availRows[0].textContent).toContain('Lee, Sam');
+        expect(document.body.textContent).not.toContain('Kim, Pat');
+    });
+
+    it('reveals disabled users in Available when the toggle is switched on', async () => {
+        const wrapper = mount(ManageRosterModal, {
+            props: { open: false, classId: 'c1', users: usersWithDisabled },
+            attachTo: document.body,
+        });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        const toggle = document.body.querySelector<HTMLElement>(
+            '[data-testid="roster-show-disabled"]',
+        );
+        toggle!.click();
+        await flushPromises();
+
+        const availRows = document.body
+            .querySelectorAll('table')[1]
+            .querySelectorAll('tbody tr');
+        expect(availRows).toHaveLength(2);
+
+        const patRow = Array.from(availRows).find((r) =>
+            r.textContent?.includes('Kim, Pat'),
+        );
+        expect(patRow).toBeDefined();
+        // Marked visually as disabled.
+        expect(patRow!.textContent).toContain('Disabled');
+    });
+
+    it('always shows an enrolled disabled user on the Enrolled side, toggle or not', async () => {
+        const store = useClassesStore();
+        store.detail = {
+            c1: {
+                ...detail,
+                enrollments: [
+                    detail.enrollments[0], // u1 / e1
+                    {
+                        ...detail.enrollments[0],
+                        id: 'e3',
+                        user_id: 'u3',
+                        user_name: 'Kim, Pat',
+                        user_email: 'pat@x.com',
+                    },
+                ],
+            },
+        };
+
+        const wrapper = mount(ManageRosterModal, {
+            props: { open: false, classId: 'c1', users: usersWithDisabled },
+            attachTo: document.body,
+        });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        // Toggle stays off — the disabled-but-enrolled user still shows.
+        const assignedRows = document.body
+            .querySelectorAll('table')[0]
+            .querySelectorAll('tbody tr');
+        expect(
+            Array.from(assignedRows).some((r) =>
+                r.textContent?.includes('Kim, Pat'),
+            ),
+        ).toBe(true);
+    });
+
+    it('shuttles a disabled user in and commits the enrollment', async () => {
+        const wrapper = mount(ManageRosterModal, {
+            props: { open: false, classId: 'c1', users: usersWithDisabled },
+            attachTo: document.body,
+        });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        const toggle = document.body.querySelector<HTMLElement>(
+            '[data-testid="roster-show-disabled"]',
+        );
+        toggle!.click();
+        await flushPromises();
+
+        const availRows = document.body
+            .querySelectorAll('table')[1]
+            .querySelectorAll('tbody tr');
+        const patRow = Array.from(availRows).find((r) =>
+            r.textContent?.includes('Kim, Pat'),
+        );
+        patRow!.querySelector<HTMLButtonElement>('button[aria-label="Add"]')!.click();
+        await flushPromises();
+
+        findBtn('Done')!.click();
+        await flushPromises();
+
+        expect(axios.post).toHaveBeenCalledWith(
+            '/api/classes/c1/enrollments/bulk',
+            { enroll: ['u3'], unenroll: [] },
+            expect.anything(),
+        );
+    });
+
     it('filters the available list by department', async () => {
         const deptUsers = [
             // u1 is the enrolled student (in detail.enrollments).

@@ -4,7 +4,9 @@ import DualListShuttle from '@/components/DualListShuttle.vue';
 import TagFilter from '@/components/TagFilter.vue';
 import type { TagFilterMode } from '@/components/TagFilter.vue';
 import TagPill from '@/components/TagPill.vue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -33,6 +35,8 @@ export interface PickerUser {
     job_title?: string | null;
     location?: string | null;
     tag_ids?: string[];
+    // Missing on some legacy callers/fixtures — treated as 'active'.
+    status?: 'active' | 'disabled';
 }
 
 const props = defineProps<{
@@ -123,6 +127,11 @@ const baselineEnrollmentIds = ref<Map<string, string>>(new Map());
 const deptFilter = ref<string>('');
 const tagFilterIds = ref<string[]>([]);
 const tagFilterMode = ref<TagFilterMode>('and');
+// Off by default: disabled/inactive people are hidden from the Available
+// pool unless a manager opts in (e.g. to enroll someone on leave, or record
+// history for a since-disabled account). Already-enrolled disabled people
+// are unaffected — they always render on the Enrolled side regardless.
+const showDisabledFilter = ref(false);
 
 function seedBaseline(d: ClassDetail): void {
     baseline.value = new Set(d.enrollments.map((e) => e.user_id));
@@ -147,6 +156,7 @@ watch(
             deptFilter.value = '';
             tagFilterIds.value = [];
             tagFilterMode.value = 'and';
+            showDisabledFilter.value = false;
         }
 
         if (open && baseline.value === null && detail.value) {
@@ -177,6 +187,7 @@ interface StudentItem {
     location: string;
     tags: TagRow[];
     searchText: string;
+    disabled: boolean;
 }
 
 // Plain-text cell value for the non-tag columns. Kept in the script (not the
@@ -200,6 +211,9 @@ const toItem = (u: PickerUser): StudentItem => {
         tags,
         // Tag names are searchable even though they render as pills.
         searchText: tags.map((t) => t.name).join(' '),
+        // Rows without a status (older fixtures / other picker consumers)
+        // are treated as active.
+        disabled: u.status === 'disabled',
     };
 };
 
@@ -240,6 +254,9 @@ const assigned = computed<StudentItem[]>(() =>
 const available = computed<StudentItem[]>(() =>
     props.users
         .filter((u) => !selected.value.has(u.id))
+        .filter(
+            (u) => showDisabledFilter.value || u.status !== 'disabled',
+        )
         .filter(
             (u) => deptFilter.value === '' || u.department === deptFilter.value,
         )
@@ -419,6 +436,20 @@ function onOpenChange(value: boolean): void {
                                 placeholder="any"
                             />
                         </div>
+                        <label
+                            for="roster_show_disabled"
+                            class="flex items-center gap-1.5 text-xs"
+                        >
+                            <Checkbox
+                                id="roster_show_disabled"
+                                data-testid="roster-show-disabled"
+                                :model-value="showDisabledFilter"
+                                @update:model-value="
+                                    (v) => (showDisabledFilter = Boolean(v))
+                                "
+                            />
+                            Show disabled users
+                        </label>
                     </div>
                 </template>
 
@@ -438,6 +469,19 @@ function onOpenChange(value: boolean): void {
                         >
                             —
                         </span>
+                    </span>
+                    <span
+                        v-else-if="column.key === 'name'"
+                        class="flex items-center gap-1.5"
+                    >
+                        {{ cellValue(item as StudentItem, column.key) }}
+                        <Badge
+                            v-if="(item as StudentItem).disabled"
+                            variant="secondary"
+                            class="text-[10px]"
+                        >
+                            Disabled
+                        </Badge>
                     </span>
                     <template v-else>
                         {{ cellValue(item as StudentItem, column.key) }}

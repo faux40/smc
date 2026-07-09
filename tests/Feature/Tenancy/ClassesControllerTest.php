@@ -504,6 +504,38 @@ class ClassesControllerTest extends TestCase
             ->assertStatus(422);
     }
 
+    /**
+     * "Disabled" is a status flag distinct from soft-delete — a manager may
+     * still need to enroll a disabled/inactive person (e.g. recording
+     * history, someone on leave). The enroll validation only gates on
+     * deleted_at, so this already works; guard it against regressing.
+     */
+    public function test_enroll_allows_a_disabled_but_not_deleted_user(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $disabled = User::factory()->for($org, 'organization')->disabled()->create();
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments", ['user_id' => $disabled->id])
+            ->assertOk()
+            ->assertJsonPath('enrollments.0.user_id', $disabled->id);
+    }
+
+    public function test_enroll_rejects_a_soft_deleted_user(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $deleted = User::factory()->for($org, 'organization')->create();
+        $deleted->delete();
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments", ['user_id' => $deleted->id])
+            ->assertStatus(422);
+    }
+
     public function test_bulk_enrollment_adds_and_removes_in_one_request(): void
     {
         $org = Organization::factory()->create();
@@ -574,6 +606,23 @@ class ClassesControllerTest extends TestCase
 
         $this->assertDatabaseMissing('class_enrollments', ['id' => $enrollment->id]);
         $this->assertSoftDeleted('completions', ['id' => $completion->id]);
+    }
+
+    public function test_bulk_enrollment_allows_a_disabled_but_not_deleted_user(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $disabled = User::factory()->for($org, 'organization')->disabled()->create();
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments/bulk", [
+                'enroll' => [$disabled->id],
+                'unenroll' => [],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('class_enrollments', ['class_id' => $class->id, 'user_id' => $disabled->id]);
     }
 
     public function test_bulk_enrollment_rejects_cross_org_user(): void

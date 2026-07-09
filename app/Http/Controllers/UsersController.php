@@ -104,7 +104,7 @@ class UsersController extends Controller
      * with `users.` so the sort joins (role / supervisor self-join) never make a
      * column reference ambiguous.
      *
-     * @return \Illuminate\Database\Eloquent\Builder<User>
+     * @return Builder<User>
      */
     private function filteredUsersQuery(Request $request): Builder
     {
@@ -170,7 +170,7 @@ class UsersController extends Controller
      * supervisor sort via left joins (one-role-per-user + 1:1 supervisor keep
      * the joins row-preserving). Always ends on users.id for a stable order.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<User>  $query
+     * @param  Builder<User>  $query
      */
     private function applySort(Builder $query, string $sort, string $dir): void
     {
@@ -256,14 +256,16 @@ class UsersController extends Controller
             403,
         );
 
+        $includeDisabled = filter_var($request->query('include_disabled', false), FILTER_VALIDATE_BOOLEAN);
+
         $users = User::query()
-            ->where('status', 'active')
+            ->when(! $includeDisabled, fn ($q) => $q->where('status', 'active'))
             ->with(['tags:id', 'supervisor:id,prefix_name,f_name,m_name,l_name,suffix_name'])
             ->orderBy('l_name')
             ->orderBy('f_name')
             ->get([
                 'id', 'f_name', 'm_name', 'l_name', 'email', 'employee_number',
-                'department', 'location', 'job_title', 'supervisor_id',
+                'department', 'location', 'job_title', 'supervisor_id', 'status',
             ]);
 
         return response()->json($users->map(fn (User $u) => $this->pickerRow($u)));
@@ -294,6 +296,7 @@ class UsersController extends Controller
             'supervisor_name' => $u->supervisor?->name,
             'supervisor_sort_name' => $u->supervisor?->sort_name,
             'tag_ids' => $u->tags->pluck('id')->all(),
+            'status' => $u->status,
         ];
     }
 

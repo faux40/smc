@@ -361,7 +361,11 @@ onMounted(async () => {
         await Promise.all([
             store.loadDetail(props.classId),
             trainings.load(),
-            users.loadPicker(),
+            // Force + include disabled: the roster (and the missed-person
+            // certificate picker below) both need the full active+disabled
+            // pool, regardless of whether an earlier page in this session
+            // already warmed the shared cache with the active-only default.
+            users.loadPicker(true, true),
         ]);
         setFrom(detail.value);
     } catch (e) {
