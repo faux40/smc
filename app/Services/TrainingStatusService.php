@@ -38,6 +38,20 @@ class TrainingStatusService
     ];
 
     /**
+     * Human labels for each bucket — the canonical vocabulary shared by the
+     * compliance UI badge (ComplianceStatusBadge.vue) and the server-rendered
+     * compliance-status report (so an exported PDF/CSV reads the same words the
+     * screen shows).
+     */
+    public const LABELS = [
+        self::STATUS_OVERDUE => 'Overdue',
+        self::STATUS_DUE_SOON => 'Due soon',
+        self::STATUS_NOT_STARTED => 'Not started',
+        self::STATUS_CURRENT => 'Current',
+        self::STATUS_AS_NEEDED => 'As needed',
+    ];
+
+    /**
      * @param  int  $dueSoonDays  the org's amber window (Organization::expiringSoonDays())
      */
     public function statusFor(

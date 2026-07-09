@@ -430,57 +430,12 @@ class ComplianceQuery
             $base->where('status', $opts['status']);
         }
 
-        // Optional search across the user's name/email + the profile fields the
-        // detail list shows (EE# / dept / location) + tag names. Via the
-        // relation so there's no join (and no org_id ambiguity).
+        // Optional search + tag filter across the TA's user — same seams the
+        // compliance-status report reuses (extracted so both agree).
         if ($like = $this->searchLike($opts)) {
-            $base->whereHas('user', fn ($u) => $u->where(function ($w) use ($like) {
-                foreach (['f_name', 'm_name', 'l_name', 'email', 'employee_number', 'department', 'location'] as $col) {
-                    $w->orWhereRaw("LOWER({$col}) LIKE ?", [$like]);
-                }
-                // Tag-name match. The morph relation would compare uuid users.id
-                // to varchar taggables.taggable_id (Postgres rejects it), so use
-                // the explicit CAST subquery (same pattern as UsersController).
-                $w->orWhereExists(fn ($sub) => $sub->select(DB::raw(1))
-                    ->from('taggables')
-                    ->join('tags', 'tags.id', '=', 'taggables.tag_id')
-                    ->whereRaw('taggables.taggable_id = CAST(users.id AS text)')
-                    ->where('taggables.taggable_type', User::class)
-                    ->whereNull('tags.deleted_at')
-                    ->whereRaw('LOWER(tags.name) LIKE ?', [$like]));
-            }));
+            $this->applyUserSearch($base, $like);
         }
-
-        // Optional tag filter (and / or / not) — same CAST subquery as
-        // UsersController, correlated to the TA's user.
-        $tagIds = array_values(array_filter(
-            (array) ($opts['tags'] ?? []),
-            fn ($v) => is_string($v) && $v !== '',
-        ));
-        if (count($tagIds) > 0) {
-            $mode = in_array($opts['tags_mode'] ?? null, ['and', 'or', 'not'], true)
-                ? $opts['tags_mode']
-                : 'and';
-            $tagSubquery = function ($sub, array $ids) {
-                $sub->select(DB::raw(1))
-                    ->from('taggables')
-                    ->join('tags', 'tags.id', '=', 'taggables.tag_id')
-                    ->whereRaw('taggables.taggable_id = CAST(training_assignments.user_id AS text)')
-                    ->where('taggables.taggable_type', User::class)
-                    ->whereNull('tags.deleted_at')
-                    ->whereIn('tags.id', $ids);
-            };
-
-            if ($mode === 'and') {
-                foreach ($tagIds as $id) {
-                    $base->whereExists(fn ($sub) => $tagSubquery($sub, [$id]));
-                }
-            } elseif ($mode === 'or') {
-                $base->whereExists(fn ($sub) => $tagSubquery($sub, $tagIds));
-            } else { // 'not'
-                $base->whereNotExists(fn ($sub) => $tagSubquery($sub, $tagIds));
-            }
-        }
+        $this->applyTagFilter($base, $opts);
 
         // Worst-first by the canonical bucket order, then soonest expiry.
         $rank = collect(self::BUCKETS)
@@ -524,6 +479,143 @@ class ComplianceQuery
                 'total' => $paginator->total(),
             ],
         ];
+    }
+
+    /**
+     * The canonical per-(user, assigned training) status snapshot — the audit
+     * document's dataset. One TrainingAssignment row per assignment (never-
+     * started people included: they're TA rows with status not_started/overdue),
+     * carrying the materialized status, expiry, and requirement sources. Reuses
+     * the exact filter seams the compliance drill-downs use (status, user
+     * search, tag filter) so the report agrees with the screens, and adds an
+     * optional requirement_id / training_id scope. Returns the *builder* so the
+     * caller can paginate (on-screen) or chunk (export) — no parallel status
+     * derivation, since status is read straight off the column.
+     *
+     * @param  array<string, mixed>  $opts  statuses[]|status, q, tags, tags_mode, requirement_id, training_id
+     * @return EloquentBuilder<TrainingAssignment>
+     */
+    public function statusReportQuery(Organization $org, array $opts = []): EloquentBuilder
+    {
+        $base = TrainingAssignment::query()->where('org_id', $org->id);
+
+        // Optional scope: a single requirement (RequirementDetail export) and/or
+        // a single training. The requirement scope matches the assignments that
+        // requirement actively sources — the same predicate as usersForRequirement.
+        if (! empty($opts['training_id'])) {
+            $base->where('training_id', $opts['training_id']);
+        }
+        if (! empty($opts['requirement_id'])) {
+            $base->whereHas('activeSources', fn ($q) => $q
+                ->where('sourceable_type', Requirement::class)
+                ->where('sourceable_id', $opts['requirement_id']));
+        }
+
+        // Status: multi-select (statuses[]) from the reports screen, or the
+        // single `status` chip from the drill-downs. Both filter the stored
+        // bucket; unknown values are dropped.
+        $statuses = array_values(array_filter(
+            (array) ($opts['statuses'] ?? []),
+            fn ($v) => in_array($v, self::BUCKETS, true),
+        ));
+        if ($statuses !== []) {
+            $base->whereIn('status', $statuses);
+        } elseif (in_array($opts['status'] ?? null, self::BUCKETS, true)) {
+            $base->where('status', $opts['status']);
+        }
+
+        if ($like = $this->searchLike($opts)) {
+            $this->applyUserSearch($base, $like);
+        }
+        $this->applyTagFilter($base, $opts);
+
+        $rank = collect(self::BUCKETS)
+            ->map(fn (string $b, int $i) => "WHEN '{$b}' THEN {$i}")
+            ->implode(' ');
+
+        return $base
+            ->with([
+                'user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location',
+                'user.tags:id',
+                // Requirement sources for the "Source" column. Constrained to
+                // active requirement sources; morphTo eager-load batches the
+                // requirement names (no N+1).
+                'activeSources' => fn ($q) => $q->where('sourceable_type', Requirement::class),
+                'activeSources.sourceable:id,name',
+            ])
+            ->orderByRaw("CASE status {$rank} ELSE 99 END")
+            ->orderByRaw('expires_at IS NULL') // non-null expiries first
+            ->orderBy('expires_at')
+            ->orderBy('id');
+    }
+
+    /**
+     * User search across name/email + the profile fields the detail lists show
+     * (EE# / dept / location) + tag names. Via the `user` relation so there's no
+     * join (and no org_id ambiguity). Shared by the drill-down pager + the
+     * compliance-status report.
+     *
+     * @param  EloquentBuilder<TrainingAssignment>  $base
+     */
+    private function applyUserSearch(EloquentBuilder $base, string $like): void
+    {
+        $base->whereHas('user', fn ($u) => $u->where(function ($w) use ($like) {
+            foreach (['f_name', 'm_name', 'l_name', 'email', 'employee_number', 'department', 'location'] as $col) {
+                $w->orWhereRaw("LOWER({$col}) LIKE ?", [$like]);
+            }
+            // Tag-name match. The morph relation would compare uuid users.id
+            // to varchar taggables.taggable_id (Postgres rejects it), so use
+            // the explicit CAST subquery (same pattern as UsersController).
+            $w->orWhereExists(fn ($sub) => $sub->select(DB::raw(1))
+                ->from('taggables')
+                ->join('tags', 'tags.id', '=', 'taggables.tag_id')
+                ->whereRaw('taggables.taggable_id = CAST(users.id AS text)')
+                ->where('taggables.taggable_type', User::class)
+                ->whereNull('tags.deleted_at')
+                ->whereRaw('LOWER(tags.name) LIKE ?', [$like]));
+        }));
+    }
+
+    /**
+     * Optional tag filter (and / or / not) — the same CAST subquery as
+     * UsersController, correlated to the TA's user. Shared by the drill-down
+     * pager + the compliance-status report.
+     *
+     * @param  EloquentBuilder<TrainingAssignment>  $base
+     * @param  array<string, mixed>  $opts
+     */
+    private function applyTagFilter(EloquentBuilder $base, array $opts): void
+    {
+        $tagIds = array_values(array_filter(
+            (array) ($opts['tags'] ?? []),
+            fn ($v) => is_string($v) && $v !== '',
+        ));
+        if (count($tagIds) === 0) {
+            return;
+        }
+
+        $mode = in_array($opts['tags_mode'] ?? null, ['and', 'or', 'not'], true)
+            ? $opts['tags_mode']
+            : 'and';
+        $tagSubquery = function ($sub, array $ids) {
+            $sub->select(DB::raw(1))
+                ->from('taggables')
+                ->join('tags', 'tags.id', '=', 'taggables.tag_id')
+                ->whereRaw('taggables.taggable_id = CAST(training_assignments.user_id AS text)')
+                ->where('taggables.taggable_type', User::class)
+                ->whereNull('tags.deleted_at')
+                ->whereIn('tags.id', $ids);
+        };
+
+        if ($mode === 'and') {
+            foreach ($tagIds as $id) {
+                $base->whereExists(fn ($sub) => $tagSubquery($sub, [$id]));
+            }
+        } elseif ($mode === 'or') {
+            $base->whereExists(fn ($sub) => $tagSubquery($sub, $tagIds));
+        } else { // 'not'
+            $base->whereNotExists(fn ($sub) => $tagSubquery($sub, $tagIds));
+        }
     }
 
     /** Normalized LIKE term, or null when no search. */

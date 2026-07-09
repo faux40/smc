@@ -4,8 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Completion;
 use App\Models\Organization;
+use App\Models\Requirement;
 use App\Models\Training;
+use App\Models\TrainingAssignment;
 use App\Models\User;
+use App\Services\ComplianceQuery;
+use App\Services\TrainingStatusService;
 use App\Support\CompletionSerializer;
 use App\Support\ExpiryStatus;
 use App\Support\PdfRenderer;
@@ -34,6 +38,11 @@ class ReportsController extends Controller
     private const MANAGER_PLUS_ROLES = ['Owner', 'SuperAdmin', 'Admin', 'Manager'];
 
     private const ROW_CAP = 2000;
+
+    public function __construct(
+        private readonly ComplianceQuery $compliance,
+        private readonly TrainingStatusService $status,
+    ) {}
 
     /** Reports landing (Manager+) — the org completion report + filters. */
     public function index(Request $request): Response
@@ -101,7 +110,7 @@ class ReportsController extends Controller
             org: $org,
             title: 'Completion report',
             subtitle: $this->dateRangeLabel($request),
-            columns: $this->selectedColumns($request),
+            columns: $this->selectedColumns($request, self::COMPLETION_COLUMNS),
             rows: $rows,
             capped: $capped,
             filename: 'completion-report.pdf',
@@ -134,18 +143,35 @@ class ReportsController extends Controller
      */
     private function completionsExportCsv(Request $request, Organization $org): StreamedResponse
     {
-        $columns = $this->selectedColumns($request);
+        $columns = $this->selectedColumns($request, self::COMPLETION_COLUMNS);
         $groupBy = ReportGrouping::sanitize((array) $request->query('group_by', []));
         $filename = 'completions-'.Carbon::now(config('app.display_timezone'))->format('Y-m-d').'.csv';
 
-        return response()->streamDownload(function () use ($request, $org, $columns, $groupBy) {
+        $lines = $groupBy !== []
+            ? $this->completionsGroupedCsvLines($request, $org, $columns, $groupBy)
+            : $this->completionsFlatCsvLines($request, $org, $columns);
+
+        return $this->streamCsv($filename, $columns, $lines);
+    }
+
+    /**
+     * Generic CSV streaming seam (extracted from the F11 completion export so
+     * both it and the compliance-status report share the exact mechanics):
+     * header row from the column labels, then each yielded line written via
+     * `fputcsv` against `php://output` so nothing is buffered in memory.
+     * `Content-Disposition`/`Content-Type` are handled by `streamDownload()`.
+     *
+     * @param  array<int, array{key: string, label: string}>  $columns
+     * @param  iterable<int, array<int, mixed>>  $rows  each item is one CSV line's cells
+     */
+    private function streamCsv(string $filename, array $columns, iterable $rows): StreamedResponse
+    {
+        return response()->streamDownload(function () use ($columns, $rows) {
             $out = fopen('php://output', 'w');
             fputcsv($out, array_column($columns, 'label'));
 
-            if ($groupBy !== []) {
-                $this->writeGroupedCsvRows($out, $request, $org, $columns, $groupBy);
-            } else {
-                $this->writeFlatCsvRows($out, $request, $org, $columns);
+            foreach ($rows as $line) {
+                fputcsv($out, $line);
             }
 
             fclose($out);
@@ -153,24 +179,62 @@ class ReportsController extends Controller
     }
 
     /**
-     * Ungrouped CSV rows: streamed straight from a chunked query in the
-     * shared filter/order, so an arbitrarily large org never holds more than
-     * one chunk of completions in memory at a time.
+     * A shaped report row → its CSV cells, in the selected column order.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<int, array{key: string, label: string}>  $columns
+     * @return array<int, mixed>
+     */
+    private function rowToCsv(array $row, array $columns): array
+    {
+        return array_map(fn (array $col) => $row[$col['key']] ?? '', $columns);
+    }
+
+    /**
+     * Grouped shaped rows → interleaved CSV lines: a one-cell group-label row
+     * ("Location: Yard (2)") followed by that bucket's data rows, mirroring the
+     * PDF's group bands exactly (same `ReportGrouping::flatten` output). Shared
+     * by the completion + compliance-status CSV exports.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  array<int, string>  $groupBy
+     * @param  array<int, array{key: string, label: string}>  $columns
+     * @return \Generator<int, array<int, mixed>>
+     */
+    private function groupedCsvLines(array $rows, array $groupBy, array $columns, bool $capped): \Generator
+    {
+        foreach (ReportGrouping::flatten($rows, $groupBy) as $item) {
+            if ($item['type'] === 'group') {
+                yield [$item['label'].' ('.$item['count'].')'];
+            } else {
+                yield $this->rowToCsv($item['data'], $columns);
+            }
+        }
+
+        if ($capped) {
+            yield ['Showing the first '.self::ROW_CAP.' rows — narrow your filters to see the rest.'];
+        }
+    }
+
+    /**
+     * Ungrouped completion CSV lines: streamed straight from a chunked query in
+     * the shared filter/order, so an arbitrarily large org never holds more
+     * than one chunk of completions in memory at a time.
      *
      * @param  array<int, array{key: string, label: string}>  $columns
+     * @return \Generator<int, array<int, mixed>>
      */
-    private function writeFlatCsvRows($out, Request $request, Organization $org, array $columns): void
+    private function completionsFlatCsvLines(Request $request, Organization $org, array $columns): \Generator
     {
         $total = 0;
 
-        $this->completionsQuery($request, $org)
-            ->with($this->completionRelations())
-            ->chunk(500, function (Collection $chunk) use ($out, $org, $columns, &$total) {
-                foreach ($this->reportRows($chunk, $org) as $row) {
-                    fputcsv($out, array_map(fn (array $col) => $row[$col['key']] ?? '', $columns));
-                }
-                $total += $chunk->count();
-            });
+        foreach ($this->completionsQuery($request, $org)->with($this->completionRelations())->lazy(500)->chunk(500) as $chunk) {
+            $collection = new Collection($chunk->all());
+            foreach ($this->reportRows($collection, $org) as $row) {
+                yield $this->rowToCsv($row, $columns);
+            }
+            $total += $collection->count();
+        }
 
         if ($total > self::ROW_CAP) {
             Log::info('CSV completion export exceeded the PDF row cap', [
@@ -181,14 +245,14 @@ class ReportsController extends Controller
     }
 
     /**
-     * Grouped CSV rows: materializes the same capped row set the PDF export
-     * uses, runs it through the same `ReportGrouping::flatten`, and renders
-     * each item as either a one-cell group-label row or a normal data row.
+     * Grouped completion CSV lines: materializes the same capped row set the PDF
+     * export uses and renders it through the shared group flattener.
      *
      * @param  array<int, array{key: string, label: string}>  $columns
      * @param  array<int, string>  $groupBy
+     * @return \Generator<int, array<int, mixed>>
      */
-    private function writeGroupedCsvRows($out, Request $request, Organization $org, array $columns, array $groupBy): void
+    private function completionsGroupedCsvLines(Request $request, Organization $org, array $columns, array $groupBy): \Generator
     {
         $all = $this->completionsQuery($request, $org)
             ->with($this->completionRelations())
@@ -198,17 +262,7 @@ class ReportsController extends Controller
         $capped = $all->count() > self::ROW_CAP;
         $rows = $this->reportRows($all->take(self::ROW_CAP), $org);
 
-        foreach (ReportGrouping::flatten($rows, $groupBy) as $item) {
-            if ($item['type'] === 'group') {
-                fputcsv($out, [$item['label'].' ('.$item['count'].')']);
-            } else {
-                fputcsv($out, array_map(fn (array $col) => $item['data'][$col['key']] ?? '', $columns));
-            }
-        }
-
-        if ($capped) {
-            fputcsv($out, ['Showing the first '.self::ROW_CAP.' rows — narrow your filters to see the rest.']);
-        }
+        yield from $this->groupedCsvLines($rows, $groupBy, $columns, $capped);
     }
 
     /**
@@ -250,23 +304,47 @@ class ReportsController extends Controller
     ];
 
     /**
-     * Resolve which columns the export PDF should render, honoring the
-     * on-screen column show/hide + order passed as `columns[]`. Unknown keys
-     * are ignored (whitelist); an empty/absent/all-unknown selection falls
-     * back to the full catalog rather than rendering an empty table.
+     * The compliance-status report's column catalog (key → label), in default
+     * order. Distinct from the completion catalog: this report is one row per
+     * (user, assigned training) with the *current* status + due date + source,
+     * not a completion record. `expires_at` reads "Expires / Due" to make clear
+     * it's the forward-looking due date (F12 date-field clarity), not a
+     * completed date.
      *
+     * @var array<string, string>
+     */
+    private const COMPLIANCE_STATUS_COLUMNS = [
+        'user' => 'User',
+        'employee_number' => 'Employee #',
+        'department' => 'Department',
+        'location' => 'Location',
+        'training' => 'Training',
+        'status' => 'Status',
+        'expires_at' => 'Expires / Due',
+        'days_until_due' => 'Days until due',
+        'source' => 'Source',
+    ];
+
+    /**
+     * Resolve which columns the export should render, honoring the on-screen
+     * column show/hide + order passed as `columns[]`. Unknown keys are ignored
+     * (whitelist against the given catalog); an empty/absent/all-unknown
+     * selection falls back to the full catalog rather than rendering an empty
+     * table.
+     *
+     * @param  array<string, string>  $catalog  key → label whitelist for this report
      * @return array<int, array{key: string, label: string}>
      */
-    private function selectedColumns(Request $request): array
+    private function selectedColumns(Request $request, array $catalog): array
     {
         $requested = array_values(array_filter(
             (array) $request->query('columns', []),
-            fn ($k) => is_string($k) && isset(self::COMPLETION_COLUMNS[$k]),
+            fn ($k) => is_string($k) && isset($catalog[$k]),
         ));
-        $keys = $requested !== [] ? $requested : array_keys(self::COMPLETION_COLUMNS);
+        $keys = $requested !== [] ? $requested : array_keys($catalog);
 
         return array_map(
-            fn (string $key) => ['key' => $key, 'label' => self::COMPLETION_COLUMNS[$key]],
+            fn (string $key) => ['key' => $key, 'label' => $catalog[$key]],
             $keys,
         );
     }
@@ -472,6 +550,238 @@ class ReportsController extends Controller
         ));
         if ($statuses !== []) {
             $parts[] = 'Status: '.implode(', ', array_map(fn ($s) => $statusLabels[$s], $statuses));
+        }
+
+        return $parts === [] ? null : implode('   ·   ', $parts);
+    }
+
+    // ------------------------------------------------------------------
+    // F12 — compliance-status snapshot (the audit document): every employee ×
+    // each assigned training with its CURRENT status / due date / source,
+    // including never-started people. Dataset comes from ComplianceQuery's TA
+    // snapshot (no parallel status derivation); rendered on-screen, as PDF, and
+    // as CSV via the same seams the completion report uses.
+    // ------------------------------------------------------------------
+
+    /**
+     * Compliance-status report — on-screen paginated JSON ({data, meta}).
+     * Filters mirror the compliance screens (status multi-select, tag, search)
+     * plus optional requirement_id / training_id scope.
+     */
+    public function complianceStatus(Request $request): JsonResponse
+    {
+        $this->authorizeManager($request);
+        $org = $request->user()->organization;
+
+        $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
+        $page = $this->compliance
+            ->statusReportQuery($org, $this->complianceStatusOpts($request))
+            ->paginate($perPage);
+
+        return response()->json([
+            'data' => $this->complianceStatusRows($page->getCollection()),
+            'meta' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * Compliance-status report — full filtered set as a PDF (capped), or a
+     * streamed CSV when `?format=csv`. Both branches share the same filters
+     * (statusReportQuery), column resolution, row shaping, and grouping — only
+     * the rendering differs. Filename `compliance-status-YYYY-MM-DD.{pdf,csv}`.
+     */
+    public function complianceStatusExport(Request $request): PdfBuilder|StreamedResponse
+    {
+        $this->authorizeManager($request);
+        $org = $request->user()->organization;
+        $opts = $this->complianceStatusOpts($request);
+        $columns = $this->selectedColumns($request, self::COMPLIANCE_STATUS_COLUMNS);
+        $groupBy = ReportGrouping::sanitize((array) $request->query('group_by', []));
+        $date = Carbon::now(config('app.display_timezone'))->format('Y-m-d');
+
+        if ($request->query('format') === 'csv') {
+            $lines = $groupBy !== []
+                ? $this->complianceStatusGroupedCsvLines($org, $opts, $columns, $groupBy)
+                : $this->complianceStatusFlatCsvLines($org, $opts, $columns);
+
+            return $this->streamCsv('compliance-status-'.$date.'.csv', $columns, $lines);
+        }
+
+        $all = $this->compliance->statusReportQuery($org, $opts)
+            ->limit(self::ROW_CAP + 1)
+            ->get();
+
+        $capped = $all->count() > self::ROW_CAP;
+        $rows = $this->complianceStatusRows($all->take(self::ROW_CAP));
+
+        return $this->tableReport(
+            org: $org,
+            title: 'Compliance status',
+            subtitle: $this->complianceStatusSubtitle($org, $opts),
+            columns: $columns,
+            rows: $rows,
+            capped: $capped,
+            filename: 'compliance-status-'.$date.'.pdf',
+            filters: $this->complianceStatusFilterSummary($request),
+            groups: $groupBy !== [] ? ReportGrouping::flatten($rows, $groupBy) : [],
+        );
+    }
+
+    /**
+     * Parse the compliance-status request into the ComplianceQuery opts shape.
+     *
+     * @return array<string, mixed>
+     */
+    private function complianceStatusOpts(Request $request): array
+    {
+        return [
+            'statuses' => (array) $request->query('statuses', []),
+            'q' => (string) $request->query('q', ''),
+            'tags' => (array) $request->query('tags', []),
+            'tags_mode' => $request->query('tags_mode'),
+            'requirement_id' => $request->query('requirement_id'),
+            'training_id' => $request->query('training_id'),
+        ];
+    }
+
+    /**
+     * Map compliance-status TAs → report rows: user identity, training, the
+     * labeled current status (canonical vocabulary), the expiry/due date,
+     * signed days-until-due (negative = overdue), and the source (requirement
+     * name(s), or "Direct"). Users must be eager-loaded (statusReportQuery
+     * does this); `activeSources.sourceable` supplies the source names.
+     *
+     * @param  Collection<int, TrainingAssignment>  $tas
+     * @return array<int, array<string, mixed>>
+     */
+    private function complianceStatusRows(Collection $tas): array
+    {
+        return $tas->map(function (TrainingAssignment $ta) {
+            $u = $ta->user;
+
+            $sources = $ta->relationLoaded('activeSources')
+                ? $ta->activeSources
+                    ->filter(fn ($s) => $s->sourceable_type === Requirement::class)
+                    ->map(fn ($s) => $s->sourceable?->name)
+                    ->filter()
+                    ->unique()
+                    ->values()
+                : collect();
+
+            $days = $this->status->daysUntilDue($ta);
+
+            return [
+                'id' => $ta->id,
+                'user_id' => $ta->user_id,
+                'training_id' => $ta->training_id,
+                'tag_ids' => $u && $u->relationLoaded('tags')
+                    ? $u->tags->pluck('id')->all()
+                    : [],
+                'user' => $u?->sort_name ?? '—',
+                'employee_number' => $u?->employee_number ?? '—',
+                'department' => $u?->department ?? '—',
+                'location' => $u?->location ?? '—',
+                'training' => $ta->name ?? '—',
+                'status' => TrainingStatusService::LABELS[$ta->status] ?? $ta->status,
+                // Raw bucket key for the on-screen badge (`_band`).
+                'status_key' => $ta->status,
+                'expires_at' => $ta->expires_at?->toDateString() ?? '—',
+                'days_until_due' => $days === null ? '—' : (string) $days,
+                'source' => $sources->isNotEmpty() ? $sources->implode(', ') : 'Direct',
+                '_band' => $ta->status,
+            ];
+        })->all();
+    }
+
+    /**
+     * Ungrouped compliance-status CSV lines — streamed from a chunked query so
+     * a large org never holds more than one chunk of TAs in memory.
+     *
+     * @param  array<string, mixed>  $opts
+     * @param  array<int, array{key: string, label: string}>  $columns
+     * @return \Generator<int, array<int, mixed>>
+     */
+    private function complianceStatusFlatCsvLines(Organization $org, array $opts, array $columns): \Generator
+    {
+        $total = 0;
+
+        foreach ($this->compliance->statusReportQuery($org, $opts)->lazy(500)->chunk(500) as $chunk) {
+            $collection = new Collection($chunk->all());
+            foreach ($this->complianceStatusRows($collection) as $row) {
+                yield $this->rowToCsv($row, $columns);
+            }
+            $total += $collection->count();
+        }
+
+        if ($total > self::ROW_CAP) {
+            Log::info('CSV compliance-status export exceeded the PDF row cap', [
+                'org_id' => $org->id,
+                'rows' => $total,
+            ]);
+        }
+    }
+
+    /**
+     * Grouped compliance-status CSV lines — materializes the same capped set the
+     * PDF export uses and renders it through the shared group flattener.
+     *
+     * @param  array<string, mixed>  $opts
+     * @param  array<int, array{key: string, label: string}>  $columns
+     * @param  array<int, string>  $groupBy
+     * @return \Generator<int, array<int, mixed>>
+     */
+    private function complianceStatusGroupedCsvLines(Organization $org, array $opts, array $columns, array $groupBy): \Generator
+    {
+        $all = $this->compliance->statusReportQuery($org, $opts)
+            ->limit(self::ROW_CAP + 1)
+            ->get();
+
+        $capped = $all->count() > self::ROW_CAP;
+        $rows = $this->complianceStatusRows($all->take(self::ROW_CAP));
+
+        yield from $this->groupedCsvLines($rows, $groupBy, $columns, $capped);
+    }
+
+    /**
+     * Subtitle for the scoped export: the requirement or training name when the
+     * report is scoped to one (e.g. the RequirementDetail export), else null.
+     *
+     * @param  array<string, mixed>  $opts
+     */
+    private function complianceStatusSubtitle(Organization $org, array $opts): ?string
+    {
+        if (! empty($opts['requirement_id'])) {
+            return Requirement::where('org_id', $org->id)
+                ->whereKey($opts['requirement_id'])
+                ->value('name');
+        }
+        if (! empty($opts['training_id'])) {
+            return Training::where('org_id', $org->id)
+                ->whereKey($opts['training_id'])
+                ->value('name');
+        }
+
+        return null;
+    }
+
+    private function complianceStatusFilterSummary(Request $request): ?string
+    {
+        $parts = [];
+
+        $statuses = array_values(array_filter(
+            (array) $request->query('statuses', []),
+            fn ($v) => isset(TrainingStatusService::LABELS[$v]),
+        ));
+        if ($statuses !== []) {
+            $parts[] = 'Status: '.implode(', ', array_map(fn ($s) => TrainingStatusService::LABELS[$s], $statuses));
+        }
+        if ($q = trim((string) $request->query('q', ''))) {
+            $parts[] = 'Search: '.$q;
         }
 
         return $parts === [] ? null : implode('   ·   ', $parts);

@@ -72,6 +72,8 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('reports', [ReportsController::class, 'index'])->name('reports.page');
     Route::get('api/reports/completions', [ReportsController::class, 'completions'])->name('reports.completions');
     Route::get('api/reports/completions/export', [ReportsController::class, 'completionsExport'])->name('reports.completions-export');
+    Route::get('api/reports/compliance-status', [ReportsController::class, 'complianceStatus'])->name('reports.compliance-status');
+    Route::get('api/reports/compliance-status/export', [ReportsController::class, 'complianceStatusExport'])->name('reports.compliance-status-export');
     Route::get('api/reports/training/{training}/record', [ReportsController::class, 'trainingRecord'])->name('reports.training-record');
     Route::get('api/reports/user/{user}/record', [ReportsController::class, 'userRecord'])->name('reports.user-record');
     Route::get('api/compliance/by-requirement/{requirement}/users', [ComplianceController::class, 'requirementUsers'])->name('compliance.requirement-users');
