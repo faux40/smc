@@ -428,6 +428,34 @@ class ClassesController extends Controller
     }
 
     /**
+     * Re-lock a re-opened class WITHOUT re-running the reconciliation — the
+     * lightweight counterpart to `complete()`. For a class that was fixed up
+     * in edit mode (typo, single-cert revoke/issue — all of which already
+     * apply immediately) there's nothing left to reconcile, so this just
+     * flips the status back to `completed` and stamps `completed_at`. It
+     * deliberately does NOT call the `CompleteClass` action: no completions
+     * are issued or de-issued, no results are read, no expiries are
+     * re-stamped. Only valid on a class that's `scheduled` AND was
+     * previously completed (`completion_date` set) — i.e. re-opened, not a
+     * fresh scheduled class.
+     */
+    public function reclose(TrainingClass $class): JsonResponse
+    {
+        Gate::authorize('update', $class);
+        abort_if($class->status === 'completed', 422, 'This class is already completed.');
+        abort_if($class->completion_date === null, 422, "This class hasn't been completed yet — use Complete.");
+
+        $class->update([
+            'status' => 'completed',
+            'completed_at' => now(),
+        ]);
+
+        event(new ClassChanged($class->id, $class->org_id, 'completed'));
+
+        return response()->json($this->detail($class->fresh()));
+    }
+
+    /**
      * Deliberately renumber issued certificates for a re-opened (scheduled)
      * class — the whole class, or a single topic when `class_training_id` is
      * given. NULLs the affected completions' cert_ids so the NEXT re-close

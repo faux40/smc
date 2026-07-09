@@ -365,6 +365,22 @@ export const useClassesStore = defineStore('classes', () => {
     }
 
     /**
+     * Re-lock a re-opened class WITHOUT re-running the reconciliation — the
+     * lightweight counterpart to `complete()`. Use after fixing a typo or a
+     * single-cert correction (revoke/issue) that already applied server-side
+     * in edit mode, when there's nothing left to reconcile.
+     */
+    async function reclose(id: string): Promise<ClassDetail> {
+        const { data } = await axios.post<ClassDetail>(
+            `/api/classes/${id}/reclose`,
+            {},
+            { headers: defaultHeaders() },
+        );
+
+        return cache(data);
+    }
+
+    /**
      * Deliberately renumber issued certificates on a re-opened (scheduled)
      * class — the whole class, or a single topic when `classTrainingId` is
      * given. Clears the affected cert numbers server-side; the next re-close
@@ -463,6 +479,7 @@ export const useClassesStore = defineStore('classes', () => {
         bulkEnroll,
         complete,
         reopen,
+        reclose,
         reissueCertificates,
         revokeCertificate,
         issueCertificate,

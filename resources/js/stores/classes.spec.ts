@@ -214,6 +214,22 @@ describe('useClassesStore', () => {
         expect(store.detail.c1.status).toBe('scheduled');
     });
 
+    it('reclose() posts and caches the re-locked (completed) detail', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({ data: { ...detailA, status: 'completed' } });
+        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
+        const store = useClassesStore();
+
+        await store.reclose('c1');
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/classes/c1/reclose',
+            {},
+            expect.anything(),
+        );
+        expect(store.detail.c1.status).toBe('completed');
+    });
+
     it('reissueCertificates() posts whole-class scope and caches detail', async () => {
         const post = axios.post as ReturnType<typeof vi.fn>;
         post.mockResolvedValue({ data: detailA });

@@ -132,6 +132,29 @@ async function reopen(): Promise<void> {
     }
 }
 
+// Re-close (keep as-is) — one click, no marking modal. Only offered on a
+// re-opened class that was previously completed (canManageCerts): the class
+// is already correct (typo fix / single-cert revoke-issue applied
+// immediately), so this just re-locks it without running the full
+// reconciliation that "Complete class" does.
+const reclosing = ref(false);
+const RECLOSE_CTX = 'form:class-reclose';
+
+async function reclose(): Promise<void> {
+    reclosing.value = true;
+    errorStore.clear(RECLOSE_CTX);
+
+    try {
+        await store.reclose(props.classId);
+    } catch (e) {
+        errorStore.reportFromAxios(e, RECLOSE_CTX, {
+            fallback: 'Failed to re-close the class.',
+        });
+    } finally {
+        reclosing.value = false;
+    }
+}
+
 // Re-issue (deliberate renumbering) — only on a re-opened class that was
 // previously completed (i.e. it holds issued credit). Scope: ALL_TOPICS =
 // whole class, else a specific class_training id. The number change lands on
@@ -411,6 +434,16 @@ const totalHoursLabel = computed(
                     <Button
                         v-if="canManageCerts"
                         variant="outline"
+                        data-testid="reclose-btn"
+                        title="Re-lock the class with no changes to certificates or credit."
+                        :disabled="reclosing"
+                        @click="reclose"
+                    >
+                        Re-close (keep as-is)
+                    </Button>
+                    <Button
+                        v-if="canManageCerts"
+                        variant="outline"
                         data-testid="issue-open"
                         @click="openIssue"
                     >
@@ -432,6 +465,8 @@ const totalHoursLabel = computed(
                         Re-open
                     </Button>
                 </div>
+
+                <ErrorBanner v-if="canManageCerts" :context="RECLOSE_CTX" />
 
                 <div class="grid gap-6 lg:grid-cols-3">
                     <!-- Main column: details (name → topics → rest) + documents -->

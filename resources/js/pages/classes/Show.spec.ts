@@ -485,3 +485,57 @@ describe('classes/Show — issue a single certificate', () => {
         expect(labels).not.toContain('Issue certificate');
     });
 });
+
+// Re-close (keep as-is) — the lightweight re-lock, offered on the same
+// re-opened + previously-completed condition as the single-cert controls
+// (canManageCerts), and gone once the class is completed again.
+describe('classes/Show — re-close (keep as-is)', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+    });
+
+    it('shows the re-close button on a re-opened, previously-completed class', async () => {
+        mockGet(reopenedDetail);
+        const wrapper = await mountShow();
+        const labels = wrapper.findAll('button').map((b) => b.text());
+        expect(labels).toContain('Re-close (keep as-is)');
+    });
+
+    it('hides the re-close button on a never-completed scheduled class', async () => {
+        mockGet({ ...reopenedDetail, completion_date: null });
+        const wrapper = await mountShow();
+        const labels = wrapper.findAll('button').map((b) => b.text());
+        expect(labels).not.toContain('Re-close (keep as-is)');
+    });
+
+    it('hides the re-close button on a completed (locked) class', async () => {
+        mockGet(completedDetail);
+        const wrapper = await mountShow();
+        const labels = wrapper.findAll('button').map((b) => b.text());
+        expect(labels).not.toContain('Re-close (keep as-is)');
+    });
+
+    it('clicking Re-close posts to the reclose endpoint and does not open the marking modal', async () => {
+        mockGet(reopenedDetail);
+        (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { ...reopenedDetail, status: 'completed' },
+        });
+        const wrapper = await mountShow();
+
+        const btn = wrapper.find('[data-testid="reclose-btn"]');
+        expect(btn.exists()).toBe(true);
+        await btn.trigger('click');
+        await flushPromises();
+
+        expect(axios.post).toHaveBeenCalledWith(
+            '/api/classes/c1/reclose',
+            {},
+            expect.anything(),
+        );
+        // The heavyweight marking grid (ClassCompleteModal) never opened.
+        expect(document.body.textContent).not.toContain(
+            'Mark each attendee Pass, Fail, or Incomplete',
+        );
+    });
+});
