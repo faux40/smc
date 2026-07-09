@@ -30,6 +30,7 @@ class Completion extends Model
         'class_training_id',
         'hours',
         'notes',
+        'revoke_reason',
     ];
 
     protected $casts = [

@@ -473,6 +473,148 @@ class ClassesController extends Controller
     }
 
     /**
+     * Revoke a single issued certificate on a re-opened (scheduled) class.
+     * Soft-deletes the completion (retaining `revoke_reason` + `deleted_at` for
+     * audit) AND sets the owning enrollment's result for that topic to
+     * `incomplete`, so the authoritative re-close reconcile won't resurrect it.
+     * The CompletionObserver's `deleted` hook recalculates the user's training
+     * status. Returns the refreshed detail.
+     */
+    public function revokeCompletion(Request $request, TrainingClass $class, Completion $completion): JsonResponse
+    {
+        Gate::authorize('update', $class);
+        $this->assertEditable($class);
+
+        // The completion must be org-scoped and belong to one of THIS class's
+        // topics (route binding already rejects a cross-org id).
+        $ctIds = $class->classTrainings()->pluck('id');
+        abort_unless(
+            $completion->org_id === $class->org_id && $ctIds->contains($completion->class_training_id),
+            404,
+        );
+
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        DB::transaction(function () use ($class, $completion, $data) {
+            // Retain the reason on the soft-deleted row for auditors, then pull
+            // the cert.
+            $completion->update(['revoke_reason' => $data['reason'] ?? null]);
+            $completion->delete();
+
+            // Keep the results map in step so re-close treats this topic as
+            // non-pass for this enrollee and leaves the cert revoked.
+            $enrollment = $class->enrollments()->where('user_id', $completion->user_id)->first();
+            if ($enrollment !== null) {
+                $results = $enrollment->results ?? [];
+                $results[$completion->class_training_id] = 'incomplete';
+                $enrollment->update(['results' => $results]);
+                $this->rollUpEnrollmentStatus($enrollment, $class);
+            }
+        });
+
+        event(new CompletionDeleted($completion->id, $completion->user_id, $class->org_id));
+        event(new ClassChanged($class->id, $class->org_id, 'updated'));
+
+        return response()->json($this->detail($class->fresh()));
+    }
+
+    /**
+     * Issue a single certificate to a (possibly un-rostered) person on a
+     * re-opened (scheduled) class — the "missed someone" path. Enrolls the user
+     * if needed, mints the next cert number in the class's per-date sequence via
+     * the shared close-out numbering (CompleteClass::nextCertId — one code
+     * path), and sets the enrollment's result for that topic to `pass` so
+     * re-close preserves the credit and its number. Guarded against duplicating
+     * a live cert. Returns the refreshed detail.
+     */
+    public function issueCompletion(Request $request, TrainingClass $class, CompleteClass $action): JsonResponse
+    {
+        Gate::authorize('update', $class);
+        $this->assertEditable($class);
+
+        $data = $request->validate([
+            'user_id' => [
+                'required', 'string',
+                Rule::exists('users', 'id')->where('org_id', $class->org_id)->whereNull('deleted_at'),
+            ],
+            'class_training_id' => [
+                'required', 'string',
+                Rule::exists('class_training', 'id')->where('class_id', $class->id),
+            ],
+        ]);
+
+        $ct = $class->classTrainings()->findOrFail($data['class_training_id']);
+
+        // A snapshot-only topic (its training was deleted) can't be credited fresh.
+        abort_if($ct->training_id === null, 422, 'This topic no longer references a training and cannot issue a certificate.');
+
+        // Don't duplicate a live cert for this (user, topic).
+        abort_if(
+            Completion::query()
+                ->where('class_training_id', $ct->id)
+                ->where('user_id', $data['user_id'])
+                ->exists(),
+            422,
+            'This person already has a certificate for this topic.',
+        );
+
+        // Anchor the number/date to the class's completion date (kept across a
+        // re-open); fall back to the scheduled date for a never-completed class.
+        $completionDate = CarbonImmutable::parse(
+            $class->completion_date ?? $class->scheduled_date ?? now(),
+        );
+
+        $completion = DB::transaction(function () use ($class, $ct, $data, $action, $completionDate) {
+            // Enroll if not already on the roster (idempotent, like bulkEnrollment).
+            $enrollment = $class->enrollments()->firstOrCreate(
+                ['user_id' => $data['user_id']],
+                ['status' => 'enrolled'],
+            );
+
+            $completion = Completion::create([
+                'org_id' => $class->org_id,
+                'user_id' => $data['user_id'],
+                'module_type' => Training::class,
+                'module_id' => $ct->training_id,
+                'completion_date' => $completionDate->toDateString(),
+                'expire_date' => $ct->expire_date,
+                'cert_id' => $action->nextCertId($class, $ct, $completionDate),
+                'class_training_id' => $ct->id,
+                'hours' => $ct->hours,
+            ]);
+
+            // Keep the results map in step so re-close preserves this credit.
+            $results = $enrollment->results ?? [];
+            $results[$ct->id] = 'pass';
+            $enrollment->update(['results' => $results]);
+            $this->rollUpEnrollmentStatus($enrollment, $class);
+
+            return $completion;
+        });
+
+        event(new CompletionCreated($completion->fresh(), actorId: $request->user()->id));
+        event(new ClassChanged($class->id, $class->org_id, 'updated'));
+
+        return response()->json($this->detail($class->fresh()));
+    }
+
+    /**
+     * Re-derive an enrollment's roster status from its results map using the
+     * same rule close-out applies, so the roster badge stays truthful after a
+     * single revoke/issue (which only touch one topic).
+     */
+    private function rollUpEnrollmentStatus(ClassEnrollment $enrollment, TrainingClass $class): void
+    {
+        $passed = collect($enrollment->results ?? [])->filter(fn ($r) => $r === 'pass')->count();
+
+        $enrollment->update([
+            'status' => CompleteClass::rollUpStatus($passed, $class->classTrainings()->count()),
+        ]);
+    }
+
+    /**
      * Snapshot a training's template fields onto the class so later edits to
      * the training don't rewrite class history. Shared by store() (the at-
      * create picker) and attachTraining() (the detail-page picker).

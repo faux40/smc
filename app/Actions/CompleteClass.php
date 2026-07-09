@@ -125,7 +125,7 @@ class CompleteClass
                 }
 
                 $enrollment->update([
-                    'status' => $this->rollUpStatus($passedCount, $totalTopics),
+                    'status' => self::rollUpStatus($passedCount, $totalTopics),
                     'notes' => $enrollMark['notes'] ?? $enrollment->notes,
                     'results' => $resultMap,
                 ]);
@@ -139,6 +139,35 @@ class CompleteClass
         });
 
         return ['issued' => $issued, 'deIssued' => $deIssued];
+    }
+
+    /**
+     * The next cert id for a single (class, topic, date) — the one numbering
+     * code path reused by the "issue a missed person" endpoint so a
+     * hand-issued cert continues the class's per-date sequence and never
+     * collides with a preserved or soft-deleted number. Advances past the
+     * highest suffix used on this date across the whole class.
+     */
+    public function nextCertId(TrainingClass $class, ClassTraining $ct, CarbonImmutable $completionDate): string
+    {
+        $dateStr = $completionDate->format('Ymd');
+        $seq = $this->maxCertSeqForDate($class->classTrainings()->pluck('id'), $dateStr) + 1;
+
+        return $this->makeCertId($ct, $dateStr, $seq);
+    }
+
+    /**
+     * Roll an enrollee's per-topic pass count up to a single status. Public so
+     * the single-cert revoke/issue endpoints keep the roster badge in step with
+     * the results map they mutate, using the exact rule close-out applies.
+     */
+    public static function rollUpStatus(int $passedCount, int $totalTopics): string
+    {
+        return match (true) {
+            $totalTopics > 0 && $passedCount >= $totalTopics => 'passed',
+            $passedCount > 0 => 'partial',
+            default => 'incomplete',
+        };
     }
 
     /** The cert id for a topic: `{cert_code}{YYYYMMDD}-{NNN}` (code → CERT if unset). */
@@ -164,16 +193,6 @@ class CompleteClass
 
         $certSeq++;
         $completion->update(['cert_id' => $this->makeCertId($ct, $dateStr, $certSeq)]);
-    }
-
-    /** Roll an enrollee's per-topic pass count up to a single status. */
-    private function rollUpStatus(int $passedCount, int $totalTopics): string
-    {
-        return match (true) {
-            $totalTopics > 0 && $passedCount >= $totalTopics => 'passed',
-            $passedCount > 0 => 'partial',
-            default => 'incomplete',
-        };
     }
 
     /**

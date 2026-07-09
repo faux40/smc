@@ -204,6 +204,8 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::post('api/classes/{class}/complete', [ClassesController::class, 'complete'])->name('classes.complete');
     Route::post('api/classes/{class}/reopen', [ClassesController::class, 'reopen'])->name('classes.reopen');
     Route::post('api/classes/{class}/reissue-certificates', [ClassesController::class, 'reissueCertificates'])->name('classes.reissue-certificates');
+    Route::post('api/classes/{class}/completions/issue', [ClassesController::class, 'issueCompletion'])->name('classes.completions.issue');
+    Route::post('api/classes/{class}/completions/{completion}/revoke', [ClassesController::class, 'revokeCompletion'])->name('classes.completions.revoke');
 
     Route::inertia('classes', 'classes/Index')->name('classes.page');
     Route::get('classes/{class}', [ClassesController::class, 'showPage'])->name('classes.show-page');
