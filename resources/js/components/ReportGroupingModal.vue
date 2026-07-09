@@ -9,7 +9,15 @@
  * The host passes `baseHref` (the export URL carrying the current filters +
  * visible columns). The "Generate report" link appends the chosen dimensions
  * as ordered `group_by[]` params — the backend (ReportGrouping) nests in that
- * order. Grouping is PDF-only; the on-screen table is unaffected.
+ * order. Grouping applies to both formats: the PDF renders nested group
+ * bands, the CSV interleaves one-cell group-label rows with the data rows
+ * (see ReportsController::writeGroupedCsvRows). The on-screen table is
+ * unaffected either way.
+ *
+ * "Download CSV" reuses the exact same `finalHref` (filters + columns +
+ * group_by) and just appends `format=csv`, so it always exports precisely
+ * what "Generate report" (PDF) would — never a second source of truth for
+ * which filters/columns/grouping apply.
  */
 import { ArrowDown, ArrowUp } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
@@ -98,6 +106,13 @@ const finalHref = computed(() => {
 
     return `${props.baseHref}${sep}${qs}`;
 });
+
+// Same href, format=csv appended — never build the query string twice.
+const csvHref = computed(() => {
+    const sep = finalHref.value.includes('?') ? '&' : '?';
+
+    return `${finalHref.value}${sep}format=csv`;
+});
 </script>
 
 <template>
@@ -178,6 +193,17 @@ const finalHref = computed(() => {
             <DialogFooter>
                 <Button variant="outline" @click="emit('update:open', false)">
                     Cancel
+                </Button>
+                <Button variant="secondary" as-child>
+                    <a
+                        :href="csvHref"
+                        target="_blank"
+                        rel="noopener"
+                        data-testid="export-completion-report-csv"
+                        @click="emit('update:open', false)"
+                    >
+                        Download CSV
+                    </a>
                 </Button>
                 <Button as-child>
                     <a

@@ -16,9 +16,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Spatie\LaravelPdf\PdfBuilder;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Exportable PDF reports (T1). Each action assembles rows and streams a PDF via
@@ -51,7 +53,7 @@ class ReportsController extends Controller
         $org = $request->user()->organization;
 
         $base = $this->completionsQuery($request, $org)
-            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location', 'user.tags:id,name', 'rqmtElements:id']);
+            ->with($this->completionRelations());
 
         $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
         $page = $base->paginate($perPage);
@@ -67,14 +69,24 @@ class ReportsController extends Controller
         ]);
     }
 
-    /** Org completion report — full filtered set as a PDF (capped). */
-    public function completionsExport(Request $request): PdfBuilder
+    /**
+     * Org completion report — full filtered set as a PDF (capped), or as a
+     * streamed CSV when `?format=csv` is present. Both branches share the
+     * exact same filters (completionsQuery), column resolution
+     * (selectedColumns), and row shaping (reportRows) — only the rendering
+     * differs.
+     */
+    public function completionsExport(Request $request): PdfBuilder|StreamedResponse
     {
         $this->authorizeManager($request);
         $org = $request->user()->organization;
 
+        if ($request->query('format') === 'csv') {
+            return $this->completionsExportCsv($request, $org);
+        }
+
         $all = $this->completionsQuery($request, $org)
-            ->with(['user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location', 'user.tags:id,name', 'rqmtElements:id'])
+            ->with($this->completionRelations())
             ->limit(self::ROW_CAP + 1)
             ->get();
 
@@ -96,6 +108,124 @@ class ReportsController extends Controller
             filters: $this->filterSummary($request),
             groups: $groupBy !== [] ? ReportGrouping::flatten($rows, $groupBy) : [],
         );
+    }
+
+    /**
+     * Org completion report as a streamed CSV — same filters/columns as the
+     * PDF export, via `fputcsv` against `php://output` so nothing is buffered
+     * in memory. `Content-Disposition`/`Content-Type` are handled by
+     * `streamDownload()`.
+     *
+     * Grouping (`group_by[]`) is represented as label rows interleaved with
+     * data rows — e.g. a row whose sole cell reads "Location: Yard (2)"
+     * followed by that bucket's data rows — mirroring the PDF's group bands
+     * exactly (same `ReportGrouping::flatten` output, just rendered as CSV
+     * rows instead of a colspan `<tr>`). This was chosen over flattening
+     * group keys into leading columns because several groupable keys (e.g.
+     * `status`) are derived in PHP (ExpiryStatus), not a SQL column, so a
+     * true global sort-by-group-then-stream isn't possible without either
+     * duplicating that derivation as SQL or materializing the full result
+     * set first. Grouped exports therefore materialize like the PDF path
+     * does (capped at ROW_CAP) — grouping is the less common, "narrower"
+     * export shape. The common flat (ungrouped) export streams from a
+     * chunked query and is NOT row-capped, since CSV rows are cheap and
+     * chunking already bounds memory regardless of row count; if a flat
+     * export exceeds the PDF's ROW_CAP, that's logged for visibility.
+     */
+    private function completionsExportCsv(Request $request, Organization $org): StreamedResponse
+    {
+        $columns = $this->selectedColumns($request);
+        $groupBy = ReportGrouping::sanitize((array) $request->query('group_by', []));
+        $filename = 'completions-'.Carbon::now(config('app.display_timezone'))->format('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($request, $org, $columns, $groupBy) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, array_column($columns, 'label'));
+
+            if ($groupBy !== []) {
+                $this->writeGroupedCsvRows($out, $request, $org, $columns, $groupBy);
+            } else {
+                $this->writeFlatCsvRows($out, $request, $org, $columns);
+            }
+
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * Ungrouped CSV rows: streamed straight from a chunked query in the
+     * shared filter/order, so an arbitrarily large org never holds more than
+     * one chunk of completions in memory at a time.
+     *
+     * @param  array<int, array{key: string, label: string}>  $columns
+     */
+    private function writeFlatCsvRows($out, Request $request, Organization $org, array $columns): void
+    {
+        $total = 0;
+
+        $this->completionsQuery($request, $org)
+            ->with($this->completionRelations())
+            ->chunk(500, function (Collection $chunk) use ($out, $org, $columns, &$total) {
+                foreach ($this->reportRows($chunk, $org) as $row) {
+                    fputcsv($out, array_map(fn (array $col) => $row[$col['key']] ?? '', $columns));
+                }
+                $total += $chunk->count();
+            });
+
+        if ($total > self::ROW_CAP) {
+            Log::info('CSV completion export exceeded the PDF row cap', [
+                'org_id' => $org->id,
+                'rows' => $total,
+            ]);
+        }
+    }
+
+    /**
+     * Grouped CSV rows: materializes the same capped row set the PDF export
+     * uses, runs it through the same `ReportGrouping::flatten`, and renders
+     * each item as either a one-cell group-label row or a normal data row.
+     *
+     * @param  array<int, array{key: string, label: string}>  $columns
+     * @param  array<int, string>  $groupBy
+     */
+    private function writeGroupedCsvRows($out, Request $request, Organization $org, array $columns, array $groupBy): void
+    {
+        $all = $this->completionsQuery($request, $org)
+            ->with($this->completionRelations())
+            ->limit(self::ROW_CAP + 1)
+            ->get();
+
+        $capped = $all->count() > self::ROW_CAP;
+        $rows = $this->reportRows($all->take(self::ROW_CAP), $org);
+
+        foreach (ReportGrouping::flatten($rows, $groupBy) as $item) {
+            if ($item['type'] === 'group') {
+                fputcsv($out, [$item['label'].' ('.$item['count'].')']);
+            } else {
+                fputcsv($out, array_map(fn (array $col) => $item['data'][$col['key']] ?? '', $columns));
+            }
+        }
+
+        if ($capped) {
+            fputcsv($out, ['Showing the first '.self::ROW_CAP.' rows — narrow your filters to see the rest.']);
+        }
+    }
+
+    /**
+     * Relations eager-loaded for the completion report's on-screen JSON, PDF
+     * export, and CSV export alike (user identity columns + tags + the
+     * elements needed for CompletionSerializer). Centralized so the three
+     * callers can't drift.
+     *
+     * @return array<int, string>
+     */
+    private function completionRelations(): array
+    {
+        return [
+            'user:id,prefix_name,f_name,m_name,l_name,suffix_name,employee_number,department,location',
+            'user.tags:id,name',
+            'rqmtElements:id',
+        ];
     }
 
     /**

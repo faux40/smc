@@ -20,6 +20,11 @@ const generateHref = (): string | null =>
         .querySelector('[data-testid="export-completion-report"]')!
         .getAttribute('href');
 
+const csvHref = (): string | null =>
+    document.body
+        .querySelector('[data-testid="export-completion-report-csv"]')!
+        .getAttribute('href');
+
 // Clicks the option row's checkbox button (toggles selection).
 async function toggle(key: string): Promise<void> {
     document.body
@@ -99,5 +104,38 @@ describe('ReportGroupingModal', () => {
         await wrapper.setProps({ open: true });
         await flushPromises();
         expect(generateHref()).toBe(BASE);
+    });
+
+    it('renders a Download CSV button alongside Generate report', async () => {
+        await openModal();
+        expect(
+            document.body.querySelector(
+                '[data-testid="export-completion-report-csv"]',
+            ),
+        ).not.toBeNull();
+    });
+
+    it('the CSV href equals the PDF href with format=csv appended', async () => {
+        await openModal();
+        expect(csvHref()).toBe(`${BASE}&format=csv`);
+    });
+
+    it('the CSV href carries filters, columns, and group_by like the PDF href', async () => {
+        await openModal(
+            '/api/reports/completions/export?q=cpr&columns%5B%5D=user',
+        );
+        await toggle('location');
+        await toggle('department');
+
+        const pdfHref = generateHref()!;
+        expect(csvHref()).toBe(`${pdfHref}&format=csv`);
+        expect(csvHref()).toContain('group_by%5B%5D=location');
+        expect(csvHref()).toContain('group_by%5B%5D=department');
+        expect(csvHref()).toContain('columns%5B%5D=user');
+    });
+
+    it('appends format=csv with a ? when the base href has no query string', async () => {
+        await openModal('/api/reports/completions/export');
+        expect(csvHref()).toBe('/api/reports/completions/export?format=csv');
     });
 });

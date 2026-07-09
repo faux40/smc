@@ -400,6 +400,120 @@ class ReportsTest extends TestCase
         });
     }
 
+    public function test_completion_report_export_csv_streams_header_and_rows(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $user = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Lee', 'employee_number' => 'EMP-1']);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+        Completion::factory()->for($org, 'organization')->for($user, 'user')->state([
+            'module_type' => Training::class, 'module_id' => $training->id, 'completion_date' => '2026-02-01',
+        ])->create();
+
+        $response = $this->actingAs($manager)
+            ->get(route('reports.completions-export', ['format' => 'csv']))
+            ->assertOk();
+
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+        $this->assertStringContainsString(
+            'attachment; filename=completions-'.Carbon::now(config('app.display_timezone'))->format('Y-m-d').'.csv',
+            $response->headers->get('Content-Disposition'),
+        );
+
+        $rows = array_map('str_getcsv', explode("\n", trim($response->streamedContent())));
+        $this->assertSame(
+            ['User', 'Employee #', 'Department', 'Location', 'Training', 'Completed', 'Expires', 'Status', 'Tags', 'Hours', 'Class', 'Cert ID'],
+            $rows[0],
+        );
+        $this->assertTrue(collect($rows)->contains(fn (array $r) => ($r[0] ?? null) === 'Lee, Sam' && ($r[4] ?? null) === 'CPR' && ($r[1] ?? null) === 'EMP-1'));
+    }
+
+    public function test_completion_report_export_csv_honors_filters_and_selected_columns(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $alice = User::factory()->for($org, 'organization')->create(['f_name' => 'Alice', 'l_name' => 'Adams']);
+        $bob = User::factory()->for($org, 'organization')->create(['f_name' => 'Bob', 'l_name' => 'Baker']);
+        $forklift = Training::factory()->for($org, 'organization')->create(['name' => 'Forklift']);
+        $ladders = Training::factory()->for($org, 'organization')->create(['name' => 'Ladders']);
+        Completion::factory()->for($org, 'organization')->for($alice, 'user')->state([
+            'module_type' => Training::class, 'module_id' => $forklift->id, 'completion_date' => '2026-03-01',
+        ])->create();
+        Completion::factory()->for($org, 'organization')->for($bob, 'user')->state([
+            'module_type' => Training::class, 'module_id' => $ladders->id, 'completion_date' => '2026-01-01',
+        ])->create();
+
+        $response = $this->actingAs($manager)
+            ->get(route('reports.completions-export', ['format' => 'csv', 'q' => 'forklift', 'columns' => ['status', 'user']]))
+            ->assertOk();
+
+        $rows = array_map('str_getcsv', explode("\n", trim($response->streamedContent())));
+        $this->assertSame(['Status', 'User'], $rows[0]);
+        $this->assertCount(2, $rows); // header + the one filtered row
+        $this->assertSame(['Current', 'Adams, Alice'], $rows[1]);
+    }
+
+    public function test_completion_report_export_csv_groups_rows_as_label_rows(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+        $yard1 = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Lee', 'location' => 'Yard']);
+        $yard2 = User::factory()->for($org, 'organization')->create(['f_name' => 'Jane', 'l_name' => 'Doe', 'location' => 'Yard']);
+        $dock = User::factory()->for($org, 'organization')->create(['f_name' => 'Max', 'l_name' => 'Roe', 'location' => 'Dock']);
+        foreach ([$yard1, $yard2, $dock] as $u) {
+            Completion::factory()->for($org, 'organization')->for($u, 'user')->state([
+                'module_type' => Training::class, 'module_id' => $training->id, 'completion_date' => '2026-02-01',
+            ])->create();
+        }
+
+        $response = $this->actingAs($manager)
+            ->get(route('reports.completions-export', ['format' => 'csv', 'group_by' => ['location'], 'columns' => ['user']]))
+            ->assertOk();
+
+        $rows = array_map('str_getcsv', explode("\n", trim($response->streamedContent())));
+
+        $this->assertSame(['User'], $rows[0]);
+        // Group label rows are single-cell, interleaved with their data rows,
+        // sorted alphabetically by location (Dock before Yard).
+        $this->assertSame(['Location: Dock (1)'], $rows[1]);
+        $this->assertSame(['Roe, Max'], $rows[2]);
+        $this->assertSame(['Location: Yard (2)'], $rows[3]);
+        $this->assertEqualsCanonicalizing(['Doe, Jane', 'Lee, Sam'], [$rows[4][0], $rows[5][0]]);
+    }
+
+    public function test_completion_report_export_pdf_path_unaffected_by_csv_support(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $user = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Lee']);
+        $training = Training::factory()->for($org, 'organization')->create(['name' => 'CPR']);
+        Completion::factory()->for($org, 'organization')->for($user, 'user')->state([
+            'module_type' => Training::class, 'module_id' => $training->id, 'completion_date' => '2026-02-01',
+        ])->create();
+
+        // No `format` param, and explicit `format=pdf`, both still render the PDF.
+        foreach ([[], ['format' => 'pdf']] as $extra) {
+            $this->actingAs($manager)
+                ->get(route('reports.completions-export', $extra))
+                ->assertOk();
+
+            Pdf::assertRespondedWithPdf(
+                fn ($pdf) => $pdf->viewName === 'pdf.report' && $pdf->viewData['title'] === 'Completion report',
+            );
+        }
+    }
+
+    public function test_completion_report_export_csv_forbidden_for_non_manager(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('None')->create();
+
+        $this->actingAs($member)
+            ->get(route('reports.completions-export', ['format' => 'csv']))
+            ->assertForbidden();
+    }
+
     public function test_completion_report_forbidden_for_non_manager(): void
     {
         $org = Organization::factory()->create();
