@@ -350,13 +350,33 @@ export const useClassesStore = defineStore('classes', () => {
     }
 
     /**
-     * Re-open a completed class for editing. De-issues the certs it generated
-     * (server-side) and unlocks the class back to `scheduled`.
+     * Re-open a completed class for editing. Non-destructive: issued
+     * certificates (and their numbers) are preserved server-side; only the
+     * lock is released (status back to `scheduled`).
      */
     async function reopen(id: string): Promise<ClassDetail> {
         const { data } = await axios.post<ClassDetail>(
             `/api/classes/${id}/reopen`,
             {},
+            { headers: defaultHeaders() },
+        );
+
+        return cache(data);
+    }
+
+    /**
+     * Deliberately renumber issued certificates on a re-opened (scheduled)
+     * class — the whole class, or a single topic when `classTrainingId` is
+     * given. Clears the affected cert numbers server-side; the next re-close
+     * re-mints them from the current cert_code. Refreshes the cached detail.
+     */
+    async function reissueCertificates(
+        id: string,
+        classTrainingId?: string | null,
+    ): Promise<ClassDetail> {
+        const { data } = await axios.post<ClassDetail>(
+            `/api/classes/${id}/reissue-certificates`,
+            classTrainingId ? { class_training_id: classTrainingId } : {},
             { headers: defaultHeaders() },
         );
 
@@ -406,6 +426,7 @@ export const useClassesStore = defineStore('classes', () => {
         bulkEnroll,
         complete,
         reopen,
+        reissueCertificates,
         subscribe,
     };
 });

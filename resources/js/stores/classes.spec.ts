@@ -213,4 +213,35 @@ describe('useClassesStore', () => {
         );
         expect(store.detail.c1.status).toBe('scheduled');
     });
+
+    it('reissueCertificates() posts whole-class scope and caches detail', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({ data: detailA });
+        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
+        const store = useClassesStore();
+
+        await store.reissueCertificates('c1');
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/classes/c1/reissue-certificates',
+            {},
+            expect.anything(),
+        );
+        expect(store.detail.c1.id).toBe('c1');
+    });
+
+    it('reissueCertificates() scopes to a single topic when given', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({ data: detailA });
+        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
+        const store = useClassesStore();
+
+        await store.reissueCertificates('c1', 'ct7');
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/classes/c1/reissue-certificates',
+            { class_training_id: 'ct7' },
+            expect.anything(),
+        );
+    });
 });

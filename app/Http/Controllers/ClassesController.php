@@ -401,41 +401,73 @@ class ClassesController extends Controller
 
     /**
      * Re-open a completed class for editing — non-destructive: the issued
-     * certificates (completions), roster results, and expiries are all left
-     * intact; only the lock is released (status back to `scheduled`,
-     * `completed_at` cleared, the completion date kept as the default for
-     * re-closing). The common case is fixing a typo or adding/removing one
-     * person: editing fields touches no certs, removing a person de-issues
-     * only theirs (see unenroll), and re-completing reconciles — preserving
-     * everyone else's original certificate.
+     * certificates (completions AND their numbers), roster results, and
+     * expiries are all left intact; only the lock is released (status back to
+     * `scheduled`, `completed_at` cleared, the completion date kept as the
+     * default for re-closing). Because re-close only re-mints NULL cert_ids and
+     * preserves present ones, a re-open → fix-a-typo → re-close round-trip
+     * leaves every existing certificate number byte-for-byte identical. Editing
+     * fields touches no certs, removing a person de-issues only theirs (see
+     * unenroll), and re-completing reconciles — preserving everyone else's
+     * original certificate. Deliberate renumbering is a separate, explicit
+     * action (see reissueCertificates).
      */
     public function reopen(TrainingClass $class): JsonResponse
     {
         Gate::authorize('update', $class);
         abort_unless($class->status === 'completed', 422, 'Only a completed class can be re-opened.');
 
-        // Re-opening clears the issued certificate numbers (credit, expiry and
-        // results are kept). Re-closing re-mints them from the current cert_code
-        // — so correcting the code and re-closing updates the printed numbers.
+        $class->update([
+            'status' => 'scheduled',
+            'completed_at' => null,
+        ]);
+
+        event(new ClassChanged($class->id, $class->org_id, 'reopened'));
+
+        return response()->json($this->detail($class->fresh()));
+    }
+
+    /**
+     * Deliberately renumber issued certificates for a re-opened (scheduled)
+     * class — the whole class, or a single topic when `class_training_id` is
+     * given. NULLs the affected completions' cert_ids so the NEXT re-close
+     * re-mints them from the current cert_code/date via the shared close-out
+     * path (one numbering code path — nothing is minted here). A no-op when
+     * there are no issued certs to clear (e.g. a never-completed class).
+     * Previously printed certificates will no longer match after re-close.
+     */
+    public function reissueCertificates(Request $request, TrainingClass $class): JsonResponse
+    {
+        Gate::authorize('update', $class);
+        $this->assertEditable($class);
+
+        $data = $request->validate([
+            'class_training_id' => [
+                'sometimes', 'nullable', 'string',
+                Rule::exists('class_training', 'id')->where('class_id', $class->id),
+            ],
+        ]);
+
+        $ctIds = $class->classTrainings()->pluck('id');
+
+        if (($data['class_training_id'] ?? null) !== null) {
+            $ctIds = $ctIds->filter(fn ($id) => $id === $data['class_training_id'])->values();
+        }
+
         $cleared = Completion::query()
-            ->whereIn('class_training_id', $class->classTrainings()->pluck('id'))
+            ->whereIn('class_training_id', $ctIds)
             ->whereNotNull('cert_id')
             ->get();
 
-        DB::transaction(function () use ($class, $cleared) {
+        DB::transaction(function () use ($cleared) {
             Completion::whereKey($cleared->pluck('id'))->update(['cert_id' => null]);
-
-            $class->update([
-                'status' => 'scheduled',
-                'completed_at' => null,
-            ]);
         });
 
         foreach ($cleared as $completion) {
             event(new CompletionUpdated($completion->fresh()));
         }
 
-        event(new ClassChanged($class->id, $class->org_id, 'reopened'));
+        event(new ClassChanged($class->id, $class->org_id, 'updated'));
 
         return response()->json($this->detail($class->fresh()));
     }

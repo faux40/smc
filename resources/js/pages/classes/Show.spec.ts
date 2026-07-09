@@ -294,6 +294,12 @@ describe('classes/Show — completed class (M3)', () => {
         expect(sam).toContain('— Harness Inspection');
     });
 
+    it('hides the re-issue control on a completed (locked) class', async () => {
+        const wrapper = await mountShow();
+        const labels = wrapper.findAll('button').map((b) => b.text());
+        expect(labels).not.toContain('Re-issue certificates');
+    });
+
     it.each(['Certificates', 'Class summary', 'Sign-in sheet'])(
         'clicking %s opens the doc in the in-app viewer (with save-to-files)',
         async (label) => {
@@ -324,4 +330,59 @@ describe('classes/Show — completed class (M3)', () => {
             wrapper.unmount();
         },
     );
+});
+
+// Re-issue certificates — deliberate renumbering on a re-opened (scheduled)
+// class that was previously completed (its topics still hold issued credit).
+const reopenedDetail: ClassDetail = {
+    ...completedDetail,
+    status: 'scheduled',
+    can_edit: true,
+};
+
+describe('classes/Show — re-issue certificates', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+        mockGet(reopenedDetail);
+    });
+
+    it('shows the re-issue control once the class has issued credit', async () => {
+        const wrapper = await mountShow();
+        const labels = wrapper.findAll('button').map((b) => b.text());
+        expect(labels).toContain('Re-issue certificates');
+    });
+
+    it('confirming posts the whole-class re-issue and closes the dialog', async () => {
+        (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: reopenedDetail,
+        });
+        const wrapper = await mountShow();
+
+        const open = wrapper
+            .findAll('button')
+            .find((b) => b.text() === 'Re-issue certificates')!;
+        await open.trigger('click');
+        await flushPromises();
+
+        const confirm = document.body.querySelector<HTMLButtonElement>(
+            '[data-testid="reissue-confirm"]',
+        );
+        expect(confirm).not.toBeNull();
+        confirm!.click();
+        await flushPromises();
+
+        expect(axios.post).toHaveBeenCalledWith(
+            '/api/classes/c1/reissue-certificates',
+            {},
+            expect.anything(),
+        );
+    });
+
+    it('hides the re-issue control when no credit was ever issued', async () => {
+        mockGet({ ...reopenedDetail, trainings: [] });
+        const wrapper = await mountShow();
+        const labels = wrapper.findAll('button').map((b) => b.text());
+        expect(labels).not.toContain('Re-issue certificates');
+    });
 });

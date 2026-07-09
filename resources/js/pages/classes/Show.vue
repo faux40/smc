@@ -15,6 +15,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { useClassForm } from '@/composables/useClassForm';
 import ClassCertEditModal from '@/pages/classes/Partials/ClassCertEditModal.vue';
 import AttachmentViewer from '@/components/AttachmentViewer.vue';
@@ -125,6 +132,63 @@ async function reopen(): Promise<void> {
     }
 }
 
+// Re-issue (deliberate renumbering) — only on a re-opened class that was
+// previously completed (i.e. it holds issued credit). Scope: ALL_TOPICS =
+// whole class, else a specific class_training id. The number change lands on
+// the next re-close, which re-mints the cleared cert_ids from the current
+// cert_code. (reka's Select reserves '' for the placeholder, so whole-class
+// uses a sentinel value.)
+const ALL_TOPICS = '__all__';
+const reissueOpen = ref(false);
+const reissuing = ref(false);
+const reissueScope = ref<string>(ALL_TOPICS);
+const REISSUE_CTX = 'form:class-reissue';
+
+const hasIssuedCerts = computed(
+    () => (detail.value?.trainings ?? []).some((t) => t.credits.length > 0),
+);
+
+const canReissue = computed(
+    () => canEditDetails.value && hasIssuedCerts.value,
+);
+
+const reissueScopeLabel = computed(() => {
+    if (reissueScope.value === ALL_TOPICS) {
+        return 'all topics';
+    }
+
+    const topic = detail.value?.trainings.find(
+        (t) => t.id === reissueScope.value,
+    );
+
+    return topic ? `“${topic.training_name}”` : 'this topic';
+});
+
+function openReissue(): void {
+    reissueScope.value = ALL_TOPICS;
+    errorStore.clear(REISSUE_CTX);
+    reissueOpen.value = true;
+}
+
+async function reissue(): Promise<void> {
+    reissuing.value = true;
+    errorStore.clear(REISSUE_CTX);
+
+    try {
+        await store.reissueCertificates(
+            props.classId,
+            reissueScope.value === ALL_TOPICS ? null : reissueScope.value,
+        );
+        reissueOpen.value = false;
+    } catch (e) {
+        errorStore.reportFromAxios(e, REISSUE_CTX, {
+            fallback: 'Failed to re-issue certificates.',
+        });
+    } finally {
+        reissuing.value = false;
+    }
+}
+
 const isDirty = computed(() => {
     const d = detail.value;
 
@@ -228,6 +292,14 @@ const totalHoursLabel = computed(
                     </Badge>
                     <Button v-if="canComplete" @click="completeOpen = true">
                         Complete class
+                    </Button>
+                    <Button
+                        v-if="canReissue"
+                        variant="outline"
+                        data-testid="reissue-open"
+                        @click="openReissue"
+                    >
+                        Re-issue certificates
                     </Button>
                     <Button
                         v-if="canReopen"
@@ -685,6 +757,66 @@ const totalHoursLabel = computed(
                             </Button>
                             <Button :disabled="reopening" @click="reopen">
                                 Re-open
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog v-model:open="reissueOpen">
+                    <DialogContent data-testid="reissue-dialog">
+                        <DialogHeader>
+                            <DialogTitle>
+                                Re-issue certificate numbers?
+                            </DialogTitle>
+                            <DialogDescription>
+                                New certificate numbers will be assigned to
+                                {{ reissueScopeLabel }} when you re-complete the
+                                class. Previously printed certificates will no
+                                longer match.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div class="space-y-2">
+                            <label
+                                for="reissue-scope"
+                                class="text-sm font-medium"
+                            >
+                                Scope
+                            </label>
+                            <Select v-model="reissueScope">
+                                <SelectTrigger id="reissue-scope">
+                                    <SelectValue placeholder="Whole class" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem :value="ALL_TOPICS">
+                                        Whole class (all topics)
+                                    </SelectItem>
+                                    <SelectItem
+                                        v-for="t in detail.trainings"
+                                        :key="t.id"
+                                        :value="t.id"
+                                    >
+                                        {{ t.training_name }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <ErrorBanner :context="REISSUE_CTX" />
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                :disabled="reissuing"
+                                @click="reissueOpen = false"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                :disabled="reissuing"
+                                data-testid="reissue-confirm"
+                                @click="reissue"
+                            >
+                                Re-issue
                             </Button>
                         </DialogFooter>
                     </DialogContent>
