@@ -10,6 +10,7 @@ use App\Http\Controllers\CompletionsController;
 use App\Http\Controllers\ComplianceController;
 use App\Http\Controllers\CspReportController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DocTemplatesController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\MergeFieldsController;
 use App\Http\Controllers\MergeValuesController;
@@ -164,6 +165,14 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/merge-values', [MergeValuesController::class, 'index'])->name('merge-values.index');
     Route::put('api/merge-values', [MergeValuesController::class, 'upsert'])->name('merge-values.upsert');
     Route::delete('api/merge-values/{mergeValue}', [MergeValuesController::class, 'destroy'])->name('merge-values.destroy');
+
+    // Doc-template registry (Phase D2) — Manager+ list; upload/replace/
+    // rename/delete Admin+ org templates only (system = console-managed).
+    Route::get('api/doc-templates', [DocTemplatesController::class, 'index'])->name('doc-templates.index');
+    Route::post('api/doc-templates', [DocTemplatesController::class, 'store'])->name('doc-templates.store');
+    Route::post('api/doc-templates/{docTemplate}/replace', [DocTemplatesController::class, 'replace'])->name('doc-templates.replace');
+    Route::patch('api/doc-templates/{docTemplate}', [DocTemplatesController::class, 'update'])->name('doc-templates.update');
+    Route::delete('api/doc-templates/{docTemplate}', [DocTemplatesController::class, 'destroy'])->name('doc-templates.destroy');
 
     // Document data page (Documents module). Shell is open like tags —
     // nav hides it below Manager and the JSON APIs enforce roles.

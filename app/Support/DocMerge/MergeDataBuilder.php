@@ -24,6 +24,12 @@ use Illuminate\Support\Carbon;
  */
 class MergeDataBuilder
 {
+    /**
+     * Keys computed at generation time — never stored merge fields, and
+     * excluded from template-upload draft registration.
+     */
+    public const COMPUTED_KEYS = ['doc_date', 'doc_date_my', 'foot_date', 'copy_date', 'today_date'];
+
     public function __construct(private readonly MergeValueResolver $resolver) {}
 
     /**
