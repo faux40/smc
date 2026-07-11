@@ -5,6 +5,7 @@ import {
     CheckCircle2,
     ClipboardCheck,
     ClipboardList,
+    Database,
     FileText,
     GraduationCap,
     LayoutGrid,
@@ -29,6 +30,7 @@ import { dashboard } from '@/routes';
 import { page as assignmentsPage } from '@/routes/assignments';
 import { page as classesPage } from '@/routes/classes';
 import { page as completionsPage } from '@/routes/completions';
+import { data as documentDataPage } from '@/routes/documents';
 import { page as requirementsPage } from '@/routes/requirements';
 import { page as tagsPage } from '@/routes/tags';
 import { page as trainingsPage } from '@/routes/trainings';
@@ -109,6 +111,13 @@ const mainNavItems = computed<NavItem[]>(() => {
             title: 'Classes',
             href: classesPage(),
             icon: CalendarDays,
+        });
+        // Documents module (Phase D1) — org merge data feeding template
+        // generation. Grows into a Documents group as D2+ pages land (F40).
+        items.push({
+            title: 'Document data',
+            href: documentDataPage(),
+            icon: Database,
         });
     }
 

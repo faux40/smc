@@ -165,6 +165,10 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::put('api/merge-values', [MergeValuesController::class, 'upsert'])->name('merge-values.upsert');
     Route::delete('api/merge-values/{mergeValue}', [MergeValuesController::class, 'destroy'])->name('merge-values.destroy');
 
+    // Document data page (Documents module). Shell is open like tags —
+    // nav hides it below Manager and the JSON APIs enforce roles.
+    Route::inertia('documents/data', 'documents/Data')->name('documents.data');
+
     // Polymorphic comment API — consumed by <CommentsList>. Anyone in the
     // org can read/post; author-only edit; author OR admin+ delete.
     Route::get('api/comments', [CommentsController::class, 'index'])->name('comments.index');
