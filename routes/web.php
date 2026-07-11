@@ -11,6 +11,7 @@ use App\Http\Controllers\ComplianceController;
 use App\Http\Controllers\CspReportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocTemplatesController;
+use App\Http\Controllers\GeneratedDocumentsController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\MergeFieldsController;
 use App\Http\Controllers\MergeValuesController;
@@ -173,6 +174,13 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::post('api/doc-templates/{docTemplate}/replace', [DocTemplatesController::class, 'replace'])->name('doc-templates.replace');
     Route::patch('api/doc-templates/{docTemplate}', [DocTemplatesController::class, 'update'])->name('doc-templates.update');
     Route::delete('api/doc-templates/{docTemplate}', [DocTemplatesController::class, 'destroy'])->name('doc-templates.destroy');
+
+    // Generated documents (Phase D2) — queued template merges + the org
+    // output archive. Manager+ throughout.
+    Route::get('api/generated-documents', [GeneratedDocumentsController::class, 'index'])->name('generated-documents.index');
+    Route::post('api/generated-documents', [GeneratedDocumentsController::class, 'store'])->name('generated-documents.store');
+    Route::get('api/generated-documents/{generatedDocument}/download', [GeneratedDocumentsController::class, 'download'])->name('generated-documents.download');
+    Route::delete('api/generated-documents/{generatedDocument}', [GeneratedDocumentsController::class, 'destroy'])->name('generated-documents.destroy');
 
     // Document data page (Documents module). Shell is open like tags —
     // nav hides it below Manager and the JSON APIs enforce roles.
