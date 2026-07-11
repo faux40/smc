@@ -11,6 +11,8 @@ use App\Http\Controllers\ComplianceController;
 use App\Http\Controllers\CspReportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HealthController;
+use App\Http\Controllers\MergeFieldsController;
+use App\Http\Controllers\MergeValuesController;
 use App\Http\Controllers\NotificationsController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\RequirementsController;
@@ -147,6 +149,21 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // Tags library admin page. Read open to any org member (the page
     // hides write UI for non-admins); write API enforces role via policy.
     Route::inertia('tags', 'tags/Index')->name('tags.page');
+
+    // Merge-field definitions (Phase D1) — the ${key} vocabulary for doc
+    // templates. Listing is Manager+; definition CRUD is Admin+ and org
+    // fields only (system fields are console-managed, read-only here).
+    Route::get('api/merge-fields', [MergeFieldsController::class, 'index'])->name('merge-fields.index');
+    Route::post('api/merge-fields', [MergeFieldsController::class, 'store'])->name('merge-fields.store');
+    Route::patch('api/merge-fields/{mergeField}', [MergeFieldsController::class, 'update'])->name('merge-fields.update');
+    Route::delete('api/merge-fields/{mergeField}', [MergeFieldsController::class, 'destroy'])->name('merge-fields.destroy');
+
+    // Org merge data (Phase D1) — Manager+ value entry per field ×
+    // (location, department) variation. PUT is an idempotent upsert keyed
+    // on the variation; DELETE clears an override.
+    Route::get('api/merge-values', [MergeValuesController::class, 'index'])->name('merge-values.index');
+    Route::put('api/merge-values', [MergeValuesController::class, 'upsert'])->name('merge-values.upsert');
+    Route::delete('api/merge-values/{mergeValue}', [MergeValuesController::class, 'destroy'])->name('merge-values.destroy');
 
     // Polymorphic comment API — consumed by <CommentsList>. Anyone in the
     // org can read/post; author-only edit; author OR admin+ delete.
