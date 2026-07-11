@@ -18,6 +18,7 @@ import MergeFieldFormModal from '@/components/mergeData/MergeFieldFormModal.vue'
 import MergeFieldValueRow from '@/components/mergeData/MergeFieldValueRow.vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { useVariationSuggestions } from '@/composables/useVariationSuggestions';
 import { data as documentDataRoute } from '@/routes/documents';
 import { useErrorStore } from '@/stores/errors';
 import { useMergeDataStore } from '@/stores/mergeData';
@@ -78,18 +79,8 @@ onMounted(async () => {
     }
 });
 
-// Variation suggestions: the org's people fields plus anything an
-// override row already uses (overrides can reference retired sites).
-const locationSuggestions = computed(() => {
-    const fromValues = store.values.map((v) => v.location).filter((l) => l !== '');
-
-    return [...new Set([...usersStore.fieldOptions.location, ...fromValues])];
-});
-const departmentSuggestions = computed(() => {
-    const fromValues = store.values.map((v) => v.department).filter((d) => d !== '');
-
-    return [...new Set([...usersStore.fieldOptions.department, ...fromValues])];
-});
+const { location: locationSuggestions, department: departmentSuggestions } =
+    useVariationSuggestions();
 
 const editingDefaults = computed(
     () => location.value === '' && department.value === '',

@@ -225,6 +225,27 @@ export const useMergeDataStore = defineStore('mergeData', () => {
         return { value: null, source: null };
     }
 
+    /**
+     * Template-completeness check: which of a template's placeholder
+     * keys have NO resolvable value for the given variation. Keys that
+     * aren't registered fields (generation-time computed values, legacy
+     * aliases) are not "missing" — the generator handles those itself.
+     */
+    function missingKeysFor(
+        placeholders: string[],
+        location: string,
+        department: string,
+    ): string[] {
+        return placeholders.filter((key) => {
+            const field = fields.value.find((f) => f.key === key);
+
+            return (
+                field !== undefined &&
+                resolvedFor(field.id, location, department).source === null
+            );
+        });
+    }
+
     /** Fields bucketed by field_group, both in server order (ungrouped last). */
     const groupedFields = computed<FieldGroup[]>(() => {
         const buckets: FieldGroup[] = [];
@@ -277,6 +298,7 @@ export const useMergeDataStore = defineStore('mergeData', () => {
         clearValue,
         rowFor,
         resolvedFor,
+        missingKeysFor,
         groupedFields,
         subscribe,
     };

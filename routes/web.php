@@ -182,8 +182,9 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/generated-documents/{generatedDocument}/download', [GeneratedDocumentsController::class, 'download'])->name('generated-documents.download');
     Route::delete('api/generated-documents/{generatedDocument}', [GeneratedDocumentsController::class, 'destroy'])->name('generated-documents.destroy');
 
-    // Document data page (Documents module). Shell is open like tags —
-    // nav hides it below Manager and the JSON APIs enforce roles.
+    // Documents module pages. Shells are open like tags — nav hides them
+    // below Manager and the JSON APIs enforce roles.
+    Route::inertia('documents', 'documents/Index')->name('documents.page');
     Route::inertia('documents/data', 'documents/Data')->name('documents.data');
 
     // Polymorphic comment API — consumed by <CommentsList>. Anyone in the

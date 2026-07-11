@@ -123,6 +123,41 @@ describe('useMergeDataStore', () => {
     });
 
     // ----------------------------------------------------------------
+    // template completeness
+    // ----------------------------------------------------------------
+
+    it('missingKeysFor reports placeholder keys with no resolvable value', () => {
+        const store = useMergeDataStore();
+        store.fields = [
+            field({ id: 'f1', key: 'agency' }),
+            field({ id: 'f2', key: 'top_manager' }),
+        ];
+        store.values = [value({ id: 'v1', merge_field_id: 'f1', value: 'Rio Dell' })];
+
+        // agency resolves; top_manager doesn't; doc_date is computed at
+        // generation time; EMS_direct_phone isn't a registered field.
+        expect(
+            store.missingKeysFor(
+                ['agency', 'top_manager', 'doc_date', 'EMS_direct_phone'],
+                '',
+                '',
+            ),
+        ).toEqual(['top_manager']);
+    });
+
+    it('missingKeysFor honors the variation ladder', () => {
+        const store = useMergeDataStore();
+        store.fields = [field({ id: 'f1', key: 'assembly_area' })];
+        store.values = [
+            value({ id: 'v1', merge_field_id: 'f1', location: 'North', value: 'North gate' }),
+        ];
+
+        expect(store.missingKeysFor(['assembly_area'], 'North', '')).toEqual([]);
+        // No default row -> unresolved for other variations.
+        expect(store.missingKeysFor(['assembly_area'], 'South', '')).toEqual(['assembly_area']);
+    });
+
+    // ----------------------------------------------------------------
     // network paths
     // ----------------------------------------------------------------
 
