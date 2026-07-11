@@ -21,7 +21,8 @@
         "spatie/browsershot": "^5.4",
         "spatie/laravel-activitylog": "^4.12",
         "spatie/laravel-pdf": "^2.12",
-        "spatie/laravel-permission": "^7.4"
+        "spatie/laravel-permission": "^7.4",
+        "tinybutstrong/opentbs": "^1.12"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24",
@@ -38,7 +39,10 @@
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"
-        }
+        },
+        "files": [
+            "app/Support/DocMerge/tbs_modifiers.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
