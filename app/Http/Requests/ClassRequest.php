@@ -42,6 +42,15 @@ class ClassRequest extends FormRequest
                     ->where('org_id', $this->user()->org_id)
                     ->whereNull('deleted_at'),
             ],
+            // Optional at-create-time roster (the "duplicate class, include
+            // students" flow) — enrolled atomically with the class.
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => [
+                'string',
+                Rule::exists('users', 'id')
+                    ->where('org_id', $this->user()->org_id)
+                    ->whereNull('deleted_at'),
+            ],
         ];
     }
 }

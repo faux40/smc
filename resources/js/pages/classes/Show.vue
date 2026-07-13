@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { ChevronDown } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import AttachmentsList from '@/components/AttachmentsList.vue';
+import AttachmentViewer from '@/components/AttachmentViewer.vue';
+import type { GeneratedDoc } from '@/components/AttachmentViewer.vue';
 import ClassFieldset from '@/components/ClassFieldset.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +19,12 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -24,13 +33,13 @@ import {
 } from '@/components/ui/select';
 import { useClassForm } from '@/composables/useClassForm';
 import ClassCertEditModal from '@/pages/classes/Partials/ClassCertEditModal.vue';
-import AttachmentViewer from '@/components/AttachmentViewer.vue';
-import type { GeneratedDoc } from '@/components/AttachmentViewer.vue';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
+import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import ManageRosterModal from '@/pages/classes/Partials/ManageRosterModal.vue';
 import ManageTopicsModal from '@/pages/classes/Partials/ManageTopicsModal.vue';
-import { page as classesPage } from '@/routes/classes';
+import { page as classesPage, showPage } from '@/routes/classes';
 import { useClassesStore } from '@/stores/classes';
+import type { ClassDetail } from '@/stores/classes';
 import { useErrorStore } from '@/stores/errors';
 import { useTrainingsStore } from '@/stores/trainings';
 import { useUsersStore } from '@/stores/users';
@@ -60,6 +69,19 @@ const detail = computed(() => store.detail[props.classId] ?? null);
 
 const completeOpen = ref(false);
 const topicsOpen = ref(false);
+
+// Actions → Duplicate: reuse the create modal seeded from this class, then
+// jump to the freshly created copy.
+const duplicateOpen = ref(false);
+
+function openDuplicate(): void {
+    duplicateOpen.value = true;
+}
+
+function onDuplicateSaved(created: ClassDetail): void {
+    duplicateOpen.value = false;
+    router.visit(showPage(created.id));
+}
 // Doc generators open in the in-app viewer (preview + browser download/print,
 // plus "save to this class's files"), instead of a second tab.
 const docOpen = ref(false);
@@ -167,13 +189,11 @@ const reissuing = ref(false);
 const reissueScope = ref<string>(ALL_TOPICS);
 const REISSUE_CTX = 'form:class-reissue';
 
-const hasIssuedCerts = computed(
-    () => (detail.value?.trainings ?? []).some((t) => t.credits.length > 0),
+const hasIssuedCerts = computed(() =>
+    (detail.value?.trainings ?? []).some((t) => t.credits.length > 0),
 );
 
-const canReissue = computed(
-    () => canEditDetails.value && hasIssuedCerts.value,
-);
+const canReissue = computed(() => canEditDetails.value && hasIssuedCerts.value);
 
 const reissueScopeLabel = computed(() => {
     if (reissueScope.value === ALL_TOPICS) {
@@ -464,6 +484,22 @@ const totalHoursLabel = computed(
                     >
                         Re-open
                     </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                            <Button
+                                variant="outline"
+                                data-testid="class-actions-trigger"
+                            >
+                                Actions
+                                <ChevronDown class="size-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem @click="openDuplicate">
+                                Duplicate class…
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
 
                 <ErrorBanner v-if="canManageCerts" :context="RECLOSE_CTX" />
@@ -517,7 +553,9 @@ const totalHoursLabel = computed(
                                                         class="flex items-center justify-between gap-2 py-0.5"
                                                     >
                                                         <span>
-                                                            {{ t.training_name }}
+                                                            {{
+                                                                t.training_name
+                                                            }}
                                                             <span
                                                                 class="text-muted-foreground"
                                                             >
@@ -661,7 +699,9 @@ const totalHoursLabel = computed(
                              shown on a re-opened (scheduled) class that still
                              holds issued credit, where each row can be revoked. -->
                         <section
-                            v-if="detail.status === 'completed' || hasIssuedCerts"
+                            v-if="
+                                detail.status === 'completed' || hasIssuedCerts
+                            "
                             data-testid="credits-awarded"
                             class="space-y-3 rounded-md border border-border p-4"
                         >
@@ -747,7 +787,9 @@ const totalHoursLabel = computed(
                                 <Button
                                     v-if="detail.status === 'completed'"
                                     variant="outline"
-                                    @click="openDoc('certificates', 'Certificates')"
+                                    @click="
+                                        openDoc('certificates', 'Certificates')
+                                    "
                                 >
                                     Certificates
                                 </Button>
@@ -869,7 +911,8 @@ const totalHoursLabel = computed(
                                         (e.results?.[t.id] ?? 'incomplete') ===
                                         'pass'
                                             ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
-                                            : (e.results?.[t.id] ?? '') === 'fail'
+                                            : (e.results?.[t.id] ?? '') ===
+                                                'fail'
                                               ? 'border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-200'
                                               : 'border-border text-muted-foreground'
                                     "
@@ -878,7 +921,8 @@ const totalHoursLabel = computed(
                                         (e.results?.[t.id] ?? 'incomplete') ===
                                         'pass'
                                             ? '✓'
-                                            : (e.results?.[t.id] ?? '') === 'fail'
+                                            : (e.results?.[t.id] ?? '') ===
+                                                'fail'
                                               ? '✗'
                                               : '—'
                                     }}
@@ -913,6 +957,11 @@ const totalHoursLabel = computed(
                 <ClassCompleteModal
                     v-model:open="completeOpen"
                     :target="detail"
+                />
+                <ClassFormModal
+                    v-model:open="duplicateOpen"
+                    :copy-from="detail"
+                    @saved="onDuplicateSaved"
                 />
 
                 <Dialog v-model:open="reopenOpen">
@@ -1010,10 +1059,12 @@ const totalHoursLabel = computed(
                             <DialogTitle>Revoke this certificate?</DialogTitle>
                             <DialogDescription>
                                 <template v-if="revokeTarget">
-                                    {{ revokeTarget.userName ?? 'This person' }}'s
-                                    certificate for “{{ revokeTarget.topicName }}”
-                                    will be removed from their record (kept for
-                                    audit). Optionally note why.
+                                    {{
+                                        revokeTarget.userName ?? 'This person'
+                                    }}'s certificate for “{{
+                                        revokeTarget.topicName
+                                    }}” will be removed from their record (kept
+                                    for audit). Optionally note why.
                                 </template>
                             </DialogDescription>
                         </DialogHeader>

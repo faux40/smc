@@ -7,12 +7,17 @@ import Show from '@/pages/classes/Show.vue';
 import type { ClassDetail } from '@/stores/classes';
 
 vi.mock('axios');
+const routerVisit = vi.fn();
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
     Link: { template: '<a :href="href"><slot /></a>', props: ['href'] },
     usePage: () => ({ props: { auth: { user: { org_id: 'org1' } } } }),
+    router: { visit: (...args: unknown[]) => routerVisit(...args) },
 }));
-vi.mock('@/routes/classes', () => ({ page: () => ({ url: '/classes' }) }));
+vi.mock('@/routes/classes', () => ({
+    page: () => ({ url: '/classes' }),
+    showPage: (id: string) => ({ url: `/classes/${id}` }),
+}));
 
 const detail: ClassDetail = {
     id: 'c1',
@@ -173,13 +178,70 @@ describe('classes/Show inline edit', () => {
                 std_freq_name: 'Annual',
                 repeat_days: 365,
                 hours: '4.00',
-                cert_title: null, cert_text: null, cert_code: null, credits: [],
+                cert_title: null,
+                cert_text: null,
+                cert_code: null,
+                credits: [],
             },
         ];
         const wrapper = await mountShow();
         expect(wrapper.text()).toContain('Fall Protection');
         expect(wrapper.text()).toContain('(4h)');
         detail.trainings = []; // restore for other tests
+    });
+});
+
+// Actions dropdown — duplicate class (available on scheduled AND completed
+// classes; copying a finished class to run it again is the main use case).
+describe('classes/Show — duplicate class', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+        mockGet();
+    });
+
+    it('shows the Actions dropdown trigger on a scheduled class', async () => {
+        const wrapper = await mountShow();
+        expect(
+            wrapper.find('[data-testid="class-actions-trigger"]').exists(),
+        ).toBe(true);
+    });
+
+    it('shows the Actions dropdown trigger on a completed class too', async () => {
+        mockGet({ ...detail, status: 'completed', can_edit: false });
+        const wrapper = await mountShow();
+        expect(
+            wrapper.find('[data-testid="class-actions-trigger"]').exists(),
+        ).toBe(true);
+    });
+
+    it('openDuplicate seeds the class form modal from this class', async () => {
+        const wrapper = await mountShow();
+
+        (
+            wrapper.vm as unknown as { openDuplicate: () => void }
+        ).openDuplicate();
+        await flushPromises();
+
+        const modal = wrapper.findComponent({ name: 'ClassFormModal' });
+        expect(modal.exists()).toBe(true);
+        expect(modal.props('open')).toBe(true);
+        expect((modal.props('copyFrom') as ClassDetail | null)?.id).toBe('c1');
+    });
+
+    it('navigates to the new class once the duplicate is saved', async () => {
+        const wrapper = await mountShow();
+
+        (
+            wrapper.vm as unknown as { openDuplicate: () => void }
+        ).openDuplicate();
+        await flushPromises();
+
+        const modal = wrapper.findComponent({ name: 'ClassFormModal' });
+        modal.vm.$emit('saved', { ...detail, id: 'c2' });
+        await flushPromises();
+
+        expect(routerVisit).toHaveBeenCalledWith({ url: '/classes/c2' });
     });
 });
 
@@ -200,7 +262,10 @@ const completedDetail: ClassDetail = {
             std_freq_name: 'Annual',
             repeat_days: 365,
             hours: '4.00',
-            cert_title: null, cert_text: null, cert_code: null, credits: [
+            cert_title: null,
+            cert_text: null,
+            cert_code: null,
+            credits: [
                 {
                     completion_id: 'cp1',
                     user_id: 'u1',
@@ -221,7 +286,10 @@ const completedDetail: ClassDetail = {
             std_freq_name: null,
             repeat_days: null,
             hours: '2.00',
-            cert_title: null, cert_text: null, cert_code: null, credits: [],
+            cert_title: null,
+            cert_text: null,
+            cert_code: null,
+            credits: [],
         },
     ],
     enrollments: [
@@ -402,10 +470,8 @@ describe('classes/Show — revoke a single certificate', () => {
         const credits = wrapper.find('[data-testid="credits-awarded"]');
         expect(credits.exists()).toBe(true);
         expect(credits.text()).toContain('Dana Reed');
-        expect(credits.text()).toContain("Wrong spelling?");
-        expect(
-            wrapper.find('[data-testid="revoke-cert"]').exists(),
-        ).toBe(true);
+        expect(credits.text()).toContain('Wrong spelling?');
+        expect(wrapper.find('[data-testid="revoke-cert"]').exists()).toBe(true);
     });
 
     it('confirming a revoke posts to the completion revoke endpoint', async () => {
@@ -445,7 +511,9 @@ describe('classes/Show — revoke a single certificate', () => {
     it('hides Revoke on a completed (locked) class', async () => {
         mockGet(completedDetail);
         const wrapper = await mountShow();
-        expect(wrapper.find('[data-testid="revoke-cert"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="revoke-cert"]').exists()).toBe(
+            false,
+        );
     });
 });
 

@@ -107,9 +107,10 @@ class ClassesController extends Controller
 
         $data = $request->validated();
         $trainingIds = $data['training_ids'] ?? [];
-        unset($data['training_ids']);
+        $userIds = array_values(array_unique($data['user_ids'] ?? []));
+        unset($data['training_ids'], $data['user_ids']);
 
-        $class = DB::transaction(function () use ($request, $data, $trainingIds) {
+        $class = DB::transaction(function () use ($request, $data, $trainingIds, $userIds) {
             $class = TrainingClass::create([
                 'org_id' => $request->user()->org_id,
                 'status' => 'scheduled',
@@ -127,6 +128,10 @@ class ClassesController extends Controller
                 }
 
                 $this->recomputeTotalHours($class);
+            }
+
+            foreach ($userIds as $userId) {
+                $class->enrollments()->create(['user_id' => $userId, 'status' => 'enrolled']);
             }
 
             return $class;

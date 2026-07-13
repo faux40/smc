@@ -113,6 +113,67 @@ class ClassesControllerTest extends TestCase
         $this->assertEqualsCanonicalizing(['Fall Protection', 'First Aid'], $names);
     }
 
+    public function test_create_with_user_ids_enrolls_each_user(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $a = User::factory()->for($org, 'organization')->create();
+        $b = User::factory()->for($org, 'organization')->create();
+
+        $this->actingAs($manager)
+            ->postJson('/api/classes', [
+                'name' => 'Copied Class',
+                'scheduled_date' => '2026-08-01',
+                'user_ids' => [$a->id, $b->id, $a->id],
+            ])
+            ->assertCreated()
+            ->assertJsonCount(2, 'enrollments');
+
+        $class = TrainingClass::where('org_id', $org->id)->firstOrFail();
+        $userIds = ClassEnrollment::where('class_id', $class->id)->pluck('user_id')->all();
+        $this->assertEqualsCanonicalizing([$a->id, $b->id], $userIds);
+        $this->assertSame(
+            ['enrolled'],
+            ClassEnrollment::where('class_id', $class->id)->pluck('status')->unique()->values()->all(),
+        );
+    }
+
+    public function test_create_rejects_a_cross_org_user_id(): void
+    {
+        $org = Organization::factory()->create();
+        $otherOrg = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $foreign = User::factory()->for($otherOrg, 'organization')->create();
+
+        $this->actingAs($manager)
+            ->postJson('/api/classes', [
+                'name' => 'x',
+                'scheduled_date' => '2026-08-01',
+                'user_ids' => [$foreign->id],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('user_ids.0');
+
+        $this->assertDatabaseMissing('classes', ['name' => 'x']);
+    }
+
+    public function test_create_rejects_a_soft_deleted_user_id(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $gone = User::factory()->for($org, 'organization')->create();
+        $gone->delete();
+
+        $this->actingAs($manager)
+            ->postJson('/api/classes', [
+                'name' => 'x',
+                'scheduled_date' => '2026-08-01',
+                'user_ids' => [$gone->id],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('user_ids.0');
+    }
+
     public function test_create_rejects_a_cross_org_training_id(): void
     {
         $org = Organization::factory()->create();
