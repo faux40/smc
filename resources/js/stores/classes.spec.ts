@@ -17,6 +17,8 @@ const detailA: ClassDetail = {
     instructor: null,
     show_signature: false,
     total_hours: null,
+    min_students: null,
+    max_students: null,
     notes: null,
     status: 'scheduled',
     completion_date: null,
@@ -108,6 +110,8 @@ describe('useClassesStore', () => {
             instructor: null,
             show_signature: false,
             total_hours: null,
+            min_students: null,
+            max_students: null,
             notes: null,
             training_ids: ['t1', 't2'],
         });

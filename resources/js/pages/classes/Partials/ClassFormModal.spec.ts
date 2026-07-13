@@ -97,6 +97,30 @@ describe('ClassFormModal create validation', () => {
         );
     });
 
+    it('sends the reference student counts when filled', async () => {
+        await openCreate();
+
+        const set = (sel: string, value: string) => {
+            const el = document.body.querySelector<HTMLInputElement>(sel)!;
+            el.value = value;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+        set('#class_name', 'Counted');
+        set('#class_date', '2026-09-01');
+        set('#class_min_students', '5');
+        set('#class_max_students', '20');
+        await flushPromises();
+
+        clickCreate();
+        await flushPromises();
+
+        expect(axios.post).toHaveBeenCalledWith(
+            '/api/classes',
+            expect.objectContaining({ min_students: 5, max_students: 20 }),
+            expect.anything(),
+        );
+    });
+
     it('the form opts out of silent native validation (novalidate)', async () => {
         await openCreate();
         const form = document.body.querySelector('form');
@@ -137,6 +161,8 @@ const sourceClass: ClassDetail = {
     instructor: 'J. Cole',
     show_signature: true,
     total_hours: '4.00',
+    min_students: 5,
+    max_students: 20,
     notes: 'Bring harnesses.',
     status: 'completed',
     completion_date: '2026-03-01',
@@ -215,6 +241,8 @@ describe('ClassFormModal duplicate mode', () => {
         expect(value('#class_start_time')).toBe('08:00');
         expect(value('#class_location')).toBe('Yard 3');
         expect(value('#class_instructor')).toBe('J. Cole');
+        expect(value('#class_min_students')).toBe('5');
+        expect(value('#class_max_students')).toBe('20');
     });
 
     it('prepends a clearable "Copied from" line to the notes', async () => {

@@ -363,6 +363,8 @@ const isDirty = computed(() => {
         text(f.instructor) !== text(d.instructor) ||
         f.show_signature !== d.show_signature ||
         Number(f.total_hours || 0) !== Number(d.total_hours || 0) ||
+        Number(f.min_students || 0) !== Number(d.min_students || 0) ||
+        Number(f.max_students || 0) !== Number(d.max_students || 0) ||
         text(f.notes) !== text(d.notes)
     );
 });
@@ -681,6 +683,22 @@ const totalHoursLabel = computed(
                                         </dt>
                                         <dd>{{ detail.instructor || '—' }}</dd>
                                     </div>
+                                    <div
+                                        v-if="
+                                            detail.min_students != null ||
+                                            detail.max_students != null
+                                        "
+                                    >
+                                        <dt
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            Students (min / max)
+                                        </dt>
+                                        <dd>
+                                            {{ detail.min_students ?? '—' }} /
+                                            {{ detail.max_students ?? '—' }}
+                                        </dd>
+                                    </div>
                                     <div v-if="detail.notes" class="col-span-2">
                                         <dt
                                             class="text-xs text-muted-foreground"
@@ -833,7 +851,12 @@ const totalHoursLabel = computed(
                     >
                         <div class="flex items-center justify-between">
                             <h2 class="text-sm font-semibold">
-                                Enrolled ({{ detail.enrollments.length }})
+                                Enrolled ({{ detail.enrollments.length
+                                }}{{
+                                    detail.max_students
+                                        ? ` · max ${detail.max_students}`
+                                        : ''
+                                }})
                             </h2>
                             <Button
                                 v-if="canEditDetails"
@@ -884,7 +907,12 @@ const totalHoursLabel = computed(
                     class="space-y-2"
                 >
                     <h2 class="text-sm font-semibold">
-                        Enrolled ({{ detail.enrollments.length }})
+                        Enrolled ({{ detail.enrollments.length
+                        }}{{
+                            detail.max_students
+                                ? ` · max ${detail.max_students}`
+                                : ''
+                        }})
                     </h2>
                     <ul
                         v-if="detail.enrollments.length"

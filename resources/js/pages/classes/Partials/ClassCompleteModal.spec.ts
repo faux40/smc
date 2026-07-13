@@ -17,16 +17,55 @@ function detail(): ClassDetail {
         instructor: null,
         show_signature: false,
         total_hours: null,
+        min_students: null,
+        max_students: null,
         notes: null,
         status: 'scheduled',
         completion_date: null,
         can_edit: true,
         trainings: [
-            { id: 'ct1', training_id: 't1', training_name: 'First Aid', initial_only: false, repeating: true, as_needed: false, std_freq_name: null, repeat_days: null, hours: null, cert_title: null, cert_text: null, cert_code: null, credits: [] },
-            { id: 'ct2', training_id: 't2', training_name: 'Fall Protection', initial_only: false, repeating: true, as_needed: false, std_freq_name: null, repeat_days: null, hours: null, cert_title: null, cert_text: null, cert_code: null, credits: [] },
+            {
+                id: 'ct1',
+                training_id: 't1',
+                training_name: 'First Aid',
+                initial_only: false,
+                repeating: true,
+                as_needed: false,
+                std_freq_name: null,
+                repeat_days: null,
+                hours: null,
+                cert_title: null,
+                cert_text: null,
+                cert_code: null,
+                credits: [],
+            },
+            {
+                id: 'ct2',
+                training_id: 't2',
+                training_name: 'Fall Protection',
+                initial_only: false,
+                repeating: true,
+                as_needed: false,
+                std_freq_name: null,
+                repeat_days: null,
+                hours: null,
+                cert_title: null,
+                cert_text: null,
+                cert_code: null,
+                credits: [],
+            },
         ],
         enrollments: [
-            { id: 'e1', user_id: 'u1', user_name: 'John Doe', user_email: null, status: 'enrolled', notes: null, credited_training_ids: [], results: {} },
+            {
+                id: 'e1',
+                user_id: 'u1',
+                user_name: 'John Doe',
+                user_email: null,
+                status: 'enrolled',
+                notes: null,
+                credited_training_ids: [],
+                results: {},
+            },
         ],
     };
 }
@@ -43,12 +82,16 @@ async function openWith(target: ClassDetail) {
 }
 
 const chip = (testid: string): HTMLButtonElement =>
-    document.body.querySelector<HTMLButtonElement>(`[data-testid="${testid}"]`)!;
+    document.body.querySelector<HTMLButtonElement>(
+        `[data-testid="${testid}"]`,
+    )!;
 
 function submitForm(): void {
     document.body
         .querySelector('form')!
-        .dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        .dispatchEvent(
+            new Event('submit', { cancelable: true, bubbles: true }),
+        );
 }
 
 describe('ClassCompleteModal', () => {
@@ -63,7 +106,9 @@ describe('ClassCompleteModal', () => {
 
     it('defaults every topic to incomplete and submits them all', async () => {
         const store = useClassesStore();
-        const complete = vi.spyOn(store, 'complete').mockResolvedValue(detail());
+        const complete = vi
+            .spyOn(store, 'complete')
+            .mockResolvedValue(detail());
 
         await openWith(detail());
         // Incomplete is the active default.
@@ -89,7 +134,9 @@ describe('ClassCompleteModal', () => {
 
     it('"Mark all passed" passes every topic', async () => {
         const store = useClassesStore();
-        const complete = vi.spyOn(store, 'complete').mockResolvedValue(detail());
+        const complete = vi
+            .spyOn(store, 'complete')
+            .mockResolvedValue(detail());
 
         await openWith(detail());
         Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
@@ -117,7 +164,9 @@ describe('ClassCompleteModal', () => {
 
     it('records an explicit per-topic mix (pass / fail / incomplete)', async () => {
         const store = useClassesStore();
-        const complete = vi.spyOn(store, 'complete').mockResolvedValue(detail());
+        const complete = vi
+            .spyOn(store, 'complete')
+            .mockResolvedValue(detail());
 
         await openWith(detail());
         chip('mark-ct1-pass').click();
@@ -144,7 +193,9 @@ describe('ClassCompleteModal', () => {
 
     it('pre-fills each topic from the stored results on a re-close', async () => {
         const store = useClassesStore();
-        const complete = vi.spyOn(store, 'complete').mockResolvedValue(detail());
+        const complete = vi
+            .spyOn(store, 'complete')
+            .mockResolvedValue(detail());
 
         const target = detail();
         target.completion_date = '2026-06-01'; // previously completed → re-close

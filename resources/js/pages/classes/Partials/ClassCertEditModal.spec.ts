@@ -1,6 +1,6 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { createPinia, setActivePinia } from 'pinia';
 import axios from 'axios';
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useClassesStore } from '@/stores/classes';
 import ClassCertEditModal from './ClassCertEditModal.vue';
@@ -39,6 +39,8 @@ function seedStore() {
         instructor: null,
         show_signature: false,
         total_hours: '4.00',
+        min_students: null,
+        max_students: null,
         notes: null,
         status: 'scheduled',
         completion_date: null,
@@ -46,6 +48,7 @@ function seedStore() {
         trainings: [topic],
         enrollments: [],
     };
+
     return store;
 }
 
@@ -62,9 +65,11 @@ describe('ClassCertEditModal', () => {
     // directly and drive native events (Vue reactivity still applies).
     function input(selector: string): HTMLInputElement {
         const el = document.body.querySelector(selector);
+
         if (!el) {
             throw new Error(`missing ${selector}`);
         }
+
         return el as HTMLInputElement;
     }
 

@@ -21,6 +21,8 @@ const detail: ClassDetail = {
     instructor: null,
     show_signature: false,
     total_hours: null,
+    min_students: null,
+    max_students: null,
     notes: null,
     status: 'scheduled',
     completion_date: null,
@@ -474,7 +476,9 @@ describe('ManageRosterModal', () => {
         const patRow = Array.from(availRows).find((r) =>
             r.textContent?.includes('Kim, Pat'),
         );
-        patRow!.querySelector<HTMLButtonElement>('button[aria-label="Add"]')!.click();
+        patRow!
+            .querySelector<HTMLButtonElement>('button[aria-label="Add"]')!
+            .click();
         await flushPromises();
 
         findBtn('Done')!.click();

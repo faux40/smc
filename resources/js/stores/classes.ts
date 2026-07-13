@@ -21,6 +21,8 @@ export interface ClassRow {
     location: string | null;
     instructor: string | null;
     total_hours: string | null;
+    min_students: number | null;
+    max_students: number | null;
     status: 'scheduled' | 'completed';
     trainings_count: number;
     enrollments_count: number;
@@ -94,6 +96,9 @@ export interface ClassDetail {
     instructor: string | null;
     show_signature: boolean;
     total_hours: string | null;
+    // Reference-only planning counts — never limit enrollment.
+    min_students: number | null;
+    max_students: number | null;
     notes: string | null;
     status: 'scheduled' | 'completed';
     completion_date: string | null;
@@ -112,6 +117,8 @@ export interface ClassFormPayload {
     instructor: string | null;
     show_signature: boolean;
     total_hours: number | null;
+    min_students: number | null;
+    max_students: number | null;
     notes: string | null;
     // Create-only: snapshot these trainings onto the new class.
     training_ids?: string[];

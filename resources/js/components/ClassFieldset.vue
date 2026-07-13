@@ -49,9 +49,7 @@ const id = (field: string) => `${props.idPrefix ?? 'class'}_${field}`;
                     type="date"
                     v-model="form.scheduled_date"
                 />
-                <InputError
-                    :message="fieldErrors.message('scheduled_date')"
-                />
+                <InputError :message="fieldErrors.message('scheduled_date')" />
             </div>
             <div class="grid gap-2">
                 <Label :for="id('total_hours')">Class hours</Label>
@@ -64,6 +62,34 @@ const id = (field: string) => `${props.idPrefix ?? 'class'}_${field}`;
                     placeholder="e.g. 8"
                 />
                 <InputError :message="fieldErrors.message('total_hours')" />
+            </div>
+        </div>
+
+        <!-- Reference-only planning counts — never limit enrollment. -->
+        <div class="grid grid-cols-2 gap-3">
+            <div class="grid gap-2">
+                <Label :for="id('min_students')">Min students</Label>
+                <Input
+                    :id="id('min_students')"
+                    type="number"
+                    min="0"
+                    step="1"
+                    v-model="form.min_students"
+                    placeholder="for reference"
+                />
+                <InputError :message="fieldErrors.message('min_students')" />
+            </div>
+            <div class="grid gap-2">
+                <Label :for="id('max_students')">Max students</Label>
+                <Input
+                    :id="id('max_students')"
+                    type="number"
+                    min="0"
+                    step="1"
+                    v-model="form.max_students"
+                    placeholder="for reference"
+                />
+                <InputError :message="fieldErrors.message('max_students')" />
             </div>
         </div>
 

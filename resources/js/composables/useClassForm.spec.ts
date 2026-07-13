@@ -17,6 +17,8 @@ const detail: ClassDetail = {
     instructor: 'J. Cole',
     show_signature: true,
     total_hours: '4.00',
+    min_students: null,
+    max_students: null,
     notes: 'bring harnesses',
     status: 'scheduled',
     completion_date: null,

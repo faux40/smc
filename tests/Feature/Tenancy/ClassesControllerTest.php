@@ -113,6 +113,122 @@ class ClassesControllerTest extends TestCase
         $this->assertEqualsCanonicalizing(['Fall Protection', 'First Aid'], $names);
     }
 
+    public function test_create_persists_reference_student_counts(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+
+        $this->actingAs($manager)
+            ->postJson('/api/classes', [
+                'name' => 'Counted Class',
+                'scheduled_date' => '2026-06-01',
+                'min_students' => 5,
+                'max_students' => 20,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('min_students', 5)
+            ->assertJsonPath('max_students', 20);
+
+        $this->assertDatabaseHas('classes', [
+            'org_id' => $org->id,
+            'name' => 'Counted Class',
+            'min_students' => 5,
+            'max_students' => 20,
+        ]);
+    }
+
+    public function test_student_counts_are_optional_and_clearable(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create([
+            'min_students' => 5,
+            'max_students' => 20,
+        ]);
+
+        $this->actingAs($manager)
+            ->patchJson("/api/classes/{$class->id}", [
+                'name' => $class->name,
+                'scheduled_date' => '2026-06-01',
+                'min_students' => null,
+                'max_students' => null,
+            ])
+            ->assertOk()
+            ->assertJsonPath('min_students', null)
+            ->assertJsonPath('max_students', null);
+    }
+
+    public function test_max_students_alone_is_valid_without_a_min(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+
+        $this->actingAs($manager)
+            ->postJson('/api/classes', [
+                'name' => 'Max Only',
+                'scheduled_date' => '2026-06-01',
+                'max_students' => 20,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('min_students', null)
+            ->assertJsonPath('max_students', 20);
+    }
+
+    public function test_max_students_must_not_be_below_min_students(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+
+        $this->actingAs($manager)
+            ->postJson('/api/classes', [
+                'name' => 'x',
+                'scheduled_date' => '2026-06-01',
+                'min_students' => 20,
+                'max_students' => 5,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('max_students');
+    }
+
+    public function test_student_counts_do_not_limit_enrollment(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create([
+            'max_students' => 1,
+        ]);
+        $a = User::factory()->for($org, 'organization')->create();
+        $b = User::factory()->for($org, 'organization')->create();
+
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments", ['user_id' => $a->id])
+            ->assertOk();
+
+        // Reference only — a second enrollee past max_students is still fine.
+        $this->actingAs($manager)
+            ->postJson("/api/classes/{$class->id}/enrollments", ['user_id' => $b->id])
+            ->assertOk()
+            ->assertJsonCount(2, 'enrollments');
+    }
+
+    public function test_index_rows_carry_the_student_counts(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        TrainingClass::factory()->for($org, 'organization')->create([
+            'name' => 'Counted',
+            'min_students' => 5,
+            'max_students' => 20,
+        ]);
+
+        $row = collect(
+            $this->actingAs($manager)->getJson('/api/classes')->assertOk()->json('data'),
+        )->firstWhere('name', 'Counted');
+
+        $this->assertSame(5, $row['min_students']);
+        $this->assertSame(20, $row['max_students']);
+    }
+
     public function test_create_with_user_ids_enrolls_each_user(): void
     {
         $org = Organization::factory()->create();

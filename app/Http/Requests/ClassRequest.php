@@ -33,6 +33,14 @@ class ClassRequest extends FormRequest
             'instructor' => ['nullable', 'string', 'max:255'],
             'show_signature' => ['boolean'],
             'total_hours' => ['nullable', 'numeric', 'min:0'],
+            // Reference-only planning counts — never enforced on enrollment.
+            'min_students' => ['nullable', 'integer', 'min:0', 'max:9999'],
+            'max_students' => [
+                'nullable', 'integer', 'min:0', 'max:9999',
+                // gte only when a min was given — a bare null min must not
+                // invalidate a max-only submission.
+                Rule::when($this->filled('min_students'), ['gte:min_students']),
+            ],
             'notes' => ['nullable', 'string'],
             // Optional at-create-time training picker (snapshotted on store).
             'training_ids' => ['nullable', 'array'],

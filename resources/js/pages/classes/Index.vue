@@ -218,9 +218,21 @@ onMounted(async () => {
                 <template #col-trainings="{ row }">{{
                     row.trainings_count
                 }}</template>
-                <template #col-enrolled="{ row }">{{
-                    row.enrollments_count
-                }}</template>
+                <!-- Reference max (never a limit) reads as "7 / 20". -->
+                <template #col-enrolled="{ row }">
+                    <span
+                        :title="
+                            row.min_students != null
+                                ? `min ${row.min_students}`
+                                : undefined
+                        "
+                    >
+                        {{ row.enrollments_count
+                        }}<template v-if="row.max_students != null">
+                            / {{ row.max_students }}</template
+                        >
+                    </span>
+                </template>
 
                 <template #col-status="{ row }">
                     <Badge

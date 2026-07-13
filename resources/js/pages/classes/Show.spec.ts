@@ -30,6 +30,8 @@ const detail: ClassDetail = {
     instructor: 'J. Cole',
     show_signature: false,
     total_hours: '4.00',
+    min_students: null,
+    max_students: null,
     notes: null,
     status: 'scheduled',
     completion_date: null,
@@ -188,6 +190,43 @@ describe('classes/Show inline edit', () => {
         expect(wrapper.text()).toContain('Fall Protection');
         expect(wrapper.text()).toContain('(4h)');
         detail.trainings = []; // restore for other tests
+    });
+});
+
+// Reference student counts — shown, never enforced.
+describe('classes/Show — student counts', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        vi.clearAllMocks();
+    });
+
+    it('shows "· max N" on the roster header when a max is set', async () => {
+        mockGet({ ...detail, max_students: 20 });
+        const wrapper = await mountShow();
+
+        expect(wrapper.text()).toContain('Enrolled (1 · max 20)');
+    });
+
+    it('keeps the plain enrolled count when no max is set', async () => {
+        mockGet();
+        const wrapper = await mountShow();
+
+        expect(wrapper.text()).toContain('Enrolled (1)');
+        expect(wrapper.text()).not.toContain('· max');
+    });
+
+    it('lists the counts on the completed read-only view', async () => {
+        mockGet({
+            ...detail,
+            status: 'completed',
+            can_edit: false,
+            min_students: 5,
+            max_students: 20,
+        });
+        const wrapper = await mountShow();
+
+        expect(wrapper.text()).toContain('Students (min / max)');
+        expect(wrapper.text()).toContain('5 / 20');
     });
 });
 

@@ -34,6 +34,8 @@ class TrainingClass extends Model
         'instructor',
         'show_signature',
         'total_hours',
+        'min_students',
+        'max_students',
         'notes',
         'status',
         'completion_date',
@@ -45,6 +47,8 @@ class TrainingClass extends Model
         'completion_date' => 'date',
         'completed_at' => 'datetime',
         'total_hours' => 'decimal:2',
+        'min_students' => 'integer',
+        'max_students' => 'integer',
         'show_signature' => 'boolean',
     ];
 

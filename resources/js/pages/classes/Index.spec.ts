@@ -30,6 +30,8 @@ const CLASSES = [
         location: 'Main Hall',
         instructor: 'Jane Doe',
         total_hours: '4.0',
+        min_students: 5,
+        max_students: 20,
         status: 'scheduled',
         trainings_count: 3,
         enrollments_count: 12,
@@ -43,6 +45,8 @@ const CLASSES = [
         location: null,
         instructor: null,
         total_hours: null,
+        min_students: null,
+        max_students: null,
         status: 'completed',
         trainings_count: 1,
         enrollments_count: 4,
@@ -129,6 +133,14 @@ describe('classes/Index — server-paged table', () => {
         expect(text).toContain('Jane Doe');
         expect(text).toContain('Main Hall');
         expect(wrapper.find('a[href="/classes/cl1"]').exists()).toBe(true);
+    });
+
+    it('shows enrolled as "n / max" when a max is set, plain count otherwise', async () => {
+        const wrapper = await mountPage();
+        const cells = wrapper.findAll('tbody td').map((td) => td.text().trim());
+
+        expect(cells).toContain('12 / 20'); // cl1 has max_students 20
+        expect(cells).toContain('4'); // cl2 has no max — no slash
     });
 
     it('requests page 1 sorted by scheduled_date desc on mount', async () => {
