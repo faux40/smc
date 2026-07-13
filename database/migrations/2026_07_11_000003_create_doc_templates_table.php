@@ -22,11 +22,19 @@ return new class extends Migration
             // Distinct ${keys} found at upload (modifiers stripped).
             $table->json('placeholders');
             $table->unsignedInteger('version')->default(1);
-            $table->foreignUuid('prev_version_id')->nullable()->constrained('doc_templates')->nullOnDelete();
+            $table->uuid('prev_version_id')->nullable();
             $table->foreignUuid('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes(); // replaced versions are soft-deleted, files kept
             $table->index('org_id');
+        });
+
+        // Self-referencing FK added AFTER create (same pattern as comments.
+        // parent_id): inside the create blueprint, Postgres receives the FK
+        // ALTER before the fluent primary-key ALTER and rejects it ("no
+        // unique constraint matching given keys for referenced table").
+        Schema::table('doc_templates', function (Blueprint $table) {
+            $table->foreign('prev_version_id')->references('id')->on('doc_templates')->nullOnDelete();
         });
     }
 
