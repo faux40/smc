@@ -28,7 +28,7 @@
             <td class="w-1/2 align-top leading-relaxed">
                 <div><span class="text-[#4b5563]">Trainer:</span> {{ $trainer ?: '—' }}</div>
                 <div><span class="text-[#4b5563]">Length:</span> {{ $length ?: '—' }}</div>
-                <div><span class="text-[#4b5563]">Students:</span> {{ $students }}@if ($max_students) of {{ $max_students }}@endif</div>
+                <div><span class="text-[#4b5563]">Students:</span> {{ $students }}</div>
             </td>
         </tr>
     </table>
