@@ -15,20 +15,21 @@ class ClassSignInSheet
 {
     /**
      * Row capacities for a Letter page. CSS math (96dpi): content height
-     * = 11in − 1.15in top margin (hosts the repeating Chromium header)
-     * − 0.75in bottom (footer) ≈ 869px; each roster row is 36px + 1px
+     * = 11in − 0.9in top margin (hosts the repeating Chromium header)
+     * − 0.75in bottom (footer) ≈ 898px; each roster row is 36px + 1px
      * collapsed border ≈ 37px; the column-header row ≈ 36px. Page 1 also
      * carries the header block (org/title line + "Sign In Sheet" heading +
-     * info table ≈ 200px, more with a multi-line address) → (869−200−36)/37
-     * ≈ 17, held at 16 to absorb a long address. Continuation pages repeat
-     * only the column headers → (869−36)/37 ≈ 22.5 → 22.
+     * info table ≈ 200px, more with a multi-line address) → (898−200−36)/37
+     * ≈ 17.9, held at 17 to absorb a long address. Continuation pages repeat
+     * only the column headers → (898−36)/37 ≈ 23.3 → 23.
      *
-     * Public so the tests (and anything else sizing the sheet) share the
-     * numbers. Nudge here if a visual pass shows over/underflow.
+     * Keep in step with the pageMargin in sign-in-sheet.blade.php. Public so
+     * the tests (and anything else sizing the sheet) share the numbers.
+     * Nudge here if a visual pass shows over/underflow.
      */
-    public const FIRST_PAGE_ROWS = 16;
+    public const FIRST_PAGE_ROWS = 17;
 
-    public const NEXT_PAGE_ROWS = 22;
+    public const NEXT_PAGE_ROWS = 23;
 
     /**
      * @return array<string, mixed>

@@ -1,7 +1,7 @@
 {{-- Taller top margin hosts the repeating per-page class-info header
      (pdf.partials.sign-in-header). Row capacities in ClassSignInSheet are
      derived from these margins — keep them in step. --}}
-@extends('pdf.layout', ['pageSize' => '8.5in 11in', 'pageMargin' => '1.15in 0.75in 0.75in'])
+@extends('pdf.layout', ['pageSize' => '8.5in 11in', 'pageMargin' => '0.9in 0.75in 0.75in'])
 
 @section('content')
 <div class="text-[13px] text-[#111827]">
