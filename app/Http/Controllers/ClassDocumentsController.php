@@ -110,7 +110,7 @@ class ClassDocumentsController extends Controller
         return [$data['type'] ?? null, $data['description'] ?? null];
     }
 
-    private function filedResponse(\App\Models\Attachment $attachment): JsonResponse
+    private function filedResponse(Attachment $attachment): JsonResponse
     {
         return response()->json([
             'id' => $attachment->id,
@@ -162,7 +162,24 @@ class ClassDocumentsController extends Controller
     {
         $data = ClassSignInSheet::data($class);
 
-        return $this->withReportFooter(PdfRenderer::make('pdf.sign-in-sheet', $data), $data);
+        // Unlike the other reports, the sheet repeats the class info at the
+        // top of EVERY page (Chromium margin header — the sheet reserves a
+        // taller top margin for it) and numbers its pages (no "of N", so an
+        // unused blank back page can just be skipped when printing).
+        return PdfRenderer::make('pdf.sign-in-sheet', $data)
+            ->headerView('pdf.partials.sign-in-header', [
+                'org_name' => $data['org_name'],
+                'title' => $data['title'],
+                'date' => $data['date'],
+                'time' => $data['time'],
+                'location' => $data['location'],
+                'trainer' => $data['trainer'],
+            ])
+            ->footerView('pdf.partials.footer', [
+                'stamp' => $data['generated_at'],
+                'title' => $data['title'],
+                'pageNumber' => true,
+            ]);
     }
 
     public function summary(TrainingClass $class): PdfBuilder

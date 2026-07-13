@@ -1,4 +1,7 @@
-@extends('pdf.layout', ['pageSize' => '8.5in 11in', 'pageMargin' => '0.75in'])
+{{-- Taller top margin hosts the repeating per-page class-info header
+     (pdf.partials.sign-in-header). Row capacities in ClassSignInSheet are
+     derived from these margins — keep them in step. --}}
+@extends('pdf.layout', ['pageSize' => '8.5in 11in', 'pageMargin' => '1.15in 0.75in 0.75in'])
 
 @section('content')
 <div class="text-[13px] text-[#111827]">
@@ -25,7 +28,7 @@
             <td class="w-1/2 align-top leading-relaxed">
                 <div><span class="text-[#4b5563]">Trainer:</span> {{ $trainer ?: '—' }}</div>
                 <div><span class="text-[#4b5563]">Length:</span> {{ $length ?: '—' }}</div>
-                <div><span class="text-[#4b5563]">Students:</span> {{ $students }}</div>
+                <div><span class="text-[#4b5563]">Students:</span> {{ $students }}@if ($max_students) of {{ $max_students }}@endif</div>
             </td>
         </tr>
     </table>
