@@ -31,12 +31,19 @@ class CertificateData
         $class->loadMissing('classTrainings', 'organization');
         $ctById = $class->classTrainings->keyBy('id');
 
+        // Print order matches the sign-in sheet / class summary: alphabetical
+        // by last, first, middle (PersonName::sortKey). The name printed ON the
+        // certificate is left as the person's natural full name — only the
+        // sequence of pages changes. cert_id order is the stable tiebreak for
+        // people who sort equally.
         $completions = Completion::query()
             ->whereIn('class_training_id', $ctById->keys())
             ->whereNotNull('cert_id')
             ->with('user:id,f_name,m_name,l_name,prefix_name,suffix_name')
             ->orderBy('cert_id')
-            ->get();
+            ->get()
+            ->sortBy(fn (Completion $c) => $c->user?->personName()->sortKey() ?? ['', '', ''])
+            ->values();
 
         $orgName = $class->organization?->name ?? '';
 

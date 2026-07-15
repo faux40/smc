@@ -79,6 +79,46 @@ class ClassCertificateTest extends TestCase
         $this->assertStringContainsString('Second paragraph', $row['cert_html']);
     }
 
+    public function test_rows_are_ordered_by_name_but_print_the_natural_full_name(): void
+    {
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+
+        $training = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $training->id,
+        ]);
+
+        // Issued in reverse-alphabetical cert order; the generator re-sorts by
+        // last, first, middle (matching the sign-in sheet / summary).
+        $people = [
+            ['f_name' => 'Ada', 'm_name' => 'Augusta', 'l_name' => 'Lovelace', 'cert' => 'C-1'],
+            ['f_name' => 'Grace', 'm_name' => null, 'l_name' => 'Hopper', 'cert' => 'C-2'],
+            ['f_name' => 'Alan', 'm_name' => 'Mathison', 'l_name' => 'Hopper', 'cert' => 'C-3'],
+        ];
+        foreach ($people as $p) {
+            $u = User::factory()->for($org, 'organization')->create([
+                'f_name' => $p['f_name'], 'm_name' => $p['m_name'], 'l_name' => $p['l_name'],
+            ]);
+            Completion::create([
+                'org_id' => $org->id, 'user_id' => $u->id,
+                'module_type' => Training::class, 'module_id' => $training->id,
+                'completion_date' => '2026-06-01', 'cert_id' => $p['cert'],
+                'class_training_id' => $ct->id,
+            ]);
+        }
+
+        $rows = CertificateData::forClass($class->fresh());
+
+        // Ordered by name (Hopper, Alan → Hopper, Grace → Lovelace, Ada), but
+        // each certificate still prints the natural full name — not "Last, First".
+        $this->assertSame(
+            ['Alan Mathison Hopper', 'Grace Hopper', 'Ada Augusta Lovelace'],
+            array_column($rows, 'student_name'),
+        );
+    }
+
     public function test_a_single_newline_in_cert_text_becomes_a_line_break(): void
     {
         $org = Organization::factory()->create();

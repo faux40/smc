@@ -127,15 +127,14 @@ const id = (field: string) => `${props.idPrefix ?? 'class'}_${field}`;
             <div class="grid gap-2">
                 <Label :for="id('instructor')">Trainer / instructor</Label>
                 <Input :id="id('instructor')" v-model="form.instructor" />
-                <label
-                    class="flex items-center gap-2 text-sm text-muted-foreground"
-                >
-                    <Checkbox v-model="form.show_signature" />
-                    Show signature on certificate
-                </label>
                 <InputError :message="fieldErrors.message('instructor')" />
             </div>
         </div>
+
+        <label class="flex items-center gap-2 text-sm">
+            <Checkbox :id="id('show_signature')" v-model="form.show_signature" />
+            Show signature line on certificates
+        </label>
 
         <div class="grid gap-2">
             <Label :for="id('address')">Address</Label>

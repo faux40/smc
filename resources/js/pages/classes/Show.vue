@@ -425,6 +425,36 @@ const hoursLabel = (h: string | null) => (h ? `${Number(h)}h` : '—');
 const totalHoursLabel = computed(
     () => `${Number(detail.value?.total_hours ?? 0).toFixed(1)} hours`,
 );
+
+// "8:00 AM" from a stored "HH:MM" (24h), or null. Mirrors the sign-in sheet's
+// PHP timeRange so the on-screen detail reads the same as the printed doc.
+function clockLabel(t: string | null | undefined): string | null {
+    if (!t) {
+        return null;
+    }
+
+    const [h, m] = t.split(':').map(Number);
+
+    if (Number.isNaN(h) || Number.isNaN(m)) {
+        return null;
+    }
+
+    const period = h < 12 ? 'AM' : 'PM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+
+    return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+const timeLabel = computed(() => {
+    const s = clockLabel(detail.value?.start_time);
+    const e = clockLabel(detail.value?.end_time);
+
+    if (s && e) {
+        return `${s} – ${e}`;
+    }
+
+    return s ? `from ${s}` : e ? `until ${e}` : '—';
+});
 </script>
 
 <template>
@@ -653,6 +683,14 @@ const totalHoursLabel = computed(
                                         <dt
                                             class="text-xs text-muted-foreground"
                                         >
+                                            Time
+                                        </dt>
+                                        <dd>{{ timeLabel }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt
+                                            class="text-xs text-muted-foreground"
+                                        >
                                             Class Hours
                                         </dt>
                                         <dd>{{ totalHoursLabel }}</dd>
@@ -682,6 +720,30 @@ const totalHoursLabel = computed(
                                             Instructor
                                         </dt>
                                         <dd>{{ detail.instructor || '—' }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            Certificate signature
+                                        </dt>
+                                        <dd>
+                                            {{
+                                                detail.show_signature
+                                                    ? 'Shown'
+                                                    : 'Hidden'
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div v-if="detail.address" class="col-span-2">
+                                        <dt
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            Address
+                                        </dt>
+                                        <dd class="whitespace-pre-line">
+                                            {{ detail.address }}
+                                        </dd>
                                     </div>
                                     <div
                                         v-if="
