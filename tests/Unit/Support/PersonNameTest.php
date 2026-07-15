@@ -72,6 +72,51 @@ class PersonNameTest extends TestCase
         $this->assertSame('Lovelace', (new PersonName(null, null, null, 'Lovelace', null))->short());
     }
 
+    public function test_roster_is_last_first_middle_initial(): void
+    {
+        $name = new PersonName('Dr.', 'Ada', 'Augusta', 'Lovelace', 'III');
+
+        // Prefix + suffix dropped; middle collapses to an uppercased initial.
+        $this->assertSame('Lovelace, Ada, A', $name->rosterName());
+    }
+
+    public function test_roster_drops_the_middle_segment_when_there_is_no_middle_name(): void
+    {
+        $name = new PersonName(null, 'Grace', null, 'Hopper', null);
+
+        $this->assertSame('Hopper, Grace', $name->rosterName());
+    }
+
+    public function test_roster_degrades_without_dangling_commas(): void
+    {
+        $this->assertSame('Lovelace', (new PersonName(null, null, null, 'Lovelace', null))->rosterName());
+        $this->assertSame('Ada', (new PersonName(null, 'Ada', null, null, null))->rosterName());
+        $this->assertSame('', (new PersonName)->rosterName());
+    }
+
+    public function test_sort_key_is_lowercased_last_first_middle(): void
+    {
+        $name = new PersonName('Dr.', 'Ada', 'Augusta', 'Lovelace', 'III');
+
+        $this->assertSame(['lovelace', 'ada', 'augusta'], $name->sortKey());
+    }
+
+    public function test_sort_key_orders_by_last_then_first_then_middle(): void
+    {
+        $people = [
+            new PersonName(null, 'Ada', 'Augusta', 'Lovelace', null),
+            new PersonName(null, 'Grace', null, 'Hopper', null),
+            new PersonName(null, 'Alan', 'Mathison', 'Hopper', null),
+        ];
+
+        usort($people, fn (PersonName $a, PersonName $b) => $a->sortKey() <=> $b->sortKey());
+
+        $this->assertSame(
+            ['Hopper, Alan, M', 'Hopper, Grace', 'Lovelace, Ada, A'],
+            array_map(fn (PersonName $p) => $p->rosterName(), $people),
+        );
+    }
+
     public function test_initials_use_first_and_last_uppercased(): void
     {
         $name = new PersonName(null, 'ada', 'augusta', 'lovelace', null);

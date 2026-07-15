@@ -59,10 +59,35 @@ class ClassSignInSheetTest extends TestCase
 
         $this->assertSame(1, $data['students']);
         $this->assertSame('John B', $data['trainer']);
-        $this->assertSame('Ann Lee', $data['rows'][0]);
+        $this->assertSame('Lee, Ann', $data['rows'][0]); // "Last, First"
         $this->assertSame('', $data['rows'][1]); // padded blank
         // Exactly one full first page of rows (walk-in space).
         $this->assertCount(ClassSignInSheet::FIRST_PAGE_ROWS, $data['rows']);
+    }
+
+    public function test_names_are_last_first_middle_initial_ordered_alphabetically(): void
+    {
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+        $class = TrainingClass::factory()->for($org, 'organization')->create(['max_students' => null]);
+
+        // Deliberately enrolled out of order to prove the sheet re-sorts.
+        foreach ([
+            ['f_name' => 'Ada', 'm_name' => 'Augusta', 'l_name' => 'Lovelace'],
+            ['f_name' => 'Grace', 'm_name' => null, 'l_name' => 'Hopper'],
+            ['f_name' => 'Alan', 'm_name' => 'Mathison', 'l_name' => 'Hopper'],
+        ] as $attrs) {
+            $u = User::factory()->for($org, 'organization')->create($attrs);
+            ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $u->id]);
+        }
+
+        $data = ClassSignInSheet::data($class->fresh());
+
+        // Sorted by last, then first (Hopper, Alan before Hopper, Grace), then
+        // middle. Middle name renders as a bare initial; none → none.
+        $this->assertSame('Hopper, Alan, M', $data['rows'][0]);
+        $this->assertSame('Hopper, Grace', $data['rows'][1]);
+        $this->assertSame('Lovelace, Ada, A', $data['rows'][2]);
     }
 
     public function test_an_empty_class_still_fills_the_page_with_blank_rows(): void

@@ -38,13 +38,16 @@ class ClassSignInSheet
     {
         $class->loadMissing('organization');
 
+        // Roster order: alphabetical by last name, then first, then middle —
+        // printed "Last, First, M." (see PersonName::rosterName / sortKey).
         $names = ClassEnrollment::query()
             ->where('class_id', $class->id)
             ->with('user:id,f_name,m_name,l_name,prefix_name,suffix_name')
             ->get()
-            ->map(fn (ClassEnrollment $e) => $e->user?->name)
+            ->map(fn (ClassEnrollment $e) => $e->user?->personName())
             ->filter()
-            ->sort()
+            ->sortBy(fn (PersonName $n) => $n->sortKey())
+            ->map(fn (PersonName $n) => $n->rosterName())
             ->values();
 
         $rowCount = self::rowCount($names->count(), $class->max_students);

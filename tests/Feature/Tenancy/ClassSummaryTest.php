@@ -79,6 +79,43 @@ class ClassSummaryTest extends TestCase
         $this->assertArrayNotHasKey('expires', $row);
     }
 
+    public function test_rows_are_last_first_middle_initial_ordered_alphabetically(): void
+    {
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+
+        $training = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $training->id, 'repeating' => true, 'repeat_days' => 365,
+        ]);
+
+        // Issued in cert order, but the roster prints alphabetically by name.
+        $people = [
+            ['f_name' => 'Ada', 'm_name' => 'Augusta', 'l_name' => 'Lovelace', 'cert' => 'C-1'],
+            ['f_name' => 'Alan', 'm_name' => 'Mathison', 'l_name' => 'Hopper', 'cert' => 'C-2'],
+            ['f_name' => 'Grace', 'm_name' => null, 'l_name' => 'Hopper', 'cert' => 'C-3'],
+        ];
+        foreach ($people as $p) {
+            $u = User::factory()->for($org, 'organization')->create([
+                'f_name' => $p['f_name'], 'm_name' => $p['m_name'], 'l_name' => $p['l_name'],
+            ]);
+            Completion::create([
+                'org_id' => $org->id, 'user_id' => $u->id,
+                'module_type' => Training::class, 'module_id' => $training->id,
+                'completion_date' => '2026-05-13', 'cert_id' => $p['cert'],
+                'class_training_id' => $ct->id,
+            ]);
+        }
+
+        $rows = ClassSummary::data($class->fresh())['groups'][0]['rows'];
+
+        $this->assertSame(
+            ['Hopper, Alan, M', 'Hopper, Grace', 'Lovelace, Ada, A'],
+            array_column($rows, 'name'),
+        );
+    }
+
     public function test_data_lists_the_class_trainings(): void
     {
         $org = Organization::factory()->create();

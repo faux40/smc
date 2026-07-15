@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\ClassTraining;
 use App\Models\Completion;
 use App\Models\TrainingClass;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 
 /**
@@ -48,12 +49,14 @@ class ClassSummary
                     ? Carbon::parse($issue)->addDays($ct->repeat_days)
                     : null);
 
-            $name = $user
-                ? trim(($user->l_name ?? '').', '.($user->f_name ?? ''), ', ')
-                : '—';
+            // "Last, First, M." for the roster column; keep the sort key so the
+            // group's rows can be ordered alphabetically (last, first, middle).
+            $person = $user?->personName();
+            $name = $person?->rosterName();
 
             $buckets[$comp->class_training_id]['rows'][] = [
-                'name' => $name !== '' ? $name : '—',
+                'name' => filled($name) ? $name : '—',
+                'sort' => $person?->sortKey() ?? ['', '', ''],
                 'emp_number' => $user?->employee_number ?? '',
                 'location' => $user?->location ?? '',
                 'cert_id' => $comp->cert_id,
@@ -86,11 +89,19 @@ class ClassSummary
                 continue;
             }
 
+            // Order the roster alphabetically (last, first, middle), then drop
+            // the sort key — it's scaffolding, not part of the row's shape.
+            $rows = collect($bucket['rows'])
+                ->sortBy('sort')
+                ->map(fn (array $row) => Arr::except($row, 'sort'))
+                ->values()
+                ->all();
+
             $groups[] = [
                 'training' => $ct->training_name,
                 'issue_date' => $fold($bucket['issues']),
                 'expires' => $fold($bucket['expires']),
-                'rows' => $bucket['rows'],
+                'rows' => $rows,
             ];
             $certificates += count($bucket['rows']);
         }

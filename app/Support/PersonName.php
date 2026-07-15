@@ -58,6 +58,45 @@ final class PersonName
     }
 
     /**
+     * Roster order for printed reports: "Lovelace, Ada, A" — last name, then
+     * first name, then a middle *initial* (single letter) when a middle name
+     * is present. Prefix and suffix are dropped. Degrades gracefully as parts
+     * go missing — comma-joins only the parts that exist, never a dangling
+     * comma.
+     */
+    public function rosterName(): string
+    {
+        $parts = array_filter([
+            self::squish([$this->last]),
+            self::squish([$this->first]),
+            self::initial($this->middle),
+        ], fn (string $p): bool => $p !== '');
+
+        return implode(', ', $parts);
+    }
+
+    /**
+     * Case-insensitive sort key ordering by last, then first, then middle —
+     * the alphabetical order printed rosters list people in. PHP compares the
+     * arrays element-by-element, so this slots straight into Collection::sortBy.
+     *
+     * @return array<int, string>
+     */
+    public function sortKey(): array
+    {
+        return array_map(
+            fn (?string $p): string => mb_strtolower(trim((string) $p)),
+            [$this->last, $this->first, $this->middle],
+        );
+    }
+
+    /** First letter of a name part, uppercased ("A"), or '' when empty. */
+    private static function initial(?string $part): string
+    {
+        return mb_strtoupper(mb_substr(trim((string) $part), 0, 1));
+    }
+
+    /**
      * Avatar initials from first + last, uppercased: "AL". Falls back to the
      * single available part, or '' when there is no name at all.
      */
