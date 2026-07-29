@@ -42,6 +42,16 @@ class TrainingRequest extends FormRequest
             'cert_title' => ['nullable', 'string', 'max:255'],
             'cert_text' => ['nullable', 'string', 'max:2000'],
             'cert_code' => ['nullable', 'string', 'max:32'],
+            // The custom card design printed for this training. System
+            // templates (org_id NULL) are shared and assignable; another
+            // org's is not visible, let alone selectable.
+            'card_template_id' => [
+                'nullable',
+                'string',
+                Rule::exists('card_templates', 'id')
+                    ->where(fn ($q) => $q->whereNull('org_id')->orWhere('org_id', $orgId))
+                    ->whereNull('deleted_at'),
+            ],
             'default_trainer' => ['nullable', 'string', 'max:255'],
             'default_location' => ['nullable', 'string', 'max:255'],
             'default_address' => ['nullable', 'string', 'max:1000'],

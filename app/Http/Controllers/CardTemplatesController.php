@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\CardTemplate;
+use App\Models\Training;
 use App\Support\Cards\CardTemplateFile;
 use App\Support\Cards\InvalidCardTemplate;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -81,6 +83,10 @@ class CardTemplatesController extends Controller
             $cardTemplate->id,
         );
 
+        // Trainings follow the design, not the row: uploading a fix must not
+        // silently detach every training that printed this card.
+        $this->trainingsUsing($cardTemplate)->update(['card_template_id' => $replacement->id]);
+
         $cardTemplate->delete(); // soft — the file stays for history
 
         return response()->json($this->serialize($replacement));
@@ -104,12 +110,36 @@ class CardTemplatesController extends Controller
     {
         Gate::authorize('delete', $cardTemplate);
 
+        // The row is only soft-deleted, so the FK would keep resolving to a
+        // design that no longer exists for the user. Detach explicitly.
+        $this->trainingsUsing($cardTemplate)->update(['card_template_id' => null]);
+
         $cardTemplate->delete(); // soft — the file stays for history
 
         return response()->json(['ok' => true]);
     }
 
     // ---- helpers ---------------------------------------------------------
+
+    /**
+     * Trainings pointing at this template. Scoped to the template's org so a
+     * shared system design being replaced never reaches into another org's
+     * rows; the global org scope is dropped because the update runs outside
+     * any request-scoped org for system templates.
+     *
+     * @return Builder<Training>
+     */
+    private function trainingsUsing(CardTemplate $template): Builder
+    {
+        return Training::query()
+            ->withoutGlobalScope('organization')
+            ->where('card_template_id', $template->id)
+            ->when(
+                $template->org_id !== null,
+                fn (Builder $q) => $q->where('org_id', $template->org_id),
+                fn (Builder $q) => $q->where('org_id', request()->user()?->org_id),
+            );
+    }
 
     private function storeUpload(
         Request $request,
