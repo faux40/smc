@@ -460,7 +460,7 @@ class ClassSummaryTest extends TestCase
         $this->assertSame([], $data['incomplete_groups']);
     }
 
-    public function test_the_sheet_prints_both_sections_with_a_none_fallback(): void
+    public function test_an_outcome_section_is_dropped_when_nobody_is_in_it(): void
     {
         $org = Organization::factory()->create();
         app()->instance('currentOrgId', $org->id);
@@ -482,10 +482,9 @@ class ClassSummaryTest extends TestCase
 
         $html = view('pdf.class-summary', ClassSummary::data($class->fresh()))->render();
 
-        // Nobody failed — the section still prints, so the sheet accounts for
-        // every possible outcome rather than silently omitting one.
-        $this->assertStringContainsString('Failed', $html);
-        $this->assertStringContainsString('None.', $html);
+        // Nobody failed — that heading is gone entirely rather than printing
+        // an empty section.
+        $this->assertStringNotContainsString('Failed', $html);
         $this->assertStringContainsString('Incomplete', $html);
         $this->assertStringContainsString('Lee, Sam', $html);
         $this->assertStringContainsString('No-show', $html);
