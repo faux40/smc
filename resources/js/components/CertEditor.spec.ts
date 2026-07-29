@@ -32,4 +32,14 @@ describe('CertEditor', () => {
         expect(preview.html()).toContain('<strong>Cal/OSHA</strong>');
         expect(preview.text()).toContain('Acme Safety Co.');
     });
+
+    it('labels the fields as the SMC certificate, not a custom card', async () => {
+        const wrapper = mount(CertEditor, { props: { title: '', text: '' } });
+
+        // "SMC" prefix keeps the built-in certificate distinct from an
+        // uploaded custom card template (custom-certs work).
+        const labels = wrapper.findAll('label').map((l) => l.text());
+        expect(labels).toContain('SMC Certificate title');
+        expect(labels).toContain('SMC Certificate text');
+    });
 });

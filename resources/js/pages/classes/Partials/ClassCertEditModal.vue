@@ -81,9 +81,9 @@ async function save(): Promise<void> {
     <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
         <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
             <DialogHeader>
-                <DialogTitle>Certificate details</DialogTitle>
+                <DialogTitle>SMC Certificate details</DialogTitle>
                 <DialogDescription>
-                    Edit the certificate title and text for
+                    Edit the SMC certificate title and text for
                     <span class="font-medium">{{
                         topic?.training_name ?? 'this topic'
                     }}</span>

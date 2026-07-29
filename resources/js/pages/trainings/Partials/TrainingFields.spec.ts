@@ -46,4 +46,15 @@ describe('TrainingFields', () => {
 
         expect(form.std_freq_id).toBeNull();
     });
+
+    it('heads the built-in certificate block "SMC Certificate"', async () => {
+        const form = reactive(blankTrainingForm());
+        const wrapper = mount(TrainingFields, {
+            props: { modelValue: form, context: 'form:training' },
+        });
+        await nextTick();
+
+        // Distinguishes it from an uploaded custom card template.
+        expect(wrapper.text()).toContain('SMC Certificate');
+    });
 });

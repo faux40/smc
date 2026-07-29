@@ -30,7 +30,7 @@ const orgName = computed(
         <!-- Editor -->
         <div class="space-y-3">
             <div class="grid gap-2">
-                <Label for="cert_title">Certificate title</Label>
+                <Label for="cert_title">SMC Certificate title</Label>
                 <Input
                     id="cert_title"
                     v-model="title"
@@ -40,7 +40,7 @@ const orgName = computed(
             </div>
 
             <div class="grid gap-2">
-                <Label for="cert_text">Certificate text</Label>
+                <Label for="cert_text">SMC Certificate text</Label>
                 <textarea
                     id="cert_text"
                     v-model="text"

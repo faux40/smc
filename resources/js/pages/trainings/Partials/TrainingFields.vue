@@ -140,10 +140,11 @@ watch(
         </div>
 
         <div class="space-y-3 border-t border-border pt-3">
-            <p class="text-sm font-medium">Certificate</p>
+            <p class="text-sm font-medium">SMC Certificate</p>
             <p class="text-xs text-muted-foreground">
-                Defaults copied onto a class when this topic is added, then
-                printed on the certificate.
+                The built-in certificate — defaults copied onto a class when
+                this topic is added, then printed on the certificate. Custom
+                card templates are separate.
             </p>
 
             <CertEditor
