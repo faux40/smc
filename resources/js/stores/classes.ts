@@ -75,6 +75,9 @@ export interface EnrollmentRow {
     id: string;
     user_id: string;
     user_name: string | null;
+    // "Reed, Dana Alan" — the label rosters render, and the key the server
+    // already sorted `enrollments` by (last, first, middle).
+    user_sort_name: string | null;
     user_email: string | null;
     status: 'enrolled' | 'passed' | 'partial' | 'incomplete';
     notes: string | null;

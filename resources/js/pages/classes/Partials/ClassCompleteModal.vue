@@ -32,7 +32,8 @@ const completionDate = ref('');
 
 interface Mark {
     id: string;
-    user_name: string | null;
+    // Roster label, last-name-first ("Reed, Dana Alan").
+    name: string | null;
     notes: string;
     // Freshly added on a re-opened class (never graded yet).
     isNew: boolean;
@@ -66,9 +67,10 @@ watch(
         marks.splice(
             0,
             marks.length,
+            // Order is the server's (last, first, middle) — kept verbatim.
             ...props.target.enrollments.map((e) => ({
                 id: e.id,
-                user_name: e.user_name,
+                name: e.user_sort_name ?? e.user_name,
                 notes: e.notes ?? '',
                 isNew: previouslyCompleted && e.status === 'enrolled',
                 result: Object.fromEntries(
@@ -183,8 +185,11 @@ async function submit(): Promise<void> {
                         :key="m.id"
                         class="space-y-1.5 border-b border-border pb-3 text-sm"
                     >
-                        <span class="flex items-center gap-2 font-medium">
-                            {{ m.user_name }}
+                        <span
+                            data-testid="attendee-name"
+                            class="flex items-center gap-2 font-medium"
+                        >
+                            {{ m.name }}
                             <Badge
                                 v-if="m.isNew"
                                 variant="secondary"

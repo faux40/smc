@@ -33,6 +33,7 @@ const detail: ClassDetail = {
             id: 'e1',
             user_id: 'u1',
             user_name: 'Dana Reed',
+            user_sort_name: 'Reed, Dana',
             user_email: 'dana@x.com',
             status: 'enrolled',
             notes: null,

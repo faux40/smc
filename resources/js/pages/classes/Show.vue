@@ -941,7 +941,9 @@ const timeLabel = computed(() => {
                                     :key="e.id"
                                     class="flex items-center justify-between gap-2 px-3 py-1.5"
                                 >
-                                    <span>{{ e.user_name }}</span>
+                                    <span>{{
+                                        e.user_sort_name ?? e.user_name
+                                    }}</span>
                                     <Badge
                                         v-if="e.status !== 'enrolled'"
                                         variant="secondary"
@@ -987,7 +989,7 @@ const timeLabel = computed(() => {
                             class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
                         >
                             <span class="min-w-40 font-medium">
-                                {{ e.user_name }}
+                                {{ e.user_sort_name ?? e.user_name }}
                             </span>
                             <Badge variant="secondary" class="text-[10px]">
                                 {{ e.status }}

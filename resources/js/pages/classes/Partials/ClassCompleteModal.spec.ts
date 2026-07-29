@@ -59,7 +59,8 @@ function detail(): ClassDetail {
             {
                 id: 'e1',
                 user_id: 'u1',
-                user_name: 'John Doe',
+                user_name: 'John Allen Doe',
+                user_sort_name: 'Doe, John Allen',
                 user_email: null,
                 status: 'enrolled',
                 notes: null,
@@ -219,6 +220,30 @@ describe('ClassCompleteModal', () => {
                 },
             ],
         });
+    });
+
+    it('labels attendees last-name-first and keeps the served roster order', async () => {
+        const target = detail();
+        target.enrollments.push({
+            id: 'e2',
+            user_id: 'u2',
+            user_name: 'Sandra Earle',
+            user_sort_name: 'Earle, Sandra',
+            user_email: null,
+            status: 'enrolled',
+            notes: null,
+            credited_training_ids: [],
+            results: {},
+        });
+
+        await openWith(target);
+
+        const names = Array.from(
+            document.body.querySelectorAll('[data-testid="attendee-name"]'),
+        ).map((el) => el.textContent?.trim());
+
+        // Sorted server-side; the modal renders that order verbatim.
+        expect(names).toEqual(['Doe, John Allen', 'Earle, Sandra']);
     });
 
     it('flags a freshly-added enrollee on a re-opened class', async () => {

@@ -808,6 +808,8 @@ class ClassesController extends Controller
                 'id' => $e->id,
                 'user_id' => $e->user_id,
                 'user_name' => $e->user?->name,
+                // Roster order + label: "Reed, Dana Alan" (last, first, middle).
+                'user_sort_name' => $e->user?->sort_name,
                 'user_email' => $e->user?->email,
                 'status' => $e->status,
                 'notes' => $e->notes,
@@ -815,7 +817,12 @@ class ClassesController extends Controller
                 // Per-topic pass/fail/incomplete map (pre-fills the complete
                 // modal on re-close; drives the roster's three-state display).
                 'results' => $e->results ?? [],
-            ])->all(),
+            ])
+                // Alphabetical for every consumer (roster panes, close-out
+                // modal) — enrollment order is insertion order otherwise.
+                ->sortBy('user_sort_name', SORT_NATURAL | SORT_FLAG_CASE)
+                ->values()
+                ->all(),
         ];
     }
 }

@@ -925,7 +925,39 @@ class ClassesControllerTest extends TestCase
             ->postJson("/api/classes/{$class->id}/enrollments", ['user_id' => $student->id])
             ->assertOk()
             ->assertJsonPath('enrollments.0.user_name', 'Dana Reed')
+            ->assertJsonPath('enrollments.0.user_sort_name', 'Reed, Dana')
             ->assertJsonPath('enrollments.0.user_email', 'dana.reed@demo.local');
+    }
+
+    public function test_enrollments_are_sorted_by_last_then_first_then_middle_name(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = $this->manager($org);
+        $class = TrainingClass::factory()->for($org, 'organization')->create();
+
+        // Enrolled deliberately out of order: first-name order would put
+        // "Aaron Zeller" first, and "Abe Reed" ahead of "abe alan Reed".
+        $roster = [
+            ['f_name' => 'Aaron', 'm_name' => null, 'l_name' => 'Zeller'],
+            ['f_name' => 'Abe', 'm_name' => null, 'l_name' => 'Reed'],
+            ['f_name' => 'abe', 'm_name' => 'Alan', 'l_name' => 'reed'],
+            ['f_name' => 'Dana', 'm_name' => null, 'l_name' => 'Ames'],
+        ];
+
+        foreach ($roster as $attrs) {
+            $student = User::factory()->for($org, 'organization')->create($attrs);
+            $this->actingAs($manager)
+                ->postJson("/api/classes/{$class->id}/enrollments", ['user_id' => $student->id])
+                ->assertOk();
+        }
+
+        $this->actingAs($manager)
+            ->getJson("/api/classes/{$class->id}")
+            ->assertOk()
+            ->assertJsonPath('enrollments.0.user_sort_name', 'Ames, Dana')
+            ->assertJsonPath('enrollments.1.user_sort_name', 'Reed, Abe')
+            ->assertJsonPath('enrollments.2.user_sort_name', 'reed, abe Alan')
+            ->assertJsonPath('enrollments.3.user_sort_name', 'Zeller, Aaron');
     }
 
     public function test_unenroll_and_detach_remove_rows(): void

@@ -42,6 +42,7 @@ const detail: ClassDetail = {
             id: 'e1',
             user_id: 'u1',
             user_name: 'Dana Reed',
+            user_sort_name: 'Reed, Dana',
             user_email: 'dana.reed@demo.local',
             status: 'enrolled',
             notes: null,
@@ -163,8 +164,8 @@ describe('classes/Show inline edit', () => {
     it('lists the enrolled student name in the right-hand roster column', async () => {
         const wrapper = await mountShow();
 
-        // Compact list shows the name; the email/picker lives in the modal.
-        expect(wrapper.text()).toContain('Dana Reed');
+        // Compact list shows the sortable name; email/picker lives in the modal.
+        expect(wrapper.text()).toContain('Reed, Dana');
     });
 
     it('shows compact topic names with hours inside the details card', async () => {
@@ -336,6 +337,7 @@ const completedDetail: ClassDetail = {
             id: 'e1',
             user_id: 'u1',
             user_name: 'Dana Reed',
+            user_sort_name: 'Reed, Dana',
             user_email: 'dana.reed@demo.local',
             status: 'partial',
             notes: null,
@@ -346,6 +348,7 @@ const completedDetail: ClassDetail = {
             id: 'e2',
             user_id: 'u2',
             user_name: 'Sam Lee',
+            user_sort_name: 'Lee, Sam',
             user_email: 'sam.lee@demo.local',
             status: 'incomplete',
             notes: null,
@@ -392,7 +395,7 @@ describe('classes/Show — completed class (M3)', () => {
         const rows = roster.findAll('[data-testid="roster-row"]');
         expect(rows).toHaveLength(2);
         const dana = rows[0].text();
-        expect(dana).toContain('Dana Reed');
+        expect(dana).toContain('Reed, Dana');
         expect(dana).toContain('✓ Fall Protection Basics');
         expect(dana).toContain('✗ Harness Inspection');
         const sam = rows[1].text();
