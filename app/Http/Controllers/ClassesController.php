@@ -3,16 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CompleteClass;
+use App\Actions\SaveTopicCardValues;
 use App\Events\ClassChanged;
 use App\Events\CompletionCreated;
 use App\Events\CompletionDeleted;
 use App\Events\CompletionUpdated;
 use App\Http\Requests\ClassRequest;
+use App\Http\Requests\ClassTopicUpdateRequest;
+use App\Models\CardField;
 use App\Models\ClassEnrollment;
 use App\Models\ClassTraining;
 use App\Models\Completion;
 use App\Models\Training;
 use App\Models\TrainingClass;
+use App\Support\Cards\CardFieldPresenter;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -188,25 +192,30 @@ class ClassesController extends Controller
         return response()->json($this->detail($class->fresh()));
     }
 
-    public function updateTraining(Request $request, TrainingClass $class, ClassTraining $classTraining): JsonResponse
-    {
+    public function updateTraining(
+        ClassTopicUpdateRequest $request,
+        TrainingClass $class,
+        ClassTraining $classTraining,
+        SaveTopicCardValues $saveCardValues,
+    ): JsonResponse {
         Gate::authorize('update', $class);
         $this->assertEditable($class);
         abort_unless($classTraining->class_id === $class->id, 404);
 
-        $data = $request->validate([
-            'hours' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-            // Per-class cert overrides: seeded from the training snapshot at
-            // attach time, then editable for this class only. cert_text is
-            // Markdown (rendered on the certificate).
-            'cert_title' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'cert_text' => ['sometimes', 'nullable', 'string', 'max:5000'],
-            'cert_code' => ['sometimes', 'nullable', 'string', 'max:32'],
-        ]);
+        $data = $request->validated();
+
+        // Answers for the training's custom card fields aren't columns on the
+        // topic; they're rows of their own.
+        $cardValues = $data['card_values'] ?? null;
+        unset($data['card_values']);
 
         // Only touch fields the request actually sent, so a cert-only edit
         // doesn't blank hours (and vice-versa).
         $classTraining->update($data);
+
+        if ($cardValues !== null) {
+            $saveCardValues->handle($classTraining, $cardValues);
+        }
 
         if (array_key_exists('hours', $data)) {
             $this->recomputeTotalHours($class);
@@ -716,6 +725,27 @@ class ClassesController extends Controller
         abort_if($class->status === 'completed', 422, 'This class is completed and read-only.');
     }
 
+    /**
+     * A topic's custom card fields: its training's definitions, each carrying
+     * this class's answer (null = the definition's default applies). The
+     * definition half is shaped by CardFieldPresenter so the Admin editor and
+     * this entry form read the same keys.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function cardFieldsFor(ClassTraining $ct): array
+    {
+        $valuesByField = $ct->cardValues->keyBy('card_field_id');
+
+        return $ct->training?->cardFields
+            ->map(fn (CardField $f) => [
+                ...CardFieldPresenter::definition($f),
+                'value' => $valuesByField->get($f->id)?->value,
+            ])
+            ->values()
+            ->all() ?? [];
+    }
+
     /** @return array<string, mixed> */
     private function summarize(TrainingClass $c): array
     {
@@ -740,7 +770,10 @@ class ClassesController extends Controller
     private function detail(TrainingClass $c): array
     {
         $c->load([
-            'classTrainings',
+            // cardFields + cardValues eagerly: the topic list renders a card
+            // field block per topic, and a class can carry several topics.
+            'classTrainings.training.cardFields',
+            'classTrainings.cardValues',
             'enrollments.user:id,f_name,m_name,l_name,prefix_name,suffix_name,email',
         ]);
 
@@ -790,6 +823,9 @@ class ClassesController extends Controller
                 'cert_title' => $ct->cert_title,
                 'cert_text' => $ct->cert_text,
                 'cert_code' => $ct->cert_code,
+                // Custom card fields (C3): the training's definitions with
+                // this class's answers, so the entry form is one payload.
+                'card_fields' => $this->cardFieldsFor($ct),
                 // M3 — who earned this topic's credit (completed classes).
                 'credits' => ($creditsByTopic[$ct->id] ?? collect())
                     ->map(fn (Completion $comp) => [

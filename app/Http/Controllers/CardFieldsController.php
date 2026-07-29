@@ -6,6 +6,7 @@ use App\Actions\SyncTrainingCardFields;
 use App\Http\Requests\CardFieldsSyncRequest;
 use App\Models\CardField;
 use App\Models\Training;
+use App\Support\Cards\CardFieldPresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 
@@ -24,7 +25,7 @@ class CardFieldsController extends Controller
         Gate::authorize('update', $training);
 
         return response()->json(
-            $training->cardFields()->get()->map(fn (CardField $f) => $this->serialize($f))
+            $training->cardFields()->get()->map(fn (CardField $f) => CardFieldPresenter::definition($f))
         );
     }
 
@@ -41,24 +42,6 @@ class CardFieldsController extends Controller
 
         $fields = $sync->handle($training, $request->validated()['fields']);
 
-        return response()->json($fields->map(fn (CardField $f) => $this->serialize($f)));
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function serialize(CardField $f): array
-    {
-        return [
-            'id' => $f->id,
-            'key' => $f->key,
-            // What the author actually types into the slide.
-            'placeholder' => $f->placeholder(),
-            'label' => $f->label,
-            'type' => $f->type,
-            'default_value' => $f->default_value,
-            'max_length' => $f->maxLength(),
-            'seq' => $f->seq,
-        ];
+        return response()->json($fields->map(fn (CardField $f) => CardFieldPresenter::definition($f)));
     }
 }
