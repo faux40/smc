@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Training extends Model
@@ -47,5 +48,17 @@ class Training extends Model
     public function stdFrequency(): BelongsTo
     {
         return $this->belongsTo(StdFrequency::class, 'std_freq_id');
+    }
+
+    /**
+     * Custom `${key}` definitions for this training's card design, in the
+     * order the admin arranged them — which is the order they're entered on a
+     * class and listed in the card builder.
+     *
+     * @return HasMany<CardField, $this>
+     */
+    public function cardFields(): HasMany
+    {
+        return $this->hasMany(CardField::class)->orderBy('seq')->orderBy('key');
     }
 }
