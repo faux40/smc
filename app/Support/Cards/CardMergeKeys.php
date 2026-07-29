@@ -2,9 +2,11 @@
 
 namespace App\Support\Cards;
 
+use App\Models\CardField;
+
 /**
  * The built-in `${key}` vocabulary a card design draws from — the person, the
- * class, the credit and the org. Custom fields ({@see \App\Models\CardField})
+ * class, the credit and the org. Custom fields ({@see CardField})
  * extend it per training; this list is what they may not shadow, so
  * `${first_name}` always means the student's first name.
  *

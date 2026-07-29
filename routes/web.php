@@ -3,6 +3,7 @@
 use App\Http\Controllers\AssignmentRemindController;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\BulkTrainingAssignmentsController;
+use App\Http\Controllers\CardFieldsController;
 use App\Http\Controllers\CardStocksController;
 use App\Http\Controllers\CardTemplatesController;
 use App\Http\Controllers\ClassDocumentsController;
@@ -244,6 +245,12 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::post('api/trainings', [TrainingsController::class, 'store'])->name('trainings.store');
     Route::patch('api/trainings/{training}', [TrainingsController::class, 'update'])->name('trainings.update');
     Route::delete('api/trainings/{training}', [TrainingsController::class, 'destroy'])->name('trainings.destroy');
+
+    // Custom card fields (custom-certs C3) — the training's own ${keys} for
+    // its card design. Admin+ both ways: this is vocabulary, not data entry.
+    // PUT states the whole set (absent rows are removed, order is seq).
+    Route::get('api/trainings/{training}/card-fields', [CardFieldsController::class, 'index'])->name('trainings.card-fields.index');
+    Route::put('api/trainings/{training}/card-fields', [CardFieldsController::class, 'sync'])->name('trainings.card-fields.sync');
 
     Route::inertia('trainings', 'trainings/Index')->name('trainings.page');
 

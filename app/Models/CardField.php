@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToOrganization;
+use App\Support\Cards\CardMergeKeys;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A custom `${key}` a card design can merge beyond the built-in catalogue
- * ({@see \App\Support\Cards\CardMergeKeys}) — trainer id, endorsement, and
+ * ({@see CardMergeKeys}) — trainer id, endorsement, and
  * whatever else a purchased card prints.
  *
  * Defined on the TRAINING and inherited by every class that teaches it; the
