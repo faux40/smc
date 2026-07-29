@@ -9,6 +9,7 @@ import {
     FileStack,
     FileText,
     GraduationCap,
+    IdCard,
     LayoutGrid,
     ShieldCheck,
     Tags as TagsIcon,
@@ -29,6 +30,7 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import { page as assignmentsPage } from '@/routes/assignments';
+import { page as cardsPage } from '@/routes/cards';
 import { page as classesPage } from '@/routes/classes';
 import { page as completionsPage } from '@/routes/completions';
 import { data as documentDataPage, page as documentsPage } from '@/routes/documents';
@@ -125,6 +127,12 @@ const mainNavItems = computed<NavItem[]>(() => {
             title: 'Document data',
             href: documentDataPage(),
             icon: Database,
+        });
+        // Cards (custom-certs C2) — stocks now, card templates next.
+        items.push({
+            title: 'Cards',
+            href: cardsPage(),
+            icon: IdCard,
         });
     }
 

@@ -176,6 +176,10 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::patch('api/card-stocks/{cardStock}', [CardStocksController::class, 'update'])->name('card-stocks.update');
     Route::delete('api/card-stocks/{cardStock}', [CardStocksController::class, 'destroy'])->name('card-stocks.destroy');
 
+    // Cards module page. Shell is open like tags — nav hides it below
+    // Manager and the JSON APIs enforce roles.
+    Route::inertia('cards', 'cards/Index')->name('cards.page');
+
     // Doc-template registry (Phase D2) — Manager+ list; upload/replace/
     // rename/delete Admin+ org templates only (system = console-managed).
     Route::get('api/doc-templates', [DocTemplatesController::class, 'index'])->name('doc-templates.index');
