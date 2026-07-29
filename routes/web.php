@@ -4,6 +4,7 @@ use App\Http\Controllers\AssignmentRemindController;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\BulkTrainingAssignmentsController;
 use App\Http\Controllers\CardStocksController;
+use App\Http\Controllers\CardTemplatesController;
 use App\Http\Controllers\ClassDocumentsController;
 use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\CommentsController;
@@ -175,6 +176,15 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::post('api/card-stocks', [CardStocksController::class, 'store'])->name('card-stocks.store');
     Route::patch('api/card-stocks/{cardStock}', [CardStocksController::class, 'update'])->name('card-stocks.update');
     Route::delete('api/card-stocks/{cardStock}', [CardStocksController::class, 'destroy'])->name('card-stocks.destroy');
+
+    // Card templates (custom-certs C2) — the uploaded PPTX/ODP card designs
+    // (one card per template: front, optional back). Manager+ list; upload/
+    // replace/rename/delete Admin+ org templates only.
+    Route::get('api/card-templates', [CardTemplatesController::class, 'index'])->name('card-templates.index');
+    Route::post('api/card-templates', [CardTemplatesController::class, 'store'])->name('card-templates.store');
+    Route::post('api/card-templates/{cardTemplate}/replace', [CardTemplatesController::class, 'replace'])->name('card-templates.replace');
+    Route::patch('api/card-templates/{cardTemplate}', [CardTemplatesController::class, 'update'])->name('card-templates.update');
+    Route::delete('api/card-templates/{cardTemplate}', [CardTemplatesController::class, 'destroy'])->name('card-templates.destroy');
 
     // Cards module page. Shell is open like tags — nav hides it below
     // Manager and the JSON APIs enforce roles.
