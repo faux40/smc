@@ -13,10 +13,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { trainingFormPayload, trainingToForm } from '@/lib/trainingForm';
-import type {
-    TrainingFormSource,
-    TrainingFormState,
-} from '@/lib/trainingForm';
+import type { TrainingFormSource, TrainingFormState } from '@/lib/trainingForm';
 import TrainingFields from '@/pages/trainings/Partials/TrainingFields.vue';
 import { page as trainingsPage } from '@/routes/trainings';
 import { useErrorStore } from '@/stores/errors';
@@ -122,7 +119,9 @@ const confirmDelete = async () => {
         >
             <TrainingFields v-model="form" :context="FORM_CTX" />
 
-            <div class="flex items-center justify-between border-t border-border pt-4">
+            <div
+                class="flex items-center justify-between border-t border-border pt-4"
+            >
                 <Button
                     type="button"
                     variant="destructive"

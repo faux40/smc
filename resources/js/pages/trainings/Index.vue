@@ -11,7 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useServerTable } from '@/composables/useServerTable';
 import TrainingFormModal from '@/pages/trainings/Partials/TrainingFormModal.vue';
-import { page as trainingsPage, show as trainingShow } from '@/routes/trainings';
+import {
+    page as trainingsPage,
+    show as trainingShow,
+} from '@/routes/trainings';
 import { useTrainingsStore } from '@/stores/trainings';
 import type { TrainingRow } from '@/stores/trainings';
 
@@ -168,7 +171,9 @@ const timingSummary = (row: TrainingRow): string => {
                     <Badge variant="secondary">{{ timingSummary(row) }}</Badge>
                 </template>
 
-                <template #empty>No trainings match the current search.</template>
+                <template #empty
+                    >No trainings match the current search.</template
+                >
             </DataTable>
 
             <Pagination

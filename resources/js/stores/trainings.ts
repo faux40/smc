@@ -33,6 +33,8 @@ export interface TrainingRow {
     cert_title: string | null;
     cert_text: string | null;
     cert_code: string | null;
+    /** Custom card design printed for this training; null = none. */
+    card_template_id: string | null;
     default_trainer: string | null;
     default_location: string | null;
     default_address: string | null;
@@ -52,6 +54,7 @@ export interface TrainingFormPayload {
     cert_title: string | null;
     cert_text: string | null;
     cert_code: string | null;
+    card_template_id: string | null;
     default_trainer: string | null;
     default_location: string | null;
     default_address: string | null;

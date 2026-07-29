@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import type { TrainingFormState } from '@/lib/trainingForm';
+import { useCardTemplatesStore } from '@/stores/cardTemplates';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
 
 /**
@@ -26,6 +27,7 @@ const form = defineModel<TrainingFormState>({ required: true });
 const props = defineProps<{ context: string }>();
 
 const frequencies = useStdFrequenciesStore();
+const cardTemplates = useCardTemplatesStore();
 const fieldErrors = useFieldErrors(props.context);
 
 onMounted(async () => {
@@ -36,7 +38,20 @@ onMounted(async () => {
             // Non-fatal — the picker will be empty.
         }
     }
+
+    if (!cardTemplates.loaded) {
+        try {
+            await cardTemplates.load();
+        } catch {
+            // Non-fatal — the picker will be empty.
+        }
+    }
 });
+
+/** '' is the select's "no card" option; the API wants a real null. */
+function chooseCardTemplate(value: string): void {
+    form.value.card_template_id = value === '' ? null : value;
+}
 
 // Unchecking "repeating" drops the frequency.
 watch(
@@ -161,6 +176,37 @@ watch(
                     placeholder="e.g. FPAP"
                 />
                 <InputError :message="fieldErrors.message('cert_code')" />
+            </div>
+
+            <div class="grid gap-2">
+                <Label for="t_card_template">Custom card</Label>
+                <select
+                    id="t_card_template"
+                    class="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    :value="form.card_template_id ?? ''"
+                    @change="
+                        chooseCardTemplate(
+                            ($event.target as HTMLSelectElement).value,
+                        )
+                    "
+                >
+                    <option value="">No card</option>
+                    <option
+                        v-for="t in cardTemplates.library"
+                        :key="t.id"
+                        :value="t.id"
+                    >
+                        {{ t.name }}
+                    </option>
+                </select>
+                <p class="text-xs text-muted-foreground">
+                    A printed card or custom certificate for this training —
+                    separate from the SMC certificate above. Designs live on the
+                    Cards page.
+                </p>
+                <InputError
+                    :message="fieldErrors.message('card_template_id')"
+                />
             </div>
 
             <div class="grid gap-2">

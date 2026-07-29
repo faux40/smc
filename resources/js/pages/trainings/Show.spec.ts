@@ -29,6 +29,7 @@ const training: TrainingFormSource & { id: string } = {
     cert_title: 'FP Authorized',
     cert_text: null,
     cert_code: null,
+    card_template_id: null,
     default_trainer: null,
     default_location: null,
     default_address: null,
@@ -76,7 +77,10 @@ describe('trainings/Show', () => {
             data: { ok: true },
         });
 
-        const wrapper = mount(Show, { props: { training }, attachTo: document.body });
+        const wrapper = mount(Show, {
+            props: { training },
+            attachTo: document.body,
+        });
         await flushPromises();
 
         await wrapper

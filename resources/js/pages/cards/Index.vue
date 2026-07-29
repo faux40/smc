@@ -8,11 +8,14 @@ import { Head, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Heading from '@/components/Heading.vue';
+import { Button } from '@/components/ui/button';
 import CardStockFormModal from '@/pages/cards/Partials/CardStockFormModal.vue';
 import CardStocksList from '@/pages/cards/Partials/CardStocksList.vue';
+import CardTemplatesList from '@/pages/cards/Partials/CardTemplatesList.vue';
 import { page as cardsRoute } from '@/routes/cards';
 import { useCardStocksStore } from '@/stores/cardStocks';
 import type { CardStockRow } from '@/stores/cardStocks';
+import { useCardTemplatesStore } from '@/stores/cardTemplates';
 import { useErrorStore } from '@/stores/errors';
 
 const PAGE_CTX = 'page:cards';
@@ -23,7 +26,11 @@ defineOptions({
     },
 });
 
+type Tab = 'templates' | 'stocks';
+const tab = ref<Tab>('templates');
+
 const stocks = useCardStocksStore();
+const templates = useCardTemplatesStore();
 const errorStore = useErrorStore();
 const page = usePage();
 
@@ -60,10 +67,10 @@ function openEditStock(stock: CardStockRow): void {
 
 onMounted(async () => {
     try {
-        await stocks.load();
+        await Promise.all([templates.load(), stocks.load()]);
     } catch (e) {
         errorStore.reportFromAxios(e, PAGE_CTX, {
-            fallback: 'Failed to load the card stocks',
+            fallback: 'Failed to load the cards module',
         });
     }
 });
@@ -80,15 +87,50 @@ onMounted(async () => {
 
         <ErrorBanner :context="PAGE_CTX" />
 
-        <CardStocksList
-            :can-define="canDefine"
-            @new="openNewStock"
-            @edit="openEditStock"
-        />
+        <div class="flex gap-2 border-b border-border" role="tablist">
+            <Button
+                variant="ghost"
+                role="tab"
+                data-testid="tab-templates"
+                :aria-selected="tab === 'templates'"
+                :class="
+                    tab === 'templates'
+                        ? 'rounded-b-none border-b-2 border-primary'
+                        : ''
+                "
+                @click="tab = 'templates'"
+            >
+                Card templates
+            </Button>
+            <Button
+                variant="ghost"
+                role="tab"
+                data-testid="tab-stocks"
+                :aria-selected="tab === 'stocks'"
+                :class="
+                    tab === 'stocks'
+                        ? 'rounded-b-none border-b-2 border-primary'
+                        : ''
+                "
+                @click="tab = 'stocks'"
+            >
+                Card stocks
+            </Button>
+        </div>
 
-        <CardStockFormModal
-            v-model:open="stockDialogOpen"
-            :editing="editingStock"
-        />
+        <CardTemplatesList v-if="tab === 'templates'" :can-define="canDefine" />
+
+        <template v-else>
+            <CardStocksList
+                :can-define="canDefine"
+                @new="openNewStock"
+                @edit="openEditStock"
+            />
+
+            <CardStockFormModal
+                v-model:open="stockDialogOpen"
+                :editing="editingStock"
+            />
+        </template>
     </div>
 </template>

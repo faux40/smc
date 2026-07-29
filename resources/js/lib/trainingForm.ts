@@ -25,6 +25,8 @@ export interface TrainingFormSource {
     cert_title: string | null;
     cert_text: string | null;
     cert_code: string | null;
+    /** The custom card design printed for this training; null = none. */
+    card_template_id: string | null;
     default_trainer: string | null;
     default_location: string | null;
     default_address: string | null;
@@ -42,6 +44,8 @@ export interface TrainingFormState {
     cert_title: string;
     cert_text: string;
     cert_code: string;
+    // Not blanked to '' like the text fields: the API wants a uuid or null.
+    card_template_id: string | null;
     default_trainer: string;
     default_location: string;
     default_address: string;
@@ -60,6 +64,7 @@ export function blankTrainingForm(): TrainingFormState {
         cert_title: '',
         cert_text: '',
         cert_code: '',
+        card_template_id: null,
         default_trainer: '',
         default_location: '',
         default_address: '',
@@ -80,6 +85,7 @@ export function trainingToForm(t: TrainingFormSource): TrainingFormState {
         cert_title: t.cert_title ?? '',
         cert_text: t.cert_text ?? '',
         cert_code: t.cert_code ?? '',
+        card_template_id: t.card_template_id,
         default_trainer: t.default_trainer ?? '',
         default_location: t.default_location ?? '',
         default_address: t.default_address ?? '',
@@ -87,7 +93,9 @@ export function trainingToForm(t: TrainingFormSource): TrainingFormState {
 }
 
 /** Build the API payload (empty strings → null; repeating drives std_freq_id). */
-export function trainingFormPayload(form: TrainingFormState): TrainingFormPayload {
+export function trainingFormPayload(
+    form: TrainingFormState,
+): TrainingFormPayload {
     const blank = (v: string) => (v.trim() === '' ? null : v);
 
     return {
@@ -102,6 +110,7 @@ export function trainingFormPayload(form: TrainingFormState): TrainingFormPayloa
         cert_title: blank(form.cert_title),
         cert_text: blank(form.cert_text),
         cert_code: blank(form.cert_code),
+        card_template_id: form.card_template_id,
         default_trainer: blank(form.default_trainer),
         default_location: blank(form.default_location),
         default_address: blank(form.default_address),
