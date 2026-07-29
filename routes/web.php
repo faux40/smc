@@ -3,6 +3,7 @@
 use App\Http\Controllers\AssignmentRemindController;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\BulkTrainingAssignmentsController;
+use App\Http\Controllers\CardStocksController;
 use App\Http\Controllers\ClassDocumentsController;
 use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\CommentsController;
@@ -166,6 +167,14 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/merge-values', [MergeValuesController::class, 'index'])->name('merge-values.index');
     Route::put('api/merge-values', [MergeValuesController::class, 'upsert'])->name('merge-values.upsert');
     Route::delete('api/merge-values/{mergeValue}', [MergeValuesController::class, 'destroy'])->name('merge-values.destroy');
+
+    // Card stocks (custom-certs C2) — the printable geometry of a purchased
+    // card sheet. Manager+ list (they pick a stock when printing cards);
+    // CRUD is Admin+ and org stocks only (system = console-managed).
+    Route::get('api/card-stocks', [CardStocksController::class, 'index'])->name('card-stocks.index');
+    Route::post('api/card-stocks', [CardStocksController::class, 'store'])->name('card-stocks.store');
+    Route::patch('api/card-stocks/{cardStock}', [CardStocksController::class, 'update'])->name('card-stocks.update');
+    Route::delete('api/card-stocks/{cardStock}', [CardStocksController::class, 'destroy'])->name('card-stocks.destroy');
 
     // Doc-template registry (Phase D2) — Manager+ list; upload/replace/
     // rename/delete Admin+ org templates only (system = console-managed).
