@@ -370,6 +370,9 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
                 'cert_text' => $training->cert_text,
                 'lifespan_months' => $training->lifespan_months,
                 'cert_code' => $training->cert_code,
+                // Every field the form owns must be here: it PATCHes the whole
+                // form back, so an omission reads as "cleared" on save.
+                'card_template_id' => $training->card_template_id,
                 'default_trainer' => $training->default_trainer,
                 'default_location' => $training->default_location,
                 'default_address' => $training->default_address,

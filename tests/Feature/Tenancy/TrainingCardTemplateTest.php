@@ -99,6 +99,28 @@ class TrainingCardTemplateTest extends TestCase
             ->assertJsonValidationErrors('card_template_id');
     }
 
+    /**
+     * The training form is a full-form PATCH: every field it owns is sent on
+     * every save, so an absent key means "cleared", exactly as it does for
+     * nickname or cert_title. Pinned deliberately — the trap is a *caller*
+     * that forgets the key (the show page did, and wiped assignments), not
+     * this rule, which is what keeps "unassign the card" working.
+     */
+    public function test_update_treats_an_omitted_card_template_as_cleared(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $template = CardTemplate::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create([
+            'card_template_id' => $template->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->patchJson("/api/trainings/{$training->id}", $this->payload())
+            ->assertOk()
+            ->assertJsonPath('card_template_id', null);
+    }
+
     public function test_replacing_a_template_moves_the_assignment_to_the_new_version(): void
     {
         // Replace = a new version of the same design. A training pointing at

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Models\CardTemplate;
 use App\Models\Organization;
 use App\Models\StdFrequency;
 use App\Models\Training;
@@ -48,6 +49,30 @@ class TrainingShowPageTest extends TestCase
                 ->where('training.std_freq_id', $freq->id)
                 ->where('training.cert_title', 'FP Authorized')
                 ->where('training.std_freq_name', 'Annual')
+            );
+    }
+
+    /**
+     * The page hands the training straight to the same form component the
+     * index modal uses, and that form PATCHes every field back. So a field
+     * missing from these props is not a display bug — it round-trips as
+     * "cleared" and silently detaches the card design (see the companion
+     * API test below).
+     */
+    public function test_page_includes_the_assigned_card_template(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $template = CardTemplate::factory()->for($org, 'organization')->create();
+        $training = Training::factory()->for($org, 'organization')->create([
+            'card_template_id' => $template->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('trainings.show', $training))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('training.card_template_id', $template->id)
             );
     }
 
