@@ -9,8 +9,10 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 
 /**
- * View-model for a class summary sheet: header info plus the issued
- * certificates grouped per training. Issue + expire dates are identical for
+ * View-model for a class summary sheet: header info, the issued certificates
+ * grouped per training, and — so the sheet accounts for everyone on the roster,
+ * not just the winners — the same per-training grouping for the enrollees who
+ * failed a topic or never finished it. Issue + expire dates are identical for
  * everyone within a training (the class close date and that close date plus
  * the training's lifespan), so they live once on each training's group header
  * rather than repeating on every row.
@@ -22,21 +24,33 @@ class ClassSummary
      */
     public static function data(TrainingClass $class): array
     {
-        $class->loadMissing('classTrainings', 'organization');
+        $class->loadMissing([
+            'classTrainings',
+            'organization',
+            'enrollments.user:id,f_name,m_name,l_name,prefix_name,suffix_name,employee_number,location',
+        ]);
         $ctById = $class->classTrainings->keyBy('id');
 
+        // Every completion on this class, cert or not — an un-numbered one
+        // (mid re-open renumber) is still credit, so it must keep its holder
+        // out of the fail/incomplete sections. The certificate list below
+        // narrows to the numbered ones.
         $completions = Completion::query()
             ->whereIn('class_training_id', $ctById->keys())
-            ->whereNotNull('cert_id')
             ->with('user:id,f_name,m_name,l_name,prefix_name,suffix_name,employee_number,location')
             ->orderBy('cert_id')
             ->get();
+
+        $credited = [];
+        foreach ($completions as $comp) {
+            $credited[$comp->class_training_id.'|'.$comp->user_id] = true;
+        }
 
         // Bucket each issued completion under its training, collecting the row
         // (no dates) plus the formatted issue/expire so the group header can
         // collapse them to a single value (or "varies" if they disagree).
         $buckets = [];
-        foreach ($completions as $comp) {
+        foreach ($completions->whereNotNull('cert_id') as $comp) {
             /** @var ClassTraining|null $ct */
             $ct = $ctById->get($comp->class_training_id);
             $user = $comp->user;
@@ -89,21 +103,46 @@ class ClassSummary
                 continue;
             }
 
-            // Order the roster alphabetically (last, first, middle), then drop
-            // the sort key — it's scaffolding, not part of the row's shape.
-            $rows = collect($bucket['rows'])
-                ->sortBy('sort')
-                ->map(fn (array $row) => Arr::except($row, 'sort'))
-                ->values()
-                ->all();
-
             $groups[] = [
                 'training' => $ct->training_name,
                 'issue_date' => $fold($bucket['issues']),
                 'expires' => $fold($bucket['expires']),
-                'rows' => $rows,
+                'rows' => self::sortedRows($bucket['rows']),
             ];
             $certificates += count($bucket['rows']);
+        }
+
+        // Everyone on the roster who earned no credit for a topic, split by
+        // why. An explicit `fail` is the only thing that lands in Failed;
+        // everything else — an explicit incomplete, or a class closed before
+        // per-topic results existed — is Incomplete, which is what "no
+        // certificate for this topic" means to the reader either way.
+        $failedBy = [];
+        $incompleteBy = [];
+        foreach ($class->enrollments as $enrollment) {
+            $person = $enrollment->user?->personName();
+            $name = $person?->rosterName();
+            $row = [
+                'name' => filled($name) ? $name : '—',
+                'sort' => $person?->sortKey() ?? ['', '', ''],
+                'emp_number' => $enrollment->user?->employee_number ?? '',
+                'location' => $enrollment->user?->location ?? '',
+                // The instructor's close-out note — usually the reason.
+                'notes' => $enrollment->notes ?? '',
+            ];
+            $results = $enrollment->results ?? [];
+
+            foreach ($class->classTrainings as $ct) {
+                if (isset($credited[$ct->id.'|'.$enrollment->user_id])) {
+                    continue;
+                }
+
+                if (($results[$ct->id] ?? null) === 'fail') {
+                    $failedBy[$ct->id][] = $row;
+                } else {
+                    $incompleteBy[$ct->id][] = $row;
+                }
+            }
         }
 
         $trainings = $class->classTrainings->map(fn (ClassTraining $ct) => [
@@ -131,7 +170,52 @@ class ClassSummary
             'notes' => $class->notes,
             'certificates' => $certificates,
             'groups' => $groups,
+            'failed_groups' => self::outcomeGroups($class, $failedBy),
+            'incomplete_groups' => self::outcomeGroups($class, $incompleteBy),
             'generated_at' => Carbon::now(config('app.display_timezone'))->format('M j, Y g:i A'),
         ];
+    }
+
+    /**
+     * Per-training groups in class-training order, skipping trainings nobody
+     * landed in. Same shape as the certificate groups minus the dates.
+     *
+     * @param  array<string, array<int, array<string, mixed>>>  $rowsByTraining  keyed by class_training id
+     * @return array<int, array{training: string, rows: array<int, array<string, mixed>>}>
+     */
+    private static function outcomeGroups(TrainingClass $class, array $rowsByTraining): array
+    {
+        $groups = [];
+
+        foreach ($class->classTrainings as $ct) {
+            $rows = $rowsByTraining[$ct->id] ?? null;
+
+            if ($rows === null) {
+                continue;
+            }
+
+            $groups[] = [
+                'training' => $ct->training_name,
+                'rows' => self::sortedRows($rows),
+            ];
+        }
+
+        return $groups;
+    }
+
+    /**
+     * Order a group's roster alphabetically (last, first, middle), then drop
+     * the sort key — it's scaffolding, not part of the row's shape.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private static function sortedRows(array $rows): array
+    {
+        return collect($rows)
+            ->sortBy('sort')
+            ->map(fn (array $row) => Arr::except($row, 'sort'))
+            ->values()
+            ->all();
     }
 }

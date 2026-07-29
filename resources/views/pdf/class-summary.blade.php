@@ -1,6 +1,10 @@
 @extends('pdf.layout', ['pageSize' => '8.5in 11in', 'pageMargin' => '0.75in'])
 
 @section('content')
+{{-- Section headings sit on a rule spanning the page, so the reader can tell a
+     section (Trainings / Certificates Issued / Failed / Incomplete) from the
+     lighter per-training divider inside one. --}}
+@php($section = 'mb-2 mt-7 border-b-[3px] border-[#111827] pb-1 text-[16px] font-bold uppercase tracking-wide')
 <div class="text-[13px] text-[#111827]">
     <div class="text-right text-[16px] font-bold text-[#374151]">{{ $org_name }}</div>
     <h1 class="mb-4 mt-2 text-center text-[22px]">{{ $title }}</h1>
@@ -34,7 +38,7 @@
         </tr>
     </table>
 
-    <div class="mb-1.5 mt-1 text-[15px] font-bold">Trainings</div>
+    <div class="{{ $section }}">Trainings</div>
     @if (count($trainings))
         <ul class="mb-4 ml-[18px] list-disc">
             @foreach ($trainings as $t)
@@ -48,7 +52,7 @@
         <p class="mb-4 text-[#6b7280]">No trainings on this class.</p>
     @endif
 
-    <div class="mb-1.5 mt-1 text-[15px] font-bold">Certificates Issued</div>
+    <div class="{{ $section }}">Certificates Issued</div>
     @forelse ($groups as $g)
         <div class="mb-4">
             {{-- Per-training header: issue + expire are the same for everyone
@@ -85,5 +89,12 @@
     @empty
         <p class="text-[#6b7280]">No certificates issued.</p>
     @endforelse
+
+    {{-- Who earned nothing, and why — the roster's other half. --}}
+    <div class="{{ $section }}">Failed</div>
+    @include('pdf.partials.outcome-groups', ['groups' => $failed_groups])
+
+    <div class="{{ $section }}">Incomplete</div>
+    @include('pdf.partials.outcome-groups', ['groups' => $incomplete_groups])
 </div>
 @endsection

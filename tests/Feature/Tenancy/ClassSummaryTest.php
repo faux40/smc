@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Models\ClassEnrollment;
 use App\Models\ClassTraining;
 use App\Models\Completion;
 use App\Models\Organization;
@@ -280,6 +281,214 @@ class ClassSummaryTest extends TestCase
         $this->assertSame('Jun 13, 2026 7:00 PM', ClassSummary::data($class->fresh())['generated_at']);
 
         Carbon::setTestNow();
+    }
+
+    /**
+     * A two-topic class where nobody sailed through cleanly: one person fails
+     * a topic and no-shows the other, one passes a topic and fails the other,
+     * one misses both.
+     */
+    private function mixedOutcomeClass(Organization $org): TrainingClass
+    {
+        $class = TrainingClass::factory()->for($org, 'organization')->create([
+            'status' => 'completed', 'completion_date' => '2026-05-13',
+        ]);
+        $fp = Training::factory()->for($org, 'organization')->create();
+        $ctFp = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $fp->id, 'training_name' => 'Fall Protection',
+        ]);
+        $fa = Training::factory()->for($org, 'organization')->create();
+        $ctFa = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $fa->id, 'training_name' => 'First Aid',
+        ]);
+
+        $ames = User::factory()->for($org, 'organization')->create([
+            'f_name' => 'Dana', 'l_name' => 'Ames',
+            'employee_number' => 'E-1042', 'location' => 'Yard 3',
+        ]);
+        $reed = User::factory()->for($org, 'organization')->create([
+            'f_name' => 'Abe', 'm_name' => 'Alan', 'l_name' => 'Reed',
+        ]);
+        $zeller = User::factory()->for($org, 'organization')->create([
+            'f_name' => 'Aaron', 'l_name' => 'Zeller',
+        ]);
+
+        ClassEnrollment::factory()->for($class, 'trainingClass')->create([
+            'user_id' => $ames->id, 'status' => 'incomplete',
+            'notes' => 'Failed practical',
+            'results' => [$ctFp->id => 'fail', $ctFa->id => 'incomplete'],
+        ]);
+        ClassEnrollment::factory()->for($class, 'trainingClass')->create([
+            'user_id' => $reed->id, 'status' => 'partial', 'notes' => null,
+            'results' => [$ctFp->id => 'pass', $ctFa->id => 'fail'],
+        ]);
+        ClassEnrollment::factory()->for($class, 'trainingClass')->create([
+            'user_id' => $zeller->id, 'status' => 'incomplete', 'notes' => null,
+            'results' => [$ctFp->id => 'incomplete', $ctFa->id => 'incomplete'],
+        ]);
+
+        // Reed's pass is credited.
+        Completion::create([
+            'org_id' => $org->id, 'user_id' => $reed->id,
+            'module_type' => Training::class, 'module_id' => $fp->id,
+            'completion_date' => '2026-05-13', 'cert_id' => 'FP-1',
+            'class_training_id' => $ctFp->id,
+        ]);
+
+        return $class->fresh();
+    }
+
+    public function test_failed_enrollees_are_grouped_by_training(): void
+    {
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+
+        $groups = ClassSummary::data($this->mixedOutcomeClass($org))['failed_groups'];
+
+        // Group order follows the class-trainings order; a training nobody
+        // failed is skipped entirely.
+        $this->assertCount(2, $groups);
+        $this->assertSame('Fall Protection', $groups[0]['training']);
+        $this->assertSame(['Ames, Dana'], array_column($groups[0]['rows'], 'name'));
+        $this->assertSame('First Aid', $groups[1]['training']);
+        $this->assertSame(['Reed, Abe, A'], array_column($groups[1]['rows'], 'name'));
+    }
+
+    public function test_incomplete_enrollees_are_grouped_by_training_and_ordered_by_name(): void
+    {
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+
+        $groups = ClassSummary::data($this->mixedOutcomeClass($org))['incomplete_groups'];
+
+        $this->assertCount(2, $groups);
+        $this->assertSame('Fall Protection', $groups[0]['training']);
+        $this->assertSame(['Zeller, Aaron'], array_column($groups[0]['rows'], 'name'));
+        $this->assertSame('First Aid', $groups[1]['training']);
+        // Alphabetical (last, first, middle) like every other printed roster.
+        $this->assertSame(
+            ['Ames, Dana', 'Zeller, Aaron'],
+            array_column($groups[1]['rows'], 'name'),
+        );
+    }
+
+    public function test_outcome_rows_carry_employee_details_and_the_close_out_notes(): void
+    {
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+
+        $row = ClassSummary::data($this->mixedOutcomeClass($org))['failed_groups'][0]['rows'][0];
+
+        $this->assertSame('Ames, Dana', $row['name']);
+        $this->assertSame('E-1042', $row['emp_number']);
+        $this->assertSame('Yard 3', $row['location']);
+        $this->assertSame('Failed practical', $row['notes']);
+    }
+
+    public function test_a_credited_enrollee_is_never_listed_even_without_a_stored_result(): void
+    {
+        // Classes closed before per-topic results existed have an empty
+        // results map — the issued certificate is the proof of a pass, so
+        // holders must not be swept into Incomplete. Everyone else there is.
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+
+        $training = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create([
+            'status' => 'completed', 'completion_date' => '2026-05-13',
+        ]);
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $training->id, 'training_name' => 'Fall Protection',
+        ]);
+
+        $credited = User::factory()->for($org, 'organization')->create(['f_name' => 'Mark', 'l_name' => 'Bristow']);
+        $missed = User::factory()->for($org, 'organization')->create(['f_name' => 'Sam', 'l_name' => 'Lee']);
+
+        foreach ([$credited, $missed] as $u) {
+            ClassEnrollment::factory()->for($class, 'trainingClass')->create([
+                'user_id' => $u->id, 'status' => 'enrolled', 'results' => null,
+            ]);
+        }
+
+        Completion::create([
+            'org_id' => $org->id, 'user_id' => $credited->id,
+            'module_type' => Training::class, 'module_id' => $training->id,
+            'completion_date' => '2026-05-13', 'cert_id' => 'FP-1',
+            'class_training_id' => $ct->id,
+        ]);
+
+        $data = ClassSummary::data($class->fresh());
+
+        $this->assertSame([], $data['failed_groups']);
+        $this->assertSame(
+            ['Lee, Sam'],
+            array_column($data['incomplete_groups'][0]['rows'], 'name'),
+        );
+    }
+
+    public function test_an_uncertificated_pass_still_counts_as_credited(): void
+    {
+        // Re-opening a class to renumber certificates NULLs cert_id until the
+        // re-close. The completion row is the credit, cert_id or not.
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+
+        $training = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create([
+            'status' => 'completed', 'completion_date' => '2026-05-13',
+        ]);
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $training->id, 'training_name' => 'Fall Protection',
+        ]);
+        $user = User::factory()->for($org, 'organization')->create(['f_name' => 'Mark', 'l_name' => 'Bristow']);
+
+        ClassEnrollment::factory()->for($class, 'trainingClass')->create([
+            'user_id' => $user->id, 'status' => 'passed',
+            'results' => [$ct->id => 'pass'],
+        ]);
+        Completion::create([
+            'org_id' => $org->id, 'user_id' => $user->id,
+            'module_type' => Training::class, 'module_id' => $training->id,
+            'completion_date' => '2026-05-13', 'cert_id' => null,
+            'class_training_id' => $ct->id,
+        ]);
+
+        $data = ClassSummary::data($class->fresh());
+
+        $this->assertSame([], $data['groups']); // no cert → not on the issued list
+        $this->assertSame([], $data['failed_groups']);
+        $this->assertSame([], $data['incomplete_groups']);
+    }
+
+    public function test_the_sheet_prints_both_sections_with_a_none_fallback(): void
+    {
+        $org = Organization::factory()->create();
+        app()->instance('currentOrgId', $org->id);
+
+        $training = Training::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create([
+            'status' => 'completed', 'completion_date' => '2026-05-13',
+        ]);
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')->create([
+            'training_id' => $training->id, 'training_name' => 'Fall Protection',
+        ]);
+        $user = User::factory()->for($org, 'organization')->create([
+            'f_name' => 'Sam', 'l_name' => 'Lee', 'employee_number' => 'E-9',
+        ]);
+        ClassEnrollment::factory()->for($class, 'trainingClass')->create([
+            'user_id' => $user->id, 'status' => 'incomplete',
+            'notes' => 'No-show', 'results' => [$ct->id => 'incomplete'],
+        ]);
+
+        $html = view('pdf.class-summary', ClassSummary::data($class->fresh()))->render();
+
+        // Nobody failed — the section still prints, so the sheet accounts for
+        // every possible outcome rather than silently omitting one.
+        $this->assertStringContainsString('Failed', $html);
+        $this->assertStringContainsString('None.', $html);
+        $this->assertStringContainsString('Incomplete', $html);
+        $this->assertStringContainsString('Lee, Sam', $html);
+        $this->assertStringContainsString('No-show', $html);
     }
 
     public function test_endpoint_returns_a_pdf(): void
