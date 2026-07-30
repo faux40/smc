@@ -18,6 +18,8 @@
         "laravel/wayfinder": "^0.1.14",
         "league/flysystem-aws-s3-v3": "^3.32",
         "predis/predis": "^3.5",
+        "setasign/fpdf": "^1.9",
+        "setasign/fpdi": "^2.6",
         "spatie/browsershot": "^5.4",
         "spatie/laravel-activitylog": "^4.12",
         "spatie/laravel-pdf": "^2.12",
