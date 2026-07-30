@@ -4,6 +4,7 @@ use App\Http\Controllers\AssignmentRemindController;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\BulkTrainingAssignmentsController;
 use App\Http\Controllers\CardFieldsController;
+use App\Http\Controllers\CardPrintRunsController;
 use App\Http\Controllers\CardStocksController;
 use App\Http\Controllers\CardTemplatesController;
 use App\Http\Controllers\ClassDocumentsController;
@@ -277,6 +278,10 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::post('api/classes/{class}/reopen', [ClassesController::class, 'reopen'])->name('classes.reopen');
     Route::post('api/classes/{class}/reclose', [ClassesController::class, 'reclose'])->name('classes.reclose');
     Route::post('api/classes/{class}/reissue-certificates', [ClassesController::class, 'reissueCertificates'])->name('classes.reissue-certificates');
+    // Card print runs (custom-certs C4) — one topic per run; the queued job
+    // merges, converts, imposes and files the sheets into class documents.
+    Route::get('api/classes/{class}/card-runs', [CardPrintRunsController::class, 'index'])->name('classes.card-runs.index');
+    Route::post('api/classes/{class}/card-runs', [CardPrintRunsController::class, 'store'])->name('classes.card-runs.store');
     Route::post('api/classes/{class}/completions/issue', [ClassesController::class, 'issueCompletion'])->name('classes.completions.issue');
     Route::post('api/classes/{class}/completions/{completion}/revoke', [ClassesController::class, 'revokeCompletion'])->name('classes.completions.revoke');
 
