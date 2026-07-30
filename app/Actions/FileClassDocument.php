@@ -131,12 +131,16 @@ class FileClassDocument
     /**
      * `<Prefix>_<Class_Name>_<YYYYMMDD>_<HHMM>.pdf` — underscores only, with a
      * local-timezone date + time so each saved copy is identifiable.
+     *
+     * Pass $stamp when several files belong to one run (card fronts + backs):
+     * they must carry the *same* stamp, and two calls a second apart can
+     * straddle a minute boundary and produce files that look unrelated.
      */
-    public static function filename(TrainingClass $class, string $prefix): string
+    public static function filename(TrainingClass $class, string $prefix, ?string $stamp = null): string
     {
         $name = trim((string) preg_replace('/[^A-Za-z0-9]+/', '_', (string) $class->name), '_');
         $name = $name !== '' ? $name : 'Class';
-        $stamp = Carbon::now(config('app.display_timezone'))->format('Ymd_Hi');
+        $stamp ??= Carbon::now(config('app.display_timezone'))->format('Ymd_Hi');
 
         return "{$prefix}_{$name}_{$stamp}.pdf";
     }
