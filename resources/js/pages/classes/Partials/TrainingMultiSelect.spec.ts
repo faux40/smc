@@ -28,7 +28,10 @@ function training(id: string, name: string): TrainingRow {
     };
 }
 
-const trainings = [training('t1', 'Fall Protection'), training('t2', 'First Aid')];
+const trainings = [
+    training('t1', 'Fall Protection'),
+    training('t2', 'First Aid'),
+];
 
 describe('TrainingMultiSelect', () => {
     it('renders a checkbox per training', () => {

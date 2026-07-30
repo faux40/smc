@@ -70,7 +70,9 @@ function toggle(id: string, checked: boolean): void {
                     No trainings match "{{ search }}".
                 </li>
                 <li v-for="t in filtered" :key="t.id">
-                    <label class="flex cursor-pointer items-center gap-2 text-sm">
+                    <label
+                        class="flex cursor-pointer items-center gap-2 text-sm"
+                    >
                         <input
                             type="checkbox"
                             class="size-4 rounded border-input"

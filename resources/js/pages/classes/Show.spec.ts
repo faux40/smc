@@ -3,6 +3,7 @@ import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AttachmentsList from '@/components/AttachmentsList.vue';
+import ClassCardFieldsModal from '@/pages/classes/Partials/ClassCardFieldsModal.vue';
 import Show from '@/pages/classes/Show.vue';
 import type { ClassDetail } from '@/stores/classes';
 
@@ -184,6 +185,7 @@ describe('classes/Show inline edit', () => {
                 cert_title: null,
                 cert_text: null,
                 cert_code: null,
+                card_fields: [],
                 credits: [],
             },
         ];
@@ -199,6 +201,66 @@ describe('classes/Show — student counts', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+    });
+
+    it('offers Card fields only for a topic whose training defines some', async () => {
+        // A training with no custom fields would open an empty modal, so the
+        // button follows the definitions.
+        const topic = {
+            id: 'ct1',
+            training_id: 't1',
+            training_name: 'Fall Protection',
+            initial_only: false,
+            repeating: true,
+            as_needed: false,
+            std_freq_name: null,
+            repeat_days: null,
+            hours: '4.00',
+            cert_title: null,
+            cert_text: null,
+            cert_code: null,
+            card_fields: [],
+            credits: [],
+        };
+
+        mockGet({
+            ...detail,
+            trainings: [
+                topic,
+                {
+                    ...topic,
+                    id: 'ct2',
+                    training_name: 'First Aid / CPR',
+                    card_fields: [
+                        {
+                            id: 'f1',
+                            key: 'trainer_id',
+                            placeholder: '${trainer_id}',
+                            label: 'Trainer ID',
+                            type: 'short' as const,
+                            default_value: null,
+                            max_length: 100,
+                            seq: 0,
+                            value: null,
+                        },
+                    ],
+                },
+            ],
+        });
+
+        const wrapper = await mountShow();
+
+        const buttons = wrapper
+            .findAll('button')
+            .filter((b) => b.text() === 'Card fields');
+        expect(buttons).toHaveLength(1);
+
+        await buttons[0].trigger('click');
+
+        const modal = wrapper.findComponent(ClassCardFieldsModal);
+        expect(modal.props('open')).toBe(true);
+        expect(modal.props('topicId')).toBe('ct2');
+        expect(modal.props('classId')).toBe('c1');
     });
 
     it('shows "· max N" on the roster header when a max is set', async () => {
@@ -305,6 +367,7 @@ const completedDetail: ClassDetail = {
             cert_title: null,
             cert_text: null,
             cert_code: null,
+            card_fields: [],
             credits: [
                 {
                     completion_id: 'cp1',
@@ -329,6 +392,7 @@ const completedDetail: ClassDetail = {
             cert_title: null,
             cert_text: null,
             cert_code: null,
+            card_fields: [],
             credits: [],
         },
     ],

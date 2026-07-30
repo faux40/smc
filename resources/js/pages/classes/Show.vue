@@ -32,6 +32,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { useClassForm } from '@/composables/useClassForm';
+import ClassCardFieldsModal from '@/pages/classes/Partials/ClassCardFieldsModal.vue';
 import ClassCertEditModal from '@/pages/classes/Partials/ClassCertEditModal.vue';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
@@ -108,6 +109,15 @@ const certTopicId = ref<string | null>(null);
 function openCertEditor(topicId: string) {
     certTopicId.value = topicId;
     certOpen.value = true;
+}
+
+// Per-topic custom card fields (C3): the values this class prints on cards.
+// Viewable on a completed class too — the modal locks itself there.
+const cardFieldsOpen = ref(false);
+const cardFieldsTopicId = ref<string | null>(null);
+function openCardFields(topicId: string) {
+    cardFieldsTopicId.value = topicId;
+    cardFieldsOpen.value = true;
 }
 const rosterOpen = ref(false);
 const reopenOpen = ref(false);
@@ -598,19 +608,41 @@ const timeLabel = computed(() => {
                                                                 }})
                                                             </span>
                                                         </span>
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            class="h-6 px-2 text-xs"
-                                                            @click="
-                                                                openCertEditor(
-                                                                    t.id,
-                                                                )
-                                                            "
+                                                        <span
+                                                            class="flex items-center gap-1"
                                                         >
-                                                            Edit certificate
-                                                        </Button>
+                                                            <Button
+                                                                v-if="
+                                                                    t
+                                                                        .card_fields
+                                                                        .length
+                                                                "
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                class="h-6 px-2 text-xs"
+                                                                @click="
+                                                                    openCardFields(
+                                                                        t.id,
+                                                                    )
+                                                                "
+                                                            >
+                                                                Card fields
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                class="h-6 px-2 text-xs"
+                                                                @click="
+                                                                    openCertEditor(
+                                                                        t.id,
+                                                                    )
+                                                                "
+                                                            >
+                                                                Edit certificate
+                                                            </Button>
+                                                        </span>
                                                     </li>
                                                 </ul>
                                                 <p
@@ -652,11 +684,31 @@ const timeLabel = computed(() => {
                                         <li
                                             v-for="t in detail.trainings"
                                             :key="t.id"
+                                            class="flex items-center justify-between gap-2 py-0.5"
                                         >
-                                            {{ t.training_name }}
-                                            <span class="text-muted-foreground">
-                                                ({{ hoursLabel(t.hours) }})
+                                            <span>
+                                                {{ t.training_name }}
+                                                <span
+                                                    class="text-muted-foreground"
+                                                >
+                                                    ({{ hoursLabel(t.hours) }})
+                                                </span>
                                             </span>
+                                            <!--
+                                                Read-only here: the values that
+                                                will print are worth seeing
+                                                before cards are generated.
+                                            -->
+                                            <Button
+                                                v-if="t.card_fields.length"
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                class="h-6 px-2 text-xs"
+                                                @click="openCardFields(t.id)"
+                                            >
+                                                Card fields
+                                            </Button>
                                         </li>
                                     </ul>
                                     <p
@@ -735,7 +787,10 @@ const timeLabel = computed(() => {
                                             }}
                                         </dd>
                                     </div>
-                                    <div v-if="detail.address" class="col-span-2">
+                                    <div
+                                        v-if="detail.address"
+                                        class="col-span-2"
+                                    >
                                         <dt
                                             class="text-xs text-muted-foreground"
                                         >
@@ -1032,6 +1087,12 @@ const timeLabel = computed(() => {
                     v-model:open="topicsOpen"
                     :class-id="props.classId"
                 />
+                <ClassCardFieldsModal
+                    v-model:open="cardFieldsOpen"
+                    :class-id="classId"
+                    :topic-id="cardFieldsTopicId"
+                />
+
                 <ClassCertEditModal
                     v-model:open="certOpen"
                     :class-id="props.classId"

@@ -72,7 +72,10 @@ function formatDate(value: string | null): string {
 async function addTo(row: ClassRow): Promise<void> {
     submittingId.value = row.id;
     try {
-        await classes.bulkEnroll(row.id, { enroll: props.userIds, unenroll: [] });
+        await classes.bulkEnroll(row.id, {
+            enroll: props.userIds,
+            unenroll: [],
+        });
         emit('added', row.id);
         emit('update:open', false);
     } catch (e) {
@@ -103,7 +106,10 @@ async function addTo(row: ClassRow): Promise<void> {
                 {{ error }}
             </p>
 
-            <p v-if="loading" class="py-6 text-center text-sm text-muted-foreground">
+            <p
+                v-if="loading"
+                class="py-6 text-center text-sm text-muted-foreground"
+            >
                 Loading classes…
             </p>
             <p
@@ -113,7 +119,10 @@ async function addTo(row: ClassRow): Promise<void> {
                 No scheduled classes include this training yet — use “Create
                 class with selected” instead.
             </p>
-            <ul v-else class="max-h-[60vh] divide-y divide-border overflow-y-auto">
+            <ul
+                v-else
+                class="max-h-[60vh] divide-y divide-border overflow-y-auto"
+            >
                 <li
                     v-for="row in list"
                     :key="row.id"

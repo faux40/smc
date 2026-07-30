@@ -127,7 +127,9 @@ async function submit(): Promise<void> {
 
 <template>
     <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
-        <DialogContent class="max-h-[90vh] w-[92vw] overflow-y-auto sm:max-w-3xl">
+        <DialogContent
+            class="max-h-[90vh] w-[92vw] overflow-y-auto sm:max-w-3xl"
+        >
             <form @submit.prevent="submit" class="space-y-4">
                 <DialogHeader>
                     <DialogTitle>Complete class</DialogTitle>

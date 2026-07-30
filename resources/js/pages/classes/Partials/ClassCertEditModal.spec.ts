@@ -23,6 +23,7 @@ const topic = {
     cert_title: 'Snapshotted Title',
     cert_text: 'Snapshotted **text**',
     cert_code: 'OLD',
+    card_fields: [],
     credits: [],
 };
 

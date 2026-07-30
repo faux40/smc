@@ -147,6 +147,7 @@ const topic = (
     cert_title: null,
     cert_text: null,
     cert_code: null,
+    card_fields: [],
     credits: [],
 });
 

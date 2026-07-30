@@ -63,6 +63,7 @@ onMounted(async () => {
 
     try {
         await store.load(props.trainingId);
+
         // Don't clobber anything typed while the request was in flight.
         if (!isDirty.value) {
             seed();

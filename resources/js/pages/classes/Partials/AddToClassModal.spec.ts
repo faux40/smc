@@ -6,7 +6,9 @@ import AddToClassModal from '@/pages/classes/Partials/AddToClassModal.vue';
 
 vi.mock('axios');
 vi.mock('@/echo', () => ({ realtimeTabId: () => 'tab' }));
-vi.mock('@/composables/useRealtime', () => ({ useRealtime: () => ({ bind: vi.fn() }) }));
+vi.mock('@/composables/useRealtime', () => ({
+    useRealtime: () => ({ bind: vi.fn() }),
+}));
 
 const META = { current_page: 1, last_page: 1, per_page: 100, total: 1 };
 
@@ -26,10 +28,17 @@ async function openModal(rows = [classRow()]) {
     (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({
         data: { data: rows, meta: { ...META, total: rows.length } },
     });
-    (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { id: 'c1' } });
+    (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: { id: 'c1' },
+    });
 
     const wrapper = mount(AddToClassModal, {
-        props: { open: false, trainingId: 't1', trainingName: 'Fall Protection', userIds: ['u1', 'u2'] },
+        props: {
+            open: false,
+            trainingId: 't1',
+            trainingName: 'Fall Protection',
+            userIds: ['u1', 'u2'],
+        },
         attachTo: document.body,
     });
     await wrapper.setProps({ open: true });
@@ -53,7 +62,10 @@ describe('AddToClassModal', () => {
         expect(axios.get).toHaveBeenCalledWith(
             '/api/classes',
             expect.objectContaining({
-                params: expect.objectContaining({ training_id: 't1', status: 'scheduled' }),
+                params: expect.objectContaining({
+                    training_id: 't1',
+                    status: 'scheduled',
+                }),
             }),
         );
         expect(document.body.textContent).toContain('Spring Fall-Protection');
@@ -63,7 +75,9 @@ describe('AddToClassModal', () => {
         const wrapper = await openModal();
 
         document.body
-            .querySelector<HTMLButtonElement>('[data-testid="add-to-class-c1"]')!
+            .querySelector<HTMLButtonElement>(
+                '[data-testid="add-to-class-c1"]',
+            )!
             .click();
         await flushPromises();
 
@@ -77,6 +91,8 @@ describe('AddToClassModal', () => {
 
     it('shows an empty state when no scheduled class includes the training', async () => {
         await openModal([]);
-        expect(document.body.textContent).toContain('No scheduled classes include this training');
+        expect(document.body.textContent).toContain(
+            'No scheduled classes include this training',
+        );
     });
 });

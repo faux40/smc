@@ -37,6 +37,7 @@ function detail(): ClassDetail {
                 cert_title: null,
                 cert_text: null,
                 cert_code: null,
+                card_fields: [],
                 credits: [],
             },
             {
@@ -52,6 +53,7 @@ function detail(): ClassDetail {
                 cert_title: null,
                 cert_text: null,
                 cert_code: null,
+                card_fields: [],
                 credits: [],
             },
         ],

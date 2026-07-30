@@ -13,6 +13,7 @@ import type {
     ServerTableResponse,
 } from '@/composables/useServerTable';
 import { realtimeTabId } from '@/echo';
+import type { CardFieldWithValue } from '@/lib/cardFields';
 
 export interface ClassRow {
     id: string;
@@ -57,6 +58,11 @@ export interface ClassTrainingRow {
     cert_title: string | null;
     cert_text: string | null;
     cert_code: string | null;
+    /**
+     * Custom card fields (C3): the training's definitions, each with this
+     * class's answer. Empty when the training defines none.
+     */
+    card_fields: CardFieldWithValue[];
     /** M3 — who earned this topic's credit (populated after close-out). */
     credits: TopicCredit[];
 }
@@ -259,18 +265,31 @@ export const useClassesStore = defineStore('classes', () => {
         return cache(data);
     }
 
+    /**
+     * One topic-level PATCH behind the three edits a topic supports. The
+     * endpoint only touches what it's sent, so each caller sends its own slice
+     * and nothing else on the topic moves.
+     */
+    async function patchTraining(
+        id: string,
+        classTrainingId: string,
+        payload: object,
+    ): Promise<ClassDetail> {
+        const { data } = await axios.patch<ClassDetail>(
+            `/api/classes/${id}/trainings/${classTrainingId}`,
+            payload,
+            { headers: defaultHeaders() },
+        );
+
+        return cache(data);
+    }
+
     async function updateTrainingHours(
         id: string,
         classTrainingId: string,
         hours: number | null,
     ): Promise<ClassDetail> {
-        const { data } = await axios.patch<ClassDetail>(
-            `/api/classes/${id}/trainings/${classTrainingId}`,
-            { hours },
-            { headers: defaultHeaders() },
-        );
-
-        return cache(data);
+        return patchTraining(id, classTrainingId, { hours });
     }
 
     /** Edit a topic's per-class certificate fields (title / text / code). */
@@ -279,13 +298,20 @@ export const useClassesStore = defineStore('classes', () => {
         classTrainingId: string,
         cert: ClassCertPayload,
     ): Promise<ClassDetail> {
-        const { data } = await axios.patch<ClassDetail>(
-            `/api/classes/${id}/trainings/${classTrainingId}`,
-            cert,
-            { headers: defaultHeaders() },
-        );
+        return patchTraining(id, classTrainingId, cert);
+    }
 
-        return cache(data);
+    /**
+     * Record this class's answers for a topic's custom card fields, keyed by
+     * field id. An empty string clears an answer (the training's default
+     * applies again); a field left out is unchanged.
+     */
+    async function updateTrainingCardValues(
+        id: string,
+        classTrainingId: string,
+        values: Record<string, string | null>,
+    ): Promise<ClassDetail> {
+        return patchTraining(id, classTrainingId, { card_values: values });
     }
 
     async function detachTraining(
@@ -483,6 +509,7 @@ export const useClassesStore = defineStore('classes', () => {
         attachTraining,
         updateTrainingHours,
         updateTrainingCert,
+        updateTrainingCardValues,
         detachTraining,
         enroll,
         unenroll,

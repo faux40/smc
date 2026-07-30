@@ -145,25 +145,22 @@ function seedBaseline(d: ClassDetail): void {
 // transient state and drops any stale baseline; the baseline is then seeded
 // once, as soon as a loaded detail is available — which covers "opened before
 // the roster finished loading".
-watch(
-    [() => props.open, detail],
-    ([open], [prevOpen]) => {
-        if (open && !prevOpen) {
-            actionError.value = null;
-            baseline.value = null;
-            baselineEnrollmentIds.value = new Map();
-            selected.value = new Set();
-            deptFilter.value = '';
-            tagFilterIds.value = [];
-            tagFilterMode.value = 'and';
-            showDisabledFilter.value = false;
-        }
+watch([() => props.open, detail], ([open], [prevOpen]) => {
+    if (open && !prevOpen) {
+        actionError.value = null;
+        baseline.value = null;
+        baselineEnrollmentIds.value = new Map();
+        selected.value = new Set();
+        deptFilter.value = '';
+        tagFilterIds.value = [];
+        tagFilterMode.value = 'and';
+        showDisabledFilter.value = false;
+    }
 
-        if (open && baseline.value === null && detail.value) {
-            seedBaseline(detail.value);
-        }
-    },
-);
+    if (open && baseline.value === null && detail.value) {
+        seedBaseline(detail.value);
+    }
+});
 
 const userLabel = (u: PickerUser) => u.sort_name || u.email || u.id;
 
@@ -254,9 +251,7 @@ const assigned = computed<StudentItem[]>(() =>
 const available = computed<StudentItem[]>(() =>
     props.users
         .filter((u) => !selected.value.has(u.id))
-        .filter(
-            (u) => showDisabledFilter.value || u.status !== 'disabled',
-        )
+        .filter((u) => showDisabledFilter.value || u.status !== 'disabled')
         .filter(
             (u) => deptFilter.value === '' || u.department === deptFilter.value,
         )

@@ -159,6 +159,26 @@ describe('useClassesStore', () => {
         expect(store.detail.c1.id).toBe('c1');
     });
 
+    it('updateTrainingCardValues() PATCHes the answers keyed by field id', async () => {
+        // Same endpoint as the cert edit: "card values" is another thing you
+        // can change about a topic on a class.
+        const patch = axios.patch as ReturnType<typeof vi.fn>;
+        patch.mockResolvedValue({ data: detailA });
+        const store = useClassesStore();
+
+        await store.updateTrainingCardValues('c1', 'ct1', {
+            f1: 'INST-4471',
+            f2: '',
+        });
+
+        expect(patch).toHaveBeenCalledWith(
+            '/api/classes/c1/trainings/ct1',
+            { card_values: { f1: 'INST-4471', f2: '' } },
+            expect.anything(),
+        );
+        expect(store.detail.c1.id).toBe('c1');
+    });
+
     it('complete() posts the close-out and caches the returned detail', async () => {
         const post = axios.post as ReturnType<typeof vi.fn>;
         post.mockResolvedValue({ data: { ...detailA, status: 'completed' } });

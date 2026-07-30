@@ -23,7 +23,8 @@ const trainings = useTrainingsStore();
 
 const detail = computed(() => store.detail[props.classId] ?? null);
 const canEdit = computed(
-    () => detail.value?.can_edit === true && detail.value?.status === 'scheduled',
+    () =>
+        detail.value?.can_edit === true && detail.value?.status === 'scheduled',
 );
 
 const actionError = ref<string | null>(null);
@@ -54,7 +55,8 @@ const freqLabel = (t: {
     as_needed: boolean;
     initial_only: boolean;
 }) =>
-    t.std_freq_name ?? (t.as_needed ? 'as-needed' : t.initial_only ? 'initial' : '—');
+    t.std_freq_name ??
+    (t.as_needed ? 'as-needed' : t.initial_only ? 'initial' : '—');
 
 interface TopicItem {
     id: string;
@@ -94,13 +96,20 @@ const available = computed<TopicItem[]>(() => {
 
 const assign = (item: { id: string }) =>
     run(() =>
-        store.attachTraining(props.classId, { training_id: item.id, hours: null }),
+        store.attachTraining(props.classId, {
+            training_id: item.id,
+            hours: null,
+        }),
     );
 const unassign = (item: { id: string }) =>
     run(() => store.detachTraining(props.classId, item.id));
 const changeHours = (item: { id: string }, value: string) =>
     run(() =>
-        store.updateTrainingHours(props.classId, item.id, optionalNumber(value)),
+        store.updateTrainingHours(
+            props.classId,
+            item.id,
+            optionalNumber(value),
+        ),
     );
 </script>
 
