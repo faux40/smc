@@ -36,7 +36,11 @@ class PdfNormalizerTest extends TestCase
 
     private function samplePdf(): string
     {
-        $pdf = new Fpdi('P', 'pt', [243.0, 153.0]);
+        // 'L' because the card is wider than tall: FPDF normalises a size array
+        // to portrait and swaps back only for a landscape flag, so 'P' here
+        // would quietly produce a 153x243 page — the same trap CardImposer
+        // guards against for the sheet.
+        $pdf = new Fpdi('L', 'pt', [243.0, 153.0]);
         $pdf->AddPage();
         $pdf->SetFont('Helvetica', '', 10);
         $pdf->Text(10, 20, 'card');

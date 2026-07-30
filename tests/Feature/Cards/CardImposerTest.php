@@ -64,7 +64,10 @@ class CardImposerTest extends TestCase
      */
     private function cardPdf(string $name, int $pages = 1): string
     {
-        $pdf = new Fpdi('P', 'pt', [243.0, 153.0]);
+        // 'L': see the orientation note on the imposer — 'P' would make this
+        // fixture 153x243, and the suite would be placing portrait cards while
+        // claiming to test landscape ones.
+        $pdf = new Fpdi('L', 'pt', [243.0, 153.0]);
 
         for ($i = 1; $i <= $pages; $i++) {
             $pdf->AddPage();
@@ -100,6 +103,13 @@ class CardImposerTest extends TestCase
         $size = $reader->getTemplateSize($reader->importPage(1));
 
         return [$count, round($size['width'], 2), round($size['height'], 2)];
+    }
+
+    public function test_the_card_fixture_really_is_card_shaped(): void
+    {
+        // Guards the guard: every placement test below is meaningless if the
+        // source pages aren't the size the plan was computed for.
+        $this->assertSame([1, 243.0, 153.0], $this->inspect($this->cardPdf('shape')));
     }
 
     public function test_a_short_run_lands_on_one_sheet(): void
