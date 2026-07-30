@@ -178,6 +178,46 @@ class TrainingCardFieldsApiTest extends TestCase
             ->assertJsonPath('0.default_value', 'INST-4471');
     }
 
+    public function test_definitions_report_how_many_answers_exist(): void
+    {
+        // Removing a field discards the answers entered against it, so the
+        // editor's confirmation names the number rather than warning vaguely.
+        $field = CardField::factory()->for($this->training)->create();
+        $untouched = CardField::factory()->for($this->training)->create(['key' => 'untouched']);
+
+        foreach ([$this->topicFor($this->training), $this->topicFor($this->training)] as $ct) {
+            ClassTrainingCardValue::create([
+                'org_id' => $this->org->id,
+                'class_training_id' => $ct->id,
+                'card_field_id' => $field->id,
+                'value' => 'INST-4471',
+            ]);
+        }
+
+        $json = $this->actingAs($this->admin)->getJson($this->url())->assertOk()->json();
+        $counts = array_column($json, 'value_count', 'id');
+
+        $this->assertSame(2, $counts[$field->id]);
+        $this->assertSame(0, $counts[$untouched->id]);
+    }
+
+    public function test_the_sync_response_reports_answer_counts_too(): void
+    {
+        // The editor rebuilds its baseline from the response, so it must carry
+        // the same information the initial load did.
+        $field = CardField::factory()->for($this->training)->create();
+        ClassTrainingCardValue::create([
+            'org_id' => $this->org->id,
+            'class_training_id' => $this->topicFor($this->training)->id,
+            'card_field_id' => $field->id,
+            'value' => 'INST-4471',
+        ]);
+
+        $this->sync([$this->field(['id' => $field->id, 'key' => $field->key])])
+            ->assertOk()
+            ->assertJsonPath('0.value_count', 1);
+    }
+
     // ---- validation -------------------------------------------------------
 
     public function test_a_key_must_be_lowercase_snake_case(): void

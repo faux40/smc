@@ -25,7 +25,8 @@ class CardFieldsController extends Controller
         Gate::authorize('update', $training);
 
         return response()->json(
-            $training->cardFields()->get()->map(fn (CardField $f) => CardFieldPresenter::definition($f))
+            $training->cardFields()->withCount('values')->get()
+                ->map(fn (CardField $f) => $this->serialize($f))
         );
     }
 
@@ -42,6 +43,22 @@ class CardFieldsController extends Controller
 
         $fields = $sync->handle($training, $request->validated()['fields']);
 
-        return response()->json($fields->map(fn (CardField $f) => CardFieldPresenter::definition($f)));
+        return response()->json($fields->map(fn (CardField $f) => $this->serialize($f)));
+    }
+
+    /**
+     * The definition plus how many class answers hang off it — the editor
+     * names that number when confirming a removal, since removing a field
+     * discards them. Kept out of CardFieldPresenter: class detail serves
+     * definitions too, and there the count is neither loaded nor meaningful.
+     *
+     * @return array<string, mixed>
+     */
+    private function serialize(CardField $field): array
+    {
+        return [
+            ...CardFieldPresenter::definition($field),
+            'value_count' => (int) ($field->values_count ?? 0),
+        ];
     }
 }

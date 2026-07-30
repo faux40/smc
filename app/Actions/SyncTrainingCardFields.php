@@ -58,7 +58,9 @@ class SyncTrainingCardFields
             }
         });
 
-        return $training->cardFields()->get();
+        // withCount so the editor can say how many answers a field would
+        // discard if it were removed.
+        return $training->cardFields()->withCount('values')->get();
     }
 
     /**

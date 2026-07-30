@@ -3,6 +3,7 @@ import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TrainingFormSource } from '@/lib/trainingForm';
+import CardFieldsEditor from '@/pages/trainings/Partials/CardFieldsEditor.vue';
 import Show from '@/pages/trainings/Show.vue';
 
 const visit = vi.fn();
@@ -101,5 +102,16 @@ describe('trainings/Show', () => {
             expect.anything(),
         );
         expect(visit).toHaveBeenCalledWith('/trainings');
+    });
+
+    it('offers the card-fields editor, scoped to this training', async () => {
+        // Its own section with its own save — the training form PATCHes fields,
+        // the editor PUTs a set.
+        const wrapper = mount(Show, { props: { training } });
+        await flushPromises();
+
+        const editor = wrapper.findComponent(CardFieldsEditor);
+        expect(editor.exists()).toBe(true);
+        expect(editor.props('trainingId')).toBe('t1');
     });
 });

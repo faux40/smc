@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { trainingFormPayload, trainingToForm } from '@/lib/trainingForm';
 import type { TrainingFormSource, TrainingFormState } from '@/lib/trainingForm';
+import CardFieldsEditor from '@/pages/trainings/Partials/CardFieldsEditor.vue';
 import TrainingFields from '@/pages/trainings/Partials/TrainingFields.vue';
 import { page as trainingsPage } from '@/routes/trainings';
 import { useErrorStore } from '@/stores/errors';
@@ -138,6 +139,14 @@ const confirmDelete = async () => {
         <p v-else class="text-sm text-muted-foreground">
             You don't have permission to edit this training.
         </p>
+
+        <!--
+            Custom card fields: a set of definitions, saved on its own. Kept
+            out of the form above because membership and order are properties
+            of the set, and it PUTs rather than PATCHes. Sits after the
+            permission notice so the form's v-if/v-else stay adjacent.
+        -->
+        <CardFieldsEditor v-if="canManage" :training-id="training.id" />
 
         <Dialog v-model:open="deleteOpen">
             <DialogContent>
