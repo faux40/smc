@@ -10,6 +10,7 @@
  * literal text on a purchased card.
  */
 import { computed, onMounted, ref } from 'vue';
+import CopyableKey from '@/components/CopyableKey.vue';
 import { Label } from '@/components/ui/label';
 import { useCardFieldsStore } from '@/stores/cardFields';
 import { useCardMergeKeysStore } from '@/stores/cardMergeKeys';
@@ -46,10 +47,6 @@ async function chooseTraining(id: string): Promise<void> {
     }
 }
 
-async function copy(placeholder: string): Promise<void> {
-    await navigator.clipboard?.writeText(placeholder);
-}
-
 onMounted(async () => {
     await Promise.all([keys.load(), trainings.load()]);
 });
@@ -68,17 +65,9 @@ onMounted(async () => {
             class="space-y-2"
         >
             <h3 class="text-sm font-semibold">{{ group.group }}</h3>
-            <ul class="flex flex-wrap gap-2">
+            <ul class="flex flex-wrap gap-3">
                 <li v-for="k in group.keys" :key="k.key">
-                    <button
-                        type="button"
-                        data-testid="copy-key"
-                        class="rounded border border-border px-2 py-1 font-mono text-xs hover:bg-muted"
-                        :title="`Copy ${k.placeholder}`"
-                        @click="copy(k.placeholder)"
-                    >
-                        {{ k.placeholder }}
-                    </button>
+                    <CopyableKey :text="k.placeholder" />
                 </li>
             </ul>
         </section>
@@ -125,15 +114,7 @@ onMounted(async () => {
                         :key="f.id"
                         class="flex flex-wrap items-baseline gap-2 text-sm"
                     >
-                        <button
-                            type="button"
-                            data-testid="copy-key"
-                            class="rounded border border-border px-2 py-1 font-mono text-xs hover:bg-muted"
-                            :title="`Copy ${f.placeholder}`"
-                            @click="copy(f.placeholder)"
-                        >
-                            {{ f.placeholder }}
-                        </button>
+                        <CopyableKey :text="f.placeholder" />
                         <span>{{ f.label }}</span>
                         <span
                             v-if="f.default_value"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import CopyableKey from '@/components/CopyableKey.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -127,10 +128,6 @@ function dropRow(index: number): void {
     pendingRemoval.value = null;
 }
 
-async function copyPlaceholder(key: string): Promise<void> {
-    await navigator.clipboard?.writeText(`\${${key}}`);
-}
-
 async function save(): Promise<void> {
     if (hasKeyErrors.value) {
         return;
@@ -211,16 +208,7 @@ const TYPE_LABELS: Record<CardFieldType, string> = {
                             v-if="draft.key && !keyErrors[i]"
                             class="flex items-center gap-2"
                         >
-                            <code class="text-xs text-muted-foreground">
-                                ${{ '{' }}{{ draft.key }}{{ '}' }}
-                            </code>
-                            <button
-                                type="button"
-                                class="text-xs text-primary hover:underline"
-                                @click="copyPlaceholder(draft.key)"
-                            >
-                                Copy
-                            </button>
+                            <CopyableKey :text="`\${${draft.key}}`" />
                         </div>
                         <p v-if="keyErrors[i]" class="text-xs text-red-600">
                             {{ keyErrors[i] }}
