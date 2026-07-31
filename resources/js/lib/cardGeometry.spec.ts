@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
     cellRects,
+    fitsCell,
     fromPoints,
     perSheet,
+    sheetCount,
     sheetFits,
     toPoints,
 } from '@/lib/cardGeometry';
@@ -56,6 +58,82 @@ describe('cardGeometry', () => {
         expect(sheetFits(wallet({ column_count: 3 }))).toBe(false);
         expect(sheetFits(wallet({ row_count: 6 }))).toBe(false);
         expect(sheetFits(wallet({ gutter_y: 72 }))).toBe(false);
+    });
+});
+
+/*
+ * sheetCount + fitsCell mirror CardSheetPlan (the PHP), case for case, so the
+ * print modal's "N cards → M sheets" and its size warning say what the job
+ * will actually do. Cases below track CardSheetPlanTest.
+ */
+describe('sheetCount', () => {
+    it('fits a full sheet on one sheet', () => {
+        expect(sheetCount(wallet(), 10)).toBe(1);
+    });
+
+    it('starts another sheet for one card past the first', () => {
+        expect(sheetCount(wallet(), 11)).toBe(2);
+    });
+
+    it('spreads twenty-three cards over three sheets', () => {
+        expect(sheetCount(wallet(), 23)).toBe(3);
+    });
+
+    it('needs no sheets for no cards', () => {
+        expect(sheetCount(wallet(), 0)).toBe(0);
+    });
+
+    it('counts the skipped start cells toward the sheet total', () => {
+        // Eight cards onto a sheet with three cells already used: 7 fit, so
+        // the eighth opens a second sheet.
+        expect(sheetCount(wallet(), 8, 4)).toBe(2);
+    });
+
+    it('skips cells only on the first sheet', () => {
+        // 10-up: 7 on the partial first sheet, 10 on the second, 3 on a third.
+        expect(sheetCount(wallet(), 20, 4)).toBe(3);
+    });
+
+    /*
+     * The server throws on a start cell off the sheet; a computed property in
+     * a modal must not. null means "not computable" — the caller shows the
+     * stock's capacity and blocks the submit the API would 422 anyway. This
+     * is reachable: pick cell 9, then switch to a 4-up stock.
+     */
+    it('cannot count when the start cell is off the sheet', () => {
+        expect(sheetCount(wallet(), 1, 11)).toBeNull();
+    });
+
+    it('cannot count when the start cell is below one', () => {
+        // Cells are 1-based for the user; 0 would silently mean "cell -1".
+        expect(sheetCount(wallet(), 1, 0)).toBeNull();
+    });
+
+    it('still needs no sheets for no cards, whatever the start cell', () => {
+        // Matches the server's early return, which precedes its start-cell check.
+        expect(sheetCount(wallet(), 0, 11)).toBe(0);
+    });
+});
+
+describe('fitsCell', () => {
+    it('accepts a card that matches its cell exactly', () => {
+        expect(fitsCell(243, 153, wallet())).toBe(true);
+    });
+
+    it('accepts a card smaller than its cell', () => {
+        expect(fitsCell(200, 140, wallet())).toBe(true);
+    });
+
+    it('rejects a card wider or taller than its cell', () => {
+        // What the print-time overhang warning is built on.
+        expect(fitsCell(244, 153, wallet())).toBe(false);
+        expect(fitsCell(243, 154, wallet())).toBe(false);
+    });
+
+    it('absorbs unit-conversion dust, like the server', () => {
+        // A hundredth of a point — a card measured in mm lands here.
+        expect(fitsCell(243.005, 153.005, wallet())).toBe(true);
+        expect(fitsCell(243.02, 153, wallet())).toBe(false);
     });
 });
 

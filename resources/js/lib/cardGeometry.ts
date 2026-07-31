@@ -85,6 +85,53 @@ export function sheetFits(grid: CardGrid): boolean {
     );
 }
 
+/**
+ * Sheets a run needs, counting the cells skipped on the first one — a partial
+ * sheet's used cells still occupy the grid.
+ *
+ * null when the start cell is off the sheet. The server throws there, but this
+ * feeds a live count in the print modal, and a computed property that throws
+ * takes the dialog down with it; the state is reachable by picking cell 9 and
+ * then switching to a 4-up stock. The caller shows the stock's capacity and
+ * blocks the submit that the API would reject anyway.
+ */
+export function sheetCount(
+    grid: CardGrid,
+    cardCount: number,
+    startCell = 1,
+): number | null {
+    // Ahead of the start-cell check, as on the server: nothing to place means
+    // nothing to place onto.
+    if (cardCount < 1) {
+        return 0;
+    }
+
+    const per = perSheet(grid);
+
+    if (startCell < 1 || startCell > per) {
+        return null;
+    }
+
+    return Math.ceil((cardCount + startCell - 1) / per);
+}
+
+/**
+ * Does a design fit the cell it will be placed in? False means the card
+ * overhangs into the gutter — the print-time warning, never a scale.
+ *
+ * Card dimensions are the template's, read from its slide size at upload.
+ */
+export function fitsCell(
+    cardWidth: number,
+    cardHeight: number,
+    grid: CardGrid,
+): boolean {
+    return (
+        cardWidth <= grid.card_width + SLACK &&
+        cardHeight <= grid.card_height + SLACK
+    );
+}
+
 /** Entered length → the points the API stores. */
 export function toPoints(value: number, unit: LengthUnit): number {
     return value * PER_UNIT[unit];
