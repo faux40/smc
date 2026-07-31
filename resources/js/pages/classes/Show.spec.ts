@@ -3,9 +3,12 @@ import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AttachmentsList from '@/components/AttachmentsList.vue';
+import CardPrintRunsList from '@/pages/classes/Partials/CardPrintRunsList.vue';
 import ClassCardFieldsModal from '@/pages/classes/Partials/ClassCardFieldsModal.vue';
+import PrintCardsModal from '@/pages/classes/Partials/PrintCardsModal.vue';
 import Show from '@/pages/classes/Show.vue';
 import type { ClassDetail } from '@/stores/classes';
+import { useTrainingsStore } from '@/stores/trainings';
 
 vi.mock('axios');
 const routerVisit = vi.fn();
@@ -261,6 +264,74 @@ describe('classes/Show — student counts', () => {
         expect(modal.props('open')).toBe(true);
         expect(modal.props('topicId')).toBe('ct2');
         expect(modal.props('classId')).toBe('c1');
+    });
+
+    it('offers Print cards only for a topic whose training carries a design', async () => {
+        // The design is what makes a topic printable; a topic without one has
+        // nothing to print onto, so the button follows it rather than
+        // appearing everywhere and explaining itself.
+        const topic = {
+            id: 'ct1',
+            training_id: 't1',
+            training_name: 'Fall Protection',
+            initial_only: false,
+            repeating: true,
+            as_needed: false,
+            std_freq_name: null,
+            repeat_days: null,
+            hours: '4.00',
+            cert_title: null,
+            cert_text: null,
+            cert_code: null,
+            card_fields: [],
+            credits: [],
+        };
+
+        mockGet({
+            ...detail,
+            trainings: [
+                topic,
+                {
+                    ...topic,
+                    id: 'ct2',
+                    training_id: 't2',
+                    training_name: 'CPR',
+                },
+            ],
+        });
+
+        const trainings = useTrainingsStore();
+        trainings.library = [
+            { id: 't1', card_template_id: null } as never,
+            { id: 't2', card_template_id: 'tpl1' } as never,
+        ];
+        trainings.loaded = true;
+
+        const wrapper = await mountShow();
+
+        const buttons = wrapper
+            .findAll('button')
+            .filter((b) => b.text() === 'Print cards');
+        expect(buttons).toHaveLength(1);
+
+        await buttons[0].trigger('click');
+
+        const modal = wrapper.findComponent(PrintCardsModal);
+        expect(modal.props('open')).toBe(true);
+        expect(modal.props('topicId')).toBe('ct2');
+        expect(modal.props('classId')).toBe('c1');
+    });
+
+    it('keeps the print-run outcomes on the page, next to the documents', async () => {
+        // A failed run is only ever explained here: nothing reaches Documents,
+        // and the dialog that asked for it is long closed.
+        mockGet();
+
+        const wrapper = await mountShow();
+
+        expect(wrapper.findComponent(CardPrintRunsList).props('classId')).toBe(
+            'c1',
+        );
     });
 
     it('shows "· max N" on the roster header when a max is set', async () => {

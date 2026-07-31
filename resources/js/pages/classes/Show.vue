@@ -32,15 +32,19 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { useClassForm } from '@/composables/useClassForm';
+import CardPrintRunsList from '@/pages/classes/Partials/CardPrintRunsList.vue';
 import ClassCardFieldsModal from '@/pages/classes/Partials/ClassCardFieldsModal.vue';
 import ClassCertEditModal from '@/pages/classes/Partials/ClassCertEditModal.vue';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import ManageRosterModal from '@/pages/classes/Partials/ManageRosterModal.vue';
 import ManageTopicsModal from '@/pages/classes/Partials/ManageTopicsModal.vue';
+import PrintCardsModal from '@/pages/classes/Partials/PrintCardsModal.vue';
 import { page as classesPage, showPage } from '@/routes/classes';
+import { useCardStocksStore } from '@/stores/cardStocks';
+import { useCardTemplatesStore } from '@/stores/cardTemplates';
 import { useClassesStore } from '@/stores/classes';
-import type { ClassDetail } from '@/stores/classes';
+import type { ClassDetail, ClassTrainingRow } from '@/stores/classes';
 import { useErrorStore } from '@/stores/errors';
 import { useTrainingsStore } from '@/stores/trainings';
 import { useUsersStore } from '@/stores/users';
@@ -118,6 +122,39 @@ const cardFieldsTopicId = ref<string | null>(null);
 function openCardFields(topicId: string) {
     cardFieldsTopicId.value = topicId;
     cardFieldsOpen.value = true;
+}
+
+// Printing a topic's cards (C4e). One run is one topic, so the topic is
+// chosen by which button was pressed rather than inside the dialog.
+const cardTemplates = useCardTemplatesStore();
+const cardStocks = useCardStocksStore();
+const printOpen = ref(false);
+const printTopicId = ref<string | null>(null);
+
+/**
+ * A topic is printable when its training carries a card design. Without one
+ * there is nothing to print, and orgs that never use cards see no button at
+ * all. (A design can still be swapped per run inside the dialog.)
+ */
+function hasCardDesign(t: ClassTrainingRow): boolean {
+    if (!t.training_id) {
+        return false;
+    }
+
+    return (
+        trainings.library.find((x) => x.id === t.training_id)
+            ?.card_template_id != null
+    );
+}
+
+async function openPrintCards(topicId: string): Promise<void> {
+    printTopicId.value = topicId;
+    printOpen.value = true;
+
+    // Designs and stocks are only needed once someone actually prints, so
+    // they're fetched here rather than on every class view. Both stores
+    // no-op when already loaded.
+    await Promise.all([cardTemplates.load(), cardStocks.load()]);
 }
 const rosterOpen = ref(false);
 const reopenOpen = ref(false);
@@ -630,6 +667,24 @@ const timeLabel = computed(() => {
                                                                 Card fields
                                                             </Button>
                                                             <Button
+                                                                v-if="
+                                                                    hasCardDesign(
+                                                                        t,
+                                                                    )
+                                                                "
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                class="h-6 px-2 text-xs"
+                                                                @click="
+                                                                    openPrintCards(
+                                                                        t.id,
+                                                                    )
+                                                                "
+                                                            >
+                                                                Print cards
+                                                            </Button>
+                                                            <Button
                                                                 type="button"
                                                                 variant="ghost"
                                                                 size="sm"
@@ -699,16 +754,39 @@ const timeLabel = computed(() => {
                                                 will print are worth seeing
                                                 before cards are generated.
                                             -->
-                                            <Button
-                                                v-if="t.card_fields.length"
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                class="h-6 px-2 text-xs"
-                                                @click="openCardFields(t.id)"
+                                            <span
+                                                class="flex items-center gap-1"
                                             >
-                                                Card fields
-                                            </Button>
+                                                <Button
+                                                    v-if="t.card_fields.length"
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    class="h-6 px-2 text-xs"
+                                                    @click="
+                                                        openCardFields(t.id)
+                                                    "
+                                                >
+                                                    Card fields
+                                                </Button>
+                                                <!--
+                                                    Printing from a completed
+                                                    class is the main case, not
+                                                    an exception to it.
+                                                -->
+                                                <Button
+                                                    v-if="hasCardDesign(t)"
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    class="h-6 px-2 text-xs"
+                                                    @click="
+                                                        openPrintCards(t.id)
+                                                    "
+                                                >
+                                                    Print cards
+                                                </Button>
+                                            </span>
                                         </li>
                                     </ul>
                                     <p
@@ -944,6 +1022,11 @@ const timeLabel = computed(() => {
                                 once the class is completed.
                             </p>
 
+                            <!-- Card print runs: the outcome of a queued run,
+                                 above all why one failed. The sheets
+                                 themselves land in the file list below. -->
+                            <CardPrintRunsList :class-id="props.classId" />
+
                             <!-- Uploaded files (distinct from the generated PDFs above) -->
                             <div class="space-y-2 border-t border-border pt-4">
                                 <h3
@@ -1087,6 +1170,12 @@ const timeLabel = computed(() => {
                     v-model:open="topicsOpen"
                     :class-id="props.classId"
                 />
+                <PrintCardsModal
+                    v-model:open="printOpen"
+                    :class-id="props.classId"
+                    :topic-id="printTopicId"
+                />
+
                 <ClassCardFieldsModal
                     v-model:open="cardFieldsOpen"
                     :class-id="classId"
