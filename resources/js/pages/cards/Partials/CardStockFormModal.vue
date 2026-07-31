@@ -9,6 +9,7 @@
  * exists to catch the mistake without a round trip.
  */
 import { computed, reactive, ref, watch } from 'vue';
+import CardSheetPreview from '@/components/CardSheetPreview.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -23,13 +24,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFieldErrors } from '@/composables/useFieldErrors';
-import {
-    cellRects,
-    fromPoints,
-    perSheet,
-    sheetFits,
-    toPoints,
-} from '@/lib/cardGeometry';
+import { fromPoints, perSheet, sheetFits, toPoints } from '@/lib/cardGeometry';
 import type { CardGrid, LengthUnit } from '@/lib/cardGeometry';
 import { useCardStocksStore } from '@/stores/cardStocks';
 import type { CardStockRow } from '@/stores/cardStocks';
@@ -139,11 +134,6 @@ const grid = computed<CardGrid>(() => ({
 
 const cards = computed(() => perSheet(grid.value));
 const fits = computed(() => sheetFits(grid.value));
-const cells = computed(() =>
-    // An absurd grid would render thousands of rects; the preview caps out
-    // long before the server's 100x100 limit becomes a real layout.
-    cards.value > 0 && cards.value <= 400 ? cellRects(grid.value) : [],
-);
 
 const title = computed(() =>
     props.editing ? 'Edit card stock' : 'New card stock',
@@ -421,25 +411,7 @@ async function submit(): Promise<void> {
                             rows, card size, margin or gaps until it fits.
                         </div>
 
-                        <svg
-                            data-testid="stock-preview"
-                            class="w-full rounded border border-border bg-white"
-                            :viewBox="`0 0 ${grid.page_width} ${grid.page_height}`"
-                            preserveAspectRatio="xMidYMin meet"
-                        >
-                            <rect
-                                v-for="(cell, i) in cells"
-                                :key="i"
-                                data-testid="preview-cell"
-                                :x="cell.x"
-                                :y="cell.y"
-                                :width="cell.width"
-                                :height="cell.height"
-                                fill="#e0e7ff"
-                                stroke="#4338ca"
-                                stroke-width="1"
-                            />
-                        </svg>
+                        <CardSheetPreview :grid="grid" />
                     </div>
                 </div>
 
