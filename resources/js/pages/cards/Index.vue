@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import CardStockFormModal from '@/pages/cards/Partials/CardStockFormModal.vue';
 import CardStocksList from '@/pages/cards/Partials/CardStocksList.vue';
 import CardTemplatesList from '@/pages/cards/Partials/CardTemplatesList.vue';
+import MergeKeysPanel from '@/pages/cards/Partials/MergeKeysPanel.vue';
 import { page as cardsRoute } from '@/routes/cards';
 import { useCardStocksStore } from '@/stores/cardStocks';
 import type { CardStockRow } from '@/stores/cardStocks';
@@ -26,7 +27,7 @@ defineOptions({
     },
 });
 
-type Tab = 'templates' | 'stocks';
+type Tab = 'templates' | 'stocks' | 'keys';
 const tab = ref<Tab>('templates');
 
 const stocks = useCardStocksStore();
@@ -116,9 +117,25 @@ onMounted(async () => {
             >
                 Card stocks
             </Button>
+            <Button
+                variant="ghost"
+                role="tab"
+                data-testid="tab-keys"
+                :aria-selected="tab === 'keys'"
+                :class="
+                    tab === 'keys'
+                        ? 'rounded-b-none border-b-2 border-primary'
+                        : ''
+                "
+                @click="tab = 'keys'"
+            >
+                Merge keys
+            </Button>
         </div>
 
         <CardTemplatesList v-if="tab === 'templates'" :can-define="canDefine" />
+
+        <MergeKeysPanel v-else-if="tab === 'keys'" />
 
         <template v-else>
             <CardStocksList

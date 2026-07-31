@@ -22,7 +22,10 @@ class CardFieldsController extends Controller
 {
     public function index(Training $training): JsonResponse
     {
-        Gate::authorize('update', $training);
+        // Reading is Manager+, defining is Admin+ (see sync): a Manager prints
+        // the cards, and these same definitions already reach them embedded in
+        // the class-detail payload.
+        Gate::authorize('view', $training);
 
         return response()->json(
             $training->cardFields()->withCount('values')->get()

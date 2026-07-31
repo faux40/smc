@@ -319,6 +319,20 @@ class TrainingCardFieldsApiTest extends TestCase
         $this->actingAs($viewer)->getJson($this->url())->assertForbidden();
     }
 
+    public function test_a_manager_reads_the_definitions(): void
+    {
+        // Reading the vocabulary is not defining it: a Manager prints the
+        // cards, and the same keys already reach them inside the class-detail
+        // payload that renders the value form.
+        $manager = User::factory()->for($this->org, 'organization')->withRole('Manager')->create();
+        CardField::factory()->for($this->training)->create(['key' => 'trainer_id', 'seq' => 0]);
+
+        $this->actingAs($manager)
+            ->getJson($this->url())
+            ->assertOk()
+            ->assertJsonPath('0.key', 'trainer_id');
+    }
+
     public function test_an_admin_reads_the_definitions(): void
     {
         CardField::factory()->for($this->training)->create(['key' => 'trainer_id', 'seq' => 0]);

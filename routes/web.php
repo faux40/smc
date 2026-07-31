@@ -4,6 +4,7 @@ use App\Http\Controllers\AssignmentRemindController;
 use App\Http\Controllers\AttachmentsController;
 use App\Http\Controllers\BulkTrainingAssignmentsController;
 use App\Http\Controllers\CardFieldsController;
+use App\Http\Controllers\CardMergeKeysController;
 use App\Http\Controllers\CardPrintRunsController;
 use App\Http\Controllers\CardStocksController;
 use App\Http\Controllers\CardTemplatesController;
@@ -187,6 +188,11 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::post('api/card-templates/{cardTemplate}/replace', [CardTemplatesController::class, 'replace'])->name('card-templates.replace');
     Route::patch('api/card-templates/{cardTemplate}', [CardTemplatesController::class, 'update'])->name('card-templates.update');
     Route::delete('api/card-templates/{cardTemplate}', [CardTemplatesController::class, 'destroy'])->name('card-templates.destroy');
+
+    // The built-in ${key} catalogue a card design draws from (custom-certs
+    // C4e) — served from the constant the merge itself reads, gated with the
+    // template library.
+    Route::get('api/card-merge-keys', [CardMergeKeysController::class, 'index'])->name('card-merge-keys.index');
 
     // Cards module page. Shell is open like tags — nav hides it below
     // Manager and the JSON APIs enforce roles.
