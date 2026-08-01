@@ -1,9 +1,16 @@
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import type { ComputedRef } from 'vue';
+import { useListDrag } from '@/composables/useListDrag';
 import type { ResolvedColumn } from '@/composables/useTableView';
 
 /*
  * Drag-to-reorder for table column headers.
+ *
+ * The mechanics live in useListDrag, shared with the stacked form rows in the
+ * card-fields editor. What stays here is what's specific to a table: a header
+ * is both the thing you grab and the thing you aim at (so the two attribute
+ * sets collapse into one v-bind), the highlight styling, and the
+ * visible-column filter.
  *
  * Returns:
  *   dragAttrs(key)          — spread via v-bind onto each <th> / SortableHeader
@@ -14,34 +21,15 @@ import type { ResolvedColumn } from '@/composables/useTableView';
  *   const { dragAttrs, previewVisibleColumns } = useColumnDrag(columnDefs, reorder);
  *   <SortableHeader v-for="col in previewVisibleColumns" v-bind="dragAttrs(col.key)" ... />
  *   <td v-for="col in previewVisibleColumns" ...>
- *
- * Why stable DOM order: re-ordering DOM elements live during HTML5 DnD causes the
- * drag source element to move under the cursor, which prevents the browser from
- * firing dragover.preventDefault() on the source (guarded), so drop never fires.
- * The reorder is committed in onDragend instead (always fires).
  */
 export function useColumnDrag(
     allColumns: ComputedRef<ResolvedColumn[]>,
     reorder: (newOrder: string[]) => void,
 ) {
-    const dragKey = ref<string | null>(null);
-    const overKey = ref<string | null>(null);
-
-    // Internal: computes the committed order for onDragend. Not used for rendering.
-    const pendingOrder = computed<ResolvedColumn[]>(() => {
-        const dk = dragKey.value;
-        const ok = overKey.value;
-        if (!dk || !ok || dk === ok) return allColumns.value;
-
-        const cols = [...allColumns.value];
-        const fromIdx = cols.findIndex((c) => c.key === dk);
-        const toIdx = cols.findIndex((c) => c.key === ok);
-        if (fromIdx === -1 || toIdx === -1) return allColumns.value;
-
-        const [moved] = cols.splice(fromIdx, 1);
-        cols.splice(toIdx, 0, moved);
-        return cols;
-    });
+    const { dragKey, overKey, sourceAttrs, targetAttrs } = useListDrag(
+        computed(() => allColumns.value.map((c) => c.key)),
+        reorder,
+    );
 
     // Stable for rendering — never reorders during drag to avoid oscillation.
     const previewVisibleColumns = computed(() =>
@@ -50,33 +38,13 @@ export function useColumnDrag(
 
     function dragAttrs(key: string): Record<string, unknown> {
         return {
-            draggable: true,
+            ...sourceAttrs(key),
+            ...targetAttrs(key),
             class: {
                 'cursor-grab': true,
                 'opacity-40': dragKey.value === key,
-                'ring-2 ring-inset ring-primary': overKey.value === key && dragKey.value !== key,
-            },
-            onDragstart(e: DragEvent): void {
-                dragKey.value = key;
-                e.dataTransfer?.setData('text/plain', key);
-            },
-            onDragover(e: DragEvent): void {
-                if (!dragKey.value || key === dragKey.value) return;
-                e.preventDefault();
-                overKey.value = key;
-            },
-            onDrop(e: DragEvent): void {
-                // Prevent the browser's "bounce back" animation.
-                e.preventDefault();
-            },
-            onDragend(): void {
-                // Always commit here — onDrop is unreliable when the cursor is over a
-                // child element (e.g. the sort button inside <th>) at release time.
-                if (dragKey.value && overKey.value && dragKey.value !== overKey.value) {
-                    reorder(pendingOrder.value.map((c) => c.key));
-                }
-                dragKey.value = null;
-                overKey.value = null;
+                'ring-2 ring-inset ring-primary':
+                    overKey.value === key && dragKey.value !== key,
             },
         };
     }

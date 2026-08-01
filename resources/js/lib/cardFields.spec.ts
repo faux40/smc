@@ -72,7 +72,10 @@ describe('draftsFromCardFields', () => {
             row({ id: 'f2', key: 'notes', type: 'rich', max_length: 2000 }),
         ]);
 
-        expect(drafts[0]).toEqual({
+        // toMatchObject, not toEqual: the draft also carries client-side
+        // identity (uid, keyTouched) whose values are deliberately not part
+        // of this contract. See the 'draft identity' block for those.
+        expect(drafts[0]).toMatchObject({
             id: 'f1',
             key: 'trainer_id',
             label: 'Trainer ID',
@@ -80,6 +83,55 @@ describe('draftsFromCardFields', () => {
             default_value: 'INST-1',
         });
         expect(drafts[1].type).toBe('rich');
+    });
+});
+
+describe('draft identity', () => {
+    /*
+     * Rows are reorderable, so they need an identity that survives a move.
+     * The array index can't be it — Vue would reuse the wrong DOM, and any
+     * state held alongside the list (which key was hand-edited, which row is
+     * awaiting a delete confirmation) would smear onto its neighbour.
+     */
+    it('gives every new draft its own uid', () => {
+        const a = blankCardFieldDraft('short');
+        const b = blankCardFieldDraft('short');
+
+        expect(a.uid).toBeTruthy();
+        expect(a.uid).not.toBe(b.uid);
+    });
+
+    it('gives a saved row a uid too, since a saved id is not enough', () => {
+        // Saved and unsaved rows sit in one list and reorder together, so
+        // they need one kind of identity, not two.
+        const drafts = draftsFromCardFields([
+            row({ id: 'f1', key: 'a' }),
+            row({ id: 'f2', key: 'b' }),
+        ]);
+
+        expect(drafts[0].uid).toBeTruthy();
+        expect(drafts[0].uid).not.toBe(drafts[1].uid);
+    });
+
+    it('treats a saved row as having a deliberate key', () => {
+        // Its key is in templates already; typing in the label must never
+        // rewrite it.
+        expect(draftsFromCardFields([row({ id: 'f1' })])[0].keyTouched).toBe(
+            true,
+        );
+    });
+
+    it('treats a new row as having no key yet', () => {
+        expect(blankCardFieldDraft('short').keyTouched).toBe(false);
+    });
+
+    it('keeps client-side identity out of the wire payload', () => {
+        const payload = cardFieldDraftPayload([
+            draft({ key: 'trainer_id', label: 'Trainer ID' }),
+        ]);
+
+        expect(payload[0]).not.toHaveProperty('uid');
+        expect(payload[0]).not.toHaveProperty('keyTouched');
     });
 });
 

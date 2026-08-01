@@ -35,11 +35,26 @@ export interface CardFieldWithValue extends CardFieldRow {
 
 /** An editable row. `id` null = not saved yet. */
 export interface CardFieldDraft {
+    /**
+     * Client-side identity, stable across a reorder. Not the `id`: unsaved
+     * rows have none, and they sort and drag alongside saved ones.
+     */
+    uid: string;
     id: string | null;
     key: string;
     label: string;
     type: CardFieldType;
     default_value: string | null;
+    /**
+     * Has this row's key been set deliberately (hand-typed, or already saved
+     * and therefore live in someone's template)? A deliberate key is never
+     * overwritten by the label suggestion.
+     *
+     * Lives on the row rather than in a parallel array beside it, because
+     * rows move: an index-keyed flag would smear onto whichever row inherited
+     * the position.
+     */
+    keyTouched: boolean;
 }
 
 /** One row of the sync payload. */
@@ -71,17 +86,42 @@ export function slugifyCardKey(label: string): string {
     return /^[a-z]/.test(slug) ? slug : `f_${slug}`;
 }
 
+/**
+ * Row identity, from a counter rather than `crypto.randomUUID()`: that needs
+ * a secure context, and dev runs on plain http — the same trap that made the
+ * clipboard silently do nothing. Uniqueness within one editor session is the
+ * whole requirement, and a counter meets it everywhere.
+ */
+let uidCounter = 0;
+
+function nextUid(): string {
+    uidCounter += 1;
+
+    return `cf${uidCounter}`;
+}
+
 export function blankCardFieldDraft(type: CardFieldType): CardFieldDraft {
-    return { id: null, key: '', label: '', type, default_value: null };
+    return {
+        uid: nextUid(),
+        id: null,
+        key: '',
+        label: '',
+        type,
+        default_value: null,
+        keyTouched: false,
+    };
 }
 
 export function draftsFromCardFields(rows: CardFieldRow[]): CardFieldDraft[] {
     return rows.map((r) => ({
+        uid: nextUid(),
         id: r.id,
         key: r.key,
         label: r.label,
         type: r.type,
         default_value: r.default_value,
+        // A saved key is already in templates; the label must never rewrite it.
+        keyTouched: true,
     }));
 }
 

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFieldErrors } from '@/composables/useFieldErrors';
+import { useListDrag } from '@/composables/useListDrag';
 import {
     blankCardFieldDraft,
     cardFieldDraftPayload,
@@ -15,6 +16,7 @@ import {
     slugifyCardKey,
 } from '@/lib/cardFields';
 import type { CardFieldDraft, CardFieldType } from '@/lib/cardFields';
+import { moveItem } from '@/lib/reorder';
 import { useCardFieldsStore } from '@/stores/cardFields';
 import { useErrorStore } from '@/stores/errors';
 
@@ -35,22 +37,16 @@ const errorStore = useErrorStore();
 const fieldErrors = useFieldErrors(CONTEXT);
 
 const drafts = ref<CardFieldDraft[]>([]);
-/**
- * Per row: has the key been set deliberately? A hand-edited or already-saved
- * key is never overwritten by the label suggestion.
- */
-const keyTouched = ref<boolean[]>([]);
 const baseline = ref('');
 const saving = ref(false);
-/** Index awaiting confirmation of removal (saved rows only). */
-const pendingRemoval = ref<number | null>(null);
+/** Row awaiting confirmation of removal, by uid (saved rows only). */
+const pendingRemoval = ref<string | null>(null);
 
 const saved = computed(() => store.forTraining(props.trainingId));
 
 /** Reset the form from what the server currently holds. */
 function seed(): void {
     drafts.value = seedCardFieldDrafts(saved.value);
-    keyTouched.value = drafts.value.map((d) => d.key !== '');
     baseline.value = JSON.stringify(cardFieldDraftPayload(drafts.value));
     pendingRemoval.value = null;
 }
@@ -84,10 +80,8 @@ const keyErrors = computed(() => cardFieldKeyErrors(drafts.value));
 const hasKeyErrors = computed(() => Object.keys(keyErrors.value).length > 0);
 
 /** How many class answers a saved row would discard if removed. */
-function answerCount(index: number): number {
-    const id = drafts.value[index]?.id;
-
-    return saved.value.find((f) => f.id === id)?.value_count ?? 0;
+function answerCount(draft: CardFieldDraft): number {
+    return saved.value.find((f) => f.id === draft.id)?.value_count ?? 0;
 }
 
 function onLabel(index: number, value: string): void {
@@ -96,14 +90,14 @@ function onLabel(index: number, value: string): void {
 
     // Suggest the key while it's still untouched — and never for a field that
     // already exists, whose key is in templates already.
-    if (draft.id === null && !keyTouched.value[index]) {
+    if (draft.id === null && !draft.keyTouched) {
         draft.key = slugifyCardKey(value);
     }
 }
 
 function onKey(index: number, value: string): void {
     drafts.value[index].key = value;
-    keyTouched.value[index] = true;
+    drafts.value[index].keyTouched = true;
 }
 
 /**
@@ -120,24 +114,75 @@ function addRow(): void {
     }
 
     drafts.value = [...drafts.value, blankCardFieldDraft('short')];
-    keyTouched.value = [...keyTouched.value, false];
 }
 
-function removeRow(index: number): void {
+function removeRow(draft: CardFieldDraft): void {
     // A saved field's answers go with it, so say so first.
-    if (drafts.value[index].id !== null) {
-        pendingRemoval.value = index;
+    if (draft.id !== null) {
+        pendingRemoval.value = draft.uid;
 
         return;
     }
 
-    dropRow(index);
+    dropRow(draft);
 }
 
-function dropRow(index: number): void {
-    drafts.value = drafts.value.filter((_, i) => i !== index);
-    keyTouched.value = keyTouched.value.filter((_, i) => i !== index);
+function dropRow(draft: CardFieldDraft): void {
+    drafts.value = drafts.value.filter((d) => d.uid !== draft.uid);
     pendingRemoval.value = null;
+}
+
+// ---- reordering ------------------------------------------------------
+//
+// Order is stored as `seq` and drives both the order values are entered on a
+// class and the order the card builder lists the merge keys, so it's worth
+// arranging. Rows are identified by uid throughout: the array index changes
+// under a move, and unsaved rows have no server id.
+
+const uids = computed(() => drafts.value.map((d) => d.uid));
+
+/** A single row has nowhere to go; a dead handle beside it is just noise. */
+const reorderable = computed(() => drafts.value.length > 1);
+
+/** Rearrange to match a uid order, dropping any uid that has since gone. */
+function applyOrder(order: string[]): void {
+    const byUid = new Map(drafts.value.map((d) => [d.uid, d]));
+
+    drafts.value = order.flatMap((uid) => {
+        const draft = byUid.get(uid);
+
+        return draft ? [draft] : [];
+    });
+
+    // The confirmation names one field; leaving it open while the rows move
+    // invites confirming whichever row landed underneath it.
+    pendingRemoval.value = null;
+}
+
+const { dragKey, overKey, sourceAttrs, targetAttrs } = useListDrag(
+    uids,
+    applyOrder,
+);
+
+/**
+ * Reorder from the keyboard, so this isn't a mouse-only feature. The focused
+ * handle keeps focus across the move for free: rows are keyed by uid, so Vue
+ * moves the existing DOM node rather than rebuilding it.
+ */
+function onHandleKey(event: KeyboardEvent, index: number): void {
+    const delta =
+        event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
+
+    if (delta === 0) {
+        return;
+    }
+
+    // Stop the page scrolling under the row being moved.
+    event.preventDefault();
+
+    // moveItem ignores an out-of-range target, so the ends simply hold rather
+    // than wrapping around — a wrap would be a surprise, not a convenience.
+    applyOrder(moveItem(uids.value, index, index + delta));
 }
 
 async function save(): Promise<void> {
@@ -195,159 +240,208 @@ const TYPE_LABELS: Record<CardFieldType, string> = {
             list this long, repeating four labels per row buries the values in
             their own chrome.
         -->
-        <div
-            v-if="drafts.length"
-            class="hidden gap-3 px-1 text-xs font-medium text-muted-foreground lg:grid lg:grid-cols-12"
-        >
-            <span class="lg:col-span-3">Label</span>
-            <span class="lg:col-span-3">Merge key</span>
-            <span class="lg:col-span-2">Type</span>
-            <span class="lg:col-span-3">Default value</span>
-            <span class="lg:col-span-1"></span>
+        <div v-if="drafts.length" class="hidden px-2 lg:flex lg:gap-2">
+            <!-- Mirrors the handle's footprint so the headings stay over
+                 their columns once the rows are indented by one. -->
+            <span v-if="reorderable" class="w-6 shrink-0" aria-hidden="true" />
+            <div
+                class="grid flex-1 gap-3 text-xs font-medium text-muted-foreground lg:grid-cols-12"
+            >
+                <span class="lg:col-span-3">Label</span>
+                <span class="lg:col-span-3">Merge key</span>
+                <span class="lg:col-span-2">Type</span>
+                <span class="lg:col-span-3">Default value</span>
+                <span class="lg:col-span-1"></span>
+            </div>
         </div>
 
         <div class="space-y-2">
             <div
                 v-for="(draft, i) in drafts"
-                :key="draft.id ?? `new-${i}`"
-                class="rounded-md border border-border px-2 py-2"
+                :key="draft.uid"
+                v-bind="targetAttrs(draft.uid)"
+                data-testid="card-field-row"
+                class="rounded-md border px-2 py-2 transition-colors"
+                :class="[
+                    dragKey === draft.uid
+                        ? 'border-border opacity-40'
+                        : 'border-border',
+                    overKey === draft.uid && dragKey !== draft.uid
+                        ? 'border-primary ring-2 ring-primary'
+                        : '',
+                ]"
             >
-                <div class="grid items-start gap-3 lg:grid-cols-12">
-                    <div class="grid gap-1 lg:col-span-3">
-                        <Label
-                            :for="`cf_label_${i}`"
-                            class="text-xs lg:sr-only"
-                        >
-                            Label
-                        </Label>
-                        <Input
-                            :id="`cf_label_${i}`"
-                            data-testid="card-field-label"
-                            :model-value="draft.label"
-                            placeholder="e.g. Trainer ID"
-                            @update:model-value="
-                                onLabel(i, String($event ?? ''))
-                            "
-                        />
-                    </div>
+                <div class="flex items-start gap-2">
+                    <!--
+                        The handle is the draggable element, not the row: a
+                        draggable row would swallow text selection inside its
+                        own inputs. Arrow keys do the same job for anyone not
+                        using a mouse.
+                    -->
+                    <button
+                        v-if="reorderable"
+                        v-bind="sourceAttrs(draft.uid)"
+                        type="button"
+                        data-testid="card-field-handle"
+                        class="mt-1 w-6 shrink-0 cursor-grab rounded text-center text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:cursor-grabbing"
+                        :aria-label="`Reorder ${draft.label || draft.key || 'this field'} — position ${i + 1} of ${drafts.length}. Drag, or use the up and down arrow keys.`"
+                        title="Drag to reorder, or use ↑ / ↓"
+                        @keydown="onHandleKey($event, i)"
+                    >
+                        ⠿
+                    </button>
 
-                    <div class="grid gap-1 lg:col-span-3">
-                        <Label :for="`cf_key_${i}`" class="text-xs lg:sr-only">
-                            Merge key
-                        </Label>
-                        <Input
-                            :id="`cf_key_${i}`"
-                            data-testid="card-field-key"
-                            :model-value="draft.key"
-                            placeholder="trainer_id"
-                            :class="keyErrors[i] ? 'border-red-500' : undefined"
-                            @update:model-value="onKey(i, String($event ?? ''))"
-                        />
-                        <div
-                            v-if="draft.key && !keyErrors[i]"
-                            class="flex items-center gap-2"
-                        >
-                            <CopyableKey :text="`\${${draft.key}}`" />
-                        </div>
-                        <p v-if="keyErrors[i]" class="text-xs text-red-600">
-                            {{ keyErrors[i] }}
-                        </p>
-                        <InputError
-                            :message="fieldErrors.message(`fields.${i}.key`)"
-                        />
-                    </div>
-
-                    <div class="grid gap-1 lg:col-span-2">
-                        <Label :for="`cf_type_${i}`" class="text-xs lg:sr-only">
-                            Type
-                        </Label>
-                        <select
-                            :id="`cf_type_${i}`"
-                            data-testid="card-field-type"
-                            class="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                            :value="draft.type"
-                            @change="
-                                draft.type = (
-                                    $event.target as HTMLSelectElement
-                                ).value as CardFieldType
-                            "
-                        >
-                            <option
-                                v-for="(label, value) in TYPE_LABELS"
-                                :key="value"
-                                :value="value"
+                    <div class="grid flex-1 items-start gap-3 lg:grid-cols-12">
+                        <div class="grid gap-1 lg:col-span-3">
+                            <Label
+                                :for="`cf_label_${i}`"
+                                class="text-xs lg:sr-only"
                             >
-                                {{ label }}
-                            </option>
-                        </select>
-                    </div>
+                                Label
+                            </Label>
+                            <Input
+                                :id="`cf_label_${i}`"
+                                data-testid="card-field-label"
+                                :model-value="draft.label"
+                                placeholder="e.g. Trainer ID"
+                                @update:model-value="
+                                    onLabel(i, String($event ?? ''))
+                                "
+                            />
+                        </div>
 
-                    <div class="grid gap-1 lg:col-span-3">
-                        <Label
-                            :for="`cf_default_${i}`"
-                            class="text-xs lg:sr-only"
-                        >
-                            Default value
-                        </Label>
-                        <textarea
-                            v-if="draft.type === 'rich'"
-                            :id="`cf_default_${i}`"
-                            data-testid="card-field-rich"
-                            v-model="draft.default_value"
-                            rows="2"
-                            maxlength="2000"
-                            class="w-full rounded border border-input bg-background p-2 text-sm"
-                            placeholder="Markdown: **bold**, *italic*, - lists"
-                        ></textarea>
-                        <!--
+                        <div class="grid gap-1 lg:col-span-3">
+                            <Label
+                                :for="`cf_key_${i}`"
+                                class="text-xs lg:sr-only"
+                            >
+                                Merge key
+                            </Label>
+                            <Input
+                                :id="`cf_key_${i}`"
+                                data-testid="card-field-key"
+                                :model-value="draft.key"
+                                placeholder="trainer_id"
+                                :class="
+                                    keyErrors[i] ? 'border-red-500' : undefined
+                                "
+                                @update:model-value="
+                                    onKey(i, String($event ?? ''))
+                                "
+                            />
+                            <div
+                                v-if="draft.key && !keyErrors[i]"
+                                class="flex items-center gap-2"
+                            >
+                                <CopyableKey :text="`\${${draft.key}}`" />
+                            </div>
+                            <p v-if="keyErrors[i]" class="text-xs text-red-600">
+                                {{ keyErrors[i] }}
+                            </p>
+                            <InputError
+                                :message="
+                                    fieldErrors.message(`fields.${i}.key`)
+                                "
+                            />
+                        </div>
+
+                        <div class="grid gap-1 lg:col-span-2">
+                            <Label
+                                :for="`cf_type_${i}`"
+                                class="text-xs lg:sr-only"
+                            >
+                                Type
+                            </Label>
+                            <select
+                                :id="`cf_type_${i}`"
+                                data-testid="card-field-type"
+                                class="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                                :value="draft.type"
+                                @change="
+                                    draft.type = (
+                                        $event.target as HTMLSelectElement
+                                    ).value as CardFieldType
+                                "
+                            >
+                                <option
+                                    v-for="(label, value) in TYPE_LABELS"
+                                    :key="value"
+                                    :value="value"
+                                >
+                                    {{ label }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <div class="grid gap-1 lg:col-span-3">
+                            <Label
+                                :for="`cf_default_${i}`"
+                                class="text-xs lg:sr-only"
+                            >
+                                Default value
+                            </Label>
+                            <textarea
+                                v-if="draft.type === 'rich'"
+                                :id="`cf_default_${i}`"
+                                data-testid="card-field-rich"
+                                v-model="draft.default_value"
+                                rows="2"
+                                maxlength="2000"
+                                class="w-full rounded border border-input bg-background p-2 text-sm"
+                                placeholder="Markdown: **bold**, *italic*, - lists"
+                            ></textarea>
+                            <!--
                             Bound through '' rather than v-model: the draft
                             holds null for "no default", which Input's
                             modelValue doesn't accept. The payload maps ''
                             back to null, so this never reads as a change.
                         -->
-                        <Input
-                            v-else
-                            :id="`cf_default_${i}`"
-                            data-testid="card-field-default"
-                            :model-value="draft.default_value ?? ''"
-                            maxlength="100"
-                            placeholder="Optional"
-                            @update:model-value="
-                                draft.default_value = String($event ?? '')
-                            "
-                        />
-                        <InputError
-                            :message="
-                                fieldErrors.message(`fields.${i}.default_value`)
-                            "
-                        />
-                    </div>
+                            <Input
+                                v-else
+                                :id="`cf_default_${i}`"
+                                data-testid="card-field-default"
+                                :model-value="draft.default_value ?? ''"
+                                maxlength="100"
+                                placeholder="Optional"
+                                @update:model-value="
+                                    draft.default_value = String($event ?? '')
+                                "
+                            />
+                            <InputError
+                                :message="
+                                    fieldErrors.message(
+                                        `fields.${i}.default_value`,
+                                    )
+                                "
+                            />
+                        </div>
 
-                    <div class="flex justify-end lg:col-span-1">
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            data-testid="card-field-remove"
-                            class="text-xs"
-                            @click="removeRow(i)"
-                        >
-                            Remove
-                        </Button>
+                        <div class="flex justify-end lg:col-span-1">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                data-testid="card-field-remove"
+                                class="text-xs"
+                                @click="removeRow(draft)"
+                            >
+                                Remove
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
                 <div
-                    v-if="pendingRemoval === i"
+                    v-if="pendingRemoval === draft.uid"
                     data-testid="card-field-confirm"
                     class="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm dark:border-red-900 dark:bg-red-900/30"
                 >
                     <p>
                         Remove “{{ draft.label || draft.key }}”?
-                        <template v-if="answerCount(i) > 0">
-                            {{ answerCount(i) }}
+                        <template v-if="answerCount(draft) > 0">
+                            {{ answerCount(draft) }}
                             {{
-                                answerCount(i) === 1
+                                answerCount(draft) === 1
                                     ? 'class has'
                                     : 'classes have'
                             }}
@@ -365,7 +459,7 @@ const TYPE_LABELS: Record<CardFieldType, string> = {
                             variant="destructive"
                             size="sm"
                             data-testid="card-field-confirm-remove"
-                            @click="dropRow(i)"
+                            @click="dropRow(draft)"
                         >
                             Remove field
                         </Button>
