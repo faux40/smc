@@ -22,6 +22,8 @@ function wallet(overrides: Partial<CardStockRow> = {}): CardStockRow {
         margin_left: 63,
         gutter_x: 0,
         gutter_y: 0,
+        offset_x: 0,
+        offset_y: 0,
         duplex_flip: null,
         notes: null,
         per_sheet: 10,
@@ -75,6 +77,26 @@ describe('CardStocksList', () => {
         expect(wrapper.text()).toContain('System');
         expect(wrapper.find('[data-testid="edit-sys"]').exists()).toBe(false);
         expect(wrapper.find('[data-testid="delete-sys"]').exists()).toBe(false);
+    });
+
+    it('links every stock to its calibration sheet, system ones included', async () => {
+        /*
+         * C6a. The sheet is how a Manager measures their printer's drift,
+         * and built-in stocks are exactly what most orgs print on — so the
+         * link doesn't hide behind can_edit. (Storing the measured offsets
+         * still needs an org-owned stock; the measuring must not.)
+         */
+        const { wrapper } = await mountWith([
+            wallet(),
+            wallet({ id: 'sys', is_system: true, can_edit: false }),
+        ]);
+
+        expect(wrapper.get('[data-testid="calibrate-s1"]').attributes('href')).toBe(
+            '/api/card-stocks/s1/calibration-sheet',
+        );
+        expect(wrapper.find('[data-testid="calibrate-sys"]').exists()).toBe(
+            true,
+        );
     });
 
     it('asks to edit a stock the actor may edit', async () => {

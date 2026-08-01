@@ -114,18 +114,99 @@ class CardStocksApiTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_calibration_offsets_are_not_settable_yet(): void
+    public function test_calibration_offsets_are_stored_negatives_included(): void
     {
-        // Reserved for the precision pass — accepting them now would imply
-        // they do something.
+        // C6a: the whole-sheet printer nudge. Negative is half the point —
+        // a printer drifts up and left as easily as down and right.
         $org = Organization::factory()->create();
         $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
 
         $this->actingAs($admin)
-            ->postJson('/api/card-stocks', $this->payload(['offset_x' => 5]))
+            ->postJson('/api/card-stocks', $this->payload([
+                'offset_x' => 4.5,
+                'offset_y' => -3.5,
+            ]))
+            ->assertCreated()
+            ->assertJsonPath('offset_x', 4.5)
+            ->assertJsonPath('offset_y', -3.5);
+
+        $stock = CardStock::first();
+        $this->assertSame(4.5, $stock->offset_x);
+        $this->assertSame(-3.5, $stock->offset_y);
+    }
+
+    public function test_offsets_default_to_zero_when_not_sent(): void
+    {
+        // Older clients and simple scripts shouldn't have to know
+        // calibration exists.
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/card-stocks', $this->payload())
             ->assertCreated();
 
         $this->assertSame(0.0, CardStock::first()->offset_x);
+    }
+
+    public function test_an_offset_beyond_an_inch_is_rejected_outright(): void
+    {
+        /*
+         * ±72pt (1in) is far beyond any real printer's drift. Past that the
+         * number is almost certainly a margin typed into the wrong box, and
+         * "your offset is implausible" beats a confusing overflow message —
+         * or worse, a plausible-looking grid shifted a full inch.
+         */
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/card-stocks', $this->payload(['offset_x' => 73]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['offset_x']);
+    }
+
+    public function test_an_offset_that_shoves_the_grid_off_the_page_is_rejected(): void
+    {
+        // The 10-up grid ends flush with the page bottom, so any downward
+        // nudge clips the last row. The error lands on the offset, not on
+        // row_count — the grid was fine, the nudge is the culprit.
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/card-stocks', $this->payload(['offset_y' => 3]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['offset_y']);
+    }
+
+    public function test_a_negative_offset_past_the_margin_is_rejected(): void
+    {
+        // Left margin is 63pt; pulling the grid 64pt left clips column 0.
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/card-stocks', $this->payload(['offset_x' => -64]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['offset_x']);
+    }
+
+    public function test_the_index_serves_the_offsets(): void
+    {
+        // The client mirror and the sheet preview need them; a row without
+        // offsets would render the uncalibrated grid.
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        CardStock::factory()->for($org, 'organization')->create([
+            'offset_x' => 4.5, 'offset_y' => -3.5,
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/card-stocks')
+            ->assertOk()
+            ->assertJsonPath('0.offset_x', 4.5)
+            ->assertJsonPath('0.offset_y', -3.5);
     }
 
     // ---- validation ----------------------------------------------------

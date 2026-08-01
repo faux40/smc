@@ -97,6 +97,19 @@ async function remove(stock: CardStockRow): Promise<void> {
                 </div>
 
                 <div class="flex gap-2">
+                    <!-- A plain link, not an axios call: the endpoint streams
+                         a PDF and the browser's viewer is the right home for
+                         it. Every visible stock gets one — calibration is a
+                         Manager's printing task, not an Admin's editing one. -->
+                    <a
+                        :href="`/api/card-stocks/${s.id}/calibration-sheet`"
+                        target="_blank"
+                        :data-testid="`calibrate-${s.id}`"
+                        class="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+                        title="A printable sheet of cell outlines and rulers — print at 100%, hold against the stock, and enter the drift as the stock's shift."
+                    >
+                        Calibration sheet
+                    </a>
                     <Button
                         v-if="s.can_edit"
                         :data-testid="`edit-${s.id}`"

@@ -20,6 +20,8 @@ function row(overrides: Partial<CardStockRow> & { id: string }): CardStockRow {
         margin_left: 63,
         gutter_x: 0,
         gutter_y: 0,
+        offset_x: 0,
+        offset_y: 0,
         duplex_flip: null,
         notes: null,
         per_sheet: 10,

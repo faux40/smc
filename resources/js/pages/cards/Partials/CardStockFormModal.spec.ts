@@ -22,6 +22,8 @@ function wallet(overrides: Partial<CardStockRow> = {}): CardStockRow {
         margin_left: 63,
         gutter_x: 0,
         gutter_y: 0,
+        offset_x: 0,
+        offset_y: 0,
         duplex_flip: null,
         notes: null,
         per_sheet: 10,
@@ -140,6 +142,49 @@ describe('CardStockFormModal', () => {
             's1',
             expect.objectContaining({ name: 'Renamed', page_width: 612 }),
         );
+    });
+
+    it('sends the calibration nudge in points, negatives included', async () => {
+        /*
+         * C6a: the whole-sheet printer correction. Same unit discipline as
+         * every other length — typed in the display unit, points on the
+         * wire — and negative is half the point: a printer can drift up and
+         * left as easily as down and right.
+         */
+        const store = useCardStocksStore();
+        const update = vi.spyOn(store, 'update').mockResolvedValue(wallet());
+
+        await openWith(wallet());
+        await setField('cs_offset_x', '0.125');
+        await setField('cs_offset_y', '-0.125');
+
+        submitForm();
+        await flushPromises();
+
+        expect(update).toHaveBeenCalledWith(
+            's1',
+            expect.objectContaining({ offset_x: 9, offset_y: -9 }),
+        );
+    });
+
+    it('refuses a nudge that pushes the grid off the page', async () => {
+        // The same rule as any other overflow: a clipped card is wasted
+        // stock, so the client mirror blocks the save the API would reject.
+        const store = useCardStocksStore();
+        const update = vi.spyOn(store, 'update').mockResolvedValue(wallet());
+
+        await openWith(wallet());
+        // The 10-up grid ends flush with the page bottom; any downward
+        // nudge overflows.
+        await setField('cs_offset_y', '0.05');
+
+        submitForm();
+        await flushPromises();
+
+        expect(update).not.toHaveBeenCalled();
+        expect(
+            document.body.querySelector('[data-testid="overflow-warning"]'),
+        ).not.toBeNull();
     });
 
     it('shows the cards-per-sheet count as the grid changes', async () => {

@@ -23,6 +23,8 @@ function wallet(overrides: Partial<CardGrid> = {}): CardGrid {
         margin_left: 63,
         gutter_x: 0,
         gutter_y: 0,
+        offset_x: 0,
+        offset_y: 0,
         ...overrides,
     };
 }
@@ -58,6 +60,33 @@ describe('cardGeometry', () => {
         expect(sheetFits(wallet({ column_count: 3 }))).toBe(false);
         expect(sheetFits(wallet({ row_count: 6 }))).toBe(false);
         expect(sheetFits(wallet({ gutter_y: 72 }))).toBe(false);
+    });
+
+    it('nudges every cell by the calibration offsets', () => {
+        // Cases track CardSheetGeometryTest's offset block (C6a).
+        const cells = cellRects(wallet({ offset_x: 4.5, offset_y: -3 }));
+
+        expect(cells[0].x).toBe(63 + 4.5);
+        expect(cells[0].y).toBe(27 - 3);
+        // A shift, not a scale: the last cell moves by the same amount and
+        // the cell size is untouched.
+        expect(cells[9].x).toBe(63 + 243 + 4.5);
+        expect(cells[9].y).toBe(27 + 4 * 153 - 3);
+        expect(cells[0].width).toBe(243);
+        expect(cells[0].height).toBe(153);
+    });
+
+    it('counts the offsets toward the fit, in both directions', () => {
+        // ±1mm within the margins is the normal case…
+        expect(sheetFits(wallet({ offset_x: 2.83, offset_y: -2.83 }))).toBe(
+            true,
+        );
+        // …off the right edge (63pt of room on this stock)…
+        expect(sheetFits(wallet({ offset_x: 64 }))).toBe(false);
+        // …any downward nudge on a grid that ends at the page edge…
+        expect(sheetFits(wallet({ offset_y: 2.83 }))).toBe(false);
+        // …and up past the top margin clips row 0.
+        expect(sheetFits(wallet({ offset_y: -36 }))).toBe(false);
     });
 });
 

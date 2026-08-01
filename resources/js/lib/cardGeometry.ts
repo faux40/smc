@@ -20,6 +20,12 @@ export interface CardGrid {
     margin_left: number;
     gutter_x: number;
     gutter_y: number;
+    /**
+     * Calibration nudge (C6a): a whole-sheet shift for a printer that lands
+     * the image slightly off the paper. One pair for both duplex passes.
+     */
+    offset_x: number;
+    offset_y: number;
 }
 
 export interface CellRect {
@@ -52,8 +58,14 @@ export function cellRects(grid: CardGrid): CellRect[] {
         const row = Math.floor(index / grid.column_count);
 
         cells.push({
-            x: grid.margin_left + column * (grid.card_width + grid.gutter_x),
-            y: grid.margin_top + row * (grid.card_height + grid.gutter_y),
+            x:
+                grid.margin_left +
+                grid.offset_x +
+                column * (grid.card_width + grid.gutter_x),
+            y:
+                grid.margin_top +
+                grid.offset_y +
+                row * (grid.card_height + grid.gutter_y),
             width: grid.card_width,
             height: grid.card_height,
         });
@@ -79,9 +91,14 @@ export function usedHeight(grid: CardGrid): number {
 }
 
 export function sheetFits(grid: CardGrid): boolean {
+    // Offsets count in both directions, as on the server: a positive nudge
+    // can push the far edge off the page, a negative one can pull row or
+    // column 0 off the near edge — either way a card clips.
     return (
-        usedWidth(grid) <= grid.page_width + SLACK &&
-        usedHeight(grid) <= grid.page_height + SLACK
+        usedWidth(grid) + grid.offset_x <= grid.page_width + SLACK &&
+        usedHeight(grid) + grid.offset_y <= grid.page_height + SLACK &&
+        grid.margin_left + grid.offset_x >= -SLACK &&
+        grid.margin_top + grid.offset_y >= -SLACK
     );
 }
 

@@ -177,6 +177,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // CRUD is Admin+ and org stocks only (system = console-managed).
     Route::get('api/card-stocks', [CardStocksController::class, 'index'])->name('card-stocks.index');
     Route::post('api/card-stocks', [CardStocksController::class, 'store'])->name('card-stocks.store');
+    Route::get('api/card-stocks/{cardStock}/calibration-sheet', [CardStocksController::class, 'calibrationSheet'])->name('card-stocks.calibration');
     Route::patch('api/card-stocks/{cardStock}', [CardStocksController::class, 'update'])->name('card-stocks.update');
     Route::delete('api/card-stocks/{cardStock}', [CardStocksController::class, 'destroy'])->name('card-stocks.destroy');
 

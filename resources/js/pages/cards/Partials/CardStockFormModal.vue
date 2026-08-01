@@ -42,6 +42,8 @@ const LENGTHS = [
     'margin_left',
     'gutter_x',
     'gutter_y',
+    'offset_x',
+    'offset_y',
 ] as const;
 
 const props = defineProps<{ open: boolean; editing: CardStockRow | null }>();
@@ -65,6 +67,8 @@ const BLANK = {
     margin_left: 63,
     gutter_x: 0,
     gutter_y: 0,
+    offset_x: 0,
+    offset_y: 0,
     column_count: 2,
     row_count: 5,
     duplex_flip: '' as '' | 'long_edge' | 'short_edge',
@@ -128,6 +132,8 @@ const grid = computed<CardGrid>(() => ({
     margin_left: toPoints(Number(form.margin_left) || 0, unit.value),
     gutter_x: toPoints(Number(form.gutter_x) || 0, unit.value),
     gutter_y: toPoints(Number(form.gutter_y) || 0, unit.value),
+    offset_x: toPoints(Number(form.offset_x) || 0, unit.value),
+    offset_y: toPoints(Number(form.offset_y) || 0, unit.value),
     column_count: Math.max(0, Math.trunc(Number(form.column_count) || 0)),
     row_count: Math.max(0, Math.trunc(Number(form.row_count) || 0)),
 }));
@@ -357,6 +363,60 @@ async function submit(): Promise<void> {
                                     type="number"
                                     step="any"
                                 />
+                            </div>
+                        </div>
+
+                        <!-- Calibration (C6a): the whole-sheet nudge for a
+                             printer that lands the image slightly off the
+                             paper. Its own block, after the grid — these two
+                             describe the PRINTER, not the stock. -->
+                        <div
+                            class="space-y-2 rounded-md border border-border p-3"
+                        >
+                            <p class="text-sm font-medium">
+                                Printer calibration
+                            </p>
+                            <p class="text-xs text-muted-foreground">
+                                Print the calibration sheet, measure how far the
+                                marks sit from the card edges, and enter the
+                                shift here. Positive moves every card right /
+                                down; negative moves left / up.
+                            </p>
+                            <div class="grid gap-4 sm:grid-cols-2">
+                                <div class="grid gap-2">
+                                    <Label for="cs_offset_x">
+                                        Shift right ({{ unit }})
+                                    </Label>
+                                    <Input
+                                        id="cs_offset_x"
+                                        v-model="form.offset_x"
+                                        data-testid="stock-offset-x"
+                                        type="number"
+                                        step="any"
+                                    />
+                                    <InputError
+                                        :message="
+                                            fieldErrors.message('offset_x')
+                                        "
+                                    />
+                                </div>
+                                <div class="grid gap-2">
+                                    <Label for="cs_offset_y">
+                                        Shift down ({{ unit }})
+                                    </Label>
+                                    <Input
+                                        id="cs_offset_y"
+                                        v-model="form.offset_y"
+                                        data-testid="stock-offset-y"
+                                        type="number"
+                                        step="any"
+                                    />
+                                    <InputError
+                                        :message="
+                                            fieldErrors.message('offset_y')
+                                        "
+                                    />
+                                </div>
                             </div>
                         </div>
 

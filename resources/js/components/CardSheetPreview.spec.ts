@@ -16,6 +16,8 @@ function wallet(overrides: Partial<CardGrid> = {}): CardGrid {
         margin_left: 63,
         gutter_x: 0,
         gutter_y: 0,
+        offset_x: 0,
+        offset_y: 0,
         ...overrides,
     };
 }

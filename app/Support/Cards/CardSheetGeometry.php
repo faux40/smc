@@ -38,12 +38,30 @@ class CardSheetGeometry
         $column = $index % $this->stock->column_count;
         $row = intdiv($index, $this->stock->column_count);
 
+        // The calibration nudge (C6a): a whole-sheet shift for a printer
+        // that lands the image slightly off the paper. Applied here — the
+        // one place the grid is computed — so the imposer's fronts AND
+        // backs and every preview inherit it without knowing it exists.
+        // One pair for both duplex passes, by design: drift is normally
+        // consistent in tray coordinates, and the calibration sheet's back
+        // page exists to check that on the actual printer.
         return [
-            'x' => $this->stock->margin_left + $column * ($this->stock->card_width + $this->stock->gutter_x),
-            'y' => $this->stock->margin_top + $row * ($this->stock->card_height + $this->stock->gutter_y),
+            'x' => $this->stock->margin_left + $this->offsetX() + $column * ($this->stock->card_width + $this->stock->gutter_x),
+            'y' => $this->stock->margin_top + $this->offsetY() + $row * ($this->stock->card_height + $this->stock->gutter_y),
             'width' => $this->stock->card_width,
             'height' => $this->stock->card_height,
         ];
+    }
+
+    /** The stored nudge, 0 when the stock has never been calibrated. */
+    private function offsetX(): float
+    {
+        return (float) ($this->stock->offset_x ?? 0);
+    }
+
+    private function offsetY(): float
+    {
+        return (float) ($this->stock->offset_y ?? 0);
     }
 
     /** Total width the grid occupies, margin included. */
@@ -66,10 +84,17 @@ class CardSheetGeometry
      * Does the grid stay on the page? A hundredth of a point of slack absorbs
      * unit-conversion dust from inch/mm entry — anything larger is a real
      * overflow the user has to fix.
+     *
+     * The calibration offsets participate in both directions: a positive
+     * nudge can push the far edge off the page, a negative one can pull the
+     * first row or column off the near edge — and a card clipped at the page
+     * edge is exactly the waste of purchased stock this exists to prevent.
      */
     public function fits(): bool
     {
-        return $this->usedWidth() <= $this->stock->page_width + 0.01
-            && $this->usedHeight() <= $this->stock->page_height + 0.01;
+        return $this->usedWidth() + $this->offsetX() <= $this->stock->page_width + 0.01
+            && $this->usedHeight() + $this->offsetY() <= $this->stock->page_height + 0.01
+            && $this->stock->margin_left + $this->offsetX() >= -0.01
+            && $this->stock->margin_top + $this->offsetY() >= -0.01;
     }
 }

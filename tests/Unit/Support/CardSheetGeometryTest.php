@@ -98,4 +98,70 @@ class CardSheetGeometryTest extends TestCase
 
         $this->wallet()->cellRect(10);
     }
+
+    // ---- calibration offsets (C6a) --------------------------------------
+
+    public function test_offsets_nudge_every_cell_by_the_same_amount(): void
+    {
+        /*
+         * The whole-sheet correction for a printer that lands the image a
+         * little off where the paper actually is. Applied here, in the one
+         * place the grid is computed, so the imposer's fronts AND backs and
+         * every preview inherit it without knowing it exists.
+         */
+        $g = $this->wallet(['offset_x' => 4.5, 'offset_y' => -3.0]);
+
+        $this->assertSame(63.0 + 4.5, $g->cellRect(0)['x']);
+        $this->assertSame(27.0 - 3.0, $g->cellRect(0)['y']);
+        // The last cell moves by exactly the same amount — a shift, not a
+        // scale or a gutter change.
+        $this->assertSame(63.0 + 243.0 + 4.5, $g->cellRect(9)['x']);
+        $this->assertSame(27.0 + 4 * 153.0 - 3.0, $g->cellRect(9)['y']);
+    }
+
+    public function test_offsets_leave_the_cell_size_alone(): void
+    {
+        $rect = $this->wallet(['offset_x' => 4.5, 'offset_y' => -3.0])->cellRect(0);
+
+        $this->assertSame(243.0, $rect['width']);
+        $this->assertSame(153.0, $rect['height']);
+    }
+
+    public function test_a_realistic_offset_still_fits(): void
+    {
+        // ±1mm of drift — the normal case. Y goes up rather than down
+        // because this stock's grid ends exactly at the page bottom
+        // (27 + 5 x 153 = 792): true to life, full-page stocks have no
+        // slack in one direction and the drift has to fit the margins.
+        $this->assertTrue(
+            $this->wallet(['offset_x' => 2.83, 'offset_y' => -2.83])->fits(),
+        );
+    }
+
+    public function test_an_offset_that_shoves_the_grid_off_the_right_edge_fails_the_fit(): void
+    {
+        // Used width is 549pt on a 612pt page — 63pt of room. One point
+        // more than that and the right column clips.
+        $this->assertFalse($this->wallet(['offset_x' => 64.0])->fits());
+    }
+
+    public function test_any_downward_nudge_overflows_a_grid_that_ends_at_the_page_edge(): void
+    {
+        // The same full-height grid: the bottom row already touches the
+        // page edge, so even a millimetre down is a clipped card.
+        $this->assertFalse($this->wallet(['offset_y' => 2.83])->fits());
+    }
+
+    public function test_an_offset_that_shoves_the_grid_off_the_top_edge_fails_the_fit(): void
+    {
+        // The top margin is 0.375in; nudging up by half an inch clips row 0.
+        // Cards clipped at the page edge are exactly the waste of purchased
+        // stock this feature exists to prevent, so the fit says no.
+        $this->assertFalse($this->wallet(['offset_y' => -36.0])->fits());
+    }
+
+    public function test_a_negative_offset_within_the_margin_is_fine(): void
+    {
+        $this->assertTrue($this->wallet(['offset_y' => -18.0])->fits());
+    }
 }
