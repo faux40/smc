@@ -27,6 +27,7 @@ export interface CardPrintRunRow {
     card_count: number | null;
     sheet_count: number | null;
     include_backs: boolean;
+    proof: boolean;
     start_cell: number;
     created_at: string | null;
 }
@@ -38,6 +39,8 @@ export interface CardPrintRunPayload {
     card_stock_id: string;
     start_cell: number;
     include_backs: boolean;
+    /** Print only the first card (C6b) — a positioning check, not a run. */
+    proof: boolean;
 }
 
 function defaultHeaders(): Record<string, string> {

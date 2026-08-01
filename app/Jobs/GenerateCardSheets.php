@@ -104,6 +104,16 @@ class GenerateCardSheets implements ShouldQueue
                 );
             }
 
+            // A proof run (C6b) is the identical pipeline sliced to the first
+            // card — same design, same fonts, same start cell — so what comes
+            // out of the printer is exactly what a full run would put in that
+            // cell, at the cost of one cell instead of a misaligned batch.
+            // After the empty check on purpose: a proof of nobody is still
+            // "nobody", not a blank success.
+            if ($run->proof) {
+                $rows = array_slice($rows, 0, 1);
+            }
+
             $workDir = sys_get_temp_dir().'/cards_'.$run->id;
 
             if (! is_dir($workDir)) {

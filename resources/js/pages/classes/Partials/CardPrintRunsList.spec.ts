@@ -29,6 +29,7 @@ function run(
         card_count: null,
         sheet_count: null,
         include_backs: false,
+        proof: false,
         start_cell: 1,
         created_at: '2026-07-31T10:00:00+00:00',
         ...overrides,
@@ -70,6 +71,16 @@ describe('CardPrintRunsList', () => {
         expect(text).toContain('First Aid / CPR');
         expect(text).toContain('12 cards');
         expect(text).toContain('2 sheets');
+    });
+
+    it('marks a proof so one card in the list reads as intended', async () => {
+        // "1 card" alone looks like a run that went wrong; "proof" says it
+        // was the point.
+        const { wrapper } = await mountWith([
+            run({ id: 'r1', status: 'done', card_count: 1, proof: true }),
+        ]);
+
+        expect(wrapper.text()).toContain('proof');
     });
 
     it('shows why a run failed', async () => {

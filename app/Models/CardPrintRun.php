@@ -27,7 +27,7 @@ class CardPrintRun extends Model
     protected $fillable = [
         'org_id', 'class_id', 'class_training_id',
         'card_template_id', 'card_stock_id', 'template_version',
-        'start_cell', 'include_backs',
+        'start_cell', 'include_backs', 'proof',
         'status', 'error', 'card_count', 'sheet_count',
         'front_path', 'back_path', 'run_stamp',
         'requested_by',
@@ -39,6 +39,7 @@ class CardPrintRun extends Model
             'template_version' => 'integer',
             'start_cell' => 'integer',
             'include_backs' => 'boolean',
+            'proof' => 'boolean',
             'card_count' => 'integer',
             'sheet_count' => 'integer',
         ];

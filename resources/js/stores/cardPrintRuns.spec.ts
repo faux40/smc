@@ -28,6 +28,7 @@ function run(
         card_count: null,
         sheet_count: null,
         include_backs: false,
+        proof: false,
         start_cell: 1,
         created_at: '2026-07-31T10:00:00+00:00',
         ...overrides,
@@ -109,6 +110,7 @@ describe('useCardPrintRunsStore', () => {
             card_stock_id: 's1',
             start_cell: 4,
             include_backs: true,
+            proof: false,
         });
 
         expect(post).toHaveBeenCalledWith(
@@ -119,6 +121,7 @@ describe('useCardPrintRunsStore', () => {
                 card_stock_id: 's1',
                 start_cell: 4,
                 include_backs: true,
+                proof: false,
             },
             expect.anything(),
         );
@@ -137,6 +140,7 @@ describe('useCardPrintRunsStore', () => {
             card_stock_id: 's1',
             start_cell: 1,
             include_backs: false,
+            proof: false,
         });
 
         expect(store.runsFor('c1').map((r) => r.id)).toEqual(['new']);
@@ -155,6 +159,7 @@ describe('useCardPrintRunsStore', () => {
                 card_stock_id: 's1',
                 start_cell: 1,
                 include_backs: false,
+                proof: false,
             }),
         ).rejects.toThrow('422');
     });

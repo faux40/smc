@@ -431,6 +431,44 @@ class GenerateCardSheetsTest extends TestCase
         $this->assertCount(0, $calls);
     }
 
+    public function test_a_proof_run_prints_exactly_one_card(): void
+    {
+        /*
+         * C6b: the real pipeline, sliced to the first person — same design,
+         * same fonts, same start cell, so what comes out of the printer is
+         * exactly what a full run would put in that cell. Burns one cell of
+         * one sheet instead of a whole misaligned batch.
+         */
+        $merged = new \ArrayObject;
+        $this->app->bind(DocumentMergeService::class, fn () => new class($merged) extends DocumentMergeService
+        {
+            public function __construct(private \ArrayObject $seen) {}
+
+            public function merge(string $templatePath, array $data, string $outputPath, array $blocks = []): string
+            {
+                $this->seen->append($data);
+
+                return parent::merge($templatePath, $data, $outputPath, $blocks);
+            }
+        });
+
+        $this->holder('Sam', 'Ng', 1042);
+        $this->holder('Dana', 'Abel', 1043);
+        $this->holder('Lee', 'Ortiz', 1044);
+
+        $run = $this->dispatch($this->makeRun(['proof' => true, 'start_cell' => 7]));
+
+        $this->assertSame('done', $run->status);
+        $this->assertSame(1, $run->card_count);
+        $this->assertSame(1, $run->sheet_count);
+
+        // One merge, and it's the FIRST card in print order (last-name sort,
+        // as the certificates collate) — the proof is card #1 of the real
+        // run, not an arbitrary person.
+        $this->assertCount(1, $merged);
+        $this->assertSame('Dana Abel', $merged[0]['full_name']);
+    }
+
     public function test_a_long_roster_spills_onto_more_sheets(): void
     {
         foreach (range(1, 12) as $i) {

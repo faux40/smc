@@ -64,8 +64,19 @@ const templateId = ref<string>('');
 const stockId = ref<string>('');
 const startCell = ref(1);
 const includeBacks = ref(false);
+/** Print only the first card (C6b) — a positioning check before the batch. */
+const proof = ref(false);
 const submitting = ref(false);
 const actionError = ref<string | null>(null);
+
+/**
+ * What this run will actually print. The counts, the sheet arithmetic and
+ * the submit gate all read this one — a proof beside "12 cards · 2 sheets"
+ * would look like it burns them.
+ */
+const effectiveCount = computed(() =>
+    proof.value ? Math.min(1, cardCount.value) : cardCount.value,
+);
 
 /** The design the training carries — the default, overridable per run. */
 const trainingTemplateId = computed(() => {
@@ -95,7 +106,7 @@ const stock = computed(
  */
 const sheets = computed(() =>
     stock.value
-        ? sheetCount(stock.value, cardCount.value, startCell.value)
+        ? sheetCount(stock.value, effectiveCount.value, startCell.value)
         : null,
 );
 
@@ -169,6 +180,7 @@ watch(
         stockId.value = '';
         startCell.value = 1;
         includeBacks.value = template.value?.has_back ?? false;
+        proof.value = false;
         actionError.value = null;
     },
     { immediate: true },
@@ -203,10 +215,13 @@ async function submit(): Promise<void> {
             card_stock_id: stockId.value,
             start_cell: startCell.value,
             include_backs: includeBacks.value,
+            proof: proof.value,
         });
 
         toast.success(
-            'Printing cards — the sheets will appear in Documents when they are ready.',
+            proof.value
+                ? 'Printing a proof card — it will appear in Documents when ready.'
+                : 'Printing cards — the sheets will appear in Documents when they are ready.',
         );
         emit('update:open', false);
     } catch (e) {
@@ -247,8 +262,8 @@ async function submit(): Promise<void> {
                 <div class="space-y-4">
                     <p data-testid="card-count" class="text-sm">
                         <span class="font-medium"
-                            >{{ cardCount }}
-                            {{ cardCount === 1 ? 'card' : 'cards' }}</span
+                            >{{ effectiveCount }}
+                            {{ effectiveCount === 1 ? 'card' : 'cards' }}</span
                         >
                         <span
                             v-if="sheets !== null"
@@ -345,6 +360,25 @@ async function submit(): Promise<void> {
                             <template v-if="!template?.has_back">
                                 (this design is single-sided)
                             </template>
+                        </span>
+                    </label>
+
+                    <!-- C6b: one real card through the real pipeline before a
+                         whole sheet of stock is committed to it. -->
+                    <label class="flex items-start gap-2 text-sm">
+                        <input
+                            type="checkbox"
+                            data-testid="print-proof"
+                            v-model="proof"
+                            class="mt-0.5 size-4"
+                        />
+                        <span>
+                            Proof: first card only
+                            <span class="block text-xs text-muted-foreground">
+                                Prints one card at the chosen start cell to
+                                check fit and position — same design, same
+                                values — before running the whole class.
+                            </span>
                         </span>
                     </label>
 

@@ -120,6 +120,26 @@ class CardPrintRunsApiTest extends TestCase
         );
     }
 
+    public function test_a_proof_run_is_stored_as_one(): void
+    {
+        // C6b: one real card before committing a sheet of stock. The flag
+        // must persist — the queued job reads the run row, not the request.
+        $this->requestRun(['proof' => true])
+            ->assertStatus(202)
+            ->assertJsonPath('proof', true);
+
+        $this->assertTrue(CardPrintRun::query()->sole()->proof);
+    }
+
+    public function test_a_run_is_not_a_proof_unless_asked(): void
+    {
+        $this->requestRun()
+            ->assertStatus(202)
+            ->assertJsonPath('proof', false);
+
+        $this->assertFalse(CardPrintRun::query()->sole()->proof);
+    }
+
     public function test_it_prints_the_trainings_own_design_by_default(): void
     {
         $this->requestRun()->assertStatus(202);

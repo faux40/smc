@@ -139,6 +139,9 @@ onMounted(async () => {
                         <template v-if="r.include_backs">
                             · with backs</template
                         >
+                        <!-- "1 card" alone reads like a run that went wrong;
+                             this says it was the point. -->
+                        <template v-if="r.proof"> · proof</template>
                     </span>
                     <span
                         v-if="r.created_at"

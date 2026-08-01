@@ -450,9 +450,45 @@ describe('PrintCardsModal', () => {
             card_stock_id: 's1',
             start_cell: 1,
             include_backs: false,
+            proof: false,
         });
         expect(toastSuccess).toHaveBeenCalled();
         expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false]);
+    });
+
+    it('prints a single proof card on request', async () => {
+        /*
+         * C6b: one real card — same design, same start cell — before
+         * committing a whole sheet of purchased stock. The count line has to
+         * follow the toggle, or "12 cards · 2 sheets" beside a proof reads
+         * like the proof will burn them.
+         */
+        const { runs } = await open({
+            topic: topic({
+                credits: Array.from({ length: 12 }, (_, i) =>
+                    credit({ completion_id: `c${i}`, cert_id: `FA-${i}` }),
+                ),
+            }),
+        });
+        const create = vi.spyOn(runs, 'create').mockResolvedValue({} as never);
+
+        await chooseStock('s1');
+
+        const toggle = el<HTMLInputElement>('print-proof')!;
+        toggle.checked = true;
+        toggle.dispatchEvent(new Event('change'));
+        await flushPromises();
+
+        expect(text('card-count')).toContain('1 card');
+        expect(text('sheet-count')).toContain('1 sheet');
+
+        submitButton()!.click();
+        await flushPromises();
+
+        expect(create).toHaveBeenCalledWith(
+            'c1',
+            expect.objectContaining({ proof: true }),
+        );
     });
 
     it('keeps the dialog open and shows why the server refused', async () => {

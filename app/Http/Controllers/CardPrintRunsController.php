@@ -68,6 +68,9 @@ class CardPrintRunsController extends Controller
             ],
             'start_cell' => ['required', 'integer', 'min:1'],
             'include_backs' => ['boolean'],
+            // C6b: print only the first card — the real pipeline, sliced to
+            // one, to check fit and position before a whole sheet of stock.
+            'proof' => ['boolean'],
         ]);
 
         $topic = $class->classTrainings()->with('training')->findOrFail($data['class_training_id']);
@@ -101,6 +104,7 @@ class CardPrintRunsController extends Controller
             'card_stock_id' => $stock->id,
             'start_cell' => $data['start_cell'],
             'include_backs' => (bool) ($data['include_backs'] ?? false),
+            'proof' => (bool) ($data['proof'] ?? false),
             'status' => 'queued',
             'requested_by' => $request->user()->id,
         ]);
@@ -146,6 +150,7 @@ class CardPrintRunsController extends Controller
             'card_count' => $run->card_count,
             'sheet_count' => $run->sheet_count,
             'include_backs' => $run->include_backs,
+            'proof' => $run->proof,
             'start_cell' => $run->start_cell,
             // Deliberately no storage paths: the sheets are filed as class
             // documents, and that list is how they're downloaded.
