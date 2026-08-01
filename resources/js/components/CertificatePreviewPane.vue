@@ -53,9 +53,11 @@ const open = ref(false);
             </button>
         </div>
 
-        <!-- 11:8.5, so height follows width: 280px wide ≈ 216px tall. Sized
-             to sit beside the fields rather than under them. -->
-        <div data-testid="cert-thumbnail" class="w-full max-w-[280px]">
+        <!-- Fills the column it is given — the caller decides how much room
+             the preview gets, since that depends on what is beside it. The
+             cap is only a backstop against a very wide container; 11:8.5
+             means height follows width, so 520px wide ≈ 402px tall. -->
+        <div data-testid="cert-thumbnail" class="w-full max-w-[560px]">
             <CertificatePreview v-bind="props" />
         </div>
 

@@ -33,6 +33,24 @@ describe('CertEditor', () => {
         expect(preview.text()).toContain('Acme Safety Co.');
     });
 
+    it('gives the preview column a definite width, not shrink-to-fit', () => {
+        /*
+         * Regression: the column was `shrink-0` with no width. That sizes to
+         * content, and the preview inside is `w-full`, which then resolves
+         * against that same content width — collapsing an 11:8.5 sheet to the
+         * width of its "Preview / Enlarge" header (~110px) while its own
+         * max-width appeared to be doing the work. A width class here is what
+         * makes the percentage real; happy-dom does no layout, so the class is
+         * what can be checked.
+         */
+        const wrapper = mount(CertEditor, { props: { title: '', text: '' } });
+        const classes = wrapper
+            .get('[data-testid="cert-preview-column"]')
+            .classes();
+
+        expect(classes.some((c) => /^lg:w-/.test(c))).toBe(true);
+    });
+
     it('labels the fields as the SMC certificate, not a custom card', async () => {
         const wrapper = mount(CertEditor, { props: { title: '', text: '' } });
 

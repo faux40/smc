@@ -76,9 +76,23 @@ const orgName = computed(
             </div>
         </div>
 
-        <!-- Live preview, beside the fields: capped small enough to leave
-             them room, with full size a click away. -->
-        <div class="shrink-0 lg:sticky lg:top-4">
+        <!--
+            Live preview, beside the fields, with full size a click away.
+
+            The width has to be DEFINITE, not shrink-to-fit. A `shrink-0`
+            column with no width sizes to its content, and the preview inside
+            is `w-full` — which then resolves against that same content width
+            and collapses the sheet to the width of the "Preview / Enlarge"
+            header (~110px), silently ignoring its own max-width.
+
+            A fraction rather than a fixed px so it also works in the narrow
+            pane a class renders it in (a topic panel inside a two-thirds
+            column), where a fixed 520px would crowd out the fields.
+        -->
+        <div
+            data-testid="cert-preview-column"
+            class="w-full shrink-0 lg:sticky lg:top-4 lg:w-2/5 lg:max-w-[520px]"
+        >
             <CertificatePreviewPane
                 :org-name="orgName"
                 :cert-title="title"
