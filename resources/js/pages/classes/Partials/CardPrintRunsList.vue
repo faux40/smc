@@ -65,6 +65,21 @@ watch(
     { immediate: true },
 );
 
+/**
+ * Dismiss a settled run. Only the record goes — the sheets it filed live in
+ * Documents with their own delete, so tidying the list never destroys output.
+ */
+async function clear(runId: string): Promise<void> {
+    try {
+        await store.destroy(props.classId, runId);
+    } catch (e) {
+        toast.error(
+            (e as { response?: { data?: { message?: string } } }).response?.data
+                ?.message ?? 'Could not clear that print run.',
+        );
+    }
+}
+
 onMounted(async () => {
     const orgId = (page.props.auth.user as { org_id?: string } | null)?.org_id;
 
@@ -120,6 +135,20 @@ onMounted(async () => {
                     >
                         · {{ r.created_at }}
                     </span>
+
+                    <!-- Settled runs only: clearing one mid-flight would
+                         leave the job with nowhere to report its outcome. -->
+                    <button
+                        v-if="r.status === 'done' || r.status === 'failed'"
+                        type="button"
+                        data-testid="clear-run"
+                        class="ml-auto text-xs text-muted-foreground hover:text-foreground hover:underline"
+                        :aria-label="`Clear this print run for ${r.topic_name ?? 'this topic'}`"
+                        title="Remove this entry. The sheets it filed stay in Documents."
+                        @click="clear(r.id)"
+                    >
+                        Clear
+                    </button>
                 </div>
 
                 <p v-if="r.error" class="mt-1 text-xs text-red-700">

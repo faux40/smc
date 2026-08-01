@@ -111,6 +111,27 @@ class CardPrintRunsController extends Controller
     }
 
     /**
+     * Clear a run from the class's list.
+     *
+     * The record goes; the sheets it filed do not. Those are class documents
+     * with their own delete, and they are the printed artifact — tidying up
+     * the note that a run happened must never take the output with it.
+     */
+    public function destroy(TrainingClass $class, string $cardPrintRun): JsonResponse
+    {
+        Gate::authorize('view', $class);
+
+        // Scoped to the class in the route rather than resolved globally: a
+        // run id from another class must 404 here, not delete.
+        CardPrintRun::query()
+            ->where('class_id', $class->id)
+            ->findOrFail($cardPrintRun)
+            ->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function serialize(CardPrintRun $run): array

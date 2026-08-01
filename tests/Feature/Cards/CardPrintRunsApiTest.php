@@ -3,6 +3,7 @@
 namespace Tests\Feature\Cards;
 
 use App\Jobs\GenerateCardSheets;
+use App\Models\Attachment;
 use App\Models\CardPrintRun;
 use App\Models\CardStock;
 use App\Models\CardTemplate;
@@ -66,6 +67,20 @@ class CardPrintRunsApiTest extends TestCase
     private function url(?TrainingClass $class = null): string
     {
         return '/api/classes/'.($class ?? $this->class)->id.'/card-runs';
+    }
+
+    /** A run row as the job would have left it. */
+    private function makeRun(array $overrides = []): CardPrintRun
+    {
+        return CardPrintRun::create(array_merge([
+            'org_id' => $this->org->id,
+            'class_id' => $this->class->id,
+            'class_training_id' => $this->topic->id,
+            'card_template_id' => $this->template->id,
+            'card_stock_id' => $this->stock->id,
+            'start_cell' => 1,
+            'status' => 'done',
+        ], $overrides));
     }
 
     private function payload(array $overrides = []): array
@@ -233,6 +248,75 @@ class CardPrintRunsApiTest extends TestCase
             ->assertJsonPath('0.error', 'Nobody on this class holds a certificate for “First Aid”.')
             ->assertJsonPath('1.id', $older->id)
             ->assertJsonPath('1.card_count', 3);
+    }
+
+    // ---- clearing a run ---------------------------------------------------
+
+    public function test_a_run_can_be_cleared_from_the_list(): void
+    {
+        $run = $this->makeRun(['status' => 'failed', 'error' => 'No design.']);
+
+        $this->actingAs($this->manager)
+            ->deleteJson($this->url().'/'.$run->id)
+            ->assertOk();
+
+        $this->assertDatabaseMissing('card_print_runs', ['id' => $run->id]);
+    }
+
+    public function test_clearing_a_run_leaves_the_sheets_it_filed(): void
+    {
+        /*
+         * The record goes, the documents stay. The sheets are filed as class
+         * documents with their own delete, and they are the printed artifact
+         * — dismissing the note that a run happened must not take them with
+         * it, or a tidy-up quietly destroys the audit trail.
+         */
+        $attachment = Attachment::create([
+            'org_id' => $this->org->id,
+            'attachable_type' => TrainingClass::class,
+            'attachable_id' => $this->class->id,
+            'filename' => 'Cards_Front.pdf',
+            'disk' => 'linode',
+            'path' => 'class-documents/front.pdf',
+            'type' => 'cards',
+            'uploaded_by_user_id' => $this->manager->id,
+        ]);
+        $run = $this->makeRun(['status' => 'done', 'front_path' => $attachment->path]);
+
+        $this->actingAs($this->manager)
+            ->deleteJson($this->url().'/'.$run->id)
+            ->assertOk();
+
+        $this->assertDatabaseHas('attachments', ['id' => $attachment->id]);
+    }
+
+    public function test_another_classs_run_cannot_be_cleared_through_this_class(): void
+    {
+        $otherClass = TrainingClass::factory()->for($this->org, 'organization')->create();
+        $otherTopic = ClassTraining::factory()
+            ->for($otherClass, 'trainingClass')
+            ->for($this->training, 'training')
+            ->create();
+        $foreign = $this->makeRun([
+            'class_id' => $otherClass->id,
+            'class_training_id' => $otherTopic->id,
+        ]);
+
+        $this->actingAs($this->manager)
+            ->deleteJson($this->url().'/'.$foreign->id)
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('card_print_runs', ['id' => $foreign->id]);
+    }
+
+    public function test_a_self_view_user_cannot_clear_a_run(): void
+    {
+        $viewer = User::factory()->for($this->org, 'organization')->withRole('SelfView')->create();
+        $run = $this->makeRun();
+
+        $this->actingAs($viewer)
+            ->deleteJson($this->url().'/'.$run->id)
+            ->assertForbidden();
     }
 
     public function test_another_classs_runs_are_not_listed(): void

@@ -288,6 +288,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // merges, converts, imposes and files the sheets into class documents.
     Route::get('api/classes/{class}/card-runs', [CardPrintRunsController::class, 'index'])->name('classes.card-runs.index');
     Route::post('api/classes/{class}/card-runs', [CardPrintRunsController::class, 'store'])->name('classes.card-runs.store');
+    Route::delete('api/classes/{class}/card-runs/{cardPrintRun}', [CardPrintRunsController::class, 'destroy'])->name('classes.card-runs.destroy');
     Route::post('api/classes/{class}/completions/issue', [ClassesController::class, 'issueCompletion'])->name('classes.completions.issue');
     Route::post('api/classes/{class}/completions/{completion}/revoke', [ClassesController::class, 'revokeCompletion'])->name('classes.completions.revoke');
 

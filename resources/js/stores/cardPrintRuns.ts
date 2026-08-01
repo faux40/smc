@@ -102,6 +102,24 @@ export const useCardPrintRunsStore = defineStore('cardPrintRuns', () => {
         return data;
     }
 
+    /**
+     * Clear a run from the list. The sheets it filed are class documents with
+     * their own delete and are left alone — this only dismisses the record.
+     *
+     * Removed after the server agrees: dropping it optimistically would show
+     * the run gone until the next fetch put it back.
+     */
+    async function destroy(classId: string, runId: string): Promise<void> {
+        await axios.delete(`${url(classId)}/${runId}`, {
+            headers: defaultHeaders(),
+        });
+
+        byClass.value = {
+            ...byClass.value,
+            [classId]: runsFor(classId).filter((r) => r.id !== runId),
+        };
+    }
+
     function subscribe(orgId: string): void {
         if (subscribedOrgId.value === orgId) {
             return;
@@ -147,6 +165,7 @@ export const useCardPrintRunsStore = defineStore('cardPrintRuns', () => {
         load,
         reload,
         create,
+        destroy,
         subscribe,
     };
 });

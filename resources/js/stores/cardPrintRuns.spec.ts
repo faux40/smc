@@ -159,6 +159,40 @@ describe('useCardPrintRunsStore', () => {
         ).rejects.toThrow('422');
     });
 
+    it('clears a run from the list it belongs to', async () => {
+        const get = axios.get as ReturnType<typeof vi.fn>;
+        get.mockResolvedValue({
+            data: [run({ id: 'r1' }), run({ id: 'r2' })],
+        });
+        const del = axios.delete as ReturnType<typeof vi.fn>;
+        del.mockResolvedValue({ data: { ok: true } });
+        const store = useCardPrintRunsStore();
+        await store.load('c1');
+
+        await store.destroy('c1', 'r1');
+
+        expect(del).toHaveBeenCalledWith(
+            '/api/classes/c1/card-runs/r1',
+            expect.anything(),
+        );
+        expect(store.runsFor('c1').map((r) => r.id)).toEqual(['r2']);
+    });
+
+    it('keeps the run listed when the server refuses to clear it', async () => {
+        const get = axios.get as ReturnType<typeof vi.fn>;
+        get.mockResolvedValue({ data: [run({ id: 'r1' })] });
+        (axios.delete as ReturnType<typeof vi.fn>).mockRejectedValue(
+            new Error('403'),
+        );
+        const store = useCardPrintRunsStore();
+        await store.load('c1');
+
+        // Dropping it locally on a failed delete would show the run gone until
+        // the next fetch brought it back.
+        await expect(store.destroy('c1', 'r1')).rejects.toThrow('403');
+        expect(store.runsFor('c1').map((r) => r.id)).toEqual(['r1']);
+    });
+
     it('refetches a cached class when the job reports in', async () => {
         const get = axios.get as ReturnType<typeof vi.fn>;
         get.mockResolvedValue({ data: [run({ id: 'r1' })] });

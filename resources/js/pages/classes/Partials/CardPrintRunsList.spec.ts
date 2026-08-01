@@ -118,6 +118,27 @@ describe('CardPrintRunsList', () => {
         expect(toastError).toHaveBeenCalled();
     });
 
+    it('clears a run on request', async () => {
+        const { wrapper, store } = await mountWith([
+            run({ id: 'r1', status: 'failed', error: 'No design.' }),
+        ]);
+        const destroy = vi.spyOn(store, 'destroy').mockResolvedValue();
+
+        await wrapper.get('[data-testid="clear-run"]').trigger('click');
+
+        expect(destroy).toHaveBeenCalledWith('c1', 'r1');
+    });
+
+    it('offers no clear for a run still working', async () => {
+        // Removing the record mid-flight would leave the job running with
+        // nowhere to report what happened to it.
+        const { wrapper } = await mountWith([
+            run({ id: 'r1', status: 'processing' }),
+        ]);
+
+        expect(wrapper.find('[data-testid="clear-run"]').exists()).toBe(false);
+    });
+
     it('subscribes so a queued run can finish on its own', async () => {
         const { subscribe } = await mountWith([run({ id: 'r1' })]);
 
