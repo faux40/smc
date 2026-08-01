@@ -15,7 +15,19 @@ import { useFieldErrors } from '@/composables/useFieldErrors';
 const title = defineModel<string>('title', { required: true });
 const text = defineModel<string>('text', { required: true });
 
-const props = defineProps<{ context?: string }>();
+const props = defineProps<{
+    context?: string;
+    /**
+     * Distinguishes the input ids when more than one editor is on the page —
+     * a class shows one per topic. Defaults to the historical ids so the
+     * single-editor callers (the training form) are untouched.
+     */
+    idPrefix?: string;
+    disabled?: boolean;
+}>();
+
+const id = (field: string) =>
+    props.idPrefix ? `${props.idPrefix}_${field}` : field;
 
 const fieldErrors = useFieldErrors(props.context ?? '');
 
@@ -30,22 +42,26 @@ const orgName = computed(
         <!-- Editor -->
         <div class="space-y-3">
             <div class="grid gap-2">
-                <Label for="cert_title">SMC Certificate title</Label>
+                <Label :for="id('cert_title')">SMC Certificate title</Label>
                 <Input
-                    id="cert_title"
+                    :id="id('cert_title')"
                     v-model="title"
+                    :disabled="disabled"
+                    data-testid="cert-title"
                     placeholder="e.g. Fall Protection Authorized Person"
                 />
                 <InputError :message="fieldErrors.message('cert_title')" />
             </div>
 
             <div class="grid gap-2">
-                <Label for="cert_text">SMC Certificate text</Label>
+                <Label :for="id('cert_text')">SMC Certificate text</Label>
                 <textarea
-                    id="cert_text"
+                    :id="id('cert_text')"
                     v-model="text"
                     rows="8"
-                    class="w-full rounded border border-input bg-background p-2 text-sm"
+                    :disabled="disabled"
+                    data-testid="cert-text"
+                    class="w-full rounded border border-input bg-background p-2 text-sm disabled:opacity-60"
                     placeholder="Satisfies **Cal/OSHA** requirements…"
                 ></textarea>
                 <p class="text-xs text-muted-foreground">

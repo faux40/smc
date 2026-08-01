@@ -35,6 +35,11 @@ class ClassTopicUpdateRequest extends FormRequest
     {
         return [
             'hours' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            // Normally derived at close-out from the completion date + this
+            // topic's frozen repeat interval. Set by hand when the real
+            // expiry isn't ours to compute (a third-party card, a regulator's
+            // fixed date); cleared back to null means "derive it again".
+            'expire_date' => ['sometimes', 'nullable', 'date'],
             // Per-class cert overrides: seeded from the training snapshot at
             // attach time, then editable for this class only. cert_text is
             // Markdown (rendered on the certificate).

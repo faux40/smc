@@ -22,6 +22,7 @@ const detailA: ClassDetail = {
     notes: null,
     status: 'scheduled',
     completion_date: null,
+    was_completed: false,
     can_edit: true,
     trainings: [],
     enrollments: [],
@@ -103,6 +104,7 @@ describe('useClassesStore', () => {
         await store.create({
             name: 'Class A',
             scheduled_date: '2026-06-01',
+            completion_date: null,
             start_time: null,
             end_time: null,
             location: null,
@@ -139,44 +141,46 @@ describe('useClassesStore', () => {
         expect(store.detail.c1.id).toBe('c1');
     });
 
-    it('updateTrainingCert() PATCHes the per-class cert fields and caches', async () => {
+    it('updateTopic() PATCHes a whole topic in one request and caches', async () => {
+        // One request rather than one per concern: the endpoint merges what
+        // it is sent, and four calls would leave a topic half-saved when one
+        // of them failed.
         const patch = axios.patch as ReturnType<typeof vi.fn>;
         patch.mockResolvedValue({ data: detailA });
         const store = useClassesStore();
 
-        const cert = {
+        const topic = {
+            hours: 8,
+            expire_date: '2029-07-15',
             cert_title: 'Per-class Title',
             cert_text: 'Edited **text**',
             cert_code: 'NEW',
+            card_values: { f1: 'INST-4471', f2: '' },
         };
-        await store.updateTrainingCert('c1', 'ct1', cert);
+        await store.updateTopic('c1', 'ct1', topic);
 
         expect(patch).toHaveBeenCalledWith(
             '/api/classes/c1/trainings/ct1',
-            cert,
+            topic,
             expect.anything(),
         );
         expect(store.detail.c1.id).toBe('c1');
     });
 
-    it('updateTrainingCardValues() PATCHes the answers keyed by field id', async () => {
-        // Same endpoint as the cert edit: "card values" is another thing you
-        // can change about a topic on a class.
+    it('updateTopic() sends only the slice it was given', async () => {
+        // An absent key means "leave it alone" — the topics grid edits hours
+        // across several topics and must not blank their certificates.
         const patch = axios.patch as ReturnType<typeof vi.fn>;
         patch.mockResolvedValue({ data: detailA });
         const store = useClassesStore();
 
-        await store.updateTrainingCardValues('c1', 'ct1', {
-            f1: 'INST-4471',
-            f2: '',
-        });
+        await store.updateTopic('c1', 'ct1', { expire_date: null });
 
         expect(patch).toHaveBeenCalledWith(
             '/api/classes/c1/trainings/ct1',
-            { card_values: { f1: 'INST-4471', f2: '' } },
+            { expire_date: null },
             expect.anything(),
         );
-        expect(store.detail.c1.id).toBe('c1');
     });
 
     it('complete() posts the close-out and caches the returned detail', async () => {

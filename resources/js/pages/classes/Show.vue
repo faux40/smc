@@ -34,10 +34,9 @@ import {
 } from '@/components/ui/select';
 import { useClassForm } from '@/composables/useClassForm';
 import CardPrintRunsList from '@/pages/classes/Partials/CardPrintRunsList.vue';
-import ClassCardFieldsModal from '@/pages/classes/Partials/ClassCardFieldsModal.vue';
-import ClassCertEditModal from '@/pages/classes/Partials/ClassCertEditModal.vue';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
+import ClassTopicPanel from '@/pages/classes/Partials/ClassTopicPanel.vue';
 import ManageRosterModal from '@/pages/classes/Partials/ManageRosterModal.vue';
 import ManageTopicsModal from '@/pages/classes/Partials/ManageTopicsModal.vue';
 import PrintCardsModal from '@/pages/classes/Partials/PrintCardsModal.vue';
@@ -108,23 +107,6 @@ function openDoc(kind: GeneratedDoc['kind'], title: string): void {
     };
     docOpen.value = true;
 }
-// Per-topic certificate editor (scheduled classes): which class_training row.
-const certOpen = ref(false);
-const certTopicId = ref<string | null>(null);
-function openCertEditor(topicId: string) {
-    certTopicId.value = topicId;
-    certOpen.value = true;
-}
-
-// Per-topic custom card fields (C3): the values this class prints on cards.
-// Viewable on a completed class too — the modal locks itself there.
-const cardFieldsOpen = ref(false);
-const cardFieldsTopicId = ref<string | null>(null);
-function openCardFields(topicId: string) {
-    cardFieldsTopicId.value = topicId;
-    cardFieldsOpen.value = true;
-}
-
 // Printing a topic's cards (C4e). One run is one topic, so the topic is
 // chosen by which button was pressed rather than inside the dialog.
 const cardTemplates = useCardTemplatesStore();
@@ -188,6 +170,15 @@ const saving = ref(false);
 const canEditDetails = computed(
     () =>
         detail.value?.can_edit === true && detail.value?.status === 'scheduled',
+);
+
+/**
+ * What a derived expiry counts from: the completion date once it's known,
+ * else the scheduled date. Close-out uses the completion date it is given,
+ * so this is a preview of that — hence the fall-back while it's still blank.
+ */
+const expiryBaseDate = computed(
+    () => detail.value?.completion_date || detail.value?.scheduled_date || null,
 );
 
 const canComplete = computed(
@@ -301,7 +292,7 @@ async function reissue(): Promise<void> {
 // the enrollment results map in step server-side so the next re-close preserves
 // the change.
 const canManageCerts = computed(
-    () => canEditDetails.value && detail.value?.completion_date != null,
+    () => canEditDetails.value && detail.value?.was_completed === true,
 );
 
 // Revoke a single awarded credit.
@@ -420,6 +411,7 @@ const isDirty = computed(() => {
     return (
         text(f.name) !== text(d.name) ||
         text(f.scheduled_date) !== text(d.scheduled_date) ||
+        text(f.completion_date) !== text(d.completion_date) ||
         text(f.start_time) !== text(d.start_time) ||
         text(f.end_time) !== text(d.end_time) ||
         text(f.location) !== text(d.location) ||
@@ -612,6 +604,7 @@ const timeLabel = computed(() => {
                                         v-model="form"
                                         :context="FORM_CTX"
                                         id-prefix="edit"
+                                        show-completion-date
                                     >
                                         <template #after-name>
                                             <div
@@ -661,41 +654,6 @@ const timeLabel = computed(() => {
                                                                     )
                                                                 }})
                                                             </span>
-                                                        </span>
-                                                        <span
-                                                            class="flex items-center gap-1"
-                                                        >
-                                                            <Button
-                                                                v-if="
-                                                                    t
-                                                                        .card_fields
-                                                                        .length
-                                                                "
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                class="h-6 px-2 text-xs"
-                                                                @click="
-                                                                    openCardFields(
-                                                                        t.id,
-                                                                    )
-                                                                "
-                                                            >
-                                                                Card fields
-                                                            </Button>
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                class="h-6 px-2 text-xs"
-                                                                @click="
-                                                                    openCertEditor(
-                                                                        t.id,
-                                                                    )
-                                                                "
-                                                            >
-                                                                Edit certificate
-                                                            </Button>
                                                         </span>
                                                     </li>
                                                 </ul>
@@ -748,21 +706,6 @@ const timeLabel = computed(() => {
                                                     ({{ hoursLabel(t.hours) }})
                                                 </span>
                                             </span>
-                                            <!--
-                                                Read-only here: the values that
-                                                will print are worth seeing
-                                                before cards are generated.
-                                            -->
-                                            <Button
-                                                v-if="t.card_fields.length"
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                class="h-6 px-2 text-xs"
-                                                @click="openCardFields(t.id)"
-                                            >
-                                                Card fields
-                                            </Button>
                                         </li>
                                     </ul>
                                     <p
@@ -883,6 +826,27 @@ const timeLabel = computed(() => {
                                 </dl>
                             </template>
                         </section>
+
+                        <!-- Per-topic detail a manager may need to set by
+                             hand — expiry, hours, card answers, certificate
+                             wording. One roll-up each, shut unless the topic
+                             already carries something entered by hand. Shown
+                             on a completed class too, locked: the values that
+                             will print are worth reading before they do. -->
+                        <div
+                            v-if="detail.trainings.length"
+                            data-testid="topic-panels"
+                            class="space-y-3"
+                        >
+                            <ClassTopicPanel
+                                v-for="t in detail.trainings"
+                                :key="t.id"
+                                :class-id="props.classId"
+                                :topic="t"
+                                :derived-from="expiryBaseDate"
+                                :read-only="!canEditDetails"
+                            />
+                        </div>
 
                         <!-- M3: completed class — who earned each credit. Also
                              shown on a re-opened (scheduled) class that still
@@ -1172,17 +1136,6 @@ const timeLabel = computed(() => {
                     :topic-id="printTopicId"
                 />
 
-                <ClassCardFieldsModal
-                    v-model:open="cardFieldsOpen"
-                    :class-id="classId"
-                    :topic-id="cardFieldsTopicId"
-                />
-
-                <ClassCertEditModal
-                    v-model:open="certOpen"
-                    :class-id="props.classId"
-                    :topic-id="certTopicId"
-                />
                 <AttachmentViewer
                     v-model:open="docOpen"
                     :generated="activeDoc"

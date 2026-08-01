@@ -26,6 +26,10 @@ class ClassRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'scheduled_date' => ['required', 'date'],
+            // Known in advance for a multi-day class; close-out confirms it
+            // rather than asking again. Never a "has this class been closed"
+            // signal — that's `completed_at`.
+            'completion_date' => ['nullable', 'date'],
             'start_time' => ['nullable', 'date_format:H:i'],
             'end_time' => ['nullable', 'date_format:H:i'],
             'location' => ['nullable', 'string', 'max:255'],

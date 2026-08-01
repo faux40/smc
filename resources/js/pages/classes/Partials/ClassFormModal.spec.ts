@@ -148,6 +148,7 @@ const topic = (
     cert_text: null,
     cert_code: null,
     card_fields: [],
+    expire_date: null,
     credits: [],
 });
 
@@ -167,6 +168,7 @@ const sourceClass: ClassDetail = {
     notes: 'Bring harnesses.',
     status: 'completed',
     completion_date: '2026-03-01',
+    was_completed: false,
     can_edit: false,
     trainings: [
         topic('ct1', 't1', 'Fall Protection'),

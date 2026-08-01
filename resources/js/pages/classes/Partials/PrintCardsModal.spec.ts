@@ -122,6 +122,7 @@ function topic(overrides: Partial<ClassTrainingRow> = {}): ClassTrainingRow {
         cert_text: null,
         cert_code: null,
         card_fields: [],
+        expire_date: null,
         credits: [credit()],
         ...overrides,
     };
@@ -173,6 +174,7 @@ function detail(
         notes: null,
         status,
         completion_date: '2026-06-01',
+        was_completed: false,
         can_edit: status === 'scheduled',
         trainings: [t],
         enrollments: [],

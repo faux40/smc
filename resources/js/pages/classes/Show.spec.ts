@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AttachmentsList from '@/components/AttachmentsList.vue';
 import CardPrintRunsList from '@/pages/classes/Partials/CardPrintRunsList.vue';
-import ClassCardFieldsModal from '@/pages/classes/Partials/ClassCardFieldsModal.vue';
+import ClassTopicPanel from '@/pages/classes/Partials/ClassTopicPanel.vue';
 import PrintCardsModal from '@/pages/classes/Partials/PrintCardsModal.vue';
 import Show from '@/pages/classes/Show.vue';
 import type { ClassDetail } from '@/stores/classes';
@@ -46,6 +46,7 @@ const detail: ClassDetail = {
     notes: null,
     status: 'scheduled',
     completion_date: null,
+    was_completed: false,
     can_edit: true,
     trainings: [],
     enrollments: [
@@ -199,6 +200,7 @@ describe('classes/Show inline edit', () => {
                 cert_text: null,
                 cert_code: null,
                 card_fields: [],
+                expire_date: null,
                 credits: [],
             },
         ];
@@ -216,9 +218,10 @@ describe('classes/Show — student counts', () => {
         vi.clearAllMocks();
     });
 
-    it('offers Card fields only for a topic whose training defines some', async () => {
-        // A training with no custom fields would open an empty modal, so the
-        // button follows the definitions.
+    it('gives every topic its own roll-up of the fields set by hand', async () => {
+        // One panel per topic, on the page rather than behind a button: the
+        // expiry, card answers and certificate wording all live together
+        // where the class itself is being edited.
         const topic = {
             id: 'ct1',
             training_id: 't1',
@@ -233,6 +236,7 @@ describe('classes/Show — student counts', () => {
             cert_text: null,
             cert_code: null,
             card_fields: [],
+            expire_date: null,
             credits: [],
         };
 
@@ -263,17 +267,16 @@ describe('classes/Show — student counts', () => {
 
         const wrapper = await mountShow();
 
-        const buttons = wrapper
-            .findAll('button')
-            .filter((b) => b.text() === 'Card fields');
-        expect(buttons).toHaveLength(1);
+        const panels = wrapper.findAllComponents(ClassTopicPanel);
 
-        await buttons[0].trigger('click');
-
-        const modal = wrapper.findComponent(ClassCardFieldsModal);
-        expect(modal.props('open')).toBe(true);
-        expect(modal.props('topicId')).toBe('ct2');
-        expect(modal.props('classId')).toBe('c1');
+        expect(panels).toHaveLength(2);
+        expect(panels.map((p) => p.props('topic').id)).toEqual(['ct1', 'ct2']);
+        expect(panels[0].props('classId')).toBe('c1');
+        // Editable class → editable panels.
+        expect(panels[0].props('readOnly')).toBe(false);
+        // Nothing is completed yet, so a derived expiry counts from the
+        // scheduled date — the same date close-out will start from.
+        expect(panels[0].props('derivedFrom')).toBe(detail.scheduled_date);
     });
 
     it('offers Print cards among the documents, per printable topic', async () => {
@@ -295,6 +298,7 @@ describe('classes/Show — student counts', () => {
             cert_text: null,
             cert_code: null,
             card_fields: [],
+            expire_date: null,
             credits: [],
         };
 
@@ -356,6 +360,7 @@ describe('classes/Show — student counts', () => {
             cert_text: null,
             cert_code: null,
             card_fields: [],
+            expire_date: null,
             credits: [],
         };
 
@@ -410,6 +415,7 @@ describe('classes/Show — student counts', () => {
             cert_text: null,
             cert_code: null,
             card_fields: [],
+            expire_date: null,
             credits: [],
         };
 
@@ -548,6 +554,7 @@ const completedDetail: ClassDetail = {
     ...detail,
     status: 'completed',
     completion_date: '2026-06-01',
+    was_completed: true,
     can_edit: false,
     trainings: [
         {
@@ -564,6 +571,7 @@ const completedDetail: ClassDetail = {
             cert_text: null,
             cert_code: null,
             card_fields: [],
+            expire_date: null,
             credits: [
                 {
                     completion_id: 'cp1',
@@ -589,6 +597,7 @@ const completedDetail: ClassDetail = {
             cert_text: null,
             cert_code: null,
             card_fields: [],
+            expire_date: null,
             credits: [],
         },
     ],
@@ -849,7 +858,14 @@ describe('classes/Show — issue a single certificate', () => {
     });
 
     it('hides Issue certificate on a never-completed scheduled class', async () => {
-        mockGet({ ...reopenedDetail, completion_date: null });
+        // Never closed: `was_completed` is what says so now — a scheduled
+        // class may carry a completion date that was filled in ahead of
+        // time, and neither action applies to one.
+        mockGet({
+            ...reopenedDetail,
+            completion_date: '2026-06-01',
+            was_completed: false,
+        });
         const wrapper = await mountShow();
         const labels = wrapper.findAll('button').map((b) => b.text());
         expect(labels).not.toContain('Issue certificate');
@@ -873,7 +889,14 @@ describe('classes/Show — re-close (keep as-is)', () => {
     });
 
     it('hides the re-close button on a never-completed scheduled class', async () => {
-        mockGet({ ...reopenedDetail, completion_date: null });
+        // Never closed: `was_completed` is what says so now — a scheduled
+        // class may carry a completion date that was filled in ahead of
+        // time, and neither action applies to one.
+        mockGet({
+            ...reopenedDetail,
+            completion_date: '2026-06-01',
+            was_completed: false,
+        });
         const wrapper = await mountShow();
         const labels = wrapper.findAll('button').map((b) => b.text());
         expect(labels).not.toContain('Re-close (keep as-is)');

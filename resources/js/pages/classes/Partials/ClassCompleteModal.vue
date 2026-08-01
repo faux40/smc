@@ -13,8 +13,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { derivedExpiry } from '@/lib/expiry';
 import { useClassesStore } from '@/stores/classes';
-import type { ClassDetail, TopicResult } from '@/stores/classes';
+import type {
+    ClassDetail,
+    ClassTrainingRow,
+    TopicResult,
+} from '@/stores/classes';
 import { useErrorStore } from '@/stores/errors';
 
 const FORM_CTX = 'form:class-complete';
@@ -43,10 +48,45 @@ interface Mark {
 
 const marks = reactive<Mark[]>([]);
 
+/**
+ * The expiry each topic will stamp, keyed by class_training_id, plus whether
+ * it was pinned — by hand on the class detail, or here in this dialog. A
+ * pinned expiry survives a change of completion date; an unpinned one is
+ * re-derived from it, which is what makes moving the date safe.
+ */
+const expiries = reactive<Record<string, string>>({});
+const pinned = reactive<Record<string, boolean>>({});
+
 /** A topic's current decision, defaulting to incomplete. */
 function decisionOf(m: Mark, trainingId: string): Decision {
     return m.result[trainingId] ?? 'incomplete';
 }
+
+function deriveExpiry(topic: ClassTrainingRow): string {
+    return (
+        derivedExpiry(
+            completionDate.value,
+            topic.repeating,
+            topic.repeat_days,
+        ) ?? ''
+    );
+}
+
+/** Re-derive every expiry nobody has pinned. */
+function rederiveExpiries(): void {
+    for (const topic of props.target.trainings) {
+        if (!pinned[topic.id]) {
+            expiries[topic.id] = deriveExpiry(topic);
+        }
+    }
+}
+
+function onExpiryInput(topicId: string, value: string): void {
+    expiries[topicId] = value;
+    pinned[topicId] = true;
+}
+
+watch(completionDate, rederiveExpiries);
 
 watch(
     () => props.open,
@@ -56,13 +96,24 @@ watch(
         }
 
         errorStore.clear(FORM_CTX);
-        completionDate.value = props.target.scheduled_date ?? '';
+        // A date recorded in advance on the class detail is the one to
+        // confirm; the scheduled date is the fall-back when there isn't one.
+        completionDate.value =
+            props.target.completion_date ?? props.target.scheduled_date ?? '';
+
+        for (const topic of props.target.trainings) {
+            // An expiry set by hand is a decision, so it arrives pinned —
+            // close-out re-derives every topic otherwise, which is exactly
+            // how a hand-set date used to get overwritten on the way through.
+            pinned[topic.id] = topic.expire_date !== null;
+            expiries[topic.id] = topic.expire_date ?? deriveExpiry(topic);
+        }
 
         // Pre-fill each topic from its stored result (pass/fail/incomplete),
         // defaulting to incomplete. So re-closing without touching anyone keeps
         // their prior outcome, and nobody is silently credited — only an
         // explicit Pass issues a certificate.
-        const previouslyCompleted = props.target.completion_date != null;
+        const previouslyCompleted = props.target.was_completed;
 
         marks.splice(
             0,
@@ -112,6 +163,13 @@ async function submit(): Promise<void> {
                     class_training_id: t.id,
                     result: decisionOf(m, t.id),
                 })),
+            })),
+            // Every topic, derived ones included: a topic left out is
+            // re-derived server-side, which would silently undo a date set
+            // by hand on the class detail.
+            trainings: props.target.trainings.map((t) => ({
+                id: t.id,
+                expire_date: expiries[t.id] || null,
             })),
         });
         emit('update:open', false);
@@ -172,6 +230,46 @@ async function submit(): Promise<void> {
                             Mark all incomplete
                         </Button>
                     </div>
+                </div>
+
+                <!--
+                    Expiry is confirmed here, not just derived here: this is
+                    the last point before certificates are minted, and the
+                    date lands on every one of them.
+                -->
+                <div
+                    v-if="target.trainings.length"
+                    class="space-y-2 rounded border border-border p-3"
+                >
+                    <h3 class="text-xs font-semibold text-muted-foreground">
+                        Credit expires
+                    </h3>
+                    <div
+                        v-for="t in target.trainings"
+                        :key="t.id"
+                        class="flex items-center gap-3 text-sm"
+                    >
+                        <label
+                            :for="`expire_${t.id}`"
+                            class="flex-1 truncate"
+                        >
+                            {{ t.training_name }}
+                        </label>
+                        <Input
+                            :id="`expire_${t.id}`"
+                            :data-testid="`complete-expire-${t.id}`"
+                            :model-value="expiries[t.id]"
+                            type="date"
+                            class="h-8 w-44"
+                            @update:model-value="
+                                onExpiryInput(t.id, String($event))
+                            "
+                        />
+                    </div>
+                    <p class="text-xs text-muted-foreground">
+                        Filled in from each training's frequency. Blank means
+                        the credit never expires.
+                    </p>
                 </div>
 
                 <div

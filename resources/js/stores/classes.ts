@@ -63,6 +63,12 @@ export interface ClassTrainingRow {
      * class's answer. Empty when the training defines none.
      */
     card_fields: CardFieldWithValue[];
+    /**
+     * When this topic's credit expires. Stamped at close-out from the
+     * completion date + the frozen repeat interval, or set by hand before
+     * then when the real expiry isn't ours to derive. Null = derive it.
+     */
+    expire_date: string | null;
     /** M3 — who earned this topic's credit (populated after close-out). */
     credits: TopicCredit[];
 }
@@ -72,6 +78,17 @@ export interface ClassCertPayload {
     cert_title: string | null;
     cert_text: string | null;
     cert_code: string | null;
+}
+
+/**
+ * Any slice of a topic's editable fields. The endpoint only touches what it
+ * is sent, so an omitted key means "leave it alone" — which is what lets one
+ * form save hours, expiry, certificate and card answers in a single request.
+ */
+export interface ClassTopicPayload extends Partial<ClassCertPayload> {
+    hours?: number | null;
+    expire_date?: string | null;
+    card_values?: Record<string, string | null>;
 }
 
 /** Per-topic close-out result. */
@@ -111,6 +128,13 @@ export interface ClassDetail {
     notes: string | null;
     status: 'scheduled' | 'completed';
     completion_date: string | null;
+    /**
+     * Whether this class has ever been closed — not whether it is closed now
+     * (`status`). A re-opened class is `scheduled` and `was_completed`, which
+     * is what re-close and certificate re-issue are for. Don't infer this
+     * from `completion_date`: that can be filled in before close-out.
+     */
+    was_completed: boolean;
     can_edit: boolean;
     trainings: ClassTrainingRow[];
     enrollments: EnrollmentRow[];
@@ -119,6 +143,7 @@ export interface ClassDetail {
 export interface ClassFormPayload {
     name: string;
     scheduled_date: string;
+    completion_date: string | null;
     start_time: string | null;
     end_time: string | null;
     location: string | null;
@@ -266,14 +291,14 @@ export const useClassesStore = defineStore('classes', () => {
     }
 
     /**
-     * One topic-level PATCH behind the three edits a topic supports. The
-     * endpoint only touches what it's sent, so each caller sends its own slice
-     * and nothing else on the topic moves.
+     * The one topic-level PATCH behind every edit a topic supports. The
+     * endpoint only touches what it's sent, so a caller may send one field or
+     * all of them and nothing else on the topic moves.
      */
-    async function patchTraining(
+    async function updateTopic(
         id: string,
         classTrainingId: string,
-        payload: object,
+        payload: ClassTopicPayload,
     ): Promise<ClassDetail> {
         const { data } = await axios.patch<ClassDetail>(
             `/api/classes/${id}/trainings/${classTrainingId}`,
@@ -284,34 +309,13 @@ export const useClassesStore = defineStore('classes', () => {
         return cache(data);
     }
 
+    /** The topics grid edits hours alone, across several topics at once. */
     async function updateTrainingHours(
         id: string,
         classTrainingId: string,
         hours: number | null,
     ): Promise<ClassDetail> {
-        return patchTraining(id, classTrainingId, { hours });
-    }
-
-    /** Edit a topic's per-class certificate fields (title / text / code). */
-    async function updateTrainingCert(
-        id: string,
-        classTrainingId: string,
-        cert: ClassCertPayload,
-    ): Promise<ClassDetail> {
-        return patchTraining(id, classTrainingId, cert);
-    }
-
-    /**
-     * Record this class's answers for a topic's custom card fields, keyed by
-     * field id. An empty string clears an answer (the training's default
-     * applies again); a field left out is unchanged.
-     */
-    async function updateTrainingCardValues(
-        id: string,
-        classTrainingId: string,
-        values: Record<string, string | null>,
-    ): Promise<ClassDetail> {
-        return patchTraining(id, classTrainingId, { card_values: values });
+        return updateTopic(id, classTrainingId, { hours });
     }
 
     async function detachTraining(
@@ -374,6 +378,13 @@ export const useClassesStore = defineStore('classes', () => {
                 notes: string | null;
                 results: { class_training_id: string; result: TopicResult }[];
             }[];
+            /**
+             * Per-topic expiry as confirmed at close-out. A topic left out
+             * here is re-derived from the completion date — which is why the
+             * dialog sends every topic, including the ones it derived: a
+             * hand-set expiry would otherwise be overwritten on the way past.
+             */
+            trainings?: { id: string; expire_date: string | null }[];
         },
     ): Promise<ClassDetail> {
         const { data } = await axios.post<ClassDetail>(
@@ -509,9 +520,8 @@ export const useClassesStore = defineStore('classes', () => {
         update,
         destroy,
         attachTraining,
+        updateTopic,
         updateTrainingHours,
-        updateTrainingCert,
-        updateTrainingCardValues,
         detachTraining,
         enroll,
         unenroll,

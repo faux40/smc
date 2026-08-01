@@ -15,6 +15,12 @@ const form = defineModel<ClassFormFields>({ required: true });
 const props = defineProps<{
     context: string;
     idPrefix?: string;
+    /**
+     * Detail page only. A class being created has no completion date to
+     * record yet — offering the field there would invite someone to declare a
+     * class finished before it has been scheduled.
+     */
+    showCompletionDate?: boolean;
 }>();
 
 const fieldErrors = useFieldErrors(props.context);
@@ -41,7 +47,10 @@ const id = (field: string) => `${props.idPrefix ?? 'class'}_${field}`;
              the name field so it reads as part of the form. -->
         <slot name="after-name" />
 
-        <div class="grid grid-cols-2 gap-3">
+        <div
+            class="grid gap-3"
+            :class="showCompletionDate ? 'grid-cols-3' : 'grid-cols-2'"
+        >
             <div class="grid gap-2">
                 <Label :for="id('date')">Scheduled date</Label>
                 <Input
@@ -50,6 +59,22 @@ const id = (field: string) => `${props.idPrefix ?? 'class'}_${field}`;
                     v-model="form.scheduled_date"
                 />
                 <InputError :message="fieldErrors.message('scheduled_date')" />
+            </div>
+            <div v-if="showCompletionDate" class="grid gap-2">
+                <Label :for="id('completion_date')">Completion date</Label>
+                <Input
+                    :id="id('completion_date')"
+                    data-testid="class-completion-date"
+                    type="date"
+                    v-model="form.completion_date"
+                />
+                <!-- Recording it early is the point: a multi-day class ends on
+                     a different day than it starts, and close-out offers this
+                     rather than asking again. -->
+                <p class="text-xs text-muted-foreground">
+                    Confirmed when the class is completed.
+                </p>
+                <InputError :message="fieldErrors.message('completion_date')" />
             </div>
             <div class="grid gap-2">
                 <Label :for="id('total_hours')">Class hours</Label>

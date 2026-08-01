@@ -22,6 +22,7 @@ function detail(): ClassDetail {
         notes: null,
         status: 'scheduled',
         completion_date: null,
+        was_completed: false,
         can_edit: true,
         trainings: [
             {
@@ -38,6 +39,7 @@ function detail(): ClassDetail {
                 cert_text: null,
                 cert_code: null,
                 card_fields: [],
+                expire_date: null,
                 credits: [],
             },
             {
@@ -54,6 +56,7 @@ function detail(): ClassDetail {
                 cert_text: null,
                 cert_code: null,
                 card_fields: [],
+                expire_date: null,
                 credits: [],
             },
         ],
@@ -88,6 +91,23 @@ const chip = (testid: string): HTMLButtonElement =>
     document.body.querySelector<HTMLButtonElement>(
         `[data-testid="${testid}"]`,
     )!;
+
+const dateInput = (): HTMLInputElement =>
+    document.body.querySelector<HTMLInputElement>('#complete_date')!;
+
+const expiryInput = (topicId: string): HTMLInputElement =>
+    document.body.querySelector<HTMLInputElement>(
+        `[data-testid="complete-expire-${topicId}"]`,
+    )!;
+
+function setValue(el: HTMLInputElement, value: string): void {
+    el.value = value;
+    el.dispatchEvent(new Event('input'));
+}
+
+const setDate = (value: string) => setValue(dateInput(), value);
+const setExpiry = (topicId: string, value: string) =>
+    setValue(expiryInput(topicId), value);
 
 function submitForm(): void {
     document.body
@@ -132,6 +152,10 @@ describe('ClassCompleteModal', () => {
                     ],
                 },
             ],
+            trainings: [
+                { id: 'ct1', expire_date: null },
+                { id: 'ct2', expire_date: null },
+            ],
         });
     });
 
@@ -162,6 +186,10 @@ describe('ClassCompleteModal', () => {
                     ],
                 },
             ],
+            trainings: [
+                { id: 'ct1', expire_date: null },
+                { id: 'ct2', expire_date: null },
+            ],
         });
     });
 
@@ -190,6 +218,10 @@ describe('ClassCompleteModal', () => {
                         { class_training_id: 'ct2', result: 'fail' },
                     ],
                 },
+            ],
+            trainings: [
+                { id: 'ct1', expire_date: null },
+                { id: 'ct2', expire_date: null },
             ],
         });
     });
@@ -221,6 +253,10 @@ describe('ClassCompleteModal', () => {
                     ],
                 },
             ],
+            trainings: [
+                { id: 'ct1', expire_date: null },
+                { id: 'ct2', expire_date: null },
+            ],
         });
     });
 
@@ -250,11 +286,117 @@ describe('ClassCompleteModal', () => {
 
     it('flags a freshly-added enrollee on a re-opened class', async () => {
         const target = detail();
-        target.completion_date = '2026-06-01'; // previously completed → re-close
+        target.was_completed = true; // closed once → this is a re-close
         target.enrollments[0].status = 'enrolled'; // freshly added back in
 
         await openWith(target);
 
         expect(document.body.textContent).toContain('new');
+    });
+
+    it('does not call everyone new just because a date was entered early', async () => {
+        // `completion_date` is editable before close-out now, so it can no
+        // longer stand in for "this class has been closed before".
+        const target = detail();
+        target.completion_date = '2026-06-03';
+        target.was_completed = false;
+
+        await openWith(target);
+
+        expect(document.body.textContent).not.toContain('new');
+    });
+
+    describe('the completion date', () => {
+        it('offers the one already recorded on the class', async () => {
+            const target = detail();
+            target.completion_date = '2026-06-03';
+
+            await openWith(target);
+
+            expect(dateInput().value).toBe('2026-06-03');
+        });
+
+        it('falls back to the scheduled date when none was recorded', async () => {
+            await openWith(detail());
+
+            expect(dateInput().value).toBe('2026-06-01');
+        });
+    });
+
+    describe('per-topic expiry', () => {
+        it('offers what each topic would derive, and sends it', async () => {
+            const store = useClassesStore();
+            const complete = vi
+                .spyOn(store, 'complete')
+                .mockResolvedValue(detail());
+            const target = detail();
+            target.trainings[0].repeat_days = 365;
+            target.trainings[1].repeating = false;
+
+            await openWith(target);
+
+            expect(expiryInput('ct1').value).toBe('2027-06-01');
+            expect(expiryInput('ct2').value).toBe('');
+
+            submitForm();
+            await flushPromises();
+
+            expect(complete.mock.calls[0][1].trainings).toEqual([
+                { id: 'ct1', expire_date: '2027-06-01' },
+                { id: 'ct2', expire_date: null },
+            ]);
+        });
+
+        it('offers a hand-set expiry over the derived one', async () => {
+            const target = detail();
+            target.trainings[0].repeat_days = 365;
+            target.trainings[0].expire_date = '2029-07-15';
+
+            await openWith(target);
+
+            // Set deliberately on the class detail — close-out must confirm
+            // it, not silently recompute over the top of it.
+            expect(expiryInput('ct1').value).toBe('2029-07-15');
+        });
+
+        it('re-derives an untouched expiry when the completion date moves', async () => {
+            const target = detail();
+            target.trainings[0].repeat_days = 365;
+
+            await openWith(target);
+            expect(expiryInput('ct1').value).toBe('2027-06-01');
+
+            setDate('2026-06-08');
+            await flushPromises();
+
+            expect(expiryInput('ct1').value).toBe('2027-06-08');
+        });
+
+        it('leaves an edited expiry alone when the completion date moves', async () => {
+            const target = detail();
+            target.trainings[0].repeat_days = 365;
+
+            await openWith(target);
+            setExpiry('ct1', '2029-07-15');
+            await flushPromises();
+
+            setDate('2026-06-08');
+            await flushPromises();
+
+            // Someone typed it; recomputing over it would discard a decision.
+            expect(expiryInput('ct1').value).toBe('2029-07-15');
+        });
+
+        it('keeps a hand-set expiry when the completion date moves', async () => {
+            const target = detail();
+            target.trainings[0].repeat_days = 365;
+            target.trainings[0].expire_date = '2029-07-15';
+
+            await openWith(target);
+            setDate('2026-06-08');
+            await flushPromises();
+
+            expect(expiryInput('ct1').value).toBe('2029-07-15');
+        });
     });
 });

@@ -11,6 +11,11 @@ import { useErrorStore } from '@/stores/errors';
 export interface ClassFormFields {
     name: string;
     scheduled_date: string;
+    /**
+     * The day the class finishes — known in advance for a multi-day class,
+     * and the default close-out offers. Blank until someone says otherwise.
+     */
+    completion_date: string;
     start_time: string;
     end_time: string;
     location: string;
@@ -27,6 +32,7 @@ function emptyFields(): ClassFormFields {
     return {
         name: '',
         scheduled_date: '',
+        completion_date: '',
         start_time: '',
         end_time: '',
         location: '',
@@ -55,6 +61,7 @@ export function useClassForm(context: string) {
         form.value = {
             name: target?.name ?? '',
             scheduled_date: target?.scheduled_date ?? '',
+            completion_date: target?.completion_date ?? '',
             start_time: target?.start_time ?? '',
             end_time: target?.end_time ?? '',
             location: target?.location ?? '',
@@ -105,6 +112,7 @@ export function useClassForm(context: string) {
         return {
             name: form.value.name,
             scheduled_date: form.value.scheduled_date,
+            completion_date: blank(form.value.completion_date),
             start_time: blank(form.value.start_time),
             end_time: blank(form.value.end_time),
             location: blank(form.value.location),

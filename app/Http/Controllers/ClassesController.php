@@ -417,8 +417,9 @@ class ClassesController extends Controller
      * Re-open a completed class for editing — non-destructive: the issued
      * certificates (completions AND their numbers), roster results, and
      * expiries are all left intact; only the lock is released (status back to
-     * `scheduled`, `completed_at` cleared, the completion date kept as the
-     * default for re-closing). Because re-close only re-mints NULL cert_ids and
+     * `scheduled`, with `completed_at` and the completion date both kept —
+     * the first records that it was closed once, the second is the default
+     * for re-closing). Because re-close only re-mints NULL cert_ids and
      * preserves present ones, a re-open → fix-a-typo → re-close round-trip
      * leaves every existing certificate number byte-for-byte identical. Editing
      * fields touches no certs, removing a person de-issues only theirs (see
@@ -431,10 +432,10 @@ class ClassesController extends Controller
         Gate::authorize('update', $class);
         abort_unless($class->status === 'completed', 422, 'Only a completed class can be re-opened.');
 
-        $class->update([
-            'status' => 'scheduled',
-            'completed_at' => null,
-        ]);
+        // `completed_at` deliberately stands: it records that this class was
+        // closed at some point, which re-close and re-issue both key off.
+        // `status` is what says it's open again.
+        $class->update(['status' => 'scheduled']);
 
         event(new ClassChanged($class->id, $class->org_id, 'reopened'));
 
@@ -450,14 +451,14 @@ class ClassesController extends Controller
      * deliberately does NOT call the `CompleteClass` action: no completions
      * are issued or de-issued, no results are read, no expiries are
      * re-stamped. Only valid on a class that's `scheduled` AND was
-     * previously completed (`completion_date` set) — i.e. re-opened, not a
+     * previously completed (`completed_at` set) — i.e. re-opened, not a
      * fresh scheduled class.
      */
     public function reclose(TrainingClass $class): JsonResponse
     {
         Gate::authorize('update', $class);
         abort_if($class->status === 'completed', 422, 'This class is already completed.');
-        abort_if($class->completion_date === null, 422, "This class hasn't been completed yet — use Complete.");
+        abort_if($class->completed_at === null, 422, "This class hasn't been completed yet — use Complete.");
 
         $class->update([
             'status' => 'completed',
@@ -808,6 +809,11 @@ class ClassesController extends Controller
             'notes' => $c->notes,
             'status' => $c->status,
             'completion_date' => $c->completion_date?->toDateString(),
+            // Whether this class has ever been closed — distinct from whether
+            // it's closed right now (`status`). Re-open leaves `completed_at`
+            // standing precisely so this survives it. The completion date
+            // can't answer it: that's editable in advance now.
+            'was_completed' => $c->completed_at !== null,
             'can_edit' => Gate::check('update', $c),
             'trainings' => $c->classTrainings->map(fn (ClassTraining $ct) => [
                 'id' => $ct->id,
@@ -819,6 +825,10 @@ class ClassesController extends Controller
                 'std_freq_name' => $ct->std_freq_name,
                 'repeat_days' => $ct->repeat_days,
                 'hours' => $ct->hours,
+                // Stamped at close-out from the completion date + the frozen
+                // repeat interval, or set by hand beforehand when the real
+                // expiry isn't ours to compute. Null = derive it.
+                'expire_date' => $ct->expire_date?->toDateString(),
                 // Per-class cert overrides (editable while scheduled).
                 'cert_title' => $ct->cert_title,
                 'cert_text' => $ct->cert_text,

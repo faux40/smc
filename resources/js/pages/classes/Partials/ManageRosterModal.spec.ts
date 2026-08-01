@@ -26,6 +26,7 @@ const detail: ClassDetail = {
     notes: null,
     status: 'scheduled',
     completion_date: null,
+    was_completed: false,
     can_edit: true,
     trainings: [],
     enrollments: [
