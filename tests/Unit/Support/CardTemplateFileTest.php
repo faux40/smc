@@ -91,6 +91,31 @@ class CardTemplateFileTest extends TestCase
         $this->assertSame(2, $info->slideCount);
     }
 
+    public function test_a_document_template_is_sent_to_the_documents_page(): void
+    {
+        // The mirror of the doc-template rule: the two libraries are easy to
+        // confuse, so each refusal names the other rather than the format it
+        // happens to want.
+        $this->expectException(InvalidCardTemplate::class);
+        $this->expectExceptionMessageMatches('/Documents page/i');
+
+        CardTemplateFile::inspect(
+            $this->track($this->makeOdpFixture(['<text:p>x</text:p>'])),
+            'docx',
+        );
+    }
+
+    public function test_an_unrelated_file_still_gets_the_plain_rule(): void
+    {
+        $this->expectException(InvalidCardTemplate::class);
+        $this->expectExceptionMessageMatches('/\.pptx or \.odp/i');
+
+        CardTemplateFile::inspect(
+            $this->track($this->makeOdpFixture(['<text:p>x</text:p>'])),
+            'pdf',
+        );
+    }
+
     public function test_a_notes_thumbnail_is_not_a_slide(): void
     {
         // Impress writes <draw:page-thumbnail> into each slide's notes page,

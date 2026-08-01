@@ -6,6 +6,7 @@ use App\Events\DocTemplatesChanged;
 use App\Events\MergeFieldsChanged;
 use App\Models\DocTemplate;
 use App\Models\MergeField;
+use App\Support\Cards\CardTemplateFile;
 use App\Support\DocMerge\MergeDataBuilder;
 use App\Support\DocMerge\TemplateTranslator;
 use Illuminate\Http\JsonResponse;
@@ -171,7 +172,13 @@ class DocTemplatesController extends Controller
         };
 
         if (! in_array($extension, DocTemplate::EXTENSIONS, true)) {
-            $fail('Templates must be .docx or .odt files.');
+            // A card design arriving here is the routine mistake, not an
+            // exotic one: both modules have a "Templates" library and the
+            // upload dialogs are near-identical. Restating what this library
+            // accepts leaves the user stuck; naming the other one doesn't.
+            $fail(in_array($extension, CardTemplateFile::EXTENSIONS, true)
+                ? "That looks like a card design (.{$extension}). Upload it on the Cards page instead — this library is for DOCX or ODT documents."
+                : 'Templates must be .docx or .odt files.');
         }
 
         $zip = new ZipArchive;

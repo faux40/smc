@@ -140,6 +140,23 @@ class DocTemplatesApiTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_a_card_design_is_sent_to_the_cards_page(): void
+    {
+        // Both modules have a "Templates" library and the upload dialogs look
+        // alike, so a card design lands here regularly. Restating what this
+        // library accepts doesn't help; naming where the file belongs does.
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/doc-templates', [
+                'file' => UploadedFile::fake()->create('card.pptx', 100),
+                'name' => 'Wrong library',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.file.0', fn (string $m) => str_contains($m, 'Cards page'));
+    }
+
     // ---- replace (new version) ------------------------------------------------
 
     public function test_replace_chains_a_new_version_and_soft_deletes_the_old(): void

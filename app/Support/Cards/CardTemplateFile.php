@@ -2,6 +2,7 @@
 
 namespace App\Support\Cards;
 
+use App\Models\DocTemplate;
 use App\Support\DocMerge\TemplateTranslator;
 use ZipArchive;
 
@@ -40,7 +41,12 @@ class CardTemplateFile
         $extension = strtolower($extension);
 
         if (! in_array($extension, self::EXTENSIONS, true)) {
-            throw new InvalidCardTemplate('Card templates must be .pptx or .odp files.');
+            // The mirror of the doc-template rule: send a misfiled document
+            // template to the library that wants it instead of restating the
+            // formats this one takes.
+            throw new InvalidCardTemplate(in_array($extension, DocTemplate::EXTENSIONS, true)
+                ? "That looks like a document template (.{$extension}). Upload it on the Documents page instead — card designs are .pptx or .odp."
+                : 'Card templates must be .pptx or .odp files.');
         }
 
         $zip = new ZipArchive;
