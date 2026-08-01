@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Schema;
 
+use App\Models\AssignmentSource;
 use App\Models\Organization;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
@@ -58,7 +59,7 @@ class TrainingAssignmentSchemaTest extends TestCase
         $org = Organization::factory()->create();
         $ta = TrainingAssignment::factory()->for($org, 'organization')->create();
 
-        $source = \App\Models\AssignmentSource::create([
+        $source = AssignmentSource::create([
             'training_assignment_id' => $ta->id,
             'sourceable_type' => null,
             'sourceable_id' => null,

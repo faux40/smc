@@ -12,7 +12,7 @@ use Illuminate\Support\Carbon;
 class ExpiryStatus
 {
     /**
-     * @return array{key: string, label: string}  key ∈ expired|due_soon|current
+     * @return array{key: string, label: string} key ∈ expired|due_soon|current
      */
     public static function for(?string $expireDate, int $soonDays, string $today): array
     {

@@ -3,11 +3,13 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Models\AssignmentSource;
+use App\Models\ClassTraining;
 use App\Models\Completion;
 use App\Models\Organization;
 use App\Models\Requirement;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
+use App\Models\TrainingClass;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -175,9 +177,9 @@ class UserTrainingComplianceTest extends TestCase
         ['org' => $org, 'manager' => $manager, 'subject' => $subject] = $this->makeScenario();
 
         $training = Training::factory()->for($org, 'organization')->create(['name' => 'Forklift Cert']);
-        $class = \App\Models\TrainingClass::factory()->for($org, 'organization')
+        $class = TrainingClass::factory()->for($org, 'organization')
             ->create(['name' => 'June Safety Day']);
-        $ct = \App\Models\ClassTraining::factory()->for($class, 'trainingClass')
+        $ct = ClassTraining::factory()->for($class, 'trainingClass')
             ->create(['training_id' => $training->id]);
         Completion::factory()->create([
             'org_id' => $org->id,

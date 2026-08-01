@@ -202,6 +202,38 @@ class RichTextMarkupTest extends TestCase
         $this->assertSame(['b:June', ':, renew then'], $this->flags('**June**, renew then'));
     }
 
+    public function test_marking_wraps_a_value_so_the_expander_can_find_it(): void
+    {
+        /*
+         * Private-use characters (U+E000/U+E001): no keyboard produces them,
+         * both are legal XML, and neither TBS nor the zip touches them. They
+         * ride through the merge inside the value and are consumed by the
+         * post-merge pass before LibreOffice ever sees the file.
+         */
+        $this->assertSame(
+            RichTextMarkup::OPEN.'**bold**'.RichTextMarkup::CLOSE,
+            RichTextMarkup::mark('**bold**'),
+        );
+    }
+
+    public function test_marking_nothing_produces_nothing(): void
+    {
+        // An empty pair of markers is an empty run to place and a stray
+        // character to print if the pass is ever skipped.
+        $this->assertSame('', RichTextMarkup::mark(''));
+        $this->assertSame('', RichTextMarkup::mark('   '));
+    }
+
+    public function test_marking_strips_any_marker_already_in_the_value(): void
+    {
+        // An unbalanced marker in the input would leave the expander matching
+        // across the wrong stretch of text.
+        $this->assertSame(
+            RichTextMarkup::OPEN.'ab'.RichTextMarkup::CLOSE,
+            RichTextMarkup::mark('a'.RichTextMarkup::OPEN.'b'.RichTextMarkup::CLOSE),
+        );
+    }
+
     public function test_a_span_never_arrives_empty(): void
     {
         // An empty run is legal XML but pointless, and an empty <a:t> in a

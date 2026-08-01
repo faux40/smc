@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Models\AssignmentSource;
 use App\Models\Organization;
+use App\Models\Requirement;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Models\User;
@@ -128,15 +130,15 @@ class ComplianceControllerTest extends TestCase
         $org = Organization::factory()->create();
         $manager = $this->manager($org);
         $training = Training::factory()->for($org, 'organization')->create();
-        $req = \App\Models\Requirement::factory()->for($org, 'organization')->create(['name' => 'OSHA General']);
+        $req = Requirement::factory()->for($org, 'organization')->create(['name' => 'OSHA General']);
         $user = User::factory()->for($org, 'organization')->create();
-        $ta = \App\Models\TrainingAssignment::factory()->create([
+        $ta = TrainingAssignment::factory()->create([
             'org_id' => $org->id, 'user_id' => $user->id, 'training_id' => $training->id,
             'name' => $training->name, 'status' => 'overdue',
         ]);
-        \App\Models\AssignmentSource::create([
+        AssignmentSource::create([
             'training_assignment_id' => $ta->id,
-            'sourceable_type' => \App\Models\Requirement::class,
+            'sourceable_type' => Requirement::class,
             'sourceable_id' => $req->id,
             'added_at' => now(),
         ]);

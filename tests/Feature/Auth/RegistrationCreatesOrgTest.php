@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Events\OrganizationCreated;
 use App\Events\UserRegistered;
 use App\Models\Organization;
+use App\Models\StdFrequency;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -54,13 +55,13 @@ class RegistrationCreatesOrgTest extends TestCase
 
         $org = Organization::where('name', 'Acme Co')->firstOrFail();
 
-        $names = \App\Models\StdFrequency::withoutGlobalScope('organization')
+        $names = StdFrequency::withoutGlobalScope('organization')
             ->where('org_id', $org->id)
             ->pluck('name')
             ->all();
 
         $this->assertEqualsCanonicalizing(
-            array_column(\App\Models\StdFrequency::STANDARD, 'name'),
+            array_column(StdFrequency::STANDARD, 'name'),
             $names,
         );
         $this->assertContains('Every 5 Years', $names); // includes the new multi-year options

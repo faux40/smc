@@ -23,6 +23,7 @@ class RecalculateTrainingStatusCommand extends Command
 
         if ($orgs->isEmpty()) {
             $this->warn('No organizations found.');
+
             return self::SUCCESS;
         }
 

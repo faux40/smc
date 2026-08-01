@@ -18,6 +18,8 @@ use App\Models\TrainingClass;
 use App\Models\User;
 use App\Support\Cards\CardImposer;
 use App\Support\Cards\PdfNormalizer;
+use App\Support\Cards\RichTextExpander;
+use App\Support\Cards\RichTextMarkup;
 use App\Support\DocMerge\DocumentMergeService;
 use App\Support\DocMerge\PdfConverter;
 use Database\Seeders\RoleSeeder;
@@ -90,13 +92,21 @@ class GenerateCardSheetsTest extends TestCase
         ]);
     }
 
-    /** A card design on the linode disk, with $slides sides. */
-    private function template(int $slides = 1): CardTemplate
+    /**
+     * A card design on the linode disk, with $slides sides.
+     *
+     * $extraKeys go in their own frame — a design only merges the keys it
+     * actually mentions, so a test about a field has to put it on the card.
+     */
+    private function template(int $slides = 1, array $extraKeys = []): CardTemplate
     {
         $frame = fn (string $body) => '<draw:frame svg:x="0.2in" svg:y="0.2in" svg:width="2.5in" svg:height="0.6in">'
             .'<draw:text-box><text:p>'.$body.'</text:p></draw:text-box></draw:frame>';
 
-        $pages = [$frame('${full_name}')];
+        $pages = [$frame('${full_name}'.implode('', array_map(
+            fn (string $key) => '</text:p><text:p>${'.$key.'}',
+            $extraKeys,
+        )))];
 
         if ($slides === 2) {
             $pages[] = $frame('${trainer_id}');
@@ -161,6 +171,7 @@ class GenerateCardSheetsTest extends TestCase
             app(PdfNormalizer::class),
             app(CardImposer::class),
             app(FileClassDocument::class),
+            app(RichTextExpander::class),
         );
 
         return $run->fresh();
@@ -254,6 +265,93 @@ class GenerateCardSheetsTest extends TestCase
         $this->assertSame('INST-4471', $captured[0]['trainer_id']);
         $this->assertSame('INST-4471', $captured[1]['trainer_id']);
         $this->assertSame('First Aid / CPR', $captured[0]['training_name']);
+    }
+
+    public function test_a_formatted_value_reaches_the_converter_as_real_formatting(): void
+    {
+        /*
+         * C5, and the reason the expansion is a step of this job rather than
+         * of the merge: what matters is the file soffice is handed. Capture it
+         * at that exact moment — after OpenTBS has substituted the value and
+         * after the expander has been over it.
+         */
+        $seen = new \ArrayObject;
+        $this->app->bind(PdfConverter::class, fn () => new class($seen) extends PdfConverter
+        {
+            public function __construct(private \ArrayObject $seen) {}
+
+            public function toPdfBatch(array $paths, string $workDir): array
+            {
+                foreach ($paths as $path) {
+                    $zip = new \ZipArchive;
+                    $zip->open($path);
+                    $this->seen->append((string) $zip->getFromName('content.xml'));
+                    $zip->close();
+                }
+
+                return parent::toPdfBatch($paths, $workDir);
+            }
+        });
+
+        $field = CardField::factory()->for($this->training)->create([
+            'key' => 'endorsement', 'type' => 'rich', 'default_value' => null,
+        ]);
+        ClassTrainingCardValue::create([
+            'org_id' => $this->org->id,
+            'class_training_id' => $this->topic->id,
+            'card_field_id' => $field->id,
+            'value' => '**Authorized** for sit-down',
+        ]);
+
+        $this->holder('Sam', 'Ng', 1042);
+
+        $run = $this->dispatch($this->makeRun([
+            'card_template_id' => $this->template(1, ['endorsement'])->id,
+        ]));
+
+        $this->assertSame('done', $run->status);
+        $this->assertCount(1, $seen);
+
+        $content = $seen[0];
+
+        // The bold half is a span pointing at a style the document declares.
+        $this->assertMatchesRegularExpression(
+            '/<text:span text:style-name="[^"]+">Authorized<\/text:span>/',
+            $content,
+        );
+        $this->assertStringContainsString('fo:font-weight="bold"', $content);
+        $this->assertStringContainsString('for sit-down', $content);
+
+        // Neither the markers nor the markdown may survive to the print.
+        $this->assertStringNotContainsString(RichTextMarkup::OPEN, $content);
+        $this->assertStringNotContainsString(RichTextMarkup::CLOSE, $content);
+        $this->assertStringNotContainsString('**', $content);
+    }
+
+    public function test_a_design_with_no_formatted_field_is_never_rewritten(): void
+    {
+        // Most cards have no rich field. Opening and rewriting every merged
+        // zip for them would be work done to produce identical bytes.
+        $calls = new \ArrayObject;
+        $this->app->bind(RichTextExpander::class, fn () => new class($calls) extends RichTextExpander
+        {
+            public function __construct(private \ArrayObject $calls) {}
+
+            public function expand(string $path, string $extension): void
+            {
+                $this->calls->append($path);
+            }
+        });
+
+        CardField::factory()->for($this->training)->create([
+            'key' => 'trainer_id', 'type' => 'short', 'default_value' => 'INST-1',
+        ]);
+        $this->holder('Sam', 'Ng', 1042);
+
+        $run = $this->dispatch($this->makeRun());
+
+        $this->assertSame('done', $run->status);
+        $this->assertCount(0, $calls);
     }
 
     public function test_a_long_roster_spills_onto_more_sheets(): void
@@ -364,6 +462,7 @@ class GenerateCardSheetsTest extends TestCase
             app(PdfNormalizer::class),
             app(CardImposer::class),
             app(FileClassDocument::class),
+            app(RichTextExpander::class),
         );
 
         $this->assertSame(0, Attachment::query()->count());

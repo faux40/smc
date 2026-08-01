@@ -36,6 +36,40 @@ use League\CommonMark\Parser\MarkdownParser;
 class RichTextMarkup
 {
     /**
+     * The markers a rich value wears through the merge.
+     *
+     * Private-use characters: no keyboard produces them, both are legal XML
+     * (#xE000–#xFFFD), and neither TBS nor the zip gives them any meaning. A
+     * printable token would risk colliding with something an author typed.
+     *
+     * They exist only between {@see mark()} and {@see RichTextExpander}, which
+     * consumes them before LibreOffice ever opens the file.
+     */
+    public const OPEN = "\u{E000}";
+
+    public const CLOSE = "\u{E001}";
+
+    /**
+     * Wrap a value so the post-merge pass can find it in the document.
+     *
+     * Blank in, blank out: an empty pair of markers is an empty run to place,
+     * and a stray character to print if anything downstream skips the pass.
+     */
+    public static function mark(string $markdown): string
+    {
+        if (trim($markdown) === '') {
+            return '';
+        }
+
+        // Nobody types a private-use character, but a paste from somewhere odd
+        // could carry one — and an unbalanced marker would leave the expander
+        // matching across the wrong stretch of text.
+        $clean = str_replace([self::OPEN, self::CLOSE], '', $markdown);
+
+        return self::OPEN.$clean.self::CLOSE;
+    }
+
+    /**
      * Lines of spans. A line break — typed, or implied by a paragraph or list
      * item ending — starts a new line, so emitters can place their own break
      * element between them without re-reading the markdown.

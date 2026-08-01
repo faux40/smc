@@ -9,7 +9,6 @@ use App\Models\TrainingClass;
 use App\Support\CertificateData;
 use App\Support\ExpiryCalculator;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 
 /**
  * The values behind a card's `${keys}` (custom-certs C4) — one row per person
@@ -145,7 +144,11 @@ class CardMergeData
             ->mapWithKeys(function (CardField $field) use ($answers): array {
                 $value = $answers->get($field->id)?->value ?? $field->default_value ?? '';
 
-                return [$field->key => $field->type === 'rich' ? self::plain($value) : $value];
+                // A rich value travels as its own markdown, marked so the
+                // post-merge pass can turn it into real runs. It used to be
+                // flattened to plain text here, which threw the formatting
+                // away before anything downstream could act on it.
+                return [$field->key => $field->type === 'rich' ? RichTextMarkup::mark($value) : $value];
             })
             ->all() ?? [];
     }
@@ -180,32 +183,5 @@ class CardMergeData
         }
 
         return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
-    }
-
-    /**
-     * A `rich` value as plain text, until C5 converts the markdown subset into
-     * real PPTX/ODP runs. Stripping the markers beats printing them: a literal
-     * `**` on purchased stock is worse than losing the bold.
-     */
-    private static function plain(string $markdown): string
-    {
-        if ($markdown === '') {
-            return '';
-        }
-
-        $html = Str::markdown($markdown, [
-            'html_input' => 'strip',
-            'allow_unsafe_links' => false,
-        ]);
-
-        // Block ends become line breaks so a list stays a list of lines.
-        $text = preg_replace('/<\/(p|li|h[1-6])>/i', "\n", $html) ?? $html;
-        $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-
-        // Collapse the blank lines the block substitution leaves behind.
-        $text = preg_replace("/[ \t]+\n/", "\n", $text) ?? $text;
-        $text = preg_replace("/\n{2,}/", "\n", $text) ?? $text;
-
-        return trim($text);
     }
 }

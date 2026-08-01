@@ -12,6 +12,7 @@ use App\Models\TrainingClass;
 use App\Models\User;
 use App\Support\Cards\CardMergeData;
 use App\Support\Cards\CardMergeKeys;
+use App\Support\Cards\RichTextMarkup;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -354,21 +355,67 @@ class CardMergeDataTest extends TestCase
         $this->assertSame('', CardMergeData::forTopic($this->topic)[0]['trainer_id']);
     }
 
-    public function test_a_formatted_field_reaches_the_card_as_plain_text_for_now(): void
+    public function test_a_formatted_field_reaches_the_merge_as_marked_up_markdown(): void
     {
-        // C5 turns the markdown subset into real PPTX/ODP runs. Until then the
-        // markers are stripped rather than printed — literal ** on purchased
-        // stock is worse than losing the bold.
+        /*
+         * C5: the markdown now travels intact to the merge, wrapped in
+         * markers, and RichTextExpander turns it into real runs afterwards.
+         * It used to be flattened to plain text here, which threw the
+         * formatting away before anything could act on it.
+         */
         $field = $this->field(['key' => 'endorsement', 'type' => 'rich']);
-        $this->answer($field, "**Authorized** for:\n\n- Sit-down\n- Stand-up");
+        $this->answer($field, '**Authorized** for sit-down');
         $this->holder();
 
         $value = CardMergeData::forTopic($this->topic)[0]['endorsement'];
 
-        $this->assertStringNotContainsString('**', $value);
-        $this->assertStringNotContainsString('<', $value);
-        $this->assertStringContainsString('Authorized for:', $value);
-        $this->assertStringContainsString('Sit-down', $value);
+        $this->assertSame(
+            RichTextMarkup::OPEN.'**Authorized** for sit-down'.RichTextMarkup::CLOSE,
+            $value,
+        );
+    }
+
+    public function test_a_plain_field_is_never_marked(): void
+    {
+        // Only `rich` fields get the treatment; marking a short field would
+        // put the pass to work for nothing and risk a stray marker printing.
+        $field = $this->field(['key' => 'trainer_id', 'type' => 'short']);
+        $this->answer($field, '**INST-1**');
+        $this->holder();
+
+        $this->assertSame(
+            '**INST-1**',
+            CardMergeData::forTopic($this->topic)[0]['trainer_id'],
+        );
+    }
+
+    public function test_an_empty_formatted_field_carries_no_marker(): void
+    {
+        /*
+         * The common case — a card defines a formatted field and most classes
+         * leave it blank. An empty pair of markers would be an empty run for
+         * the expander to place, and a stray marker on the card if anything
+         * downstream ever skipped the pass.
+         */
+        $this->field(['key' => 'endorsement', 'type' => 'rich', 'default_value' => null]);
+        $this->holder();
+
+        $this->assertSame('', CardMergeData::forTopic($this->topic)[0]['endorsement']);
+    }
+
+    public function test_a_marker_character_inside_a_value_cannot_confuse_the_pass(): void
+    {
+        // Nobody types a private-use character, but a paste from somewhere odd
+        // could carry one, and an unbalanced marker would leave the expander
+        // matching across the wrong stretch of text.
+        $field = $this->field(['key' => 'endorsement', 'type' => 'rich']);
+        $this->answer($field, 'safe'.RichTextMarkup::CLOSE.'ty');
+        $this->holder();
+
+        $this->assertSame(
+            RichTextMarkup::OPEN.'safety'.RichTextMarkup::CLOSE,
+            CardMergeData::forTopic($this->topic)[0]['endorsement'],
+        );
     }
 
     public function test_a_custom_key_cannot_be_overwritten_by_the_catalogue(): void

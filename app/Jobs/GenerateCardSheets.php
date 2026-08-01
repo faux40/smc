@@ -9,6 +9,8 @@ use App\Support\Cards\CardImposer;
 use App\Support\Cards\CardMergeData;
 use App\Support\Cards\CardSheetPlan;
 use App\Support\Cards\PdfNormalizer;
+use App\Support\Cards\RichTextExpander;
+use App\Support\Cards\RichTextMarkup;
 use App\Support\DocMerge\DocumentMergeService;
 use App\Support\DocMerge\PdfConverter;
 use App\Support\DocMerge\TemplateTranslator;
@@ -54,6 +56,7 @@ class GenerateCardSheets implements ShouldQueue
         PdfNormalizer $normalizer,
         CardImposer $imposer,
         FileClassDocument $filer,
+        RichTextExpander $expander,
     ): void {
         $run = CardPrintRun::query()
             ->withoutGlobalScope('organization')
@@ -129,7 +132,20 @@ class GenerateCardSheets implements ShouldQueue
                 );
             }
 
-            // 3. one soffice run for the batch, then normalise each for FPDI
+            // 3. turn any formatted value into real runs (C5). After the
+            //    merge, because only now is the author's own run visible to
+            //    clone; before the conversion, because LibreOffice is what
+            //    renders the result. Skipped outright when nothing was
+            //    marked, which is most cards — the gate is the merged data
+            //    rather than the field definitions, so a formatted field
+            //    left blank on this class costs nothing either.
+            if ($this->hasMarkedValues($rows)) {
+                foreach ($mergedPaths as $path) {
+                    $expander->expand($path, $template->extension);
+                }
+            }
+
+            // 4. one soffice run for the batch, then normalise each for FPDI
             $converted = $converter->toPdfBatch($mergedPaths, $workDir);
 
             $normalized = [];
@@ -138,7 +154,7 @@ class GenerateCardSheets implements ShouldQueue
                 $normalized[] = $normalizer->normalize($pdf, sprintf('%s/norm_%04d.pdf', $workDir, $i));
             }
 
-            // 4. impose. The plan owns every placement decision.
+            // 5. impose. The plan owns every placement decision.
             $plan = new CardSheetPlan(
                 $stock,
                 (float) $template->card_width,
@@ -165,7 +181,7 @@ class GenerateCardSheets implements ShouldQueue
                 )
                 : null;
 
-            // 5. file both under one stamp
+            // 6. file both under one stamp
             $stamp = Carbon::now(config('app.display_timezone'))->format('Ymd_Hi');
             $topicName = (string) $topic->training_name;
 
@@ -214,6 +230,28 @@ class GenerateCardSheets implements ShouldQueue
         if ($run->trainingClass !== null) {
             event(new ClassChanged($run->class_id, $run->org_id, 'updated'));
         }
+    }
+
+    /**
+     * Is there any formatted value in this run at all?
+     *
+     * Asked of the merged data rather than the field definitions: a training
+     * can define a formatted field that this class left blank, and that costs
+     * nothing to print, so it should cost nothing to check either.
+     *
+     * @param  list<array<string, string>>  $rows
+     */
+    private function hasMarkedValues(array $rows): bool
+    {
+        foreach ($rows as $row) {
+            foreach ($row as $value) {
+                if (str_contains($value, RichTextMarkup::OPEN)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function cleanUp(?string $workDir): void

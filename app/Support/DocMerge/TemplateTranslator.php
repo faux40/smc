@@ -2,8 +2,6 @@
 
 namespace App\Support\DocMerge;
 
-use ZipArchive;
-
 /**
  * Translates `${key}` / `${key:MODIFIER}` template placeholders into
  * TinyButStrong `[m.key;...]` fields inside DOCX/ODT XML, ported from
@@ -136,27 +134,7 @@ class TemplateTranslator
      */
     private function eachXmlSubfile(string $path, callable $callback): void
     {
-        $zip = new ZipArchive;
-        if ($zip->open($path) !== true) {
-            throw new \RuntimeException("Failed to open archive: {$path}");
-        }
-
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $name = $zip->getNameIndex($i);
-            if (! str_ends_with($name, '.xml')) {
-                continue;
-            }
-            $content = $zip->getFromIndex($i);
-            if ($content === false) {
-                continue;
-            }
-            $replacement = $callback($name, $content);
-            if ($replacement !== null) {
-                $zip->addFromString($name, $replacement);
-            }
-        }
-
-        $zip->close();
+        (new ZipXmlEditor)->each($path, $callback);
     }
 
     // ---- list-block promotion --------------------------------------

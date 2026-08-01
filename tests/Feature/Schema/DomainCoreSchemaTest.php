@@ -8,6 +8,7 @@ use App\Models\Requirement;
 use App\Models\RqmtElement;
 use App\Models\StdFrequency;
 use App\Models\Training;
+use App\Models\TrainingAssignment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
@@ -194,7 +195,7 @@ class DomainCoreSchemaTest extends TestCase
             ->create();
 
         // The user has no training assignment for this module.
-        $this->assertSame(0, \App\Models\TrainingAssignment::query()->where('user_id', $user->id)->count());
+        $this->assertSame(0, TrainingAssignment::query()->where('user_id', $user->id)->count());
 
         $completion = Completion::factory()
             ->for($org, 'organization')

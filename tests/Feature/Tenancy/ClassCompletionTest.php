@@ -279,7 +279,7 @@ class ClassCompletionTest extends TestCase
         $alice = User::factory()->for($org, 'organization')->create();
         $bob = User::factory()->for($org, 'organization')->create();
         $eAlice = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $alice->id]);
-        $eBob   = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $bob->id]);
+        $eBob = ClassEnrollment::factory()->for($class, 'trainingClass')->create(['user_id' => $bob->id]);
 
         $this->actingAs($manager)
             ->postJson("/api/classes/{$class->id}/complete", [
