@@ -399,6 +399,26 @@ describe('CardFieldsEditor', () => {
         });
     });
 
+    it('promises only the markdown that actually prints', async () => {
+        /*
+         * C5 ships bold, italic and line breaks — deliberately not lists,
+         * which are paragraph-level and were cut. The placeholder is the
+         * feature's documentation, and it must not advertise formatting that
+         * would silently degrade to plain text on purchased stock.
+         */
+        const { wrapper } = await editor([
+            row({ id: 'f1', key: 'endorsement', type: 'rich' }),
+        ]);
+
+        const hint = wrapper
+            .get('[data-testid="card-field-rich"]')
+            .attributes('placeholder');
+
+        expect(hint).toContain('**bold**');
+        expect(hint).toContain('*italic*');
+        expect(hint).not.toContain('list');
+    });
+
     it('leaves save disabled until something changes', async () => {
         const { wrapper } = await editor([row({ id: 'f1' })]);
 

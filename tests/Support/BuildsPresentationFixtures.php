@@ -128,6 +128,98 @@ XML);
     }
 
     /**
+     * A PPTX that LibreOffice will actually OPEN and render at the requested
+     * card size — for tests that convert rather than merely inspect.
+     *
+     * Far less ceremony than the ODP twin below: probed empirically
+     * (2026-08-01), soffice accepts a package with no slide master, no
+     * layout and no theme, and honours `<p:sldSz>` — the PDF MediaBox comes
+     * out at the card size and a `b="1"` run embeds LiberationSans-Bold
+     * beside the regular face. If a future LibreOffice tightens up, add the
+     * master/layout/theme parts back rather than relaxing the assertions.
+     *
+     * @param  array<int, string>  $slides  text-body XML per slide (runs and
+     *                                      paragraphs; the shape is provided)
+     */
+    protected function makeRenderablePptxFixture(
+        array $slides = ['<a:p><a:r><a:rPr lang="en-US" sz="1200"/><a:t>${full_name}</a:t></a:r></a:p>'],
+        float $widthInches = 3.375,
+        float $heightInches = 2.125,
+        ?string $path = null,
+    ): string {
+        $path ??= tempnam(sys_get_temp_dir(), 'rcard').'.pptx';
+
+        $zip = new ZipArchive;
+        $zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+
+        $cx = (int) round($widthInches * self::EMU_PER_INCH);
+        $cy = (int) round($heightInches * self::EMU_PER_INCH);
+
+        $overrides = '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>';
+        $slideIds = '';
+        $slideRels = '';
+
+        foreach (array_keys($slides) as $i) {
+            $n = $i + 1;
+            $overrides .= '<Override PartName="/ppt/slides/slide'.$n.'.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>';
+            $slideIds .= '<p:sldId id="'.(256 + $i).'" r:id="rId'.$n.'"/>';
+            $slideRels .= '<Relationship Id="rId'.$n.'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide'.$n.'.xml"/>';
+        }
+
+        $zip->addFromString('[Content_Types].xml',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            .'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            .'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            .'<Default Extension="xml" ContentType="application/xml"/>'
+            .$overrides
+            .'</Types>');
+
+        $zip->addFromString('_rels/.rels',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            .'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            .'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>'
+            .'</Relationships>');
+
+        $zip->addFromString('ppt/_rels/presentation.xml.rels',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            .'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'.$slideRels.'</Relationships>');
+
+        $zip->addFromString('ppt/presentation.xml',
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            .'<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"'
+            .' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            .'<p:sldIdLst>'.$slideIds.'</p:sldIdLst>'
+            .'<p:sldSz cx="'.$cx.'" cy="'.$cy.'"/>'
+            .'</p:presentation>');
+
+        foreach (array_values($slides) as $i => $body) {
+            $n = $i + 1;
+
+            $zip->addFromString('ppt/slides/_rels/slide'.$n.'.xml.rels',
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                .'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>');
+
+            $zip->addFromString('ppt/slides/slide'.$n.'.xml',
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                .'<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"'
+                .' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+                .' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+                .'<p:cSld><p:spTree>'
+                .'<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>'
+                .'<p:sp><p:nvSpPr><p:cNvPr id="2" name="Card text"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>'
+                .'<p:spPr><a:xfrm><a:off x="182880" y="182880"/><a:ext cx="2286000" cy="1097280"/></a:xfrm>'
+                .'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>'
+                .'<p:txBody><a:bodyPr/>'.$body.'</p:txBody></p:sp>'
+                .'</p:spTree></p:cSld>'
+                .'</p:sld>');
+        }
+
+        $zip->close();
+
+        return $path;
+    }
+
+    /**
      * An ODP that LibreOffice will actually OPEN and render at the requested
      * card size — for tests that convert rather than merely inspect.
      *

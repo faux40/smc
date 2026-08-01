@@ -130,6 +130,35 @@ describe('ClassCardFieldsModal', () => {
         expect(areas()[0].value).toBe('Signed off');
     });
 
+    it('tells a formatted field how to format', async () => {
+        /*
+         * This modal is where per-class values are actually typed — if the
+         * hint lives only on the training's field editor, the person entering
+         * an endorsement here has no way to know `**bold**` prints bold.
+         */
+        await open([field({ id: 'f1', key: 'notes', type: 'rich' })]);
+
+        const hint = document.body.querySelector(
+            '[data-testid="card-value-format-hint"]',
+        );
+
+        expect(hint).not.toBeNull();
+        expect(hint?.textContent).toContain('**bold**');
+        expect(hint?.textContent).not.toContain('list');
+    });
+
+    it('offers no formatting hint on a plain field', async () => {
+        // A short field prints exactly what is typed; the hint would be a
+        // false promise there.
+        await open([field({ id: 'f1' })]);
+
+        expect(
+            document.body.querySelector(
+                '[data-testid="card-value-format-hint"]',
+            ),
+        ).toBeNull();
+    });
+
     it('shows the training default as the placeholder, not as the answer', async () => {
         // The distinction matters: leaving it blank prints the default, and
         // pre-filling it would turn the default into a copy that stops

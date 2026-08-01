@@ -328,6 +328,83 @@ class GenerateCardSheetsTest extends TestCase
         $this->assertStringNotContainsString('**', $content);
     }
 
+    public function test_a_formatted_value_prints_from_a_pptx_design_too(): void
+    {
+        /*
+         * The other half of C5's format matrix. ODP is covered above; this
+         * proves the PPTX path — clone-and-amend `<a:rPr>` rather than minted
+         * styles — through the same real chain, since "well-formed XML" and
+         * "XML LibreOffice honours" are different claims.
+         */
+        $seen = new \ArrayObject;
+        $this->app->bind(PdfConverter::class, fn () => new class($seen) extends PdfConverter
+        {
+            public function __construct(private \ArrayObject $seen) {}
+
+            public function toPdfBatch(array $paths, string $workDir): array
+            {
+                foreach ($paths as $path) {
+                    $zip = new \ZipArchive;
+                    $zip->open($path);
+                    $this->seen->append((string) $zip->getFromName('ppt/slides/slide1.xml'));
+                    $zip->close();
+                }
+
+                return parent::toPdfBatch($paths, $workDir);
+            }
+        });
+
+        $field = CardField::factory()->for($this->training)->create([
+            'key' => 'endorsement', 'type' => 'rich', 'default_value' => null,
+        ]);
+        ClassTrainingCardValue::create([
+            'org_id' => $this->org->id,
+            'class_training_id' => $this->topic->id,
+            'card_field_id' => $field->id,
+            'value' => '**Authorized** for sit-down',
+        ]);
+
+        $this->holder('Sam', 'Ng', 1042);
+
+        $fixture = $this->makeRenderablePptxFixture([
+            '<a:p><a:r><a:rPr lang="en-US" sz="1200"/><a:t>${full_name}</a:t></a:r></a:p>'
+            .'<a:p><a:r><a:rPr lang="en-US" sz="900"/><a:t>${endorsement}</a:t></a:r></a:p>',
+        ]);
+        $path = "card-templates/{$this->org->id}/".uniqid('design_').'.pptx';
+        Storage::disk('linode')->put($path, file_get_contents($fixture));
+        @unlink($fixture);
+
+        $template = CardTemplate::factory()->for($this->org, 'organization')->create([
+            'extension' => 'pptx',
+            'path' => $path,
+            'slide_count' => 1,
+            'card_width' => 243.0,
+            'card_height' => 153.0,
+            'version' => 1,
+        ]);
+
+        $run = $this->dispatch($this->makeRun(['card_template_id' => $template->id]));
+
+        $this->assertSame('done', $run->status);
+        $this->assertNull($run->error);
+        $this->assertCount(1, $seen);
+
+        $slide = $seen[0];
+
+        // The bold half became its own run with b="1" — and the author's
+        // 9pt size survived onto it, which is the whole point of cloning.
+        $this->assertMatchesRegularExpression(
+            '/<a:rPr[^>]*sz="900"[^>]*b="1"[^>]*\/><a:t>Authorized<\/a:t>/',
+            $slide,
+        );
+        $this->assertStringContainsString('<a:t> for sit-down</a:t>', $slide);
+        $this->assertStringContainsString('<a:t>Sam Ng</a:t>', $slide);
+
+        $this->assertStringNotContainsString(RichTextMarkup::OPEN, $slide);
+        $this->assertStringNotContainsString(RichTextMarkup::CLOSE, $slide);
+        $this->assertStringNotContainsString('**', $slide);
+    }
+
     public function test_a_design_with_no_formatted_field_is_never_rewritten(): void
     {
         // Most cards have no rich field. Opening and rewriting every merged

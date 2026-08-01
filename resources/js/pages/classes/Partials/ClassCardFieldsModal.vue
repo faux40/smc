@@ -142,17 +142,27 @@ async function save(): Promise<void> {
                         </code>
                     </div>
 
-                    <textarea
-                        v-if="field.type === 'rich'"
-                        :id="`cv_${field.id}`"
-                        data-testid="card-value-rich"
-                        v-model="form[field.id]"
-                        rows="4"
-                        :maxlength="field.max_length"
-                        :disabled="readOnly"
-                        class="w-full rounded border border-input bg-background p-2 text-sm disabled:opacity-60"
-                        :placeholder="placeholderFor(field.default_value)"
-                    ></textarea>
+                    <template v-if="field.type === 'rich'">
+                        <textarea
+                            :id="`cv_${field.id}`"
+                            data-testid="card-value-rich"
+                            v-model="form[field.id]"
+                            rows="4"
+                            :maxlength="field.max_length"
+                            :disabled="readOnly"
+                            class="w-full rounded border border-input bg-background p-2 text-sm disabled:opacity-60"
+                            :placeholder="placeholderFor(field.default_value)"
+                        ></textarea>
+                        <!-- This is where values are typed, so this is where
+                             the supported markdown has to be discoverable. -->
+                        <p
+                            data-testid="card-value-format-hint"
+                            class="text-xs text-muted-foreground"
+                        >
+                            **bold** and *italic* print formatted; a new line
+                            starts a new line on the card.
+                        </p>
+                    </template>
                     <Input
                         v-else
                         :id="`cv_${field.id}`"

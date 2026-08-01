@@ -388,7 +388,7 @@ const TYPE_LABELS: Record<CardFieldType, string> = {
                                 rows="2"
                                 maxlength="2000"
                                 class="w-full rounded border border-input bg-background p-2 text-sm"
-                                placeholder="Markdown: **bold**, *italic*, - lists"
+                                placeholder="**bold**, *italic*; a new line starts a new line"
                             ></textarea>
                             <!--
                             Bound through '' rather than v-model: the draft
