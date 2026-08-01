@@ -10,6 +10,7 @@
  * literal text on a purchased card.
  */
 import { computed, onMounted, ref } from 'vue';
+import { toast } from 'vue-sonner';
 import CopyableKey from '@/components/CopyableKey.vue';
 import { Label } from '@/components/ui/label';
 import { useCardFieldsStore } from '@/stores/cardFields';
@@ -31,6 +32,14 @@ const customFields = computed(() =>
     trainingId.value ? fields.forTraining(trainingId.value) : [],
 );
 
+/** The server's reason when it gave one, ours when it didn't. */
+function reason(e: unknown, fallback: string): string {
+    return (
+        (e as { response?: { data?: { message?: string } } }).response?.data
+            ?.message ?? fallback
+    );
+}
+
 async function chooseTraining(id: string): Promise<void> {
     trainingId.value = id;
 
@@ -42,13 +51,24 @@ async function chooseTraining(id: string): Promise<void> {
 
     try {
         await fields.load(id);
+    } catch (e) {
+        // finally-without-catch let this escape: the spinner cleared and
+        // the training's fields simply never appeared, unexplained.
+        toast.error(reason(e, "Could not load this training's card fields."));
     } finally {
         loadingFields.value = false;
     }
 }
 
 onMounted(async () => {
-    await Promise.all([keys.load(), trainings.load()]);
+    // On this page an unexplained empty list is dangerous, not just untidy:
+    // its own warning is that a mistyped key prints as literal text, and an
+    // empty catalogue invites retyping keys from memory.
+    try {
+        await Promise.all([keys.load(), trainings.load()]);
+    } catch (e) {
+        toast.error(reason(e, 'Could not load the merge keys.'));
+    }
 });
 </script>
 

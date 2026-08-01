@@ -144,4 +144,38 @@ describe('CardPrintRunsList', () => {
 
         expect(subscribe).toHaveBeenCalledWith('org1');
     });
+
+    it('says so when the list cannot be loaded', async () => {
+        /*
+         * Regression: mount awaited store.load() bare, so a failed fetch
+         * (403, network blip) became an unhandled promise rejection with
+         * nothing on screen — a run from an earlier session that failed
+         * would simply never be mentioned.
+         */
+        setActivePinia(createPinia());
+        const store = useCardPrintRunsStore();
+        vi.spyOn(store, 'subscribe').mockImplementation(() => {});
+        vi.spyOn(store, 'load').mockRejectedValue({
+            response: { data: { message: 'Not allowed.' } },
+        });
+
+        mount(CardPrintRunsList, { props: { classId: 'c1' } });
+        await flushPromises();
+
+        expect(toastError).toHaveBeenCalledWith('Not allowed.');
+    });
+
+    it('falls back to a generic reason when the server gives none', async () => {
+        setActivePinia(createPinia());
+        const store = useCardPrintRunsStore();
+        vi.spyOn(store, 'subscribe').mockImplementation(() => {});
+        vi.spyOn(store, 'load').mockRejectedValue(new Error('network'));
+
+        mount(CardPrintRunsList, { props: { classId: 'c1' } });
+        await flushPromises();
+
+        expect(toastError).toHaveBeenCalledWith(
+            expect.stringContaining('print runs'),
+        );
+    });
 });

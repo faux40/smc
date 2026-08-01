@@ -11,6 +11,13 @@ import type { ClassDetail } from '@/stores/classes';
 import { useTrainingsStore } from '@/stores/trainings';
 
 vi.mock('axios');
+const toastError = vi.fn();
+vi.mock('vue-sonner', () => ({
+    toast: {
+        success: vi.fn(),
+        error: (...args: unknown[]) => toastError(...args),
+    },
+}));
 const routerVisit = vi.fn();
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
@@ -66,7 +73,10 @@ function mockGet(detailOverride: ClassDetail = detail) {
             if (
                 url === '/api/trainings' ||
                 url === '/api/tags' ||
-                url === '/api/attachments'
+                url === '/api/attachments' ||
+                url === '/api/card-templates' ||
+                url === '/api/card-stocks' ||
+                url === '/api/classes/c1/card-runs'
             ) {
                 return Promise.resolve({ data: [] });
             }
@@ -322,6 +332,65 @@ describe('classes/Show — student counts', () => {
         expect(modal.props('open')).toBe(true);
         expect(modal.props('topicId')).toBe('ct2');
         expect(modal.props('classId')).toBe('c1');
+    });
+
+    it('closes the print dialog and says why when designs cannot be fetched', async () => {
+        /*
+         * Regression: openPrintCards awaited the design/stock fetches bare
+         * from a click handler, so offline (or on a 403) the rejection was
+         * unhandled and the user was left in a dialog whose design and stock
+         * lists were silently empty — a dead end with no explanation.
+         * Closing instead makes the button itself the retry.
+         */
+        const topic = {
+            id: 'ct1',
+            training_id: 't1',
+            training_name: 'CPR',
+            initial_only: false,
+            repeating: true,
+            as_needed: false,
+            std_freq_name: null,
+            repeat_days: null,
+            hours: '4.00',
+            cert_title: null,
+            cert_text: null,
+            cert_code: null,
+            card_fields: [],
+            credits: [],
+        };
+
+        // Serve everything as usual except the design catalogue.
+        const base = axios.get as ReturnType<typeof vi.fn>;
+        mockGet({ ...detail, trainings: [topic] });
+        const usual = base.getMockImplementation() as (
+            url: string,
+            ...rest: unknown[]
+        ) => Promise<unknown>;
+        base.mockImplementation((url: string, ...rest: unknown[]) =>
+            url === '/api/card-templates'
+                ? Promise.reject({
+                      response: { data: { message: 'Not allowed.' } },
+                  })
+                : usual(url, ...rest),
+        );
+
+        const trainings = useTrainingsStore();
+        trainings.library = [{ id: 't1', card_template_id: 'tpl1' } as never];
+        trainings.loaded = true;
+
+        const wrapper = await mountShow();
+
+        await wrapper
+            .get('[data-testid="class-documents"]')
+            .findAll('button')
+            .filter((b) => b.text().startsWith('Print cards'))[0]
+            .trigger('click');
+        await flushPromises();
+
+        expect(toastError).toHaveBeenCalledWith('Not allowed.');
+        expect(wrapper.findComponent(PrintCardsModal).props('open')).toBe(
+            false,
+        );
     });
 
     it('names the topic when a class prints more than one card', async () => {

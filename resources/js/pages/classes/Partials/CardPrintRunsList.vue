@@ -65,6 +65,14 @@ watch(
     { immediate: true },
 );
 
+/** The server's reason when it gave one, ours when it didn't. */
+function reason(e: unknown, fallback: string): string {
+    return (
+        (e as { response?: { data?: { message?: string } } }).response?.data
+            ?.message ?? fallback
+    );
+}
+
 /**
  * Dismiss a settled run. Only the record goes — the sheets it filed live in
  * Documents with their own delete, so tidying the list never destroys output.
@@ -73,10 +81,7 @@ async function clear(runId: string): Promise<void> {
     try {
         await store.destroy(props.classId, runId);
     } catch (e) {
-        toast.error(
-            (e as { response?: { data?: { message?: string } } }).response?.data
-                ?.message ?? 'Could not clear that print run.',
-        );
+        toast.error(reason(e, 'Could not clear that print run.'));
     }
 }
 
@@ -87,8 +92,14 @@ onMounted(async () => {
         store.subscribe(orgId);
     }
 
-    // A failure from an earlier session still needs somewhere to be read.
-    await store.load(props.classId);
+    // A failure from an earlier session still needs somewhere to be read —
+    // including a failure to fetch it: a bare await here left a 403 or a
+    // network blip as an unhandled rejection with nothing on screen.
+    try {
+        await store.load(props.classId);
+    } catch (e) {
+        toast.error(reason(e, 'Could not load the card print runs.'));
+    }
 });
 </script>
 

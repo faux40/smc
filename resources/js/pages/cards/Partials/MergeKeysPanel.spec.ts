@@ -7,6 +7,13 @@ import { useTrainingsStore } from '@/stores/trainings';
 import MergeKeysPanel from './MergeKeysPanel.vue';
 
 vi.mock('axios');
+const toastError = vi.fn();
+vi.mock('vue-sonner', () => ({
+    toast: {
+        success: vi.fn(),
+        error: (...args: unknown[]) => toastError(...args),
+    },
+}));
 
 const writeText = vi.fn();
 
@@ -63,6 +70,44 @@ describe('MergeKeysPanel', () => {
             value: { writeText },
             configurable: true,
         });
+    });
+
+    it('says so when the catalogue cannot be fetched', async () => {
+        /*
+         * Regression: mount awaited the catalogue and training loads bare,
+         * so a failed fetch was an unhandled rejection and the page showed
+         * an empty key list with no explanation — which, on a page whose
+         * whole warning is "a typo in a key reaches the card", invites
+         * retyping keys from memory.
+         */
+        setActivePinia(createPinia());
+
+        const keys = useCardMergeKeysStore();
+        vi.spyOn(keys, 'load').mockRejectedValue({
+            response: { data: { message: 'Not allowed.' } },
+        });
+        const trainings = useTrainingsStore();
+        vi.spyOn(trainings, 'load').mockResolvedValue();
+
+        const wrapper = mount(MergeKeysPanel);
+        await flushPromises();
+
+        expect(toastError).toHaveBeenCalledWith('Not allowed.');
+
+        wrapper.unmount();
+    });
+
+    it('surfaces a failure to load a training’s own fields', async () => {
+        // chooseTraining had a finally with no catch, so this rejection
+        // escaped the handler entirely — spinner cleared, nothing shown.
+        const { wrapper, fields } = await mountPanel();
+        vi.spyOn(fields, 'load').mockRejectedValue(new Error('network'));
+
+        await pickTraining(wrapper, 't1');
+
+        expect(toastError).toHaveBeenCalledWith(
+            expect.stringContaining('fields'),
+        );
     });
 
     it('lists the built-in keys under their groups', async () => {

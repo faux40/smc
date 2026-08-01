@@ -2,6 +2,7 @@
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ChevronDown } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 import AsyncState from '@/components/AsyncState.vue';
 import AttachmentsList from '@/components/AttachmentsList.vue';
 import AttachmentViewer from '@/components/AttachmentViewer.vue';
@@ -159,7 +160,18 @@ async function openPrintCards(topicId: string): Promise<void> {
     // Designs and stocks are only needed once someone actually prints, so
     // they're fetched here rather than on every class view. Both stores
     // no-op when already loaded.
-    await Promise.all([cardTemplates.load(), cardStocks.load()]);
+    try {
+        await Promise.all([cardTemplates.load(), cardStocks.load()]);
+    } catch (e) {
+        // Without them the dialog is a dead end of empty pickers, so close
+        // it and say why — the button itself is the retry.
+        printOpen.value = false;
+        toast.error(
+            (e as { response?: { data?: { message?: string } } }).response
+                ?.data?.message ??
+                'Could not load the card designs and stocks.',
+        );
+    }
 }
 const rosterOpen = ref(false);
 const reopenOpen = ref(false);
