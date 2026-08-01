@@ -6,6 +6,7 @@ use App\Actions\FileClassDocument;
 use App\Jobs\GenerateCardSheets;
 use App\Models\Attachment;
 use App\Models\CardField;
+use App\Models\CardFont;
 use App\Models\CardPrintRun;
 use App\Models\CardStock;
 use App\Models\CardTemplate;
@@ -98,10 +99,17 @@ class GenerateCardSheetsTest extends TestCase
      * $extraKeys go in their own frame — a design only merges the keys it
      * actually mentions, so a test about a field has to put it on the card.
      */
-    private function template(int $slides = 1, array $extraKeys = []): CardTemplate
+    private function template(int $slides = 1, array $extraKeys = [], ?string $font = null): CardTemplate
     {
+        // A declared family lands in the fixture's own automatic styles, so
+        // CardTemplateFile reads it back exactly as it would from a real
+        // design saved out of Impress.
+        $span = fn (string $body) => $font === null
+            ? $body
+            : '<text:span text:style-name="TF">'.$body.'</text:span>';
+
         $frame = fn (string $body) => '<draw:frame svg:x="0.2in" svg:y="0.2in" svg:width="2.5in" svg:height="0.6in">'
-            .'<draw:text-box><text:p>'.$body.'</text:p></draw:text-box></draw:frame>';
+            .'<draw:text-box><text:p>'.$span($body).'</text:p></draw:text-box></draw:frame>';
 
         $pages = [$frame('${full_name}'.implode('', array_map(
             fn (string $key) => '</text:p><text:p>${'.$key.'}',
@@ -112,7 +120,7 @@ class GenerateCardSheetsTest extends TestCase
             $pages[] = $frame('${trainer_id}');
         }
 
-        $fixture = $this->makeRenderableOdpFixture($pages);
+        $fixture = $this->makeRenderableOdpFixture($pages, font: $font);
         // Unique per call, exactly as a real upload is: makeRun() builds a
         // default template even when one is passed in, and a shared path let
         // the single-sided file quietly overwrite the two-sided one.
@@ -127,6 +135,10 @@ class GenerateCardSheetsTest extends TestCase
             'card_width' => 243.0,
             'card_height' => 153.0,
             'version' => 3,
+            // What the design DECLARES, as a real upload would have recorded
+            // it — this column, not the file, is what the run reads to decide
+            // which uploaded fonts to stage.
+            'fonts' => $font === null ? ['Arial'] : ['Arial', $font],
         ]);
     }
 
@@ -280,7 +292,7 @@ class GenerateCardSheetsTest extends TestCase
         {
             public function __construct(private \ArrayObject $seen) {}
 
-            public function toPdfBatch(array $paths, string $workDir): array
+            public function toPdfBatch(array $paths, string $workDir, ?string $home = null): array
             {
                 foreach ($paths as $path) {
                     $zip = new \ZipArchive;
@@ -289,7 +301,7 @@ class GenerateCardSheetsTest extends TestCase
                     $zip->close();
                 }
 
-                return parent::toPdfBatch($paths, $workDir);
+                return parent::toPdfBatch($paths, $workDir, $home);
             }
         });
 
@@ -341,7 +353,7 @@ class GenerateCardSheetsTest extends TestCase
         {
             public function __construct(private \ArrayObject $seen) {}
 
-            public function toPdfBatch(array $paths, string $workDir): array
+            public function toPdfBatch(array $paths, string $workDir, ?string $home = null): array
             {
                 foreach ($paths as $path) {
                     $zip = new \ZipArchive;
@@ -350,7 +362,7 @@ class GenerateCardSheetsTest extends TestCase
                     $zip->close();
                 }
 
-                return parent::toPdfBatch($paths, $workDir);
+                return parent::toPdfBatch($paths, $workDir, $home);
             }
         });
 
@@ -467,6 +479,90 @@ class GenerateCardSheetsTest extends TestCase
         // run, not an arbitrary person.
         $this->assertCount(1, $merged);
         $this->assertSame('Dana Abel', $merged[0]['full_name']);
+    }
+
+    public function test_a_font_the_org_uploaded_is_staged_where_the_converter_will_see_it(): void
+    {
+        /*
+         * C6c, and the only thing that makes the font library worth having.
+         * LibreOffice embeds fonts it can SEE; an uninstalled family is
+         * substituted and the card re-flows at different metrics. The run
+         * stages the org's file into its own HOME so fontconfig finds it —
+         * verified against the real converter, since "we copied a file" and
+         * "soffice used it" are different claims.
+         */
+        $family = 'Liberation Serif'; // installed, so the spike is honest
+        Storage::disk('linode')->put(
+            'card-fonts/test.ttf',
+            (string) file_get_contents('/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf'),
+        );
+        CardFont::factory()->for($this->org, 'organization')->create([
+            'family' => $family,
+            'path' => 'card-fonts/test.ttf',
+            'format' => 'ttf',
+        ]);
+
+        $seen = new \ArrayObject;
+        $this->app->bind(PdfConverter::class, fn () => new class($seen) extends PdfConverter
+        {
+            public function __construct(private \ArrayObject $seen) {}
+
+            public function toPdfBatch(array $paths, string $workDir, ?string $home = null): array
+            {
+                $this->seen->append(
+                    $home === null ? [] : array_values(array_diff(
+                        scandir("{$home}/.fonts") ?: [],
+                        ['.', '..'],
+                    )),
+                );
+
+                return parent::toPdfBatch($paths, $workDir, $home);
+            }
+        });
+
+        // The design has to ASK for the family, or there is nothing to stage.
+        $template = $this->template(1, [], $family);
+        $this->holder('Sam', 'Ng', 1042);
+
+        $run = $this->dispatch($this->makeRun(['card_template_id' => $template->id]));
+
+        $this->assertSame('done', $run->status);
+        $this->assertCount(1, $seen);
+        $this->assertCount(1, $seen[0], 'the uploaded font should be staged');
+    }
+
+    public function test_a_design_asking_for_nothing_special_stages_no_fonts(): void
+    {
+        /*
+         * Staging every font an org owns into every run would be wasted I/O
+         * and would let an unrelated licensed font ride along into a PDF that
+         * gets emailed out. Only what the design declares goes in.
+         */
+        Storage::disk('linode')->put('card-fonts/unused.ttf', 'x');
+        CardFont::factory()->for($this->org, 'organization')->create([
+            'family' => 'Gotham', 'path' => 'card-fonts/unused.ttf',
+        ]);
+
+        $homes = new \ArrayObject;
+        $this->app->bind(PdfConverter::class, fn () => new class($homes) extends PdfConverter
+        {
+            public function __construct(private \ArrayObject $homes) {}
+
+            public function toPdfBatch(array $paths, string $workDir, ?string $home = null): array
+            {
+                $this->homes->append($home);
+
+                return parent::toPdfBatch($paths, $workDir, $home);
+            }
+        });
+
+        $this->holder('Sam', 'Ng', 1042);
+
+        $run = $this->dispatch($this->makeRun());
+
+        $this->assertSame('done', $run->status);
+        // No staging at all: the default profile is reused, as before C6c.
+        $this->assertNull($homes[0]);
     }
 
     public function test_a_long_roster_spills_onto_more_sheets(): void

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Models\CardFont;
 use App\Models\CardTemplate;
 use App\Models\MergeField;
 use App\Models\Organization;
@@ -136,6 +137,68 @@ class CardTemplatesApiTest extends TestCase
             ->post('/api/card-templates', ['name' => 'Fancy', 'file' => $file])
             ->assertCreated()
             ->assertJsonPath('unsupported_fonts', ['Brush Script MT']);
+    }
+
+    public function test_an_uploaded_font_clears_the_warning_for_that_family(): void
+    {
+        /*
+         * C6c, and the whole point of the font library: once the org owns
+         * the file, the converter will see it, so the design is no longer
+         * going to be substituted and must stop being warned about.
+         *
+         * Computed on read rather than trusted from the column written at
+         * upload — a font can be added (or removed) long after a design was
+         * uploaded, and a warning frozen at upload time would be a lie in
+         * both directions.
+         */
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+
+        $file = $this->upload($this->makePptxFixture([
+            '<a:rPr><a:latin typeface="Brush Script MT"/></a:rPr>'
+            .'<a:rPr><a:latin typeface="Gotham"/></a:rPr>',
+        ]));
+
+        $this->actingAs($admin)
+            ->post('/api/card-templates', ['name' => 'Fancy', 'file' => $file])
+            ->assertCreated()
+            ->assertJsonPath('unsupported_fonts', ['Brush Script MT', 'Gotham']);
+
+        CardFont::factory()->for($org, 'organization')->create([
+            // Spelled differently from the slide on purpose: matching is by
+            // family, case-insensitively.
+            'family' => 'brush script mt',
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/card-templates')
+            ->assertOk()
+            ->assertJsonPath('0.unsupported_fonts', ['Gotham']);
+    }
+
+    public function test_another_orgs_font_does_not_clear_this_orgs_warning(): void
+    {
+        // Fonts are licensed per org and never cross one; a warning that
+        // cleared because a stranger uploaded a file would be a lie.
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+
+        $file = $this->upload($this->makePptxFixture([
+            '<a:rPr><a:latin typeface="Gotham"/></a:rPr>',
+        ]));
+
+        $this->actingAs($admin)
+            ->post('/api/card-templates', ['name' => 'Fancy', 'file' => $file])
+            ->assertCreated();
+
+        CardFont::factory()
+            ->for(Organization::factory()->create(), 'organization')
+            ->create(['family' => 'Gotham']);
+
+        $this->actingAs($admin)
+            ->getJson('/api/card-templates')
+            ->assertOk()
+            ->assertJsonPath('0.unsupported_fonts', ['Gotham']);
     }
 
     public function test_card_keys_are_not_registered_as_org_merge_fields(): void

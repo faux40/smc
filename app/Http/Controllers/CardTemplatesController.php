@@ -6,6 +6,7 @@ use App\Models\CardTemplate;
 use App\Models\Training;
 use App\Support\Cards\CardTemplateFile;
 use App\Support\Cards\InvalidCardTemplate;
+use App\Support\Cards\SupportedFonts;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,18 @@ use Illuminate\Validation\ValidationException;
 class CardTemplatesController extends Controller
 {
     private const DISK = 'linode';
+
+    private ?SupportedFonts $supportedFonts = null;
+
+    /**
+     * Installed families plus this org's uploads, resolved once per request —
+     * index() serializes a whole library and would otherwise re-query the
+     * font table per template.
+     */
+    private function supportedFonts(): SupportedFonts
+    {
+        return $this->supportedFonts ??= SupportedFonts::forOrg(request()->user()?->org_id);
+    }
 
     public function index(Request $request): JsonResponse
     {
@@ -181,7 +194,9 @@ class CardTemplatesController extends Controller
             // an unknown key here is a typo, not a new field to define.
             'placeholders' => $info->placeholders,
             'fonts' => $info->fonts,
-            'unsupported_fonts' => $info->unsupportedFonts(),
+            // A snapshot of the warning at upload; the API always serves
+            // the freshly computed value, since the font library moves.
+            'unsupported_fonts' => $this->supportedFonts()->missingFrom($info->fonts),
             'slide_count' => $info->slideCount,
             'card_width' => $info->cardWidth,
             'card_height' => $info->cardHeight,
@@ -205,9 +220,17 @@ class CardTemplatesController extends Controller
             'size' => $t->size,
             'placeholders' => $t->placeholders,
             'fonts' => $t->fonts,
-            // Families LibreOffice would substitute — the card would re-flow
-            // at different metrics, which is what ruins a print.
-            'unsupported_fonts' => $t->unsupported_fonts,
+            /*
+             * Families LibreOffice would substitute — the card would re-flow
+             * at different metrics, which is what ruins a print.
+             *
+             * Computed here rather than read from the column written at
+             * upload: the org's font library changes independently of its
+             * designs (C6c), so a warning frozen at upload time would lie in
+             * both directions — still warning about a font that has since
+             * been uploaded, and staying silent about one that was removed.
+             */
+            'unsupported_fonts' => $this->supportedFonts()->missingFrom($t->fonts ?? []),
             'slide_count' => $t->slide_count,
             'has_back' => $t->hasBack(),
             'card_width' => $t->card_width,

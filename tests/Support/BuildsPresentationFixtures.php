@@ -241,6 +241,7 @@ XML);
         string $pageWidth = '3.375in',
         string $pageHeight = '2.125in',
         ?string $path = null,
+        ?string $font = null,
     ): string {
         $path ??= tempnam(sys_get_temp_dir(), 'rcard').'.odp';
 
@@ -270,7 +271,13 @@ XML);
             .' xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"'
             .' xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"'
             .' xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"'
-            .' xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.2">'
+            .' xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"'
+            .' xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.2">'
+            // A text style naming $font, so CardTemplateFile reads the family
+            // back exactly as it would from a design saved out of Impress.
+            .($font === null ? '' :
+                '<office:automatic-styles><style:style style:name="TF" style:family="text">'
+                .'<style:text-properties fo:font-family="'.$font.'"/></style:style></office:automatic-styles>')
             .'<office:body><office:presentation>'.$drawPages.'</office:presentation></office:body>'
             .'</office:document-content>');
 

@@ -4,13 +4,16 @@ namespace App\Jobs;
 
 use App\Actions\FileClassDocument;
 use App\Events\ClassChanged;
+use App\Models\CardFont;
 use App\Models\CardPrintRun;
+use App\Models\CardTemplate;
 use App\Support\Cards\CardImposer;
 use App\Support\Cards\CardMergeData;
 use App\Support\Cards\CardSheetPlan;
 use App\Support\Cards\PdfNormalizer;
 use App\Support\Cards\RichTextExpander;
 use App\Support\Cards\RichTextMarkup;
+use App\Support\Cards\SupportedFonts;
 use App\Support\DocMerge\DocumentMergeService;
 use App\Support\DocMerge\PdfConverter;
 use App\Support\DocMerge\TemplateTranslator;
@@ -155,8 +158,16 @@ class GenerateCardSheets implements ShouldQueue
                 }
             }
 
-            // 4. one soffice run for the batch, then normalise each for FPDI
-            $converted = $converter->toPdfBatch($mergedPaths, $workDir);
+            // 4. one soffice run for the batch, then normalise each for FPDI.
+            //    Any font this design asks for that the org uploaded is
+            //    staged first, so the converter can SEE it — otherwise
+            //    LibreOffice substitutes and the card re-flows at different
+            //    metrics, which is what ruins a print onto purchased stock.
+            $converted = $converter->toPdfBatch(
+                $mergedPaths,
+                $workDir,
+                $this->stageFonts($template, $workDir),
+            );
 
             $normalized = [];
 
@@ -240,6 +251,59 @@ class GenerateCardSheets implements ShouldQueue
         if ($run->trainingClass !== null) {
             event(new ClassChanged($run->class_id, $run->org_id, 'updated'));
         }
+    }
+
+    /**
+     * Put the org's uploaded fonts where LibreOffice will find them
+     * (custom-certs C6c), and return the HOME to run it under.
+     *
+     * fontconfig reads `$HOME/.fonts`, so a directory inside this run's own
+     * work dir gives the converter the family without installing anything
+     * into the container and without one org's licensed font reaching
+     * another org's cards. The whole thing is deleted with the work dir.
+     *
+     * Only the families this design declares: staging the org's entire
+     * library into every run would be wasted I/O and would let an unrelated
+     * licensed font ride along into a PDF that gets emailed out.
+     *
+     * @return string|null the HOME to convert under, or null to leave the
+     *                     shared profile alone (the common case — measured
+     *                     ~70ms cheaper, and most designs need no upload)
+     */
+    private function stageFonts(CardTemplate $template, string $workDir): ?string
+    {
+        $needed = SupportedFonts::forOrg($template->org_id)
+            ->neededFrom($template->fonts ?? []);
+
+        if ($needed === []) {
+            return null;
+        }
+
+        $fonts = CardFont::query()
+            ->withoutGlobalScope('organization')
+            ->where('org_id', $template->org_id)
+            ->whereIn('family_key', $needed)
+            ->get();
+
+        if ($fonts->isEmpty()) {
+            return null;
+        }
+
+        $home = "{$workDir}/home";
+        $dir = "{$home}/.fonts";
+
+        if (! is_dir($dir)) {
+            mkdir($dir, 0700, true);
+        }
+
+        foreach ($fonts as $font) {
+            file_put_contents(
+                $dir.'/'.$font->stagedFilename(),
+                Storage::disk(self::DISK)->get($font->path),
+            );
+        }
+
+        return $home;
     }
 
     /**

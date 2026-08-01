@@ -26,10 +26,18 @@ class PdfConverter
      * LibreOffice 40 times to print 40 cards would dominate the job's runtime.
      * soffice accepts multiple inputs per invocation and writes one PDF each.
      *
+     * `$home` overrides the HOME the converter runs under, which is how a
+     * card run makes its org's uploaded fonts visible (custom-certs C6c):
+     * fontconfig reads `$HOME/.fonts`, so staging files there lets soffice
+     * SEE a family without installing anything into the container and
+     * without one org's licensed font reaching another's cards. Null keeps
+     * the shared profile — measured at ~70ms cheaper, and the common case
+     * has no fonts to stage.
+     *
      * @param  list<string>  $inputPaths
      * @return list<string>
      */
-    public function toPdfBatch(array $inputPaths, string $outputDir): array
+    public function toPdfBatch(array $inputPaths, string $outputDir, ?string $home = null): array
     {
         $outputs = [];
 
@@ -41,7 +49,7 @@ class PdfConverter
                 '--outdir', $outputDir,
                 ...$chunk,
             ]);
-            $process->setEnv(['HOME' => sys_get_temp_dir()]);
+            $process->setEnv(['HOME' => $home ?? sys_get_temp_dir()]);
             // Longer than the single-file timeout: this is many documents.
             $process->setTimeout(600);
             $process->run();
@@ -69,7 +77,7 @@ class PdfConverter
     /**
      * Convert $inputPath to PDF in $outputDir; returns the PDF path.
      */
-    public function toPdf(string $inputPath, string $outputDir): string
+    public function toPdf(string $inputPath, string $outputDir, ?string $home = null): string
     {
         $process = new Process([
             config('services.soffice.path', 'soffice'),
@@ -80,7 +88,7 @@ class PdfConverter
         ]);
         // soffice writes profile state to HOME; point it somewhere writable
         // (queue workers may run with a restricted HOME).
-        $process->setEnv(['HOME' => sys_get_temp_dir()]);
+        $process->setEnv(['HOME' => $home ?? sys_get_temp_dir()]);
         $process->setTimeout(120);
         $process->run();
 

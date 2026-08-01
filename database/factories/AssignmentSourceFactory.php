@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\AssignmentSource;
+use App\Models\Requirement;
 use App\Models\TrainingAssignment;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -24,10 +25,10 @@ class AssignmentSourceFactory extends Factory
         ];
     }
 
-    public function forRequirement(\App\Models\Requirement $requirement): static
+    public function forRequirement(Requirement $requirement): static
     {
         return $this->state([
-            'sourceable_type' => \App\Models\Requirement::class,
+            'sourceable_type' => Requirement::class,
             'sourceable_id' => $requirement->id,
         ]);
     }

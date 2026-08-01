@@ -335,7 +335,7 @@ class DevDataSeeder extends Seeder
 
         foreach ($users->take($count75) as $idx => $user) {
             $user->update([
-                'employee_number' => 'EMP-' . str_pad((string) ($idx + 1), 3, '0', STR_PAD_LEFT),
+                'employee_number' => 'EMP-'.str_pad((string) ($idx + 1), 3, '0', STR_PAD_LEFT),
                 'department' => self::DEPARTMENTS[$idx % count(self::DEPARTMENTS)],
                 'location' => self::LOCATIONS[$idx % count(self::LOCATIONS)],
                 'job_title' => self::JOB_TITLES[$idx % count(self::JOB_TITLES)],
@@ -349,9 +349,9 @@ class DevDataSeeder extends Seeder
     /**
      * Create 12 tags and attach them to trainings, requirements, and users.
      *
-     * @param  Collection<string, Training>   $trainings    keyed by name
+     * @param  Collection<string, Training>  $trainings  keyed by name
      * @param  Collection<int, Requirement>  $requirements
-     * @param  Collection<int, User>         $users
+     * @param  Collection<int, User>  $users
      */
     private function seedTags(
         Organization $org,
@@ -428,33 +428,34 @@ class DevDataSeeder extends Seeder
                     continue;
                 }
 
-                $key = $pair['user']->id . '|' . $training->id;
+                $key = $pair['user']->id.'|'.$training->id;
 
                 if (isset($seen[$key])) {
                     // TA exists from another requirement — add a second source row.
                     AssignmentSource::create([
                         'training_assignment_id' => $seen[$key],
-                        'sourceable_type'        => Requirement::class,
-                        'sourceable_id'          => $pair['requirement']->id,
-                        'added_at'               => now(),
+                        'sourceable_type' => Requirement::class,
+                        'sourceable_id' => $pair['requirement']->id,
+                        'added_at' => now(),
                     ]);
+
                     continue;
                 }
 
                 $ta = TrainingAssignment::create([
-                    'org_id'            => $org->id,
-                    'user_id'           => $pair['user']->id,
-                    'training_id'       => $training->id,
-                    'name'              => $trainingName,
+                    'org_id' => $org->id,
+                    'user_id' => $pair['user']->id,
+                    'training_id' => $training->id,
+                    'name' => $trainingName,
                     'last_completed_at' => null,
-                    'expires_at'        => null,
+                    'expires_at' => null,
                 ]);
 
                 AssignmentSource::create([
                     'training_assignment_id' => $ta->id,
-                    'sourceable_type'        => Requirement::class,
-                    'sourceable_id'          => $pair['requirement']->id,
-                    'added_at'               => now(),
+                    'sourceable_type' => Requirement::class,
+                    'sourceable_id' => $pair['requirement']->id,
+                    'added_at' => now(),
                 ]);
 
                 $seen[$key] = $ta->id;

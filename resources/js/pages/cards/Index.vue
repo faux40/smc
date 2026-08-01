@@ -9,6 +9,7 @@ import { computed, onMounted, ref } from 'vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
+import CardFontsList from '@/pages/cards/Partials/CardFontsList.vue';
 import CardStockFormModal from '@/pages/cards/Partials/CardStockFormModal.vue';
 import CardStocksList from '@/pages/cards/Partials/CardStocksList.vue';
 import CardTemplatesList from '@/pages/cards/Partials/CardTemplatesList.vue';
@@ -27,7 +28,7 @@ defineOptions({
     },
 });
 
-type Tab = 'templates' | 'stocks' | 'keys';
+type Tab = 'templates' | 'stocks' | 'fonts' | 'keys';
 const tab = ref<Tab>('templates');
 
 const stocks = useCardStocksStore();
@@ -120,6 +121,20 @@ onMounted(async () => {
             <Button
                 variant="ghost"
                 role="tab"
+                data-testid="tab-fonts"
+                :aria-selected="tab === 'fonts'"
+                :class="
+                    tab === 'fonts'
+                        ? 'rounded-b-none border-b-2 border-primary'
+                        : ''
+                "
+                @click="tab = 'fonts'"
+            >
+                Fonts
+            </Button>
+            <Button
+                variant="ghost"
+                role="tab"
                 data-testid="tab-keys"
                 :aria-selected="tab === 'keys'"
                 :class="
@@ -136,6 +151,8 @@ onMounted(async () => {
         <CardTemplatesList v-if="tab === 'templates'" :can-define="canDefine" />
 
         <MergeKeysPanel v-else-if="tab === 'keys'" />
+
+        <CardFontsList v-else-if="tab === 'fonts'" :can-define="canDefine" />
 
         <template v-else>
             <CardStocksList

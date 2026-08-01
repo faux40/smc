@@ -27,23 +27,4 @@ class CardTemplateInfo
     {
         return $this->slideCount === 2;
     }
-
-    /**
-     * Declared families the converter cannot honour — LibreOffice would
-     * substitute these and re-flow the card. A warning, not a blocker.
-     *
-     * @return array<int, string>
-     */
-    public function unsupportedFonts(): array
-    {
-        $supported = array_map(
-            'mb_strtolower',
-            (array) config('cards.supported_fonts', []),
-        );
-
-        return array_values(array_filter(
-            $this->fonts,
-            fn (string $font) => ! in_array(mb_strtolower($font), $supported, true),
-        ));
-    }
 }

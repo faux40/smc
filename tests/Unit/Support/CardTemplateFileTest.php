@@ -231,11 +231,15 @@ class CardTemplateFileTest extends TestCase
         $this->assertSame(['Liberation Sans', 'Zapfino'], $info->fonts);
     }
 
-    public function test_unsupported_fonts_are_the_ones_the_converter_cannot_honour(): void
+    public function test_it_reports_every_declared_family_without_judging_them(): void
     {
-        // LibreOffice embeds fonts into the PDF, but only fonts it can SEE:
-        // an uninstalled family is substituted and the card re-flows, which
-        // is what ruins a print. Detect it at upload instead.
+        /*
+         * Inspection answers "what does the file ask for"; whether each
+         * family will actually print is SupportedFonts' question, because
+         * the answer depends on the org's uploaded library and changes after
+         * the upload. Two owners for that one question is how a design ends
+         * up warned about a font it will happily print.
+         */
         $info = CardTemplateFile::inspect(
             $this->track($this->makePptxFixture([
                 '<a:rPr><a:latin typeface="Arial"/></a:rPr>'
@@ -244,9 +248,8 @@ class CardTemplateFileTest extends TestCase
             'pptx',
         );
 
-        // Arial is metric-compatible with a shipped face; the script font is
-        // not installed anywhere in the image.
-        $this->assertSame(['Brush Script MT'], $info->unsupportedFonts());
+        sort($info->fonts);
+        $this->assertSame(['Arial', 'Brush Script MT'], $info->fonts);
     }
 
     // ---- structural validation ------------------------------------------
