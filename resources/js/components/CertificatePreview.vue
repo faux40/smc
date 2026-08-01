@@ -8,19 +8,25 @@ import { renderMarkdown } from '@/lib/markdown';
  * out. Pure/props-only; the exact output is always the downloadable PDF (this
  * deliberately skips the PDF background image and the script signature font).
  */
+/**
+ * Exported so anything wrapping this preview can forward every prop without
+ * restating the list — see CertificatePreviewPane, which renders it twice.
+ */
+export interface CertificatePreviewProps {
+    orgName?: string;
+    studentName?: string;
+    certTitle?: string;
+    certText?: string;
+    issueDate?: string;
+    expires?: string;
+    hours?: string;
+    instructor?: string;
+    certId?: string;
+    showSignature?: boolean;
+}
+
 const props = withDefaults(
-    defineProps<{
-        orgName?: string;
-        studentName?: string;
-        certTitle?: string;
-        certText?: string;
-        issueDate?: string;
-        expires?: string;
-        hours?: string;
-        instructor?: string;
-        certId?: string;
-        showSignature?: boolean;
-    }>(),
+    defineProps<CertificatePreviewProps>(),
     {
         orgName: 'Your Organization',
         studentName: 'Sample Student',

@@ -373,6 +373,19 @@ describe('ClassTopicPanel', () => {
             );
         });
 
+        it('names the topic on its certificate preview', async () => {
+            // A class shows one of these per topic, so a bare "Enlarge" would
+            // be ambiguous the moment there are two on screen.
+            const { wrapper } = mountPanel();
+            await openCert(wrapper);
+
+            expect(
+                wrapper
+                    .get('[data-testid="cert-preview-open"]')
+                    .attributes('aria-label'),
+            ).toContain('First Aid / CPR');
+        });
+
         it('rolls the card fields shut on request', async () => {
             const { wrapper } = mountPanel(
                 topic({ card_fields: [field({ id: 'f1' })] }),

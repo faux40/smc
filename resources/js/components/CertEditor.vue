@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
-import CertificatePreview from '@/components/CertificatePreview.vue';
+import CertificatePreviewPane from '@/components/CertificatePreviewPane.vue';
 import InputError from '@/components/InputError.vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +17,8 @@ const text = defineModel<string>('text', { required: true });
 
 const props = defineProps<{
     context?: string;
+    /** Names the certificate being previewed — a class has one per topic. */
+    label?: string;
     /**
      * Distinguishes the input ids when more than one editor is on the page —
      * a class shows one per topic. Defaults to the historical ids so the
@@ -38,9 +40,9 @@ const orgName = computed(
 </script>
 
 <template>
-    <div class="grid items-start gap-4 lg:grid-cols-2">
+    <div class="flex flex-col items-start gap-4 lg:flex-row">
         <!-- Editor -->
-        <div class="space-y-3">
+        <div class="min-w-0 flex-1 space-y-3">
             <div class="grid gap-2">
                 <Label :for="id('cert_title')">SMC Certificate title</Label>
                 <Input
@@ -74,15 +76,13 @@ const orgName = computed(
             </div>
         </div>
 
-        <!-- Live preview -->
-        <div class="lg:sticky lg:top-4">
-            <p class="mb-1 text-xs font-medium text-muted-foreground">
-                Preview
-            </p>
-            <CertificatePreview
+        <!-- Live preview: small beside the fields, full size on request. -->
+        <div class="shrink-0 lg:sticky lg:top-4">
+            <CertificatePreviewPane
                 :org-name="orgName"
                 :cert-title="title"
                 :cert-text="text"
+                :label="label"
             />
         </div>
     </div>

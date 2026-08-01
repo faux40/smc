@@ -316,6 +316,7 @@ async function save(): Promise<void> {
                     v-model:title="form.cert_title"
                     v-model:text="form.cert_text"
                     :id-prefix="`t_${topic.id}`"
+                    :label="topic.training_name"
                     :disabled="readOnly"
                 />
 
