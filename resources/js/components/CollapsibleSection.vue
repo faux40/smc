@@ -21,8 +21,17 @@ const props = withDefaults(
         /** Shown beside the title, open or shut (e.g. "8h · expires 06/01/27"). */
         summary?: string | null;
         defaultOpen?: boolean;
+        /** Overridden when sections nest, so each toggle is addressable. */
+        toggleTestid?: string;
+        /** Softer chrome for a section nested inside another. */
+        nested?: boolean;
     }>(),
-    { summary: null, defaultOpen: false },
+    {
+        summary: null,
+        defaultOpen: false,
+        toggleTestid: 'section-toggle',
+        nested: false,
+    },
 );
 
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>();
@@ -55,17 +64,28 @@ function toggle(v: boolean): void {
         :open="open"
         as="section"
         class="rounded-md border border-border"
+        :class="nested && 'bg-muted/20'"
         @update:open="toggle"
     >
         <CollapsibleTrigger as-child>
             <button
                 type="button"
-                data-testid="section-toggle"
+                :data-testid="toggleTestid"
                 :aria-expanded="open"
                 :aria-label="`${open ? 'Hide' : 'Show'} ${title}`"
-                class="flex w-full items-center gap-3 p-4 text-left hover:bg-muted/40"
+                class="flex w-full items-center gap-3 text-left hover:bg-muted/40"
+                :class="nested ? 'p-3' : 'p-4'"
             >
-                <h2 class="text-sm font-semibold">{{ title }}</h2>
+                <h2
+                    class="font-semibold"
+                    :class="
+                        nested
+                            ? 'text-xs uppercase tracking-wide text-muted-foreground'
+                            : 'text-sm'
+                    "
+                >
+                    {{ title }}
+                </h2>
                 <span
                     v-if="summary"
                     class="truncate text-xs text-muted-foreground"
@@ -87,7 +107,10 @@ function toggle(v: boolean): void {
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-            <div class="border-t border-border p-4">
+            <div
+                class="border-t border-border"
+                :class="nested ? 'p-3' : 'p-4'"
+            >
                 <slot />
             </div>
         </CollapsibleContent>

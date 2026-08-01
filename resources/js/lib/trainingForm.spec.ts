@@ -22,6 +22,7 @@ function source(
         cert_text: null,
         cert_code: null,
         card_template_id: null,
+        card_stock_id: null,
         default_trainer: null,
         default_location: null,
         default_address: null,
@@ -49,5 +50,25 @@ describe('trainingForm — custom card template', () => {
         form.card_template_id = null;
 
         expect(trainingFormPayload(form).card_template_id).toBeNull();
+    });
+});
+
+describe('trainingForm — default card stock', () => {
+    it('starts with no card stock', () => {
+        expect(blankTrainingForm().card_stock_id).toBeNull();
+    });
+
+    it('round-trips an assigned stock through the form', () => {
+        const form = trainingToForm(source({ card_stock_id: 'stk-1' }));
+
+        expect(form.card_stock_id).toBe('stk-1');
+        expect(trainingFormPayload(form).card_stock_id).toBe('stk-1');
+    });
+
+    it('sends null when the card stock is cleared', () => {
+        const form = trainingToForm(source({ card_stock_id: 'stk-1' }));
+        form.card_stock_id = null;
+
+        expect(trainingFormPayload(form).card_stock_id).toBeNull();
     });
 });

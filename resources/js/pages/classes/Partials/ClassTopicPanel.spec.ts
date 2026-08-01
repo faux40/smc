@@ -103,6 +103,15 @@ async function openPanel(wrapper: ReturnType<typeof mountPanel>['wrapper']) {
     }
 }
 
+/** The certificate box is shut by default — it's the tall one. */
+async function openCert(wrapper: ReturnType<typeof mountPanel>['wrapper']) {
+    await openPanel(wrapper);
+
+    if (!wrapper.find('[data-testid="topic-cert-code"]').exists()) {
+        await wrapper.get('[data-testid="cert-toggle"]').trigger('click');
+    }
+}
+
 const shortInputs = (w: ReturnType<typeof mountPanel>['wrapper']) =>
     w.findAll<HTMLInputElement>('[data-testid="card-value-short"]');
 const richAreas = (w: ReturnType<typeof mountPanel>['wrapper']) =>
@@ -336,6 +345,85 @@ describe('ClassTopicPanel', () => {
         });
     });
 
+    describe('its two inner boxes', () => {
+        it('shows the card fields and keeps the certificate rolled up', async () => {
+            // The certificate carries an editor and a live preview, so it is
+            // by far the tallest thing here and the least often wanted. Card
+            // fields are short and are usually what the panel was opened for.
+            const { wrapper } = mountPanel(
+                topic({ card_fields: [field({ id: 'f1' })] }),
+            );
+            await openPanel(wrapper);
+
+            expect(shortInputs(wrapper)).toHaveLength(1);
+            expect(
+                wrapper.find('[data-testid="topic-cert-code"]').exists(),
+            ).toBe(false);
+        });
+
+        it('rolls the certificate open on request', async () => {
+            const { wrapper } = mountPanel();
+            await openCert(wrapper);
+
+            expect(
+                wrapper.find('[data-testid="topic-cert-code"]').exists(),
+            ).toBe(true);
+            expect(wrapper.find('[data-testid="cert-title"]').exists()).toBe(
+                true,
+            );
+        });
+
+        it('rolls the card fields shut on request', async () => {
+            const { wrapper } = mountPanel(
+                topic({ card_fields: [field({ id: 'f1' })] }),
+            );
+            await openPanel(wrapper);
+
+            await wrapper
+                .get('[data-testid="card-fields-toggle"]')
+                .trigger('click');
+
+            expect(shortInputs(wrapper)).toHaveLength(0);
+        });
+
+        it('keeps an edit made in a box that was rolled shut again', async () => {
+            // The boxes hide fields; they must not discard them. One Save
+            // covers the whole topic, so a value typed and then tucked away
+            // still has to be in the request.
+            const { wrapper, store } = mountPanel();
+            const save = vi
+                .spyOn(store, 'updateTopic')
+                .mockResolvedValue(detail());
+            await openCert(wrapper);
+
+            await wrapper
+                .get('[data-testid="topic-cert-code"]')
+                .setValue('FA-2');
+            await wrapper.get('[data-testid="cert-toggle"]').trigger('click');
+            await wrapper.get('[data-testid="topic-save"]').trigger('click');
+            await flushPromises();
+
+            expect(save).toHaveBeenCalledWith(
+                'c1',
+                'ct1',
+                expect.objectContaining({ cert_code: 'FA-2' }),
+            );
+        });
+
+        it('summarises each box while it is shut', async () => {
+            const { wrapper } = mountPanel(
+                topic({
+                    cert_title: 'First Aid Certificate',
+                    card_fields: [field({ id: 'f1' }), field({ id: 'f2' })],
+                }),
+            );
+            await openPanel(wrapper);
+
+            expect(wrapper.text()).toContain('First Aid Certificate');
+            expect(wrapper.text()).toContain('2 fields');
+        });
+    });
+
     describe('saving', () => {
         it('sends every field the panel owns in one request', async () => {
             const { wrapper, store } = mountPanel(
@@ -348,6 +436,7 @@ describe('ClassTopicPanel', () => {
 
             await shortInputs(wrapper)[0].setValue('INST-4471');
             await wrapper.get('[data-testid="topic-hours"]').setValue('8');
+            await openCert(wrapper);
             await wrapper
                 .get('[data-testid="topic-cert-code"]')
                 .setValue('FA-2');
@@ -394,7 +483,7 @@ describe('ClassTopicPanel', () => {
             const save = vi
                 .spyOn(store, 'updateTopic')
                 .mockResolvedValue(detail());
-            await openPanel(wrapper);
+            await openCert(wrapper);
 
             await wrapper.get('[data-testid="topic-cert-code"]').setValue('');
             await wrapper.get('[data-testid="topic-save"]').trigger('click');
@@ -412,7 +501,7 @@ describe('ClassTopicPanel', () => {
             vi.spyOn(store, 'updateTopic').mockRejectedValue(
                 new Error('nope'),
             );
-            await openPanel(wrapper);
+            await openCert(wrapper);
 
             await wrapper
                 .get('[data-testid="topic-cert-code"]')

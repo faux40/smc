@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import type { TrainingFormState } from '@/lib/trainingForm';
+import { useCardStocksStore } from '@/stores/cardStocks';
 import { useCardTemplatesStore } from '@/stores/cardTemplates';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
 
@@ -28,6 +29,7 @@ const props = defineProps<{ context: string }>();
 
 const frequencies = useStdFrequenciesStore();
 const cardTemplates = useCardTemplatesStore();
+const cardStocks = useCardStocksStore();
 const fieldErrors = useFieldErrors(props.context);
 
 onMounted(async () => {
@@ -46,11 +48,23 @@ onMounted(async () => {
             // Non-fatal — the picker will be empty.
         }
     }
+
+    if (!cardStocks.loaded) {
+        try {
+            await cardStocks.load();
+        } catch {
+            // Non-fatal — the picker will be empty.
+        }
+    }
 });
 
 /** '' is the select's "no card" option; the API wants a real null. */
 function chooseCardTemplate(value: string): void {
     form.value.card_template_id = value === '' ? null : value;
+}
+
+function chooseCardStock(value: string): void {
+    form.value.card_stock_id = value === '' ? null : value;
 }
 
 // Unchecking "repeating" drops the frequency.
@@ -207,6 +221,35 @@ watch(
                 <InputError
                     :message="fieldErrors.message('card_template_id')"
                 />
+            </div>
+
+            <div class="grid gap-2">
+                <Label for="t_card_stock">Card stock</Label>
+                <select
+                    id="t_card_stock"
+                    data-testid="training-card-stock"
+                    class="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    :value="form.card_stock_id ?? ''"
+                    @change="
+                        chooseCardStock(
+                            ($event.target as HTMLSelectElement).value,
+                        )
+                    "
+                >
+                    <option value="">Ask when printing</option>
+                    <option
+                        v-for="s in cardStocks.library"
+                        :key="s.id"
+                        :value="s.id"
+                    >
+                        {{ s.name }}
+                    </option>
+                </select>
+                <p class="text-xs text-muted-foreground">
+                    The purchased sheet these cards print onto. Pre-selected
+                    when printing a class, and still changeable there.
+                </p>
+                <InputError :message="fieldErrors.message('card_stock_id')" />
             </div>
 
             <div class="grid gap-2">

@@ -92,6 +92,27 @@ const trainingTemplateId = computed(() => {
     );
 });
 
+/**
+ * The stock the training carries, likewise — but only if this org can still
+ * see it. Deleting a stock detaches it from trainings, so a named-but-missing
+ * id means a stale payload; falling back to asking beats pre-selecting an id
+ * the picker can't show and the server would reject.
+ */
+const trainingStockId = computed(() => {
+    const trainingId = topic.value?.training_id;
+
+    if (!trainingId) {
+        return null;
+    }
+
+    const stockId = trainings.library.find((t) => t.id === trainingId)
+        ?.card_stock_id;
+
+    return stockId && stocks.library.some((s) => s.id === stockId)
+        ? stockId
+        : null;
+});
+
 const template = computed(
     () => templates.library.find((t) => t.id === templateId.value) ?? null,
 );
@@ -175,9 +196,11 @@ watch(
         }
 
         templateId.value = trainingTemplateId.value ?? '';
-        // Deliberately not defaulted, even when the org has exactly one:
-        // which sheet is in the printer is not something to guess at.
-        stockId.value = '';
+        // From the training, the same way the design is. Still never guessed
+        // — an org with exactly one stock gets no default unless a training
+        // actually names it, because which sheet is in the printer is not
+        // something to infer from how few there are to choose from.
+        stockId.value = trainingStockId.value ?? '';
         startCell.value = 1;
         includeBacks.value = template.value?.has_back ?? false;
         proof.value = false;
@@ -185,6 +208,19 @@ watch(
     },
     { immediate: true },
 );
+
+/*
+ * The stocks are fetched *after* this dialog opens (the class page opens it,
+ * then awaits the fetch), so the seed above usually runs against an empty
+ * library and finds nothing. Fill it in when they land — but only into an
+ * empty picker, so a late arrival never reaches in and changes a stock the
+ * user already chose.
+ */
+watch(trainingStockId, (id) => {
+    if (props.open && id !== null && stockId.value === '') {
+        stockId.value = id;
+    }
+});
 
 // Backs follow the design: asking for them on a single-sided card is a no-op
 // server-side, so the checkbox shouldn't pretend otherwise.

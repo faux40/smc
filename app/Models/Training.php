@@ -33,6 +33,7 @@ class Training extends Model
         'cert_text',
         'cert_code',
         'card_template_id',
+        'card_stock_id',
         'default_trainer',
         'default_location',
         'default_address',

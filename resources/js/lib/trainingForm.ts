@@ -27,6 +27,8 @@ export interface TrainingFormSource {
     cert_code: string | null;
     /** The custom card design printed for this training; null = none. */
     card_template_id: string | null;
+    /** The sheet those cards print onto by default; overridable per run. */
+    card_stock_id: string | null;
     default_trainer: string | null;
     default_location: string | null;
     default_address: string | null;
@@ -46,6 +48,8 @@ export interface TrainingFormState {
     cert_code: string;
     // Not blanked to '' like the text fields: the API wants a uuid or null.
     card_template_id: string | null;
+    /** The sheet those cards print onto by default; overridable per run. */
+    card_stock_id: string | null;
     default_trainer: string;
     default_location: string;
     default_address: string;
@@ -65,6 +69,7 @@ export function blankTrainingForm(): TrainingFormState {
         cert_text: '',
         cert_code: '',
         card_template_id: null,
+        card_stock_id: null,
         default_trainer: '',
         default_location: '',
         default_address: '',
@@ -86,6 +91,7 @@ export function trainingToForm(t: TrainingFormSource): TrainingFormState {
         cert_text: t.cert_text ?? '',
         cert_code: t.cert_code ?? '',
         card_template_id: t.card_template_id,
+        card_stock_id: t.card_stock_id,
         default_trainer: t.default_trainer ?? '',
         default_location: t.default_location ?? '',
         default_address: t.default_address ?? '',
@@ -111,6 +117,7 @@ export function trainingFormPayload(
         cert_text: blank(form.cert_text),
         cert_code: blank(form.cert_code),
         card_template_id: form.card_template_id,
+        card_stock_id: form.card_stock_id,
         default_trainer: blank(form.default_trainer),
         default_location: blank(form.default_location),
         default_address: blank(form.default_address),

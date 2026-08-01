@@ -10,11 +10,11 @@
 import axios from 'axios';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { useRealtime } from '@/composables/useRealtime';
 import type {
     ServerTableQuery,
     ServerTableResponse,
 } from '@/composables/useServerTable';
-import { useRealtime } from '@/composables/useRealtime';
 import { realtimeTabId } from '@/echo';
 
 export interface TrainingRow {
@@ -35,6 +35,7 @@ export interface TrainingRow {
     cert_code: string | null;
     /** Custom card design printed for this training; null = none. */
     card_template_id: string | null;
+    card_stock_id: string | null;
     default_trainer: string | null;
     default_location: string | null;
     default_address: string | null;
@@ -55,6 +56,7 @@ export interface TrainingFormPayload {
     cert_text: string | null;
     cert_code: string | null;
     card_template_id: string | null;
+    card_stock_id: string | null;
     default_trainer: string | null;
     default_location: string | null;
     default_address: string | null;
@@ -109,6 +111,7 @@ export const useTrainingsStore = defineStore('trainings', () => {
         if (params.sort) {
             query.sort = params.sort;
         }
+
         if (params.q) {
             query.q = params.q;
         }
@@ -189,6 +192,7 @@ export const useTrainingsStore = defineStore('trainings', () => {
                     },
                 ];
             }
+
             revision.value++;
         });
         bind('TrainingUpdated', (p: TrainingRow & { origin_tab?: string }) => {

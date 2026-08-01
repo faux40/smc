@@ -31,6 +31,7 @@ const training: TrainingFormSource & { id: string } = {
     cert_text: null,
     cert_code: null,
     card_template_id: null,
+    card_stock_id: null,
     default_trainer: null,
     default_location: null,
     default_address: null,

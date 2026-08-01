@@ -52,6 +52,16 @@ class TrainingRequest extends FormRequest
                     ->where(fn ($q) => $q->whereNull('org_id')->orWhere('org_id', $orgId))
                     ->whereNull('deleted_at'),
             ],
+            // The stock those cards print onto by default. Same visibility
+            // rule as the design: system stocks (org_id NULL) are shared and
+            // assignable, another org's is not.
+            'card_stock_id' => [
+                'nullable',
+                'string',
+                Rule::exists('card_stocks', 'id')
+                    ->where(fn ($q) => $q->whereNull('org_id')->orWhere('org_id', $orgId))
+                    ->whereNull('deleted_at'),
+            ],
             'default_trainer' => ['nullable', 'string', 'max:255'],
             'default_location' => ['nullable', 'string', 'max:255'],
             'default_address' => ['nullable', 'string', 'max:1000'],

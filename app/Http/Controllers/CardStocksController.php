@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\CardStock;
+use App\Models\Training;
 use App\Support\Cards\CalibrationSheet;
 use App\Support\Cards\CardSheetGeometry;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -62,6 +64,24 @@ class CardStocksController extends Controller
     public function destroy(CardStock $cardStock): JsonResponse
     {
         Gate::authorize('delete', $cardStock);
+
+        // Detach before deleting. The row is soft-deleted, so the FK would
+        // still resolve — to a stock the picker no longer lists, leaving the
+        // print dialog pre-selecting an id it can't show and the server would
+        // reject. Same reasoning, same shape as CardTemplatesController.
+        //
+        // Scoped to the stock's org so deleting one org's stock never reaches
+        // another's rows; the global org scope is dropped because the update
+        // runs outside any request-scoped org for system stocks.
+        Training::query()
+            ->withoutGlobalScope('organization')
+            ->where('card_stock_id', $cardStock->id)
+            ->when(
+                $cardStock->org_id !== null,
+                fn (Builder $q) => $q->where('org_id', $cardStock->org_id),
+                fn (Builder $q) => $q->where('org_id', request()->user()?->org_id),
+            )
+            ->update(['card_stock_id' => null]);
 
         $cardStock->delete();
 

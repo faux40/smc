@@ -49,6 +49,17 @@ describe('CollapsibleSection', () => {
         expect(wrapper.text()).toContain('8h · expires 06/01/27');
     });
 
+    it('can be given its own toggle testid so sections can nest', () => {
+        // Two toggles under one root are ambiguous otherwise — a topic panel
+        // holds a card-fields box and a certificate box.
+        const wrapper = mountSection({ toggleTestid: 'cert-toggle' });
+
+        expect(wrapper.find('[data-testid="cert-toggle"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="section-toggle"]').exists()).toBe(
+            false,
+        );
+    });
+
     it('reports its state so a caller can label the control', async () => {
         const wrapper = mountSection();
 

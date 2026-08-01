@@ -145,6 +145,7 @@ function training(overrides: Partial<TrainingRow> = {}): TrainingRow {
         cert_text: null,
         cert_code: null,
         card_template_id: 'tpl1',
+        card_stock_id: null,
         default_trainer: null,
         default_location: null,
         default_address: null,
@@ -233,9 +234,100 @@ async function chooseStock(id: string): Promise<void> {
     await flushPromises();
 }
 
-describe('PrintCardsModal', () => {
-    enableAutoUnmount(afterEach);
+// File-level: mounts in either describe must be torn down, and calling this
+// twice throws.
+enableAutoUnmount(afterEach);
 
+describe('PrintCardsModal — the stock it starts on', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        document.body.innerHTML = '';
+    });
+
+    it('pre-selects the stock the training carries', async () => {
+        // Which sheet a First Aid card prints onto is a property of the
+        // training, answered once there rather than at every print.
+        await open({
+            trainings: [training({ card_stock_id: 's2' })],
+            stocks: [stock({ id: 's1' }), stock({ id: 's2' })],
+        });
+
+        expect(el<HTMLSelectElement>('print-stock')!.value).toBe('s2');
+    });
+
+    it('still lets the run print onto something else', async () => {
+        // What is loaded in the printer today is a fact about today.
+        const { runs } = await open({
+            trainings: [training({ card_stock_id: 's2' })],
+            stocks: [stock({ id: 's1' }), stock({ id: 's2' })],
+        });
+        const create = vi
+            .spyOn(runs, 'create')
+            .mockResolvedValue({} as never);
+
+        await chooseStock('s1');
+        submitButton()!.click();
+        await flushPromises();
+
+        expect(create.mock.calls[0][1].card_stock_id).toBe('s1');
+    });
+
+    it('pre-selects once the stocks arrive, since they load after it opens', async () => {
+        /*
+         * The class page opens this dialog and *then* awaits the design and
+         * stock fetches, so the first render sees an empty library. Seeding
+         * only on open would silently never pre-select anything in the real
+         * app — which every test here hides by pre-loading the stores.
+         */
+        const { wrapper } = await open({
+            trainings: [training({ card_stock_id: 's2' })],
+            stocks: [],
+        });
+        expect(el<HTMLSelectElement>('print-stock')!.value).toBe('');
+
+        useCardStocksStore().library = [stock({ id: 's1' }), stock({ id: 's2' })];
+        await flushPromises();
+
+        expect(el<HTMLSelectElement>('print-stock')!.value).toBe('s2');
+        expect(wrapper.exists()).toBe(true);
+    });
+
+    it('does not overrule a stock already chosen when they arrive late', async () => {
+        const { wrapper } = await open({
+            trainings: [training({ card_stock_id: 's2' })],
+            stocks: [stock({ id: 's1' })],
+        });
+
+        await chooseStock('s1');
+        useCardStocksStore().library = [stock({ id: 's1' }), stock({ id: 's2' })];
+        await flushPromises();
+
+        // A late arrival must not reach in and change a deliberate pick.
+        expect(el<HTMLSelectElement>('print-stock')!.value).toBe('s1');
+        expect(wrapper.exists()).toBe(true);
+    });
+
+    it('asks when the training names no stock', async () => {
+        await open({ trainings: [training({ card_stock_id: null })] });
+
+        expect(el<HTMLSelectElement>('print-stock')!.value).toBe('');
+        expect(submitButton()!.disabled).toBe(true);
+    });
+
+    it('asks when the training names a stock this org can no longer see', async () => {
+        // Deleting a stock detaches it from trainings, but a stale detail
+        // payload can still name one — falling back to asking beats
+        // pre-selecting an id the picker cannot show.
+        await open({
+            trainings: [training({ card_stock_id: 'gone' })],
+            stocks: [stock({ id: 's1' })],
+        });
+
+        expect(el<HTMLSelectElement>('print-stock')!.value).toBe('');
+    });
+});
+
+describe('PrintCardsModal', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         document.body.innerHTML = '';

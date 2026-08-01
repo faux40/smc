@@ -103,6 +103,21 @@ const expiryHint = computed<string | null>(() => {
     return `Leave blank to use ${derived.value} (${freq}, from ${props.derivedFrom}).`;
 });
 
+/** Enough on the shut card-fields box to know whether to open it. */
+const cardFieldsSummary = computed(() => {
+    const count = props.topic.card_fields.length;
+
+    if (count === 0) {
+        return 'none defined';
+    }
+
+    const answered = props.topic.card_fields.filter(
+        (f) => f.value !== null,
+    ).length;
+
+    return `${count} field${count === 1 ? '' : 's'}${answered ? ` · ${answered} filled in` : ''}`;
+});
+
 const hoursLabel = computed(() => {
     const hours = optionalNumber(props.topic.hours);
 
@@ -226,11 +241,14 @@ async function save(): Promise<void> {
             </div>
 
             <!-- Card fields: this class's answers for the training's own. -->
-            <div class="space-y-3">
-                <h3 class="text-xs font-semibold text-muted-foreground">
-                    Card fields
-                </h3>
-
+            <CollapsibleSection
+                title="Card fields"
+                toggle-testid="card-fields-toggle"
+                nested
+                :summary="cardFieldsSummary"
+                default-open
+                class="space-y-3"
+            >
                 <p
                     v-if="!topic.card_fields.length"
                     class="text-sm text-muted-foreground"
@@ -282,14 +300,18 @@ async function save(): Promise<void> {
                         :placeholder="placeholderFor(field.default_value)"
                     />
                 </div>
-            </div>
+            </CollapsibleSection>
 
-            <!-- Certificate: seeded from the training, overridden per class. -->
-            <div class="space-y-3 border-t border-border pt-4">
-                <h3 class="text-xs font-semibold text-muted-foreground">
-                    SMC certificate
-                </h3>
-
+            <!-- Certificate: seeded from the training, overridden per class.
+                 Shut by default — an editor beside a live preview is the
+                 tallest thing here and the least often wanted. -->
+            <CollapsibleSection
+                title="SMC certificate"
+                toggle-testid="cert-toggle"
+                nested
+                :summary="form.cert_title || null"
+                class="space-y-3"
+            >
                 <CertEditor
                     v-model:title="form.cert_title"
                     v-model:text="form.cert_text"
@@ -307,7 +329,7 @@ async function save(): Promise<void> {
                         placeholder="e.g. FPAP"
                     />
                 </div>
-            </div>
+            </CollapsibleSection>
 
             <div v-if="!readOnly" class="flex justify-end">
                 <Button
