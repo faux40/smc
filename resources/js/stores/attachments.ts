@@ -229,45 +229,37 @@ export const useAttachmentsStore = defineStore('attachments', () => {
                 id: string;
                 attachable_type: string;
                 attachable_id: string;
-                filename: string;
-                type: string | null;
-                description: string | null;
-                mime: string | null;
-                size: number | null;
-                uploaded_by_user_id: string;
             }) => {
-                const key = `${p.attachable_type}::${p.attachable_id}`;
-                const cur = lists.value[key];
+                const morphable = {
+                    type: p.attachable_type,
+                    id: p.attachable_id,
+                };
+                const cur = lists.value[keyOf(morphable)];
 
+                // Nothing on screen for that morphable — no list to refresh.
                 if (!cur) {
                     return;
                 }
 
+                // The uploader's own tab already reloaded after its POST; its
+                // own broadcast coming back must not cost a second round trip.
                 if (cur.some((a) => a.id === p.id)) {
                     return;
                 }
 
-                lists.value = {
-                    ...lists.value,
-                    [key]: [
-                        {
-                            id: p.id,
-                            attachable_type: p.attachable_type,
-                            attachable_id: p.attachable_id,
-                            filename: p.filename,
-                            type: p.type,
-                            description: p.description,
-                            mime: p.mime,
-                            size: p.size,
-                            uploaded_by_user_id: p.uploaded_by_user_id,
-                            uploaded_by_name: null,
-                            created_at: null,
-                            can_delete: false,
-                            can_edit: false,
-                        },
-                        ...cur,
-                    ],
-                };
+                // Refetch rather than synthesize the row. can_delete/can_edit
+                // are per-viewer (AttachmentPolicy), so a value broadcast on a
+                // shared org channel would be wrong for someone — and guessing
+                // locally would duplicate the policy in JS. index() is the one
+                // path that evaluates it for *this* viewer, and it carries the
+                // uploader name and timestamp we'd otherwise leave null.
+                // Matters most for files nobody uploaded from a browser: a
+                // card-sheet PDF filed by a queue worker arrives only here.
+                loaded.value = { ...loaded.value, [keyOf(morphable)]: false };
+                void load(morphable).catch(() => {
+                    // A broadcast has no caller to reject to. Keep what the
+                    // list had; the flag above leaves it free to refetch.
+                });
             },
         );
 
