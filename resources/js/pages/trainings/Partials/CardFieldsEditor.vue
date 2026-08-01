@@ -106,7 +106,19 @@ function onKey(index: number, value: string): void {
     keyTouched.value[index] = true;
 }
 
+/**
+ * The server's ceiling, mirrored so Add stops before a 422 does. Nothing
+ * about a card needs 50 fields — it's a runaway guard, not a design budget.
+ */
+const MAX_FIELDS = 50;
+
+const atCapacity = computed(() => drafts.value.length >= MAX_FIELDS);
+
 function addRow(): void {
+    if (atCapacity.value) {
+        return;
+    }
+
     drafts.value = [...drafts.value, blankCardFieldDraft('short')];
     keyTouched.value = [...keyTouched.value, false];
 }
@@ -170,15 +182,42 @@ const TYPE_LABELS: Record<CardFieldType, string> = {
 
         <ErrorBanner :context="CONTEXT" />
 
-        <div class="space-y-3">
+        <p
+            v-if="drafts.length === 0"
+            class="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground"
+        >
+            No card fields yet. Add one for anything this training's card needs
+            beyond the built-in student, class and credit values.
+        </p>
+
+        <!--
+            Column headings once rather than a labelled box per field: with a
+            list this long, repeating four labels per row buries the values in
+            their own chrome.
+        -->
+        <div
+            v-if="drafts.length"
+            class="hidden gap-3 px-1 text-xs font-medium text-muted-foreground lg:grid lg:grid-cols-12"
+        >
+            <span class="lg:col-span-3">Label</span>
+            <span class="lg:col-span-3">Merge key</span>
+            <span class="lg:col-span-2">Type</span>
+            <span class="lg:col-span-3">Default value</span>
+            <span class="lg:col-span-1"></span>
+        </div>
+
+        <div class="space-y-2">
             <div
                 v-for="(draft, i) in drafts"
                 :key="draft.id ?? `new-${i}`"
-                class="rounded-md border border-border bg-muted/20 p-3"
+                class="rounded-md border border-border px-2 py-2"
             >
                 <div class="grid items-start gap-3 lg:grid-cols-12">
                     <div class="grid gap-1 lg:col-span-3">
-                        <Label :for="`cf_label_${i}`" class="text-xs">
+                        <Label
+                            :for="`cf_label_${i}`"
+                            class="text-xs lg:sr-only"
+                        >
                             Label
                         </Label>
                         <Input
@@ -193,7 +232,7 @@ const TYPE_LABELS: Record<CardFieldType, string> = {
                     </div>
 
                     <div class="grid gap-1 lg:col-span-3">
-                        <Label :for="`cf_key_${i}`" class="text-xs">
+                        <Label :for="`cf_key_${i}`" class="text-xs lg:sr-only">
                             Merge key
                         </Label>
                         <Input
@@ -219,7 +258,7 @@ const TYPE_LABELS: Record<CardFieldType, string> = {
                     </div>
 
                     <div class="grid gap-1 lg:col-span-2">
-                        <Label :for="`cf_type_${i}`" class="text-xs">
+                        <Label :for="`cf_type_${i}`" class="text-xs lg:sr-only">
                             Type
                         </Label>
                         <select
@@ -244,7 +283,10 @@ const TYPE_LABELS: Record<CardFieldType, string> = {
                     </div>
 
                     <div class="grid gap-1 lg:col-span-3">
-                        <Label :for="`cf_default_${i}`" class="text-xs">
+                        <Label
+                            :for="`cf_default_${i}`"
+                            class="text-xs lg:sr-only"
+                        >
                             Default value
                         </Label>
                         <textarea
@@ -252,7 +294,7 @@ const TYPE_LABELS: Record<CardFieldType, string> = {
                             :id="`cf_default_${i}`"
                             data-testid="card-field-rich"
                             v-model="draft.default_value"
-                            rows="3"
+                            rows="2"
                             maxlength="2000"
                             class="w-full rounded border border-input bg-background p-2 text-sm"
                             placeholder="Markdown: **bold**, *italic*, - lists"
@@ -281,7 +323,7 @@ const TYPE_LABELS: Record<CardFieldType, string> = {
                         />
                     </div>
 
-                    <div class="flex justify-end lg:col-span-1 lg:pt-6">
+                    <div class="flex justify-end lg:col-span-1">
                         <Button
                             type="button"
                             variant="ghost"
@@ -343,15 +385,24 @@ const TYPE_LABELS: Record<CardFieldType, string> = {
         <div
             class="flex items-center justify-between border-t border-border pt-3"
         >
-            <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid="card-field-add"
-                @click="addRow"
-            >
-                + Add field
-            </Button>
+            <div class="flex items-center gap-3">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    data-testid="card-field-add"
+                    :disabled="atCapacity"
+                    @click="addRow"
+                >
+                    + Add field
+                </Button>
+                <span
+                    v-if="drafts.length"
+                    class="text-xs text-muted-foreground"
+                >
+                    {{ drafts.length }} of {{ MAX_FIELDS }}
+                </span>
+            </div>
             <Button
                 type="button"
                 data-testid="card-field-save"

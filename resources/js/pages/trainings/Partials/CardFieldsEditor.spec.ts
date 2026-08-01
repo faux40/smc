@@ -42,21 +42,47 @@ const keyInputs = (wrapper: ReturnType<typeof mount>) =>
 const labelInputs = (wrapper: ReturnType<typeof mount>) =>
     wrapper.findAll('[data-testid="card-field-label"]');
 
+/**
+ * The editor no longer opens on blank rows, so a test that wants somewhere to
+ * type asks for one — exactly as a user now does.
+ */
+async function editorWithBlankRows(count = 1) {
+    const opened = await editor([]);
+
+    for (let i = 0; i < count; i++) {
+        await opened.wrapper
+            .get('[data-testid="card-field-add"]')
+            .trigger('click');
+    }
+
+    return opened;
+}
+
 describe('CardFieldsEditor', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
     });
 
-    it('opens a training with no fields on four blank rows', async () => {
-        // Two plain and two formatted, per the plan — a starting point, not a
-        // limit, and nothing is written until saved.
+    it('opens a training with no fields on no rows at all', async () => {
+        // Blank rows implied a fixed set of four. Only what has been added is
+        // shown, and the empty state says what to do instead.
         const { wrapper } = await editor([]);
 
-        expect(keyInputs(wrapper)).toHaveLength(4);
-        expect(wrapper.findAll('[data-testid="card-field-rich"]')).toHaveLength(
-            2,
-        );
+        expect(keyInputs(wrapper)).toHaveLength(0);
+        expect(wrapper.text()).toContain('No card fields yet');
+    });
+
+    it('adds a row when asked, and stops at the server ceiling', async () => {
+        const { wrapper } = await editor([]);
+        const add = wrapper.get('[data-testid="card-field-add"]');
+
+        await add.trigger('click');
+        expect(keyInputs(wrapper)).toHaveLength(1);
+
+        // The cap is the server's (50); the client just stops you earlier
+        // than a 422 would.
+        expect(wrapper.text()).toContain('1 of 50');
     });
 
     it('shows the defined fields when there are some', async () => {
@@ -72,7 +98,7 @@ describe('CardFieldsEditor', () => {
     });
 
     it('suggests a key from the label on a new row', async () => {
-        const { wrapper } = await editor([]);
+        const { wrapper } = await editorWithBlankRows();
 
         await labelInputs(wrapper)[0].setValue('Trainer ID');
 
@@ -84,7 +110,7 @@ describe('CardFieldsEditor', () => {
     it('stops suggesting once the key has been edited by hand', async () => {
         // Otherwise a deliberate key is silently overwritten by a later label
         // tweak.
-        const { wrapper } = await editor([]);
+        const { wrapper } = await editorWithBlankRows();
 
         await keyInputs(wrapper)[0].setValue('tid');
         await labelInputs(wrapper)[0].setValue('Trainer ID');
@@ -109,7 +135,7 @@ describe('CardFieldsEditor', () => {
     });
 
     it('shows the merge placeholder for a keyed row', async () => {
-        const { wrapper } = await editor([]);
+        const { wrapper } = await editorWithBlankRows();
 
         await keyInputs(wrapper)[0].setValue('trainer_id');
 
@@ -125,13 +151,13 @@ describe('CardFieldsEditor', () => {
     });
 
     it('removes an unsaved row without ceremony', async () => {
-        const { wrapper } = await editor([]);
+        const { wrapper } = await editorWithBlankRows(2);
 
         await wrapper
             .findAll('[data-testid="card-field-remove"]')[0]
             .trigger('click');
 
-        expect(keyInputs(wrapper)).toHaveLength(3);
+        expect(keyInputs(wrapper)).toHaveLength(1);
         expect(
             wrapper.find('[data-testid="card-field-confirm"]').exists(),
         ).toBe(false);
@@ -154,7 +180,7 @@ describe('CardFieldsEditor', () => {
     });
 
     it('does not save a set with a duplicate key', async () => {
-        const { wrapper, store } = await editor([]);
+        const { wrapper, store } = await editorWithBlankRows(2);
         const sync = vi.spyOn(store, 'sync');
 
         await labelInputs(wrapper)[0].setValue('Trainer');
@@ -168,7 +194,7 @@ describe('CardFieldsEditor', () => {
     });
 
     it('does not save an illegal key', async () => {
-        const { wrapper, store } = await editor([]);
+        const { wrapper, store } = await editorWithBlankRows();
         const sync = vi.spyOn(store, 'sync');
 
         await keyInputs(wrapper)[0].setValue('Trainer ID');
@@ -178,7 +204,7 @@ describe('CardFieldsEditor', () => {
     });
 
     it('saves the set in order, dropping untouched rows', async () => {
-        const { wrapper, store } = await editor([]);
+        const { wrapper, store } = await editorWithBlankRows(2);
         const sync = vi.spyOn(store, 'sync').mockResolvedValue([]);
 
         await labelInputs(wrapper)[0].setValue('Trainer ID');
@@ -215,7 +241,7 @@ describe('CardFieldsEditor', () => {
     });
 
     it('rebuilds its baseline from the response, so a second save is idle', async () => {
-        const { wrapper, store } = await editor([]);
+        const { wrapper, store } = await editorWithBlankRows();
         vi.spyOn(store, 'sync').mockImplementation(async () => {
             const saved = [
                 row({ id: 'f9', key: 'trainer_id', label: 'Trainer ID' }),

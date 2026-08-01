@@ -47,20 +47,14 @@ describe('slugifyCardKey', () => {
 });
 
 describe('seedCardFieldDrafts', () => {
-    it('opens with two short and two formatted rows when nothing is defined', () => {
-        // The plan's starting point: 4 fields ready to fill in, none of them
-        // written to the server until saved.
-        const drafts = seedCardFieldDrafts([]);
-
-        expect(drafts).toHaveLength(4);
-        expect(drafts.map((d) => d.type)).toEqual([
-            'short',
-            'short',
-            'rich',
-            'rich',
-        ]);
-        expect(drafts.every((d) => d.id === null)).toBe(true);
-        expect(drafts.every((d) => d.key === '')).toBe(true);
+    it('opens empty when nothing is defined', () => {
+        /*
+         * Four blank rows used to greet everyone, which read as "you get four
+         * fields" — the opposite of the truth, since the list has always been
+         * dynamic (server cap 50). Showing only what someone actually added
+         * makes the Add button the thing that answers "how many can I have".
+         */
+        expect(seedCardFieldDrafts([])).toEqual([]);
     });
 
     it('shows exactly what is defined once fields exist', () => {

@@ -53,9 +53,6 @@ export interface CardFieldPayload {
 
 export const CARD_FIELD_KEY_RE = /^[a-z][a-z0-9_]*$/;
 
-/** How many blank rows a training with no fields opens with, by type. */
-const SEED_TYPES: CardFieldType[] = ['short', 'short', 'rich', 'rich'];
-
 /**
  * A label typed as a key: lowercase, separators collapsed to underscores.
  * A leading digit is prefixed rather than dropped ("1st Aid" → f_1st_aid), so
@@ -89,16 +86,16 @@ export function draftsFromCardFields(rows: CardFieldRow[]): CardFieldDraft[] {
 }
 
 /**
- * What the editor shows on open: the defined fields, or four blank rows (two
- * plain, two formatted) to start from. The blanks exist in the form only —
- * nothing reaches the server until it has a key.
+ * What the editor shows on open: exactly the fields that are defined, and
+ * nothing else.
+ *
+ * It used to open on four blank rows, which read as "a training gets four
+ * fields" — the opposite of the truth, since the list has always been
+ * dynamic (the server's ceiling is 50). An empty state plus an Add button
+ * says that far better than four boxes do.
  */
 export function seedCardFieldDrafts(rows: CardFieldRow[]): CardFieldDraft[] {
-    if (rows.length > 0) {
-        return draftsFromCardFields(rows);
-    }
-
-    return SEED_TYPES.map((type) => blankCardFieldDraft(type));
+    return draftsFromCardFields(rows);
 }
 
 /** True when a row has been left completely untouched. */
