@@ -147,6 +147,11 @@ function hasCardDesign(t: ClassTrainingRow): boolean {
     );
 }
 
+/** Topics this class can print cards for — one button each, in Documents. */
+const printableTopics = computed(
+    () => detail.value?.trainings.filter(hasCardDesign) ?? [],
+);
+
 async function openPrintCards(topicId: string): Promise<void> {
     printTopicId.value = topicId;
     printOpen.value = true;
@@ -667,24 +672,6 @@ const timeLabel = computed(() => {
                                                                 Card fields
                                                             </Button>
                                                             <Button
-                                                                v-if="
-                                                                    hasCardDesign(
-                                                                        t,
-                                                                    )
-                                                                "
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                class="h-6 px-2 text-xs"
-                                                                @click="
-                                                                    openPrintCards(
-                                                                        t.id,
-                                                                    )
-                                                                "
-                                                            >
-                                                                Print cards
-                                                            </Button>
-                                                            <Button
                                                                 type="button"
                                                                 variant="ghost"
                                                                 size="sm"
@@ -754,39 +741,16 @@ const timeLabel = computed(() => {
                                                 will print are worth seeing
                                                 before cards are generated.
                                             -->
-                                            <span
-                                                class="flex items-center gap-1"
+                                            <Button
+                                                v-if="t.card_fields.length"
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                class="h-6 px-2 text-xs"
+                                                @click="openCardFields(t.id)"
                                             >
-                                                <Button
-                                                    v-if="t.card_fields.length"
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    class="h-6 px-2 text-xs"
-                                                    @click="
-                                                        openCardFields(t.id)
-                                                    "
-                                                >
-                                                    Card fields
-                                                </Button>
-                                                <!--
-                                                    Printing from a completed
-                                                    class is the main case, not
-                                                    an exception to it.
-                                                -->
-                                                <Button
-                                                    v-if="hasCardDesign(t)"
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    class="h-6 px-2 text-xs"
-                                                    @click="
-                                                        openPrintCards(t.id)
-                                                    "
-                                                >
-                                                    Print cards
-                                                </Button>
-                                            </span>
+                                                Card fields
+                                            </Button>
                                         </li>
                                     </ul>
                                     <p
@@ -988,7 +952,10 @@ const timeLabel = computed(() => {
                         </section>
 
                         <!-- Documents -->
-                        <section class="space-y-2">
+                        <section
+                            class="space-y-2"
+                            data-testid="class-documents"
+                        >
                             <h2 class="text-sm font-semibold">Documents</h2>
                             <div class="flex flex-wrap gap-2">
                                 <Button
@@ -1012,6 +979,23 @@ const timeLabel = computed(() => {
                                     @click="openDoc('summary', 'Class summary')"
                                 >
                                     Class summary
+                                </Button>
+                                <!--
+                                    One run is one topic, so a class printing
+                                    two designs gets two buttons — named, since
+                                    an unlabelled pair would be a coin toss.
+                                -->
+                                <Button
+                                    v-for="t in printableTopics"
+                                    :key="t.id"
+                                    variant="outline"
+                                    @click="openPrintCards(t.id)"
+                                >
+                                    {{
+                                        printableTopics.length > 1
+                                            ? `Print cards — ${t.training_name}`
+                                            : 'Print cards'
+                                    }}
                                 </Button>
                             </div>
                             <p

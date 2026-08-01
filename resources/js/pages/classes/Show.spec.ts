@@ -266,10 +266,11 @@ describe('classes/Show — student counts', () => {
         expect(modal.props('classId')).toBe('c1');
     });
 
-    it('offers Print cards only for a topic whose training carries a design', async () => {
+    it('offers Print cards among the documents, per printable topic', async () => {
+        // Cards are a document this class produces, so the action sits with
+        // the other generated documents — and with the files it produces.
         // The design is what makes a topic printable; a topic without one has
-        // nothing to print onto, so the button follows it rather than
-        // appearing everywhere and explaining itself.
+        // nothing to print onto, so it gets no button.
         const topic = {
             id: 'ct1',
             training_id: 't1',
@@ -309,9 +310,10 @@ describe('classes/Show — student counts', () => {
 
         const wrapper = await mountShow();
 
-        const buttons = wrapper
+        const docs = wrapper.get('[data-testid="class-documents"]');
+        const buttons = docs
             .findAll('button')
-            .filter((b) => b.text() === 'Print cards');
+            .filter((b) => b.text().startsWith('Print cards'));
         expect(buttons).toHaveLength(1);
 
         await buttons[0].trigger('click');
@@ -320,6 +322,60 @@ describe('classes/Show — student counts', () => {
         expect(modal.props('open')).toBe(true);
         expect(modal.props('topicId')).toBe('ct2');
         expect(modal.props('classId')).toBe('c1');
+    });
+
+    it('names the topic when a class prints more than one card', async () => {
+        // One run is one topic, so two printable topics are two buttons —
+        // an unlabelled pair would be a coin toss.
+        const topic = {
+            id: 'ct1',
+            training_id: 't1',
+            training_name: 'First Aid',
+            initial_only: false,
+            repeating: true,
+            as_needed: false,
+            std_freq_name: null,
+            repeat_days: null,
+            hours: '4.00',
+            cert_title: null,
+            cert_text: null,
+            cert_code: null,
+            card_fields: [],
+            credits: [],
+        };
+
+        mockGet({
+            ...detail,
+            trainings: [
+                topic,
+                {
+                    ...topic,
+                    id: 'ct2',
+                    training_id: 't2',
+                    training_name: 'Forklift',
+                },
+            ],
+        });
+
+        const trainings = useTrainingsStore();
+        trainings.library = [
+            { id: 't1', card_template_id: 'tpl1' } as never,
+            { id: 't2', card_template_id: 'tpl2' } as never,
+        ];
+        trainings.loaded = true;
+
+        const wrapper = await mountShow();
+
+        const labels = wrapper
+            .get('[data-testid="class-documents"]')
+            .findAll('button')
+            .map((b) => b.text())
+            .filter((t) => t.startsWith('Print cards'));
+
+        expect(labels).toEqual([
+            'Print cards — First Aid',
+            'Print cards — Forklift',
+        ]);
     });
 
     it('keeps the print-run outcomes on the page, next to the documents', async () => {

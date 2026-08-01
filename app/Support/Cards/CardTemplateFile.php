@@ -119,7 +119,11 @@ class CardTemplateFile
             throw new InvalidCardTemplate('The file is not an OpenDocument presentation (.odp).');
         }
 
-        $slides = preg_match_all('/<draw:page\b/', $content);
+        // NOT `<draw:page\b` — a hyphen is a word boundary, so that also counts
+        // the <draw:page-thumbnail> Impress writes into every slide's notes
+        // page. A single-sided card then reported two slides, print runs asked
+        // for backs, and FPDI refused page 2 of a one-page PDF.
+        $slides = preg_match_all('/<draw:page[\s>\/]/', $content);
 
         $fonts = self::odfFontFamilies($content);
         $styles = $zip->getFromName('styles.xml');

@@ -91,6 +91,26 @@ class CardTemplateFileTest extends TestCase
         $this->assertSame(2, $info->slideCount);
     }
 
+    public function test_a_notes_thumbnail_is_not_a_slide(): void
+    {
+        // Impress writes <draw:page-thumbnail> into each slide's notes page,
+        // and a word boundary after "page" matches the hyphen — so a
+        // single-sided card counted as two slides, the print run asked for
+        // backs, and FPDI refused page 2 of a one-page PDF. Found in the wild.
+        $info = CardTemplateFile::inspect(
+            $this->track($this->makeOdpFixture([
+                '<text:p>front</text:p>'
+                    .'<presentation:notes draw:style-name="dp2">'
+                    .'<draw:page-thumbnail presentation:class="page"/>'
+                    .'</presentation:notes>',
+            ])),
+            'odp',
+        );
+
+        $this->assertSame(1, $info->slideCount);
+        $this->assertFalse($info->hasBack());
+    }
+
     // ---- card size -----------------------------------------------------
 
     public function test_card_size_comes_from_the_pptx_slide_dimensions(): void
