@@ -24,10 +24,26 @@ const page = usePage();
 
 const runs = computed(() => store.runsFor(props.classId));
 
+/**
+ * What's worth showing: work in flight, plus anything that failed.
+ *
+ * A successful run is dropped as it settles — the sheets it produced are the
+ * point, and they're filed in Documents right below, so a receipt here would
+ * just accumulate. A failure has no such landing place, which is this
+ * component's whole reason for existing, so it stays until cleared by hand.
+ *
+ * Note this filters the *rendering* only. The status watcher below reads the
+ * unfiltered list, so a run that finishes while you're looking still gets its
+ * toast on the way out.
+ */
+const visibleRuns = computed(() =>
+    runs.value.filter((r) => r.status !== 'done'),
+);
+
+/** Only the statuses that reach the list — a `done` run is never rendered. */
 const STATUS_CLASS: Record<string, string> = {
     queued: 'bg-muted text-muted-foreground',
     processing: 'bg-blue-100 text-blue-900',
-    done: 'bg-green-100 text-green-900',
     failed: 'bg-red-100 text-red-900',
 };
 
@@ -104,14 +120,14 @@ onMounted(async () => {
 </script>
 
 <template>
-    <div v-if="runs.length" class="space-y-2 border-t border-border pt-4">
+    <div v-if="visibleRuns.length" class="space-y-2 border-t border-border pt-4">
         <h3 class="text-xs font-semibold text-muted-foreground">
             Card printing
         </h3>
 
         <ul class="space-y-2 text-sm">
             <li
-                v-for="r in runs"
+                v-for="r in visibleRuns"
                 :key="r.id"
                 data-testid="card-run"
                 class="rounded border border-border p-2"
@@ -150,10 +166,11 @@ onMounted(async () => {
                         · {{ r.created_at }}
                     </span>
 
-                    <!-- Settled runs only: clearing one mid-flight would
-                         leave the job with nowhere to report its outcome. -->
+                    <!-- Failures only: a run still in flight would be left
+                         with nowhere to report its outcome, and a successful
+                         one has already taken itself off the list. -->
                     <button
-                        v-if="r.status === 'done' || r.status === 'failed'"
+                        v-if="r.status === 'failed'"
                         type="button"
                         data-testid="clear-run"
                         class="ml-auto text-xs text-muted-foreground hover:text-foreground hover:underline"

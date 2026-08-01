@@ -61,9 +61,14 @@ describe('CardPrintRunsList', () => {
         expect(wrapper.text()).toBe('');
     });
 
-    it('lists a finished run with what it produced', async () => {
+    it('tracks a run that is still working', async () => {
         const { wrapper } = await mountWith([
-            run({ id: 'r1', status: 'done', card_count: 12, sheet_count: 2 }),
+            run({
+                id: 'r1',
+                status: 'processing',
+                card_count: 12,
+                sheet_count: 2,
+            }),
         ]);
 
         const text = wrapper.text();
@@ -77,10 +82,38 @@ describe('CardPrintRunsList', () => {
         // "1 card" alone looks like a run that went wrong; "proof" says it
         // was the point.
         const { wrapper } = await mountWith([
-            run({ id: 'r1', status: 'done', card_count: 1, proof: true }),
+            run({ id: 'r1', status: 'processing', card_count: 1, proof: true }),
         ]);
 
         expect(wrapper.text()).toContain('proof');
+    });
+
+    it('drops a run that succeeded — its sheets are in Documents', async () => {
+        // This list tracks work in flight. A finished run has produced the
+        // thing you actually wanted, and it is filed one section down;
+        // leaving a receipt behind just accumulates furniture.
+        const { wrapper } = await mountWith([
+            run({ id: 'r1', status: 'done', card_count: 12, sheet_count: 2 }),
+        ]);
+
+        expect(wrapper.text()).toBe('');
+    });
+
+    it('keeps a failure on screen when a sibling run succeeded', async () => {
+        const { wrapper } = await mountWith([
+            run({ id: 'r1', status: 'done', topic_name: 'First Aid' }),
+            run({
+                id: 'r2',
+                status: 'failed',
+                topic_name: 'Forklift',
+                error: 'No design.',
+            }),
+        ]);
+
+        const text = wrapper.text();
+
+        expect(text).toContain('Forklift');
+        expect(text).not.toContain('First Aid');
     });
 
     it('shows why a run failed', async () => {
@@ -104,7 +137,7 @@ describe('CardPrintRunsList', () => {
     });
 
     it('announces a run that finishes while you are watching', async () => {
-        const { store } = await mountWith([
+        const { wrapper, store } = await mountWith([
             run({ id: 'r1', status: 'queued' }),
         ]);
 
@@ -113,7 +146,10 @@ describe('CardPrintRunsList', () => {
         };
         await flushPromises();
 
+        // The row leaves as it settles, so the toast is the whole handover —
+        // it must fire off the store's runs, not off what's rendered.
         expect(toastSuccess).toHaveBeenCalled();
+        expect(wrapper.text()).toBe('');
     });
 
     it('announces a failure the same way', async () => {
