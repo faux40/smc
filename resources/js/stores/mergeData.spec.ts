@@ -16,7 +16,9 @@ vi.mock('@/composables/useRealtime', () => ({
     useRealtime: vi.fn(() => ({ bind: mockBind, leave: vi.fn() })),
 }));
 
-function field(overrides: Partial<MergeFieldRow> & { id: string }): MergeFieldRow {
+function field(
+    overrides: Partial<MergeFieldRow> & { id: string },
+): MergeFieldRow {
     return {
         key: overrides.id,
         label: overrides.id,
@@ -47,7 +49,9 @@ describe('useMergeDataStore', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
-        Object.keys(capturedBindings).forEach((k) => delete capturedBindings[k]);
+        Object.keys(capturedBindings).forEach(
+            (k) => delete capturedBindings[k],
+        );
     });
 
     // ----------------------------------------------------------------
@@ -59,40 +63,87 @@ describe('useMergeDataStore', () => {
         store.fields = [field({ id: 'f1', key: 'contact' })];
         store.values = [
             value({ id: 'v1', merge_field_id: 'f1', value: 'default' }),
-            value({ id: 'v2', merge_field_id: 'f1', department: 'Parks', value: 'dept' }),
-            value({ id: 'v3', merge_field_id: 'f1', location: 'North', value: 'loc' }),
-            value({ id: 'v4', merge_field_id: 'f1', location: 'North', department: 'Parks', value: 'both' }),
+            value({
+                id: 'v2',
+                merge_field_id: 'f1',
+                department: 'Parks',
+                value: 'dept',
+            }),
+            value({
+                id: 'v3',
+                merge_field_id: 'f1',
+                location: 'North',
+                value: 'loc',
+            }),
+            value({
+                id: 'v4',
+                merge_field_id: 'f1',
+                location: 'North',
+                department: 'Parks',
+                value: 'both',
+            }),
         ];
 
-        expect(store.resolvedFor('f1', 'North', 'Parks')).toEqual({ value: 'both', source: 'exact' });
-        expect(store.resolvedFor('f1', 'North', '')).toEqual({ value: 'loc', source: 'exact' });
-        expect(store.resolvedFor('f1', 'South', 'Parks')).toEqual({ value: 'dept', source: 'department' });
-        expect(store.resolvedFor('f1', 'South', '')).toEqual({ value: 'default', source: 'default' });
-        expect(store.resolvedFor('f1', '', '')).toEqual({ value: 'default', source: 'exact' });
+        expect(store.resolvedFor('f1', 'North', 'Parks')).toEqual({
+            value: 'both',
+            source: 'exact',
+        });
+        expect(store.resolvedFor('f1', 'North', '')).toEqual({
+            value: 'loc',
+            source: 'exact',
+        });
+        expect(store.resolvedFor('f1', 'South', 'Parks')).toEqual({
+            value: 'dept',
+            source: 'department',
+        });
+        expect(store.resolvedFor('f1', 'South', '')).toEqual({
+            value: 'default',
+            source: 'default',
+        });
+        expect(store.resolvedFor('f1', '', '')).toEqual({
+            value: 'default',
+            source: 'exact',
+        });
     });
 
     it('resolvedFor reports location fallback for a both-variation request', () => {
         const store = useMergeDataStore();
         store.fields = [field({ id: 'f1', key: 'contact' })];
         store.values = [
-            value({ id: 'v3', merge_field_id: 'f1', location: 'North', value: 'loc' }),
+            value({
+                id: 'v3',
+                merge_field_id: 'f1',
+                location: 'North',
+                value: 'loc',
+            }),
         ];
 
-        expect(store.resolvedFor('f1', 'North', 'Parks')).toEqual({ value: 'loc', source: 'location' });
+        expect(store.resolvedFor('f1', 'North', 'Parks')).toEqual({
+            value: 'loc',
+            source: 'location',
+        });
     });
 
     it('resolvedFor returns null source when nothing is set', () => {
         const store = useMergeDataStore();
         store.fields = [field({ id: 'f1', key: 'contact' })];
 
-        expect(store.resolvedFor('f1', '', '')).toEqual({ value: null, source: null });
+        expect(store.resolvedFor('f1', '', '')).toEqual({
+            value: null,
+            source: null,
+        });
     });
 
     it('rowFor returns only the exact variation row', () => {
         const store = useMergeDataStore();
         store.values = [
             value({ id: 'v1', merge_field_id: 'f1', value: 'default' }),
-            value({ id: 'v2', merge_field_id: 'f1', location: 'North', value: 'loc' }),
+            value({
+                id: 'v2',
+                merge_field_id: 'f1',
+                location: 'North',
+                value: 'loc',
+            }),
         ];
 
         expect(store.rowFor('f1', 'North', '')?.id).toBe('v2');
@@ -114,7 +165,10 @@ describe('useMergeDataStore', () => {
         ];
 
         expect(
-            store.groupedFields.map((g) => ({ group: g.group, ids: g.fields.map((f) => f.id) })),
+            store.groupedFields.map((g) => ({
+                group: g.group,
+                ids: g.fields.map((f) => f.id),
+            })),
         ).toEqual([
             { group: 'Agency', ids: ['a', 'b'] },
             { group: 'Emergency', ids: ['c'] },
@@ -132,7 +186,9 @@ describe('useMergeDataStore', () => {
             field({ id: 'f1', key: 'agency' }),
             field({ id: 'f2', key: 'top_manager' }),
         ];
-        store.values = [value({ id: 'v1', merge_field_id: 'f1', value: 'Rio Dell' })];
+        store.values = [
+            value({ id: 'v1', merge_field_id: 'f1', value: 'Rio Dell' }),
+        ];
 
         // agency resolves; top_manager doesn't; doc_date is computed at
         // generation time; EMS_direct_phone isn't a registered field.
@@ -149,12 +205,21 @@ describe('useMergeDataStore', () => {
         const store = useMergeDataStore();
         store.fields = [field({ id: 'f1', key: 'assembly_area' })];
         store.values = [
-            value({ id: 'v1', merge_field_id: 'f1', location: 'North', value: 'North gate' }),
+            value({
+                id: 'v1',
+                merge_field_id: 'f1',
+                location: 'North',
+                value: 'North gate',
+            }),
         ];
 
-        expect(store.missingKeysFor(['assembly_area'], 'North', '')).toEqual([]);
+        expect(store.missingKeysFor(['assembly_area'], 'North', '')).toEqual(
+            [],
+        );
         // No default row -> unresolved for other variations.
-        expect(store.missingKeysFor(['assembly_area'], 'South', '')).toEqual(['assembly_area']);
+        expect(store.missingKeysFor(['assembly_area'], 'South', '')).toEqual([
+            'assembly_area',
+        ]);
     });
 
     // ----------------------------------------------------------------
@@ -183,24 +248,41 @@ describe('useMergeDataStore', () => {
     it('setValue PUTs the variation and patches the cache in place', async () => {
         const put = axios.put as ReturnType<typeof vi.fn>;
         put.mockResolvedValue({
-            data: value({ id: 'v9', merge_field_id: 'f1', location: 'North', value: 'new' }),
+            data: value({
+                id: 'v9',
+                merge_field_id: 'f1',
+                location: 'North',
+                value: 'new',
+            }),
         });
 
         const store = useMergeDataStore();
-        store.values = [value({ id: 'v1', merge_field_id: 'f1', value: 'default' })];
+        store.values = [
+            value({ id: 'v1', merge_field_id: 'f1', value: 'default' }),
+        ];
 
         await store.setValue('f1', 'North', '', 'new');
 
         expect(put).toHaveBeenCalledWith(
             '/api/merge-values',
-            { merge_field_id: 'f1', location: 'North', department: '', value: 'new' },
+            {
+                merge_field_id: 'f1',
+                location: 'North',
+                department: '',
+                value: 'new',
+            },
             expect.objectContaining({ headers: expect.any(Object) }),
         );
         expect(store.values).toHaveLength(2);
 
         // Upserting the same variation replaces, not appends.
         put.mockResolvedValue({
-            data: value({ id: 'v9', merge_field_id: 'f1', location: 'North', value: 'newer' }),
+            data: value({
+                id: 'v9',
+                merge_field_id: 'f1',
+                location: 'North',
+                value: 'newer',
+            }),
         });
         await store.setValue('f1', 'North', '', 'newer');
         expect(store.values).toHaveLength(2);

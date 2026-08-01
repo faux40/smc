@@ -15,7 +15,10 @@ describe('compliance store', () => {
 
     it('byTraining GETs the by-training endpoint with paging/sort/search', async () => {
         (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({
-            data: { data: [{ id: 't1', name: 'Forklift', total: 3, counts: {} }], meta: META },
+            data: {
+                data: [{ id: 't1', name: 'Forklift', total: 3, counts: {} }],
+                meta: META,
+            },
         });
         const store = useComplianceStore();
 
@@ -30,7 +33,13 @@ describe('compliance store', () => {
         expect(axios.get).toHaveBeenCalledWith(
             '/api/compliance/by-training',
             expect.objectContaining({
-                params: { page: 2, per_page: 25, dir: 'desc', sort: 'overdue', q: 'fork' },
+                params: {
+                    page: 2,
+                    per_page: 25,
+                    dir: 'desc',
+                    sort: 'overdue',
+                    q: 'fork',
+                },
             }),
         );
         expect(res.data[0].name).toBe('Forklift');
@@ -42,7 +51,13 @@ describe('compliance store', () => {
         });
         const store = useComplianceStore();
 
-        await store.byRequirement({ page: 1, per_page: 25, sort: null, dir: 'asc', q: '' });
+        await store.byRequirement({
+            page: 1,
+            per_page: 25,
+            sort: null,
+            dir: 'asc',
+            q: '',
+        });
 
         const call = (axios.get as ReturnType<typeof vi.fn>).mock.calls[0];
         expect(call[0]).toBe('/api/compliance/by-requirement');

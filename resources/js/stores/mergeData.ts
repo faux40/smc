@@ -53,7 +53,12 @@ export interface MergeFieldPayload {
 }
 
 /** Where a resolved value came from — drives the "inherited" hint. */
-export type ResolvedSource = 'exact' | 'location' | 'department' | 'default' | null;
+export type ResolvedSource =
+    | 'exact'
+    | 'location'
+    | 'department'
+    | 'default'
+    | null;
 
 export interface ResolvedValue {
     value: MergeValueContent;
@@ -86,8 +91,12 @@ export const useMergeDataStore = defineStore('mergeData', () => {
 
     async function fetchAll(): Promise<void> {
         const [fieldsRes, valuesRes] = await Promise.all([
-            axios.get<MergeFieldRow[]>('/api/merge-fields', { headers: defaultHeaders() }),
-            axios.get<MergeValueRow[]>('/api/merge-values', { headers: defaultHeaders() }),
+            axios.get<MergeFieldRow[]>('/api/merge-fields', {
+                headers: defaultHeaders(),
+            }),
+            axios.get<MergeValueRow[]>('/api/merge-values', {
+                headers: defaultHeaders(),
+            }),
         ]);
         fields.value = fieldsRes.data;
         values.value = valuesRes.data;
@@ -109,24 +118,39 @@ export const useMergeDataStore = defineStore('mergeData', () => {
 
     // ---- field definitions (Admin+) --------------------------------
 
-    async function createField(payload: MergeFieldPayload): Promise<MergeFieldRow> {
-        const { data } = await axios.post<MergeFieldRow>('/api/merge-fields', payload, {
-            headers: defaultHeaders(),
-        });
+    async function createField(
+        payload: MergeFieldPayload,
+    ): Promise<MergeFieldRow> {
+        const { data } = await axios.post<MergeFieldRow>(
+            '/api/merge-fields',
+            payload,
+            {
+                headers: defaultHeaders(),
+            },
+        );
         fields.value = [...fields.value, data];
 
         return data;
     }
 
-    async function updateField(id: string, payload: MergeFieldPayload): Promise<void> {
-        const { data } = await axios.patch<MergeFieldRow>(`/api/merge-fields/${id}`, payload, {
-            headers: defaultHeaders(),
-        });
+    async function updateField(
+        id: string,
+        payload: MergeFieldPayload,
+    ): Promise<void> {
+        const { data } = await axios.patch<MergeFieldRow>(
+            `/api/merge-fields/${id}`,
+            payload,
+            {
+                headers: defaultHeaders(),
+            },
+        );
         fields.value = fields.value.map((f) => (f.id === id ? data : f));
     }
 
     async function destroyField(id: string): Promise<void> {
-        await axios.delete(`/api/merge-fields/${id}`, { headers: defaultHeaders() });
+        await axios.delete(`/api/merge-fields/${id}`, {
+            headers: defaultHeaders(),
+        });
         fields.value = fields.value.filter((f) => f.id !== id);
         // The backend clears the field's values with it.
         values.value = values.value.filter((v) => v.merge_field_id !== id);
@@ -163,7 +187,9 @@ export const useMergeDataStore = defineStore('mergeData', () => {
     }
 
     async function clearValue(id: string): Promise<void> {
-        await axios.delete(`/api/merge-values/${id}`, { headers: defaultHeaders() });
+        await axios.delete(`/api/merge-values/${id}`, {
+            headers: defaultHeaders(),
+        });
         values.value = values.value.filter((v) => v.id !== id);
     }
 
@@ -272,7 +298,9 @@ export const useMergeDataStore = defineStore('mergeData', () => {
 
         subscribedOrgId.value = orgId;
 
-        const { bind } = useRealtime(`org.${orgId}`);
+        const { bind } = useRealtime(`org.${orgId}`, 'private', {
+            persist: true,
+        });
         const refetchFromPeer = (p: { origin_tab?: string | null }): void => {
             if (p.origin_tab === realtimeTabId()) {
                 return; // self-echo — the cache is already patched

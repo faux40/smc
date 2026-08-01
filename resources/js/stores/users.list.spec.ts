@@ -42,13 +42,25 @@ describe('users store — server-paged list + JSON row actions', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
-        (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} });
-        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} });
+        (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: {},
+        });
+        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: {},
+        });
     });
 
     it('fetchPage GETs the paged endpoint with every filter param', async () => {
         (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({
-            data: { data: [row({ id: 'a' })], meta: { current_page: 2, last_page: 3, per_page: 25, total: 51 } },
+            data: {
+                data: [row({ id: 'a' })],
+                meta: {
+                    current_page: 2,
+                    last_page: 3,
+                    per_page: 25,
+                    total: 51,
+                },
+            },
         });
         const store = useUsersStore();
 
@@ -86,14 +98,29 @@ describe('users store — server-paged list + JSON row actions', () => {
 
     it('fetchPage omits empty optional params', async () => {
         (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({
-            data: { data: [], meta: { current_page: 1, last_page: 1, per_page: 25, total: 0 } },
+            data: {
+                data: [],
+                meta: { current_page: 1, last_page: 1, per_page: 25, total: 0 },
+            },
         });
         const store = useUsersStore();
 
-        await store.fetchPage({ page: 1, per_page: 25, sort: 'name', dir: 'asc', q: '' });
+        await store.fetchPage({
+            page: 1,
+            per_page: 25,
+            sort: 'name',
+            dir: 'asc',
+            q: '',
+        });
 
-        const params = (axios.get as ReturnType<typeof vi.fn>).mock.calls[0][1].params;
-        expect(params).toEqual({ page: 1, per_page: 25, dir: 'asc', sort: 'name' });
+        const params = (axios.get as ReturnType<typeof vi.fn>).mock.calls[0][1]
+            .params;
+        expect(params).toEqual({
+            page: 1,
+            per_page: 25,
+            dir: 'asc',
+            sort: 'name',
+        });
         expect(params).not.toHaveProperty('q');
         expect(params).not.toHaveProperty('role');
         expect(params).not.toHaveProperty('tags');
@@ -138,7 +165,10 @@ describe('users store — server-paged list + JSON row actions', () => {
 
         await store.destroy('u1');
 
-        expect(axios.delete).toHaveBeenCalledWith('/users/u1', expect.anything());
+        expect(axios.delete).toHaveBeenCalledWith(
+            '/users/u1',
+            expect.anything(),
+        );
         expect(store.byId('u1')).toBeUndefined();
         expect(store.byId('u2')).toBeDefined();
         expect(store.revision).toBe(rev + 1);

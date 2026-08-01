@@ -222,7 +222,11 @@ export const useTrainingAssignmentsStore = defineStore(
         ): Promise<TrainingAssignmentRow[]> {
             const { data } = await axios.post<TrainingAssignmentRow[]>(
                 '/api/training-assignments',
-                { source_type: 'direct', user_id: userId, training_id: trainingId },
+                {
+                    source_type: 'direct',
+                    user_id: userId,
+                    training_id: trainingId,
+                },
                 { headers: defaultHeaders() },
             );
             data.forEach((r) => upsert(r));
@@ -324,7 +328,9 @@ export const useTrainingAssignmentsStore = defineStore(
 
             subscribedOrgId.value = orgId;
 
-            const { bind } = useRealtime(`org.${orgId}`);
+            const { bind } = useRealtime(`org.${orgId}`, 'private', {
+                persist: true,
+            });
 
             bind('TrainingAssignmentCreated', (payload: BroadcastPayload) => {
                 const existing = rows.value.find((r) => r.id === payload.id);

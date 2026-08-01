@@ -3,7 +3,10 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useRequirementAssignmentsStore } from '@/stores/requirementAssignments';
 import { useTrainingAssignmentsStore } from '@/stores/trainingAssignments';
-import type { AssignmentSourceRow, TrainingAssignmentRow } from '@/stores/trainingAssignments';
+import type {
+    AssignmentSourceRow,
+    TrainingAssignmentRow,
+} from '@/stores/trainingAssignments';
 import { useRequirementsStore } from '@/stores/requirements';
 import type { RequirementRow } from '@/stores/requirements';
 
@@ -15,7 +18,9 @@ vi.mock('@/composables/useRealtime', () => ({
 
 const REQUIREMENT_CLASS = 'App\\Models\\Requirement';
 
-function source(overrides: Partial<AssignmentSourceRow> = {}): AssignmentSourceRow {
+function source(
+    overrides: Partial<AssignmentSourceRow> = {},
+): AssignmentSourceRow {
     return {
         id: 'src-1',
         sourceable_type: null,
@@ -25,7 +30,9 @@ function source(overrides: Partial<AssignmentSourceRow> = {}): AssignmentSourceR
     };
 }
 
-function ta(overrides: Partial<TrainingAssignmentRow> & { id: string }): TrainingAssignmentRow {
+function ta(
+    overrides: Partial<TrainingAssignmentRow> & { id: string },
+): TrainingAssignmentRow {
     return {
         user_id: 'u1',
         training_id: 't1',
@@ -38,7 +45,9 @@ function ta(overrides: Partial<TrainingAssignmentRow> & { id: string }): Trainin
     };
 }
 
-function req(overrides: Partial<RequirementRow> & { id: string }): RequirementRow {
+function req(
+    overrides: Partial<RequirementRow> & { id: string },
+): RequirementRow {
     return {
         name: 'Fire Safety',
         description: null,
@@ -67,7 +76,11 @@ describe('useRequirementAssignmentsStore', () => {
     it('forUser returns empty when user TAs have no requirement sources', () => {
         const taStore = useTrainingAssignmentsStore();
         taStore.rows = [
-            ta({ id: 'ta-1', user_id: 'u1', active_sources: [source({ sourceable_type: null })] }),
+            ta({
+                id: 'ta-1',
+                user_id: 'u1',
+                active_sources: [source({ sourceable_type: null })],
+            }),
         ];
         const store = useRequirementAssignmentsStore();
         expect(store.forUser('u1')).toHaveLength(0);
@@ -81,13 +94,23 @@ describe('useRequirementAssignmentsStore', () => {
             ta({
                 id: 'ta-1',
                 user_id: 'u1',
-                active_sources: [source({ id: 'src-1', sourceable_type: REQUIREMENT_CLASS, sourceable_id: 'r1' })],
+                active_sources: [
+                    source({
+                        id: 'src-1',
+                        sourceable_type: REQUIREMENT_CLASS,
+                        sourceable_id: 'r1',
+                    }),
+                ],
             }),
         ];
         const store = useRequirementAssignmentsStore();
         const result = store.forUser('u1');
         expect(result).toHaveLength(1);
-        expect(result[0]).toMatchObject({ requirement_id: 'r1', requirement_name: 'Fire Safety', user_id: 'u1' });
+        expect(result[0]).toMatchObject({
+            requirement_id: 'r1',
+            requirement_name: 'Fire Safety',
+            user_id: 'u1',
+        });
     });
 
     it('forUser deduplicates when multiple TAs share the same requirement source', () => {
@@ -95,8 +118,28 @@ describe('useRequirementAssignmentsStore', () => {
         const reqStore = useRequirementsStore();
         reqStore.library = [req({ id: 'r1', name: 'Fire Safety' })];
         taStore.rows = [
-            ta({ id: 'ta-1', user_id: 'u1', training_id: 't1', active_sources: [source({ sourceable_type: REQUIREMENT_CLASS, sourceable_id: 'r1' })] }),
-            ta({ id: 'ta-2', user_id: 'u1', training_id: 't2', active_sources: [source({ sourceable_type: REQUIREMENT_CLASS, sourceable_id: 'r1' })] }),
+            ta({
+                id: 'ta-1',
+                user_id: 'u1',
+                training_id: 't1',
+                active_sources: [
+                    source({
+                        sourceable_type: REQUIREMENT_CLASS,
+                        sourceable_id: 'r1',
+                    }),
+                ],
+            }),
+            ta({
+                id: 'ta-2',
+                user_id: 'u1',
+                training_id: 't2',
+                active_sources: [
+                    source({
+                        sourceable_type: REQUIREMENT_CLASS,
+                        sourceable_id: 'r1',
+                    }),
+                ],
+            }),
         ];
         const store = useRequirementAssignmentsStore();
         expect(store.forUser('u1')).toHaveLength(1);
@@ -110,13 +153,34 @@ describe('useRequirementAssignmentsStore', () => {
             req({ id: 'r2', name: 'First Aid' }),
         ];
         taStore.rows = [
-            ta({ id: 'ta-1', user_id: 'u1', active_sources: [source({ sourceable_type: REQUIREMENT_CLASS, sourceable_id: 'r1' })] }),
-            ta({ id: 'ta-2', user_id: 'u1', active_sources: [source({ sourceable_type: REQUIREMENT_CLASS, sourceable_id: 'r2' })] }),
+            ta({
+                id: 'ta-1',
+                user_id: 'u1',
+                active_sources: [
+                    source({
+                        sourceable_type: REQUIREMENT_CLASS,
+                        sourceable_id: 'r1',
+                    }),
+                ],
+            }),
+            ta({
+                id: 'ta-2',
+                user_id: 'u1',
+                active_sources: [
+                    source({
+                        sourceable_type: REQUIREMENT_CLASS,
+                        sourceable_id: 'r2',
+                    }),
+                ],
+            }),
         ];
         const store = useRequirementAssignmentsStore();
         const result = store.forUser('u1');
         expect(result).toHaveLength(2);
-        expect(result.map((r) => r.requirement_id).sort()).toEqual(['r1', 'r2']);
+        expect(result.map((r) => r.requirement_id).sort()).toEqual([
+            'r1',
+            'r2',
+        ]);
     });
 
     it('forUser only returns rows for the requested user', () => {
@@ -124,8 +188,26 @@ describe('useRequirementAssignmentsStore', () => {
         const reqStore = useRequirementsStore();
         reqStore.library = [req({ id: 'r1', name: 'Fire Safety' })];
         taStore.rows = [
-            ta({ id: 'ta-1', user_id: 'u1', active_sources: [source({ sourceable_type: REQUIREMENT_CLASS, sourceable_id: 'r1' })] }),
-            ta({ id: 'ta-2', user_id: 'u2', active_sources: [source({ sourceable_type: REQUIREMENT_CLASS, sourceable_id: 'r1' })] }),
+            ta({
+                id: 'ta-1',
+                user_id: 'u1',
+                active_sources: [
+                    source({
+                        sourceable_type: REQUIREMENT_CLASS,
+                        sourceable_id: 'r1',
+                    }),
+                ],
+            }),
+            ta({
+                id: 'ta-2',
+                user_id: 'u2',
+                active_sources: [
+                    source({
+                        sourceable_type: REQUIREMENT_CLASS,
+                        sourceable_id: 'r1',
+                    }),
+                ],
+            }),
         ];
         const store = useRequirementAssignmentsStore();
         expect(store.forUser('u1')).toHaveLength(1);
@@ -135,10 +217,21 @@ describe('useRequirementAssignmentsStore', () => {
     it('forUser uses "Unknown Requirement" when requirement is not in the library', () => {
         const taStore = useTrainingAssignmentsStore();
         taStore.rows = [
-            ta({ id: 'ta-1', user_id: 'u1', active_sources: [source({ sourceable_type: REQUIREMENT_CLASS, sourceable_id: 'r-missing' })] }),
+            ta({
+                id: 'ta-1',
+                user_id: 'u1',
+                active_sources: [
+                    source({
+                        sourceable_type: REQUIREMENT_CLASS,
+                        sourceable_id: 'r-missing',
+                    }),
+                ],
+            }),
         ];
         const store = useRequirementAssignmentsStore();
-        expect(store.forUser('u1')[0].requirement_name).toBe('Unknown Requirement');
+        expect(store.forUser('u1')[0].requirement_name).toBe(
+            'Unknown Requirement',
+        );
     });
 
     // ----------------------------------------------------------------
@@ -146,17 +239,23 @@ describe('useRequirementAssignmentsStore', () => {
     // ----------------------------------------------------------------
 
     it('destroyByRequirement calls DELETE /api/training-assignments/by-requirement with correct payload', async () => {
-        vi.mocked(axios.delete).mockResolvedValue({ data: { deleted_ids: [], updated_ids: [] } });
+        vi.mocked(axios.delete).mockResolvedValue({
+            data: { deleted_ids: [], updated_ids: [] },
+        });
         const store = useRequirementAssignmentsStore();
         await store.destroyByRequirement('u1', 'r1');
         expect(axios.delete).toHaveBeenCalledWith(
             '/api/training-assignments/by-requirement',
-            expect.objectContaining({ data: { user_id: 'u1', requirement_id: 'r1' } }),
+            expect.objectContaining({
+                data: { user_id: 'u1', requirement_id: 'r1' },
+            }),
         );
     });
 
     it('destroyByRequirement removes deleted TAs from the TA store', async () => {
-        vi.mocked(axios.delete).mockResolvedValue({ data: { deleted_ids: ['ta-1'], updated_ids: [] } });
+        vi.mocked(axios.delete).mockResolvedValue({
+            data: { deleted_ids: ['ta-1'], updated_ids: [] },
+        });
         const taStore = useTrainingAssignmentsStore();
         taStore.rows = [
             ta({ id: 'ta-1', user_id: 'u1' }),
@@ -167,15 +266,25 @@ describe('useRequirementAssignmentsStore', () => {
     });
 
     it('destroyByRequirement strips requirement sources from updated TAs', async () => {
-        vi.mocked(axios.delete).mockResolvedValue({ data: { deleted_ids: [], updated_ids: ['ta-1'] } });
+        vi.mocked(axios.delete).mockResolvedValue({
+            data: { deleted_ids: [], updated_ids: ['ta-1'] },
+        });
         const taStore = useTrainingAssignmentsStore();
         taStore.rows = [
             ta({
                 id: 'ta-1',
                 user_id: 'u1',
                 active_sources: [
-                    source({ id: 'src-req', sourceable_type: REQUIREMENT_CLASS, sourceable_id: 'r1' }),
-                    source({ id: 'src-direct', sourceable_type: null, sourceable_id: null }),
+                    source({
+                        id: 'src-req',
+                        sourceable_type: REQUIREMENT_CLASS,
+                        sourceable_id: 'r1',
+                    }),
+                    source({
+                        id: 'src-direct',
+                        sourceable_type: null,
+                        sourceable_id: null,
+                    }),
                 ],
             }),
         ];
@@ -186,13 +295,22 @@ describe('useRequirementAssignmentsStore', () => {
     });
 
     it('destroyByRequirement returns the deleted_ids and updated_ids from the server', async () => {
-        vi.mocked(axios.delete).mockResolvedValue({ data: { deleted_ids: ['ta-1'], updated_ids: ['ta-2'] } });
+        vi.mocked(axios.delete).mockResolvedValue({
+            data: { deleted_ids: ['ta-1'], updated_ids: ['ta-2'] },
+        });
         const taStore = useTrainingAssignmentsStore();
         taStore.rows = [
             ta({ id: 'ta-1', user_id: 'u1' }),
             ta({ id: 'ta-2', user_id: 'u1' }),
         ];
-        const result = await useRequirementAssignmentsStore().destroyByRequirement('u1', 'r1');
-        expect(result).toEqual({ deleted_ids: ['ta-1'], updated_ids: ['ta-2'] });
+        const result =
+            await useRequirementAssignmentsStore().destroyByRequirement(
+                'u1',
+                'r1',
+            );
+        expect(result).toEqual({
+            deleted_ids: ['ta-1'],
+            updated_ids: ['ta-2'],
+        });
     });
 });

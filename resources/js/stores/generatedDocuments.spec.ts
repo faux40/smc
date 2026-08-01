@@ -20,7 +20,9 @@ describe('useGeneratedDocumentsStore', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
-        Object.keys(capturedBindings).forEach((k) => delete capturedBindings[k]);
+        Object.keys(capturedBindings).forEach(
+            (k) => delete capturedBindings[k],
+        );
     });
 
     it('fetchPage passes the query through and returns {data, meta}', async () => {
@@ -60,7 +62,9 @@ describe('useGeneratedDocumentsStore', () => {
         const store = useGeneratedDocumentsStore();
         store.subscribe('org-1');
 
-        capturedBindings['GeneratedDocumentsChanged']({ origin_tab: 'test-tab' });
+        capturedBindings['GeneratedDocumentsChanged']({
+            origin_tab: 'test-tab',
+        });
         capturedBindings['GeneratedDocumentsChanged']({ origin_tab: null });
 
         expect(store.revision).toBe(2);
@@ -69,7 +73,11 @@ describe('useGeneratedDocumentsStore', () => {
     it('downloadUrl builds the format-qualified link', () => {
         const store = useGeneratedDocumentsStore();
 
-        expect(store.downloadUrl('g1', 'pdf')).toBe('/api/generated-documents/g1/download?format=pdf');
-        expect(store.downloadUrl('g1', 'merged')).toBe('/api/generated-documents/g1/download?format=merged');
+        expect(store.downloadUrl('g1', 'pdf')).toBe(
+            '/api/generated-documents/g1/download?format=pdf',
+        );
+        expect(store.downloadUrl('g1', 'merged')).toBe(
+            '/api/generated-documents/g1/download?format=merged',
+        );
     });
 });

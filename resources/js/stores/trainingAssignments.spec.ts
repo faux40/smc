@@ -20,7 +20,9 @@ vi.mock('@/composables/useRealtime', () => ({
     useRealtime: vi.fn(() => ({ bind: mockBind, leave: vi.fn() })),
 }));
 
-function source(overrides: Partial<AssignmentSourceRow> = {}): AssignmentSourceRow {
+function source(
+    overrides: Partial<AssignmentSourceRow> = {},
+): AssignmentSourceRow {
     return {
         id: 'src-1',
         sourceable_type: null,
@@ -30,7 +32,9 @@ function source(overrides: Partial<AssignmentSourceRow> = {}): AssignmentSourceR
     };
 }
 
-function ta(overrides: Partial<TrainingAssignmentRow> & { id: string }): TrainingAssignmentRow {
+function ta(
+    overrides: Partial<TrainingAssignmentRow> & { id: string },
+): TrainingAssignmentRow {
     return {
         user_id: 'u1',
         training_id: 't1',
@@ -47,7 +51,9 @@ describe('useTrainingAssignmentsStore', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
-        Object.keys(capturedBindings).forEach((k) => delete capturedBindings[k]);
+        Object.keys(capturedBindings).forEach(
+            (k) => delete capturedBindings[k],
+        );
     });
 
     // ----------------------------------------------------------------
@@ -92,7 +98,10 @@ describe('useTrainingAssignmentsStore', () => {
         store.upsert(ta({ id: 'ta-2', user_id: 'u2', training_id: 't1' }));
         store.upsert(ta({ id: 'ta-3', user_id: 'u1', training_id: 't2' }));
 
-        expect(store.forTraining('t1').map((r) => r.id)).toEqual(['ta-1', 'ta-2']);
+        expect(store.forTraining('t1').map((r) => r.id)).toEqual([
+            'ta-1',
+            'ta-2',
+        ]);
         expect(store.forTraining('t2').map((r) => r.id)).toEqual(['ta-3']);
     });
 
@@ -102,7 +111,9 @@ describe('useTrainingAssignmentsStore', () => {
 
     it('loadFor fetches and upserts rows', async () => {
         const get = axios.get as ReturnType<typeof vi.fn>;
-        get.mockResolvedValue({ data: [ta({ id: 'ta-1' }), ta({ id: 'ta-2' })] });
+        get.mockResolvedValue({
+            data: [ta({ id: 'ta-1' }), ta({ id: 'ta-2' })],
+        });
 
         const store = useTrainingAssignmentsStore();
         await store.loadFor({ user_id: 'u1' });
@@ -130,20 +141,28 @@ describe('useTrainingAssignmentsStore', () => {
     // already loaded need a way to bypass the cache and re-pull it.
     it('loadFor({ force: true }) refetches even when the filter was already loaded', async () => {
         const get = axios.get as ReturnType<typeof vi.fn>;
-        get.mockResolvedValueOnce({ data: [ta({ id: 'ta-1', last_completed_at: null })] });
-        get.mockResolvedValueOnce({ data: [ta({ id: 'ta-1', last_completed_at: '2026-07-01' })] });
+        get.mockResolvedValueOnce({
+            data: [ta({ id: 'ta-1', last_completed_at: null })],
+        });
+        get.mockResolvedValueOnce({
+            data: [ta({ id: 'ta-1', last_completed_at: '2026-07-01' })],
+        });
 
         const store = useTrainingAssignmentsStore();
         await store.loadFor({ user_id: 'u1' });
         await store.loadFor({ user_id: 'u1' }, { force: true });
 
         expect(get).toHaveBeenCalledTimes(2);
-        expect(store.rows.find((r) => r.id === 'ta-1')?.last_completed_at).toBe('2026-07-01');
+        expect(store.rows.find((r) => r.id === 'ta-1')?.last_completed_at).toBe(
+            '2026-07-01',
+        );
     });
 
     it('assignDirect POSTs with source_type=direct and upserts the response', async () => {
         const post = axios.post as ReturnType<typeof vi.fn>;
-        post.mockResolvedValue({ data: [ta({ id: 'ta-1', user_id: 'u1', training_id: 't1' })] });
+        post.mockResolvedValue({
+            data: [ta({ id: 'ta-1', user_id: 'u1', training_id: 't1' })],
+        });
 
         const store = useTrainingAssignmentsStore();
         const result = await store.assignDirect('u1', 't1');
@@ -172,7 +191,11 @@ describe('useTrainingAssignmentsStore', () => {
 
         expect(post).toHaveBeenCalledWith(
             '/api/training-assignments',
-            { source_type: 'requirement', user_id: 'u1', requirement_id: 'req-1' },
+            {
+                source_type: 'requirement',
+                user_id: 'u1',
+                requirement_id: 'req-1',
+            },
             expect.any(Object),
         );
         expect(result).toHaveLength(2);
@@ -180,7 +203,9 @@ describe('useTrainingAssignmentsStore', () => {
     });
 
     it('destroy DELETEs the row and removes it from cache', async () => {
-        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { ok: true } });
+        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { ok: true },
+        });
 
         const store = useTrainingAssignmentsStore();
         store.upsert(ta({ id: 'ta-1' }));
@@ -249,9 +274,18 @@ describe('useTrainingAssignmentsStore', () => {
         const store = useTrainingAssignmentsStore();
         store.subscribe('org-1');
 
-        expect(mockBind).toHaveBeenCalledWith('TrainingAssignmentCreated', expect.any(Function));
-        expect(mockBind).toHaveBeenCalledWith('TrainingAssignmentDeleted', expect.any(Function));
-        expect(mockBind).toHaveBeenCalledWith('TrainingAssignmentsBulkChanged', expect.any(Function));
+        expect(mockBind).toHaveBeenCalledWith(
+            'TrainingAssignmentCreated',
+            expect.any(Function),
+        );
+        expect(mockBind).toHaveBeenCalledWith(
+            'TrainingAssignmentDeleted',
+            expect.any(Function),
+        );
+        expect(mockBind).toHaveBeenCalledWith(
+            'TrainingAssignmentsBulkChanged',
+            expect.any(Function),
+        );
     });
 
     it('subscribe is idempotent — does not re-bind for the same orgId', () => {
@@ -267,7 +301,10 @@ describe('useTrainingAssignmentsStore', () => {
         store.subscribe('org-1');
 
         const before = store.revision;
-        capturedBindings['TrainingAssignmentsBulkChanged']({ org_id: 'org-1', origin_tab: 'other-tab' });
+        capturedBindings['TrainingAssignmentsBulkChanged']({
+            org_id: 'org-1',
+            origin_tab: 'other-tab',
+        });
 
         expect(store.revision).toBe(before + 1);
     });
@@ -340,7 +377,10 @@ describe('useTrainingAssignmentsStore', () => {
         store.upsert(ta({ id: 'ta-1' }));
         store.subscribe('org-1');
 
-        capturedBindings['TrainingAssignmentDeleted']({ id: 'ta-1', origin_tab: 'other-tab' });
+        capturedBindings['TrainingAssignmentDeleted']({
+            id: 'ta-1',
+            origin_tab: 'other-tab',
+        });
 
         expect(store.rows).toHaveLength(0);
     });
@@ -384,28 +424,46 @@ describe('useTrainingAssignmentsStore', () => {
 
         const store = useTrainingAssignmentsStore();
         store.upsert(ta({ id: 'ta-1' }));
-        store.upsert(ta({
-            id: 'ta-2',
-            active_sources: [
-                source({ id: 'src-req', sourceable_type: 'App\\Models\\Requirement', sourceable_id: 'r1' }),
-                source({ id: 'src-direct', sourceable_type: null }),
-            ],
-        }));
-        store.upsert(ta({
-            id: 'ta-3',
-            active_sources: [
-                source({ id: 'src-req2', sourceable_type: 'App\\Models\\Requirement', sourceable_id: 'r1' }),
-            ],
-        }));
+        store.upsert(
+            ta({
+                id: 'ta-2',
+                active_sources: [
+                    source({
+                        id: 'src-req',
+                        sourceable_type: 'App\\Models\\Requirement',
+                        sourceable_id: 'r1',
+                    }),
+                    source({ id: 'src-direct', sourceable_type: null }),
+                ],
+            }),
+        );
+        store.upsert(
+            ta({
+                id: 'ta-3',
+                active_sources: [
+                    source({
+                        id: 'src-req2',
+                        sourceable_type: 'App\\Models\\Requirement',
+                        sourceable_id: 'r1',
+                    }),
+                ],
+            }),
+        );
 
         await store.breakFromRequirement('ta-1', 'r1');
 
         // ta-2 keeps its direct source, loses the requirement source
-        expect(store.rows.find((r) => r.id === 'ta-2')!.active_sources).toHaveLength(1);
-        expect(store.rows.find((r) => r.id === 'ta-2')!.active_sources[0].id).toBe('src-direct');
+        expect(
+            store.rows.find((r) => r.id === 'ta-2')!.active_sources,
+        ).toHaveLength(1);
+        expect(
+            store.rows.find((r) => r.id === 'ta-2')!.active_sources[0].id,
+        ).toBe('src-direct');
 
         // ta-3 has no remaining sources
-        expect(store.rows.find((r) => r.id === 'ta-3')!.active_sources).toHaveLength(0);
+        expect(
+            store.rows.find((r) => r.id === 'ta-3')!.active_sources,
+        ).toHaveLength(0);
     });
 
     it('breakFromRequirement returns the server response', async () => {

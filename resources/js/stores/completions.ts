@@ -192,7 +192,9 @@ export const useCompletionsStore = defineStore('completions', () => {
 
         subscribedOrgId.value = orgId;
 
-        const { bind } = useRealtime(`org.${orgId}`);
+        const { bind } = useRealtime(`org.${orgId}`, 'private', {
+            persist: true,
+        });
 
         // The table is server-paged, so we can't patch a row in place — each
         // broadcast just nudges the open page to refetch itself.

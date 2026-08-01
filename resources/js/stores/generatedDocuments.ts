@@ -12,7 +12,11 @@ import { ref } from 'vue';
 import { useRealtime } from '@/composables/useRealtime';
 import { realtimeTabId } from '@/echo';
 
-export type GeneratedDocumentStatus = 'queued' | 'processing' | 'done' | 'failed';
+export type GeneratedDocumentStatus =
+    | 'queued'
+    | 'processing'
+    | 'done'
+    | 'failed';
 
 export interface GeneratedDocumentRow {
     id: string;
@@ -51,63 +55,78 @@ function defaultHeaders(): Record<string, string> {
     };
 }
 
-export const useGeneratedDocumentsStore = defineStore('generatedDocuments', () => {
-    const revision = ref(0);
-    const subscribedOrgId = ref<string | null>(null);
+export const useGeneratedDocumentsStore = defineStore(
+    'generatedDocuments',
+    () => {
+        const revision = ref(0);
+        const subscribedOrgId = ref<string | null>(null);
 
-    async function fetchPage(
-        query: Record<string, unknown>,
-    ): Promise<GeneratedDocumentsPage> {
-        const { data } = await axios.get<GeneratedDocumentsPage>(
-            '/api/generated-documents',
-            { headers: defaultHeaders(), params: query },
-        );
+        async function fetchPage(
+            query: Record<string, unknown>,
+        ): Promise<GeneratedDocumentsPage> {
+            const { data } = await axios.get<GeneratedDocumentsPage>(
+                '/api/generated-documents',
+                { headers: defaultHeaders(), params: query },
+            );
 
-        return data;
-    }
-
-    async function generate(
-        templateId: string,
-        location: string,
-        department: string,
-    ): Promise<GeneratedDocumentRow> {
-        const { data } = await axios.post<GeneratedDocumentRow>(
-            '/api/generated-documents',
-            { doc_template_id: templateId, location, department },
-            { headers: defaultHeaders() },
-        );
-        revision.value++;
-
-        return data;
-    }
-
-    async function destroy(id: string): Promise<void> {
-        await axios.delete(`/api/generated-documents/${id}`, {
-            headers: defaultHeaders(),
-        });
-        revision.value++;
-    }
-
-    function downloadUrl(id: string, format: 'pdf' | 'merged'): string {
-        return `/api/generated-documents/${id}/download?format=${format}`;
-    }
-
-    function subscribe(orgId: string): void {
-        if (subscribedOrgId.value === orgId) {
-            return;
+            return data;
         }
 
-        subscribedOrgId.value = orgId;
-
-        const { bind } = useRealtime(`org.${orgId}`);
-        bind('GeneratedDocumentsChanged', (p: { origin_tab?: string | null }) => {
-            // Deliberately NOT filtering self-echo: the completion signal
-            // for this tab's own generation arrives via this event (the
-            // queue worker has no origin tab).
-            void p;
+        async function generate(
+            templateId: string,
+            location: string,
+            department: string,
+        ): Promise<GeneratedDocumentRow> {
+            const { data } = await axios.post<GeneratedDocumentRow>(
+                '/api/generated-documents',
+                { doc_template_id: templateId, location, department },
+                { headers: defaultHeaders() },
+            );
             revision.value++;
-        });
-    }
 
-    return { revision, fetchPage, generate, destroy, downloadUrl, subscribe };
-});
+            return data;
+        }
+
+        async function destroy(id: string): Promise<void> {
+            await axios.delete(`/api/generated-documents/${id}`, {
+                headers: defaultHeaders(),
+            });
+            revision.value++;
+        }
+
+        function downloadUrl(id: string, format: 'pdf' | 'merged'): string {
+            return `/api/generated-documents/${id}/download?format=${format}`;
+        }
+
+        function subscribe(orgId: string): void {
+            if (subscribedOrgId.value === orgId) {
+                return;
+            }
+
+            subscribedOrgId.value = orgId;
+
+            const { bind } = useRealtime(`org.${orgId}`, 'private', {
+                persist: true,
+            });
+            bind(
+                'GeneratedDocumentsChanged',
+                (p: { origin_tab?: string | null }) => {
+                    // Deliberately NOT filtering self-echo: the completion signal
+                    // for this tab's own generation arrives via this event (the
+                    // queue worker has no origin tab).
+                    void p;
+                    revision.value++;
+                },
+            );
+        }
+
+        return {
+            revision,
+            fetchPage,
+            generate,
+            destroy,
+            downloadUrl,
+            subscribe,
+        };
+    },
+);

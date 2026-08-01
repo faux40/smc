@@ -183,7 +183,9 @@ export const useAttachmentsStore = defineStore('attachments', () => {
         const next: Record<string, AttachmentRow[]> = {};
 
         for (const [key, rows] of Object.entries(lists.value)) {
-            next[key] = rows.map((a) => (a.id === id ? { ...a, ...fields } : a));
+            next[key] = rows.map((a) =>
+                a.id === id ? { ...a, ...fields } : a,
+            );
         }
 
         lists.value = next;
@@ -217,7 +219,9 @@ export const useAttachmentsStore = defineStore('attachments', () => {
 
         subscribedOrgId.value = orgId;
 
-        const { bind } = useRealtime(`org.${orgId}`);
+        const { bind } = useRealtime(`org.${orgId}`, 'private', {
+            persist: true,
+        });
 
         bind(
             'AttachmentCreated',
@@ -269,8 +273,11 @@ export const useAttachmentsStore = defineStore('attachments', () => {
 
         bind(
             'AttachmentUpdated',
-            (p: { id: string; type: string | null; description: string | null }) =>
-                patchRow(p.id, { type: p.type, description: p.description }),
+            (p: {
+                id: string;
+                type: string | null;
+                description: string | null;
+            }) => patchRow(p.id, { type: p.type, description: p.description }),
         );
 
         bind('AttachmentDeleted', (p: { id: string }) => {

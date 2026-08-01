@@ -61,7 +61,9 @@ describe('useCardStocksStore', () => {
 
     it('create appends the server row', async () => {
         const post = axios.post as ReturnType<typeof vi.fn>;
-        post.mockResolvedValue({ data: row({ id: 's2', name: 'Wallet 10-up' }) });
+        post.mockResolvedValue({
+            data: row({ id: 's2', name: 'Wallet 10-up' }),
+        });
         const store = useCardStocksStore();
 
         const created = await store.create({ name: 'Wallet 10-up' });

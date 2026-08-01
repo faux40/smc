@@ -124,7 +124,9 @@ export const useRqmtElementsStore = defineStore('rqmtElements', () => {
 
         subscribedOrgId.value = orgId;
 
-        const { bind } = useRealtime(`org.${orgId}`);
+        const { bind } = useRealtime(`org.${orgId}`, 'private', {
+            persist: true,
+        });
 
         bind(
             'RqmtElementCreated',

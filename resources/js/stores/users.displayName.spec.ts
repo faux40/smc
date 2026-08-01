@@ -110,7 +110,11 @@ describe('users store — name resolution via the store', () => {
 
     it('applyAdded carries the sortable name from the broadcast', () => {
         const store = useUsersStore();
-        store.applyAdded({ id: 'new', name: 'Cara Cole', sort_name: 'Cole, Cara' });
+        store.applyAdded({
+            id: 'new',
+            name: 'Cara Cole',
+            sort_name: 'Cole, Cara',
+        });
 
         expect(store.displayName('new')).toBe('Cole, Cara');
     });
@@ -118,7 +122,11 @@ describe('users store — name resolution via the store', () => {
     it('applyUpdated patches the sortable name from the broadcast', () => {
         const store = useUsersStore();
         store.hydrate([row({ id: 'u1' })]);
-        store.applyUpdated({ id: 'u1', name: 'Ada Byron', sort_name: 'Byron, Ada' });
+        store.applyUpdated({
+            id: 'u1',
+            name: 'Ada Byron',
+            sort_name: 'Byron, Ada',
+        });
 
         expect(store.displayName('u1')).toBe('Byron, Ada');
     });

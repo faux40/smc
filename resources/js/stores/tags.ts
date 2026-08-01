@@ -217,7 +217,9 @@ export const useTagsStore = defineStore('tags', () => {
 
         subscribedOrgId.value = orgId;
 
-        const { bind } = useRealtime(`org.${orgId}`);
+        const { bind } = useRealtime(`org.${orgId}`, 'private', {
+            persist: true,
+        });
 
         bind(
             'TagCreated',

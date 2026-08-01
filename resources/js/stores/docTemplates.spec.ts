@@ -17,7 +17,9 @@ vi.mock('@/composables/useRealtime', () => ({
     })),
 }));
 
-function row(overrides: Partial<DocTemplateRow> & { id: string }): DocTemplateRow {
+function row(
+    overrides: Partial<DocTemplateRow> & { id: string },
+): DocTemplateRow {
     return {
         name: overrides.id,
         description: null,
@@ -38,7 +40,9 @@ describe('useDocTemplatesStore', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
-        Object.keys(capturedBindings).forEach((k) => delete capturedBindings[k]);
+        Object.keys(capturedBindings).forEach(
+            (k) => delete capturedBindings[k],
+        );
     });
 
     it('upload posts multipart and appends the new template', async () => {
@@ -59,10 +63,15 @@ describe('useDocTemplatesStore', () => {
 
     it('replace swaps the row for the new version in place', async () => {
         const post = axios.post as ReturnType<typeof vi.fn>;
-        post.mockResolvedValue({ data: row({ id: 't2', name: 'HazCom', version: 2 }) });
+        post.mockResolvedValue({
+            data: row({ id: 't2', name: 'HazCom', version: 2 }),
+        });
 
         const store = useDocTemplatesStore();
-        store.library = [row({ id: 't1', name: 'HazCom' }), row({ id: 'other' })];
+        store.library = [
+            row({ id: 't1', name: 'HazCom' }),
+            row({ id: 'other' }),
+        ];
 
         await store.replace('t1', new File(['zip'], 'v2.docx'));
 
@@ -72,7 +81,9 @@ describe('useDocTemplatesStore', () => {
     });
 
     it('destroy removes the row', async () => {
-        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { ok: true } });
+        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { ok: true },
+        });
 
         const store = useDocTemplatesStore();
         store.library = [row({ id: 't1' })];

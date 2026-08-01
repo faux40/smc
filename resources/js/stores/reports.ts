@@ -120,7 +120,10 @@ export const useReportsStore = defineStore('reports', () => {
 
         const { data } = await axios.get<
             ServerTableResponse<CompletionReportRow>
-        >('/api/reports/completions', { headers: defaultHeaders(), params: query });
+        >('/api/reports/completions', {
+            headers: defaultHeaders(),
+            params: query,
+        });
 
         return data;
     }

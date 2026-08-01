@@ -20,7 +20,9 @@ describe('attachments store — fileClassDocument', () => {
         'POSTs to the class %s endpoint then reloads that class list',
         async (kind) => {
             const post = axios.post as ReturnType<typeof vi.fn>;
-            post.mockResolvedValue({ data: { id: 'a1', filename: `${kind}.pdf` } });
+            post.mockResolvedValue({
+                data: { id: 'a1', filename: `${kind}.pdf` },
+            });
             (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({
                 data: [
                     {

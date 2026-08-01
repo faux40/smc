@@ -479,7 +479,9 @@ export const useClassesStore = defineStore('classes', () => {
 
         subscribedOrgId.value = orgId;
 
-        const { bind } = useRealtime(`org.${orgId}`);
+        const { bind } = useRealtime(`org.${orgId}`, 'private', {
+            persist: true,
+        });
 
         // Aggregate event: nudge the paged list to refetch and re-sync any
         // cached detail for the changed class. Self-echoes are filtered by

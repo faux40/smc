@@ -81,8 +81,11 @@ export const usePreferencesStore = defineStore('preferences', () => {
 
     // Remove column_order and visible_columns for one view (keeps filters intact).
     function resetView(viewId: string): void {
-        const { visible_columns: _v, column_order: _o, ...rest } =
-            prefs.value[viewId] ?? {};
+        const {
+            visible_columns: _v,
+            column_order: _o,
+            ...rest
+        } = prefs.value[viewId] ?? {};
         prefs.value = { ...prefs.value, [viewId]: rest };
         void persist();
     }
@@ -92,7 +95,11 @@ export const usePreferencesStore = defineStore('preferences', () => {
         const next: PrefsBlob = {};
 
         for (const [id, viewPrefs] of Object.entries(prefs.value)) {
-            const { visible_columns: _v, column_order: _o, ...rest } = viewPrefs;
+            const {
+                visible_columns: _v,
+                column_order: _o,
+                ...rest
+            } = viewPrefs;
 
             if (Object.keys(rest).length > 0) {
                 next[id] = rest;
@@ -103,5 +110,13 @@ export const usePreferencesStore = defineStore('preferences', () => {
         void persist();
     }
 
-    return { prefs, hydrate, ensureHydrated, view, update, resetView, resetAllViews };
+    return {
+        prefs,
+        hydrate,
+        ensureHydrated,
+        view,
+        update,
+        resetView,
+        resetAllViews,
+    };
 });

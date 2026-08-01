@@ -38,7 +38,9 @@ describe('useCompletionsStore', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
-        Object.keys(capturedBindings).forEach((k) => delete capturedBindings[k]);
+        Object.keys(capturedBindings).forEach(
+            (k) => delete capturedBindings[k],
+        );
     });
 
     // ----------------------------------------------------------------
@@ -47,7 +49,9 @@ describe('useCompletionsStore', () => {
 
     it('bulkCreate posts the payload to the bulk endpoint and returns the tallies', async () => {
         const post = axios.post as ReturnType<typeof vi.fn>;
-        post.mockResolvedValue({ data: { created_count: 2, skipped_count: 1 } });
+        post.mockResolvedValue({
+            data: { created_count: 2, skipped_count: 1 },
+        });
 
         const store = useCompletionsStore();
         const payload = bulkPayload();
@@ -93,10 +97,22 @@ describe('useCompletionsStore', () => {
     it('subscribe binds to the completion + bulk events', () => {
         useCompletionsStore().subscribe('org-1');
 
-        expect(mockBind).toHaveBeenCalledWith('CompletionCreated', expect.any(Function));
-        expect(mockBind).toHaveBeenCalledWith('CompletionUpdated', expect.any(Function));
-        expect(mockBind).toHaveBeenCalledWith('CompletionDeleted', expect.any(Function));
-        expect(mockBind).toHaveBeenCalledWith('CompletionsBulkChanged', expect.any(Function));
+        expect(mockBind).toHaveBeenCalledWith(
+            'CompletionCreated',
+            expect.any(Function),
+        );
+        expect(mockBind).toHaveBeenCalledWith(
+            'CompletionUpdated',
+            expect.any(Function),
+        );
+        expect(mockBind).toHaveBeenCalledWith(
+            'CompletionDeleted',
+            expect.any(Function),
+        );
+        expect(mockBind).toHaveBeenCalledWith(
+            'CompletionsBulkChanged',
+            expect.any(Function),
+        );
     });
 
     it('subscribe is idempotent for the same orgId', () => {
@@ -112,7 +128,10 @@ describe('useCompletionsStore', () => {
         store.subscribe('org-1');
 
         const before = store.revision;
-        capturedBindings['CompletionsBulkChanged']({ org_id: 'org-1', origin_tab: 'other-tab' });
+        capturedBindings['CompletionsBulkChanged']({
+            org_id: 'org-1',
+            origin_tab: 'other-tab',
+        });
 
         expect(store.revision).toBe(before + 1);
     });

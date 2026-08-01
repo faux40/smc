@@ -53,9 +53,12 @@ export const useDocTemplatesStore = defineStore('docTemplates', () => {
     }
 
     async function reload(): Promise<void> {
-        const { data } = await axios.get<DocTemplateRow[]>('/api/doc-templates', {
-            headers: defaultHeaders(),
-        });
+        const { data } = await axios.get<DocTemplateRow[]>(
+            '/api/doc-templates',
+            {
+                headers: defaultHeaders(),
+            },
+        );
         library.value = data;
         loaded.value = true;
     }
@@ -73,9 +76,13 @@ export const useDocTemplatesStore = defineStore('docTemplates', () => {
             form.append('description', description);
         }
 
-        const { data } = await axios.post<DocTemplateRow>('/api/doc-templates', form, {
-            headers: defaultHeaders(),
-        });
+        const { data } = await axios.post<DocTemplateRow>(
+            '/api/doc-templates',
+            form,
+            {
+                headers: defaultHeaders(),
+            },
+        );
         library.value = [...library.value, data];
 
         return data;
@@ -110,7 +117,9 @@ export const useDocTemplatesStore = defineStore('docTemplates', () => {
     }
 
     async function destroy(id: string): Promise<void> {
-        await axios.delete(`/api/doc-templates/${id}`, { headers: defaultHeaders() });
+        await axios.delete(`/api/doc-templates/${id}`, {
+            headers: defaultHeaders(),
+        });
         library.value = library.value.filter((t) => t.id !== id);
     }
 
@@ -121,7 +130,9 @@ export const useDocTemplatesStore = defineStore('docTemplates', () => {
 
         subscribedOrgId.value = orgId;
 
-        const { bind } = useRealtime(`org.${orgId}`);
+        const { bind } = useRealtime(`org.${orgId}`, 'private', {
+            persist: true,
+        });
         bind('DocTemplatesChanged', (p: { origin_tab?: string | null }) => {
             if (p.origin_tab === realtimeTabId()) {
                 return;
@@ -131,5 +142,15 @@ export const useDocTemplatesStore = defineStore('docTemplates', () => {
         });
     }
 
-    return { library, loaded, load, reload, upload, replace, rename, destroy, subscribe };
+    return {
+        library,
+        loaded,
+        load,
+        reload,
+        upload,
+        replace,
+        rename,
+        destroy,
+        subscribe,
+    };
 });

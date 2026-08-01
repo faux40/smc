@@ -109,7 +109,9 @@ export const useCardPrintRunsStore = defineStore('cardPrintRuns', () => {
 
         subscribedOrgId.value = orgId;
 
-        const { bind } = useRealtime(`org.${orgId}`);
+        const { bind } = useRealtime(`org.${orgId}`, 'private', {
+            persist: true,
+        });
 
         /*
          * The job broadcasts ClassChanged when it finishes — there is no

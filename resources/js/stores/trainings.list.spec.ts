@@ -15,7 +15,12 @@ describe('trainings store — server-paged list', () => {
         (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({
             data: {
                 data: [{ id: 't1', name: 'Forklift' }],
-                meta: { current_page: 1, last_page: 2, per_page: 25, total: 30 },
+                meta: {
+                    current_page: 1,
+                    last_page: 2,
+                    per_page: 25,
+                    total: 30,
+                },
             },
         });
         const store = useTrainingsStore();
@@ -31,7 +36,13 @@ describe('trainings store — server-paged list', () => {
         expect(axios.get).toHaveBeenCalledWith(
             '/api/trainings/list',
             expect.objectContaining({
-                params: { page: 1, per_page: 25, dir: 'asc', sort: 'name', q: 'fork' },
+                params: {
+                    page: 1,
+                    per_page: 25,
+                    dir: 'asc',
+                    sort: 'name',
+                    q: 'fork',
+                },
             }),
         );
         expect(res.meta.total).toBe(30);
@@ -41,12 +52,11 @@ describe('trainings store — server-paged list', () => {
     });
 
     it('destroy removes the row and bumps the revision', async () => {
-        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} });
+        (axios.delete as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: {},
+        });
         const store = useTrainingsStore();
-        store.library = [
-            { id: 't1' } as never,
-            { id: 't2' } as never,
-        ];
+        store.library = [{ id: 't1' } as never, { id: 't2' } as never];
         const rev = store.revision;
 
         await store.destroy('t1');

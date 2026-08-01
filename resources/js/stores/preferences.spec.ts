@@ -39,7 +39,9 @@ describe('preferences store', () => {
             assignments: { visible_columns: { tags: true } },
         });
 
-        store.update('users', { visible_columns: { email: true, role: false } });
+        store.update('users', {
+            visible_columns: { email: true, role: false },
+        });
 
         // visible_columns replaced for users; filters + the assignments view kept.
         expect(store.view('users').visible_columns).toEqual({
@@ -47,7 +49,9 @@ describe('preferences store', () => {
             role: false,
         });
         expect(store.view('users').filters).toEqual({ q: 'x' });
-        expect(store.view('assignments').visible_columns).toEqual({ tags: true });
+        expect(store.view('assignments').visible_columns).toEqual({
+            tags: true,
+        });
     });
 
     it('ensureHydrated only hydrates once (later calls are no-ops)', () => {
@@ -86,7 +90,10 @@ describe('preferences store', () => {
                 column_order: ['email'],
                 filters: { q: 'a' },
             },
-            assignments: { visible_columns: { date: false }, column_order: ['date'] },
+            assignments: {
+                visible_columns: { date: false },
+                column_order: ['date'],
+            },
         });
 
         store.resetAllViews();

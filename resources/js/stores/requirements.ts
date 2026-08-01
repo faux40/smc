@@ -134,7 +134,9 @@ export const useRequirementsStore = defineStore('requirements', () => {
 
         subscribedOrgId.value = orgId;
 
-        const { bind } = useRealtime(`org.${orgId}`);
+        const { bind } = useRealtime(`org.${orgId}`, 'private', {
+            persist: true,
+        });
 
         bind(
             'RequirementCreated',

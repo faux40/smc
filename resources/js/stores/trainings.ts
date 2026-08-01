@@ -172,7 +172,9 @@ export const useTrainingsStore = defineStore('trainings', () => {
 
         subscribedOrgId.value = orgId;
 
-        const { bind } = useRealtime(`org.${orgId}`);
+        const { bind } = useRealtime(`org.${orgId}`, 'private', {
+            persist: true,
+        });
 
         bind('TrainingCreated', (p: TrainingRow & { origin_tab?: string }) => {
             if (!library.value.some((t) => t.id === p.id)) {

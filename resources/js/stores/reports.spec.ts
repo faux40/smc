@@ -56,9 +56,16 @@ describe('reports store', () => {
         });
         const store = useReportsStore();
 
-        await store.fetchCompletions({ page: 1, per_page: 25, sort: null, dir: 'desc', q: '' });
+        await store.fetchCompletions({
+            page: 1,
+            per_page: 25,
+            sort: null,
+            dir: 'desc',
+            q: '',
+        });
 
-        const params = (axios.get as ReturnType<typeof vi.fn>).mock.calls[0][1].params;
+        const params = (axios.get as ReturnType<typeof vi.fn>).mock.calls[0][1]
+            .params;
         expect(params).toEqual({ page: 1, per_page: 25 });
     });
 
@@ -105,9 +112,16 @@ describe('reports store', () => {
         });
         const store = useReportsStore();
 
-        await store.fetchComplianceStatus({ page: 1, per_page: 25, sort: null, dir: 'desc', q: '' });
+        await store.fetchComplianceStatus({
+            page: 1,
+            per_page: 25,
+            sort: null,
+            dir: 'desc',
+            q: '',
+        });
 
-        const params = (axios.get as ReturnType<typeof vi.fn>).mock.calls[0][1].params;
+        const params = (axios.get as ReturnType<typeof vi.fn>).mock.calls[0][1]
+            .params;
         expect(params).toEqual({ page: 1, per_page: 25 });
     });
 });

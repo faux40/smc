@@ -336,19 +336,35 @@ export const useUsersStore = defineStore('users', () => {
 
         subscribedOrgId.value = orgId;
 
-        const { bind } = useRealtime(`org.${orgId}`);
+        const { bind } = useRealtime(`org.${orgId}`, 'private', {
+            persist: true,
+        });
 
         // Each broadcast keeps the picker cache fresh (apply*) AND bumps the
         // revision so the paged Index re-pulls its current page.
-        const onChange = <T>(fn: (p: T) => void) => (payload: T) => {
-            fn(payload);
-            revision.value++;
-        };
+        const onChange =
+            <T>(fn: (p: T) => void) =>
+            (payload: T) => {
+                fn(payload);
+                revision.value++;
+            };
 
-        bind('UserRegistered', onChange((p: BroadcastUser) => applyAdded(p)));
-        bind('UserUpdated', onChange((p: BroadcastUser) => applyUpdated(p)));
-        bind('UserStatusChanged', onChange((p: BroadcastUser) => applyUpdated(p)));
-        bind('UserSoftDeleted', onChange((p: BroadcastUser) => applySoftDeleted(p.id)));
+        bind(
+            'UserRegistered',
+            onChange((p: BroadcastUser) => applyAdded(p)),
+        );
+        bind(
+            'UserUpdated',
+            onChange((p: BroadcastUser) => applyUpdated(p)),
+        );
+        bind(
+            'UserStatusChanged',
+            onChange((p: BroadcastUser) => applyUpdated(p)),
+        );
+        bind(
+            'UserSoftDeleted',
+            onChange((p: BroadcastUser) => applySoftDeleted(p.id)),
+        );
     }
 
     function applyAdded(payload: BroadcastUser) {

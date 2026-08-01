@@ -21,7 +21,9 @@ describe('attachments store — upload metadata + type vocabulary', () => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
         (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
-        (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} });
+        (axios.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: {},
+        });
         (axios.patch as ReturnType<typeof vi.fn>).mockResolvedValue({
             data: { id: 'a1', type: null, description: null },
         });
@@ -38,16 +40,19 @@ describe('attachments store — upload metadata + type vocabulary', () => {
             (s: ReturnType<typeof useAttachmentsStore>) =>
                 s.updateInfo('a1', { type: 'New' }),
         ],
-    ])('%s invalidates the type vocabulary so it refetches next open', async (_n, mutate) => {
-        const store = useAttachmentsStore();
-        await store.loadTypes();
-        expect(typesGets()).toBe(1);
+    ])(
+        '%s invalidates the type vocabulary so it refetches next open',
+        async (_n, mutate) => {
+            const store = useAttachmentsStore();
+            await store.loadTypes();
+            expect(typesGets()).toBe(1);
 
-        await mutate(store);
+            await mutate(store);
 
-        await store.loadTypes(); // cache was invalidated → refetch
-        expect(typesGets()).toBe(2);
-    });
+            await store.loadTypes(); // cache was invalidated → refetch
+            expect(typesGets()).toBe(2);
+        },
+    );
 
     it('uploads with type + description in the form data', async () => {
         const post = axios.post as ReturnType<typeof vi.fn>;
