@@ -40,9 +40,9 @@ const orgName = computed(
 </script>
 
 <template>
-    <div class="space-y-4">
+    <div class="flex flex-col items-start gap-4 lg:flex-row">
         <!-- Editor -->
-        <div class="space-y-3">
+        <div class="min-w-0 flex-1 space-y-3">
             <div class="grid gap-2">
                 <Label :for="id('cert_title')">SMC Certificate title</Label>
                 <Input
@@ -76,12 +76,9 @@ const orgName = computed(
             </div>
         </div>
 
-        <!-- Live preview, under the fields rather than beside them: at a
-             readable size it wants the full width of whatever pane it is in,
-             and a class renders one inside a topic panel inside a two-thirds
-             column, where half a row would leave it tiny. Bounded by the
-             pane itself; full size is a click away. -->
-        <div>
+        <!-- Live preview, beside the fields: capped small enough to leave
+             them room, with full size a click away. -->
+        <div class="shrink-0 lg:sticky lg:top-4">
             <CertificatePreviewPane
                 :org-name="orgName"
                 :cert-title="title"

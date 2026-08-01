@@ -53,13 +53,9 @@ const open = ref(false);
             </button>
         </div>
 
-        <!--
-            The sheet is 11:8.5, so its height follows its width and capping
-            the width is what actually bounds it: 840px wide ≈ 650px tall.
-            Big enough to read the body text at a glance, still bounded so it
-            can't grow with the pane it sits in.
-        -->
-        <div data-testid="cert-thumbnail" class="w-full max-w-[840px]">
+        <!-- 11:8.5, so height follows width: 280px wide ≈ 216px tall. Sized
+             to sit beside the fields rather than under them. -->
+        <div data-testid="cert-thumbnail" class="w-full max-w-[280px]">
             <CertificatePreview v-bind="props" />
         </div>
 
