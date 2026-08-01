@@ -29,7 +29,15 @@ class SyncTrainingCardFields
 
             // Deletes first: a key freed by a removed row must be available to
             // a row that's taking it over in the same request.
-            $training->cardFields()->whereNotIn('id', $keepIds ?: ['-'])->delete();
+            //
+            // Keeping nothing means dropping the clause, NOT comparing against
+            // a placeholder id: Postgres refuses to cast a non-uuid ('-') and
+            // rejects the whole statement, which SQLite is happy to do — so a
+            // placeholder passes the suite and fails on the first card field
+            // anyone creates.
+            $training->cardFields()
+                ->when($keepIds !== [], fn ($query) => $query->whereNotIn('id', $keepIds))
+                ->delete();
 
             $this->parkChangedKeys($training, $fields);
 

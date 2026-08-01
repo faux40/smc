@@ -11,6 +11,7 @@ use App\Models\TrainingClass;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -300,6 +301,48 @@ class TrainingCardFieldsApiTest extends TestCase
         $this->sync([$this->field(['id' => $foreign->id])])
             ->assertStatus(422)
             ->assertJsonValidationErrors('fields.0.id');
+    }
+
+    // ---- the delete pass --------------------------------------------------
+
+    public function test_a_first_field_never_compares_an_id_to_a_placeholder(): void
+    {
+        /*
+         * The set-delete needs "keep nothing" when every row in the payload is
+         * new — which is exactly the case when someone adds their first card
+         * field. A '-' placeholder standing in for an empty id list compares
+         * fine against a uuid column in SQLite, so the whole suite passes, and
+         * Postgres refuses to cast it:
+         *     invalid input syntax for type uuid: "-"
+         * The suite runs on SQLite (phpunit.xml), so behaviour alone cannot
+         * catch this — the binding is the only thing that can.
+         */
+        CardField::factory()->for($this->training)->create(['key' => 'old', 'seq' => 0]);
+
+        $bindings = [];
+        DB::listen(function ($query) use (&$bindings): void {
+            if (str_contains($query->sql, 'card_fields')) {
+                $bindings = [...$bindings, ...$query->bindings];
+            }
+        });
+
+        $this->sync([$this->field(['key' => 'trainer_id'])])->assertOk();
+
+        $this->assertNotContains('-', $bindings);
+    }
+
+    public function test_an_all_new_payload_clears_what_was_there(): void
+    {
+        // The behaviour the placeholder was standing in for, pinned so the
+        // fix cannot quietly turn a full replacement into a no-op.
+        CardField::factory()->for($this->training)->create(['key' => 'old', 'seq' => 0]);
+
+        $this->sync([$this->field(['key' => 'trainer_id'])])->assertOk();
+
+        $this->assertSame(
+            ['trainer_id'],
+            $this->training->cardFields()->pluck('key')->all(),
+        );
     }
 
     // ---- authorization ----------------------------------------------------
