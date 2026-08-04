@@ -34,4 +34,15 @@ class GeneratedDocumentPolicy
     {
         return $this->view($actor, $doc);
     }
+
+    /**
+     * Re-running a failed generation carries the same authority as viewing
+     * it — Manager+, same org, and generation is already Manager+ via
+     * create(). Kept as its own method so the two can diverge later without
+     * hunting through call sites.
+     */
+    public function retry(User $actor, GeneratedDocument $doc): bool
+    {
+        return $this->view($actor, $doc);
+    }
 }

@@ -30,6 +30,8 @@ export interface GeneratedDocumentRow {
     filename: string;
     requested_by_name: string | null;
     created_at: string | null;
+    /** Last status change — for a failed row, when it failed. */
+    updated_at: string | null;
 }
 
 export interface GeneratedDocumentsPage {
@@ -87,6 +89,21 @@ export const useGeneratedDocumentsStore = defineStore(
             return data;
         }
 
+        /**
+         * Re-queue a failed row in place, keeping its template + variation.
+         * The server 409s if the row did not fail or its template is gone.
+         */
+        async function retry(id: string): Promise<GeneratedDocumentRow> {
+            const { data } = await axios.post<GeneratedDocumentRow>(
+                `/api/generated-documents/${id}/retry`,
+                {},
+                { headers: defaultHeaders() },
+            );
+            revision.value++;
+
+            return data;
+        }
+
         async function destroy(id: string): Promise<void> {
             await axios.delete(`/api/generated-documents/${id}`, {
                 headers: defaultHeaders(),
@@ -124,6 +141,7 @@ export const useGeneratedDocumentsStore = defineStore(
             revision,
             fetchPage,
             generate,
+            retry,
             destroy,
             downloadUrl,
             subscribe,

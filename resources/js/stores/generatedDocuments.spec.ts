@@ -70,6 +70,22 @@ describe('useGeneratedDocumentsStore', () => {
         expect(store.revision).toBe(2);
     });
 
+    it('retry posts to the row and bumps revision', async () => {
+        const post = axios.post as ReturnType<typeof vi.fn>;
+        post.mockResolvedValue({ data: { id: 'g1', status: 'queued', error: null } });
+
+        const store = useGeneratedDocumentsStore();
+        const result = await store.retry('g1');
+
+        expect(post).toHaveBeenCalledWith(
+            '/api/generated-documents/g1/retry',
+            {},
+            expect.anything(),
+        );
+        expect(result.status).toBe('queued');
+        expect(store.revision).toBe(1);
+    });
+
     it('downloadUrl builds the format-qualified link', () => {
         const store = useGeneratedDocumentsStore();
 

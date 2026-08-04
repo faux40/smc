@@ -10,6 +10,7 @@ use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -121,6 +122,171 @@ class GeneratedDocumentsApiTest extends TestCase
         $this->actingAs($managerA)
             ->get("/api/generated-documents/{$docB->id}/download")
             ->assertNotFound();
+    }
+
+    /**
+     * A failed row's `updated_at` IS the moment it failed, and without it on
+     * the wire the UI cannot date the error — which is how a 19-day-old
+     * fossil read as a live outage in prod on 2026-08-04.
+     */
+    public function test_index_exposes_updated_at_so_a_failure_can_be_dated(): void
+    {
+        $org = Organization::factory()->create();
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $template = DocTemplate::factory()->system()->create();
+        $doc = GeneratedDocument::factory()->for($org, 'organization')->for($template, 'template')->create([
+            'status' => 'failed',
+            'error' => 'PDF conversion failed: sh: 1: exec: soffice: not found',
+        ]);
+
+        // Bypass the model so the timestamp is not refreshed on write.
+        DB::table('generated_documents')
+            ->where('id', $doc->id)
+            ->update(['updated_at' => '2026-07-13 20:47:50']);
+
+        $row = $this->actingAs($manager)
+            ->getJson('/api/generated-documents')
+            ->assertOk()
+            ->json('data.0');
+
+        $this->assertNotNull($row['updated_at']);
+        $this->assertSame(
+            '2026-07-13T20:47:50.000000Z',
+            $row['updated_at'],
+        );
+    }
+
+    public function test_manager_can_retry_a_failed_row(): void
+    {
+        Bus::fake([GenerateDocument::class]);
+        $org = Organization::factory()->create();
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $template = DocTemplate::factory()->system()->create();
+        $doc = GeneratedDocument::factory()->for($org, 'organization')->for($template, 'template')->create([
+            'status' => 'failed',
+            'error' => 'PDF conversion failed: sh: 1: exec: soffice: not found',
+            'location' => 'North Yard',
+        ]);
+
+        $response = $this->actingAs($manager)
+            ->postJson("/api/generated-documents/{$doc->id}/retry")
+            ->assertOk()
+            ->json();
+
+        $this->assertSame('queued', $response['status']);
+        $this->assertNull($response['error']);
+        // The variation the row already recorded survives the retry — that is
+        // the whole point of retrying rather than deleting and re-picking.
+        $this->assertSame('North Yard', $response['location']);
+
+        $this->assertDatabaseHas('generated_documents', [
+            'id' => $doc->id,
+            'status' => 'queued',
+            'error' => null,
+            'location' => 'North Yard',
+        ]);
+
+        Bus::assertDispatched(GenerateDocument::class, fn ($job) => $job->generatedDocumentId === $doc->id);
+    }
+
+    public function test_retry_rejects_a_row_that_did_not_fail(): void
+    {
+        Bus::fake([GenerateDocument::class]);
+        $org = Organization::factory()->create();
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $template = DocTemplate::factory()->system()->create();
+        $done = GeneratedDocument::factory()->for($org, 'organization')->for($template, 'template')->create([
+            'status' => 'done',
+            'pdf_path' => 'generated-documents/z.pdf',
+        ]);
+
+        $this->actingAs($manager)
+            ->postJson("/api/generated-documents/{$done->id}/retry")
+            ->assertStatus(409);
+
+        Bus::assertNotDispatched(GenerateDocument::class);
+        $this->assertDatabaseHas('generated_documents', ['id' => $done->id, 'status' => 'done']);
+    }
+
+    /**
+     * The FK is `nullOnDelete`, so hard-deleting a template orphans the row
+     * rather than removing it. `GenerateDocument` early-returns on a null
+     * template *before* it sets `processing`, so queueing one here would park
+     * the row at `queued` forever — a worse lie than the failure it replaced.
+     */
+    public function test_retry_rejects_a_row_whose_template_was_hard_deleted(): void
+    {
+        Bus::fake([GenerateDocument::class]);
+        $org = Organization::factory()->create();
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $template = DocTemplate::factory()->system()->create();
+        $doc = GeneratedDocument::factory()->for($org, 'organization')->for($template, 'template')->create([
+            'status' => 'failed',
+            'error' => 'boom',
+        ]);
+
+        $template->forceDelete();
+
+        $this->actingAs($manager)
+            ->postJson("/api/generated-documents/{$doc->id}/retry")
+            ->assertStatus(409);
+
+        Bus::assertNotDispatched(GenerateDocument::class);
+        $this->assertDatabaseHas('generated_documents', ['id' => $doc->id, 'status' => 'failed']);
+    }
+
+    /**
+     * A *soft*-deleted template is the replaced-version case, which the
+     * relation loads `withTrashed()` on purpose — retrying reproduces the
+     * document from the template it was actually generated with.
+     */
+    public function test_retry_allows_a_row_whose_template_was_superseded(): void
+    {
+        Bus::fake([GenerateDocument::class]);
+        $org = Organization::factory()->create();
+        $manager = User::factory()->for($org, 'organization')->withRole('Manager')->create();
+        $template = DocTemplate::factory()->system()->create();
+        $doc = GeneratedDocument::factory()->for($org, 'organization')->for($template, 'template')->create([
+            'status' => 'failed',
+            'error' => 'boom',
+        ]);
+
+        $template->delete();
+
+        $this->actingAs($manager)
+            ->postJson("/api/generated-documents/{$doc->id}/retry")
+            ->assertOk();
+
+        Bus::assertDispatched(GenerateDocument::class);
+    }
+
+    public function test_cross_org_retry_is_404(): void
+    {
+        $orgA = Organization::factory()->create();
+        $orgB = Organization::factory()->create();
+        $managerA = User::factory()->for($orgA, 'organization')->withRole('Manager')->create();
+        $template = DocTemplate::factory()->system()->create();
+        $docB = GeneratedDocument::factory()->for($orgB, 'organization')->for($template, 'template')->create([
+            'status' => 'failed',
+        ]);
+
+        $this->actingAs($managerA)
+            ->postJson("/api/generated-documents/{$docB->id}/retry")
+            ->assertNotFound();
+    }
+
+    public function test_below_manager_cannot_retry(): void
+    {
+        $org = Organization::factory()->create();
+        $member = User::factory()->for($org, 'organization')->withRole('SelfEdit')->create();
+        $template = DocTemplate::factory()->system()->create();
+        $doc = GeneratedDocument::factory()->for($org, 'organization')->for($template, 'template')->create([
+            'status' => 'failed',
+        ]);
+
+        $this->actingAs($member)
+            ->postJson("/api/generated-documents/{$doc->id}/retry")
+            ->assertForbidden();
     }
 
     public function test_delete_removes_row_and_files(): void

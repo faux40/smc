@@ -110,6 +110,43 @@ class GeneratedDocumentsController extends Controller
         );
     }
 
+    /**
+     * Re-queue a failed run in place. The row keeps its identity — filename,
+     * location/department variation and template — so a retry reproduces
+     * exactly what was originally asked for; deleting and re-picking from the
+     * generate bar loses the variation.
+     */
+    public function retry(GeneratedDocument $generatedDocument): JsonResponse
+    {
+        Gate::authorize('retry', $generatedDocument);
+
+        abort_if(
+            $generatedDocument->status !== 'failed',
+            409,
+            'Only a failed document can be retried.',
+        );
+
+        // The relation loads `withTrashed()`, so a *superseded* template still
+        // resolves and still reproduces. Null means hard-deleted (the FK is
+        // nullOnDelete, which orphans the row rather than removing it), and
+        // GenerateDocument early-returns on a null template *before* it marks
+        // the row processing — queueing one would park it at 'queued'
+        // forever, which is a worse lie than the failure it replaced.
+        abort_if(
+            $generatedDocument->template === null,
+            409,
+            'The template this document was generated from no longer exists.',
+        );
+
+        $generatedDocument->update(['status' => 'queued', 'error' => null]);
+
+        GenerateDocument::dispatch($generatedDocument->id);
+
+        event(new GeneratedDocumentsChanged($generatedDocument->org_id));
+
+        return response()->json($this->serialize($generatedDocument));
+    }
+
     public function destroy(GeneratedDocument $generatedDocument): JsonResponse
     {
         Gate::authorize('delete', $generatedDocument);
@@ -144,6 +181,10 @@ class GeneratedDocumentsController extends Controller
             'filename' => $d->filename,
             'requested_by_name' => $d->relationLoaded('requestedBy') ? $d->requestedBy?->name : null,
             'created_at' => $d->created_at?->toISOString(),
+            // For a failed row this IS the moment it failed — without it the
+            // UI cannot date the error, and a stale failure reads as a live
+            // one (prod, 2026-08-04).
+            'updated_at' => $d->updated_at?->toISOString(),
         ];
     }
 }

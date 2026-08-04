@@ -24,6 +24,7 @@ function row(overrides: Partial<GeneratedDocumentRow> & { id: string }): Generat
         filename: 'rio_dell.hazcom_20260711',
         requested_by_name: 'John Barritt',
         created_at: '2026-07-11T12:00:00Z',
+        updated_at: '2026-07-11T12:00:00Z',
         ...overrides,
     };
 }
@@ -41,6 +42,7 @@ describe('GeneratedList', () => {
             meta: { current_page: 1, last_page: 1, per_page: 25, total: rows.length },
         });
         store.destroy = vi.fn().mockResolvedValue(undefined);
+        store.retry = vi.fn().mockResolvedValue(rows[0]);
 
         const wrapper = mount(GeneratedList);
         await flushPromises();
@@ -64,6 +66,50 @@ describe('GeneratedList', () => {
 
         expect(wrapper.find('[data-testid="download-pdf"]').exists()).toBe(false);
         expect(wrapper.text()).toContain('soffice exploded');
+    });
+
+    /*
+     * A failed row keeps its error string forever ($tries = 1, nothing
+     * re-runs it), so without a date a weeks-old fossil reads as a live
+     * outage — which is exactly what happened on prod 2026-08-04.
+     */
+    it('dates the failure so a stale error cannot pass for a live one', async () => {
+        const { wrapper } = await mountList([
+            row({
+                id: 'g5',
+                status: 'failed',
+                error: 'PDF conversion failed: sh: 1: exec: soffice: not found',
+                updated_at: '2026-07-13T20:47:50Z',
+            }),
+        ]);
+
+        const failedAt = wrapper.get('[data-testid="failed-at"]');
+        expect(failedAt.text()).toContain('Failed');
+        // Compared against the same conversion the component does, so the
+        // assertion does not depend on the runner's locale.
+        expect(failedAt.text()).toContain(
+            new Date('2026-07-13T20:47:50Z').toLocaleString(),
+        );
+    });
+
+    it('retries a failed row through the store', async () => {
+        const { wrapper, store } = await mountList([
+            row({ id: 'g6', status: 'failed', error: 'boom' }),
+        ]);
+
+        await wrapper.get('[data-testid="retry-generated"]').trigger('click');
+        await flushPromises();
+
+        expect(store.retry).toHaveBeenCalledWith('g6');
+    });
+
+    it('offers no retry on rows that did not fail', async () => {
+        const { wrapper } = await mountList([
+            row({ id: 'g7', status: 'done' }),
+            row({ id: 'g8', status: 'queued' }),
+        ]);
+
+        expect(wrapper.find('[data-testid="retry-generated"]').exists()).toBe(false);
     });
 
     it('deletes after confirm', async () => {

@@ -67,6 +67,21 @@ const remove = async (row: GeneratedDocumentRow) => {
     }
 };
 
+/*
+ * Nothing re-runs a failed row on its own (GenerateDocument is $tries = 1),
+ * so its error string persists indefinitely. Retry re-queues it in place,
+ * keeping the template + location/department variation the row records.
+ */
+const retry = async (row: GeneratedDocumentRow) => {
+    try {
+        await store.retry(row.id);
+    } catch (e) {
+        errorStore.reportFromAxios(e, PAGE_CTX, {
+            fallback: 'Failed to retry the document',
+        });
+    }
+};
+
 const formatWhen = (iso: string | null): string =>
     iso ? new Date(iso).toLocaleString() : '';
 </script>
@@ -97,9 +112,19 @@ const formatWhen = (iso: string | null): string =>
                 <Badge :variant="STATUS_TONES[row.status] ?? 'secondary'">
                     {{ row.status }}
                 </Badge>
-                <div v-if="row.status === 'failed' && row.error" class="mt-1 max-w-96 text-xs text-destructive">
-                    {{ row.error }}
-                </div>
+                <template v-if="row.status === 'failed'">
+                    <div v-if="row.error" class="mt-1 max-w-96 text-xs text-destructive">
+                        {{ row.error }}
+                    </div>
+                    <!-- Dated so an old failure cannot pass for a live one. -->
+                    <div
+                        v-if="row.updated_at"
+                        class="mt-1 text-xs text-muted-foreground"
+                        data-testid="failed-at"
+                    >
+                        Failed {{ formatWhen(row.updated_at) }}
+                    </div>
+                </template>
             </template>
 
             <template #col-requested="{ row }">
@@ -125,6 +150,15 @@ const formatWhen = (iso: string | null): string =>
                             Editable ({{ row.extension?.toUpperCase() }})
                         </a>
                     </template>
+                    <button
+                        v-if="row.status === 'failed'"
+                        type="button"
+                        class="text-primary hover:underline"
+                        data-testid="retry-generated"
+                        @click="retry(row)"
+                    >
+                        Retry
+                    </button>
                     <button
                         type="button"
                         class="text-destructive hover:underline"

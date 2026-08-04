@@ -217,6 +217,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/generated-documents', [GeneratedDocumentsController::class, 'index'])->name('generated-documents.index');
     Route::post('api/generated-documents', [GeneratedDocumentsController::class, 'store'])->name('generated-documents.store');
     Route::get('api/generated-documents/{generatedDocument}/download', [GeneratedDocumentsController::class, 'download'])->name('generated-documents.download');
+    Route::post('api/generated-documents/{generatedDocument}/retry', [GeneratedDocumentsController::class, 'retry'])->name('generated-documents.retry');
     Route::delete('api/generated-documents/{generatedDocument}', [GeneratedDocumentsController::class, 'destroy'])->name('generated-documents.destroy');
 
     // Documents module pages. Shells are open like tags — nav hides them
