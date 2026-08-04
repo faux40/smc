@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\ComplianceQuery;
 use App\Services\TrainingStatusService;
 use App\Support\CompletionSerializer;
+use App\Support\CsvExport;
 use App\Support\ExpiryStatus;
 use App\Support\PdfRenderer;
 use App\Support\ReportGrouping;
@@ -155,27 +156,12 @@ class ReportsController extends Controller
     }
 
     /**
-     * Generic CSV streaming seam (extracted from the F11 completion export so
-     * both it and the compliance-status report share the exact mechanics):
-     * header row from the column labels, then each yielded line written via
-     * `fputcsv` against `php://output` so nothing is buffered in memory.
-     * `Content-Disposition`/`Content-Type` are handled by `streamDownload()`.
-     *
      * @param  array<int, array{key: string, label: string}>  $columns
      * @param  iterable<int, array<int, mixed>>  $rows  each item is one CSV line's cells
      */
     private function streamCsv(string $filename, array $columns, iterable $rows): StreamedResponse
     {
-        return response()->streamDownload(function () use ($columns, $rows) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, array_column($columns, 'label'));
-
-            foreach ($rows as $line) {
-                fputcsv($out, $line);
-            }
-
-            fclose($out);
-        }, $filename, ['Content-Type' => 'text/csv']);
+        return CsvExport::stream($filename, $columns, $rows);
     }
 
     /**
@@ -187,7 +173,7 @@ class ReportsController extends Controller
      */
     private function rowToCsv(array $row, array $columns): array
     {
-        return array_map(fn (array $col) => $row[$col['key']] ?? '', $columns);
+        return CsvExport::cells($row, $columns);
     }
 
     /**
@@ -337,16 +323,7 @@ class ReportsController extends Controller
      */
     private function selectedColumns(Request $request, array $catalog): array
     {
-        $requested = array_values(array_filter(
-            (array) $request->query('columns', []),
-            fn ($k) => is_string($k) && isset($catalog[$k]),
-        ));
-        $keys = $requested !== [] ? $requested : array_keys($catalog);
-
-        return array_map(
-            fn (string $key) => ['key' => $key, 'label' => $catalog[$key]],
-            $keys,
-        );
+        return CsvExport::columns($request, $catalog);
     }
 
     /**

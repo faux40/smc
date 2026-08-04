@@ -159,9 +159,53 @@ describe('AttachmentViewer', () => {
             .click();
         await flushPromises();
 
-        expect(file).toHaveBeenCalledWith('c1', 'certificates', {
-            type: '',
-            description: '',
+        expect(file).toHaveBeenCalledWith(
+            'c1',
+            'certificates',
+            { type: '', description: '' },
+            // Certificates have no column picker — only the name-check sheet
+            // carries a selection through to the filed copy.
+            undefined,
+        );
+    });
+
+    it('files a generated doc with the columns it was previewed with', async () => {
+        const store = useAttachmentsStore();
+        vi.spyOn(store, 'loadTypes').mockResolvedValue();
+        const file = vi.spyOn(store, 'fileClassDocument').mockResolvedValue();
+
+        const wrapper = mount(AttachmentViewer, {
+            props: {
+                open: false,
+                generated: {
+                    title: 'Name check sheet',
+                    src: '/api/classes/c1/name-check?columns%5B%5D=full_name&columns%5B%5D=job_title',
+                    classId: 'c1',
+                    kind: 'name-check' as const,
+                    columns: ['full_name', 'job_title'],
+                },
+            },
+            attachTo: document.body,
         });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        document.body
+            .querySelector<HTMLButtonElement>(
+                '[data-testid="viewer-save-to-files"]',
+            )!
+            .click();
+        await flushPromises();
+        document.body
+            .querySelector<HTMLButtonElement>('[data-testid="viewer-save"]')!
+            .click();
+        await flushPromises();
+
+        expect(file).toHaveBeenCalledWith(
+            'c1',
+            'name-check',
+            { type: '', description: '' },
+            ['full_name', 'job_title'],
+        );
     });
 });

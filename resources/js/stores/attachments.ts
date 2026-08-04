@@ -140,8 +140,9 @@ export const useAttachmentsStore = defineStore('attachments', () => {
      */
     async function fileClassDocument(
         classId: string,
-        kind: 'certificates' | 'summary' | 'sign-in',
+        kind: 'certificates' | 'summary' | 'sign-in' | 'name-check',
         info: AttachmentInfo = {},
+        columns?: string[],
     ): Promise<void> {
         const path = kind === 'sign-in' ? 'sign-in-sheet' : kind;
         await axios.post(
@@ -149,6 +150,9 @@ export const useAttachmentsStore = defineStore('attachments', () => {
             {
                 type: info.type || null,
                 description: info.description || null,
+                // Only the sheets with a column picker send this; the server
+                // falls back to its own default when it is absent.
+                ...(columns ? { columns } : {}),
             },
             { headers: defaultHeaders() },
         );

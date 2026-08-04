@@ -278,6 +278,8 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::post('api/classes/{class}/sign-in-sheet', [ClassDocumentsController::class, 'storeSignInSheet'])->name('classes.sign-in-sheet.store');
     Route::get('api/classes/{class}/summary', [ClassDocumentsController::class, 'summary'])->name('classes.summary');
     Route::post('api/classes/{class}/summary', [ClassDocumentsController::class, 'storeSummary'])->name('classes.summary.store');
+    Route::get('api/classes/{class}/name-check', [ClassDocumentsController::class, 'nameCheck'])->name('classes.name-check');
+    Route::post('api/classes/{class}/name-check', [ClassDocumentsController::class, 'storeNameCheck'])->name('classes.name-check.store');
     Route::get('api/classes/{class}', [ClassesController::class, 'show'])->name('classes.show');
     Route::patch('api/classes/{class}', [ClassesController::class, 'update'])->name('classes.update');
     Route::delete('api/classes/{class}', [ClassesController::class, 'destroy'])->name('classes.destroy');

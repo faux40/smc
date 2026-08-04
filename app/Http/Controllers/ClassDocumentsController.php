@@ -7,13 +7,17 @@ use App\Models\Attachment;
 use App\Models\Completion;
 use App\Models\TrainingClass;
 use App\Support\CertificateData;
+use App\Support\ClassNameCheck;
 use App\Support\ClassSignInSheet;
 use App\Support\ClassSummary;
+use App\Support\CsvExport;
 use App\Support\PdfRenderer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Spatie\LaravelPdf\PdfBuilder;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Printable PDF documents for a class: certificates, sign-in sheet, class
@@ -187,6 +191,88 @@ class ClassDocumentsController extends Controller
         Gate::authorize('view', $class);
 
         return $this->summaryPdf($class)->name("class-summary-{$class->id}.pdf");
+    }
+
+    /**
+     * Name-check sheet: every name as it will print, alphabetically, so a
+     * typo is caught before certificates or purchased card stock are
+     * committed. `?format=csv` streams the same rows as a spreadsheet
+     * (same `columns[]` convention as the Reports exports).
+     */
+    public function nameCheck(Request $request, TrainingClass $class): PdfBuilder|StreamedResponse
+    {
+        Gate::authorize('view', $class);
+
+        $columns = $this->nameCheckColumns($request);
+        $data = ClassNameCheck::data($class);
+
+        if ($request->query('format') === 'csv') {
+            return CsvExport::stream(
+                Str::slug($class->name ?: 'class').'-name-check.csv',
+                $columns,
+                array_map(fn (array $row) => CsvExport::cells($row, $columns), $data['rows']),
+            );
+        }
+
+        return $this->nameCheckPdf($data, $columns)->name("name-check-{$class->id}.pdf");
+    }
+
+    /**
+     * File a copy of the name-check sheet into the class's documents. Takes
+     * the same `columns[]` as the GET so the filed copy matches the one that
+     * was on screen when Save was pressed.
+     */
+    public function storeNameCheck(Request $request, TrainingClass $class, FileClassDocument $action): JsonResponse
+    {
+        Gate::authorize('view', $class);
+
+        [$type, $description] = $this->docInfo($request);
+        $attachment = $action->handle(
+            $class,
+            $this->nameCheckPdf(ClassNameCheck::data($class), $this->nameCheckColumns($request)),
+            FileClassDocument::filename($class, 'Name_Check'),
+            $type,
+            $description,
+        );
+
+        return $this->filedResponse($attachment);
+    }
+
+    /**
+     * Selected export columns. `full_name` is forced back in when a selection
+     * omits it — a name-check sheet without the names is not a thing — and is
+     * also the whole default: the sheet is a spelling proof first, and any
+     * other column is something you deliberately asked for.
+     *
+     * @return array<int, array{key: string, label: string}>
+     */
+    private function nameCheckColumns(Request $request): array
+    {
+        return CsvExport::columns(
+            $request,
+            ClassNameCheck::COLUMNS,
+            ClassNameCheck::ALWAYS,
+            ClassNameCheck::ALWAYS,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<int, array{key: string, label: string}>  $columns
+     */
+    private function nameCheckPdf(array $data, array $columns): PdfBuilder
+    {
+        return $this->withReportFooter(
+            PdfRenderer::make('pdf.report', [
+                ...$data,
+                'columns' => $columns,
+                // `pdf.report` defaults to landscape for the wide Reports
+                // exports. A name list is one narrow column, so landscape
+                // both stretches it and wastes rows per page.
+                'pageSize' => '8.5in 11in',
+            ]),
+            $data,
+        );
     }
 
     /**

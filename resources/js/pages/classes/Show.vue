@@ -39,6 +39,7 @@ import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import ClassTopicPanel from '@/pages/classes/Partials/ClassTopicPanel.vue';
 import ManageRosterModal from '@/pages/classes/Partials/ManageRosterModal.vue';
 import ManageTopicsModal from '@/pages/classes/Partials/ManageTopicsModal.vue';
+import NameCheckModal from '@/pages/classes/Partials/NameCheckModal.vue';
 import PrintCardsModal from '@/pages/classes/Partials/PrintCardsModal.vue';
 import { page as classesPage, showPage } from '@/routes/classes';
 import { useCardStocksStore } from '@/stores/cardStocks';
@@ -96,16 +97,36 @@ const DOC_PATHS: Record<GeneratedDoc['kind'], string> = {
     certificates: 'certificates',
     summary: 'summary',
     'sign-in': 'sign-in-sheet',
+    'name-check': 'name-check',
 };
 
-function openDoc(kind: GeneratedDoc['kind'], title: string): void {
+function openDoc(
+    kind: GeneratedDoc['kind'],
+    title: string,
+    columns?: string[],
+): void {
+    // Columns ride on the src AND on the doc, so the preview and the "save to
+    // this class's files" action render the same sheet.
+    const query = columns?.length
+        ? `?${columns.map((c) => `columns%5B%5D=${encodeURIComponent(c)}`).join('&')}`
+        : '';
+
     activeDoc.value = {
         kind,
         title,
         classId: props.classId,
-        src: `/api/classes/${props.classId}/${DOC_PATHS[kind]}`,
+        src: `/api/classes/${props.classId}/${DOC_PATHS[kind]}${query}`,
+        columns,
     };
     docOpen.value = true;
+}
+
+// Name-check sheet (spelling proof) — reached from Actions, since the column
+// picker needs a dialog to live in.
+const nameCheckOpen = ref(false);
+
+function onNameCheckView(columns: string[]): void {
+    openDoc('name-check', 'Name check sheet', columns);
 }
 // Printing a topic's cards (C4e). One run is one topic, so the topic is
 // chosen by which button was pressed rather than inside the dialog.
@@ -585,6 +606,12 @@ const timeLabel = computed(() => {
                         <DropdownMenuContent align="end">
                             <DropdownMenuItem @click="openDuplicate">
                                 Duplicate class…
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                data-testid="open-name-check"
+                                @click="nameCheckOpen = true"
+                            >
+                                Name check sheet…
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -1153,6 +1180,12 @@ const timeLabel = computed(() => {
                     v-model:open="duplicateOpen"
                     :copy-from="detail"
                     @saved="onDuplicateSaved"
+                />
+                <NameCheckModal
+                    v-model:open="nameCheckOpen"
+                    :class-id="props.classId"
+                    :completed="detail.status === 'completed'"
+                    @view="onNameCheckView"
                 />
 
                 <Dialog v-model:open="reopenOpen">

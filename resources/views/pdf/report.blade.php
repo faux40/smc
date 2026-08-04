@@ -1,4 +1,4 @@
-@extends('pdf.layout', ['pageSize' => '11in 8.5in', 'pageMargin' => '0.5in'])
+@extends('pdf.layout', ['pageSize' => $pageSize ?? '11in 8.5in', 'pageMargin' => '0.5in'])
 
 {{-- Generic tabular report: a header (org + title + optional subtitle/filters)
      and a bordered table driven by $columns (key+label) and $rows (assoc).

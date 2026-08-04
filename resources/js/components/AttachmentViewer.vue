@@ -27,7 +27,13 @@ export interface GeneratedDoc {
     title: string;
     src: string;
     classId: string;
-    kind: 'certificates' | 'summary' | 'sign-in';
+    kind: 'certificates' | 'summary' | 'sign-in' | 'name-check';
+    /**
+     * Column selection for the sheets that have one (name-check). Carried so
+     * the filed copy matches the copy on screen — saving a sheet with fewer
+     * columns than the one being looked at would be a quiet lie.
+     */
+    columns?: string[];
 }
 
 const props = defineProps<{
@@ -91,6 +97,7 @@ async function submitForm(): Promise<void> {
                 props.generated.classId,
                 props.generated.kind,
                 { type: formType.value, description: formDescription.value },
+                props.generated.columns,
             );
             toast.success('Saved to this class’s files.');
             emit('update:open', false);
