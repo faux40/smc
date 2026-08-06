@@ -37,6 +37,9 @@ class Training extends Model
         'default_trainer',
         'default_location',
         'default_address',
+        // Hierarchy: the higher training whose credential satisfies this one
+        // (Authorized points at Competent). Chains upward, transitively.
+        'superseded_by_id',
     ];
 
     protected $casts = [

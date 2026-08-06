@@ -22,11 +22,13 @@ final class RecalcContext
      * @param  Collection<string, Training>  $trainings  keyed by training id, stdFrequency eager-loaded
      * @param  int  $window  the org's expiring-soon (amber) window in days
      * @param  Collection<string, RqmtElement>  $elements  Training-typed requirement elements keyed by "{requirement_id}|{module_id}", stdFrequency eager-loaded
+     * @param  TrainingLadder  $ladder  the org's hierarchy edges, for coverage resolution
      */
     public function __construct(
         public readonly Collection $trainings,
         public readonly int $window,
         public readonly Collection $elements,
+        public readonly TrainingLadder $ladder,
     ) {}
 
     /**
@@ -42,6 +44,7 @@ final class RecalcContext
             trainings: $trainings->keyBy('id'),
             window: self::windowFor($orgId),
             elements: self::keyElements($elements ?? collect()),
+            ladder: TrainingLadder::forOrg($orgId),
         );
     }
 
@@ -66,6 +69,7 @@ final class RecalcContext
             trainings: $trainings->keyBy('id'),
             window: self::windowFor($orgId),
             elements: self::keyElements($elements),
+            ladder: TrainingLadder::forOrg($orgId),
         );
     }
 

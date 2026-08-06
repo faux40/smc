@@ -11,6 +11,7 @@ use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Services\TrainingStatusService;
 use App\Support\RecalcContext;
+use App\Support\TrainingLadder;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
@@ -58,7 +59,7 @@ class RecalculateTrainingStatus
      *
      * @return Collection<int, TrainingAssignment>
      */
-    public function handle(string $userId, string $trainingId): Collection
+    public function handle(string $userId, string $trainingId, ?TrainingLadder $ladder = null): Collection
     {
         $assignments = TrainingAssignment::where('user_id', $userId)
             ->where('training_id', $trainingId)
@@ -69,18 +70,49 @@ class RecalculateTrainingStatus
             return $assignments;
         }
 
+        $orgId = $assignments->first()->org_id;
         $latest = $this->latestCompletion($userId, $trainingId);
         $training = Training::with('stdFrequency')->find($trainingId);
-        $window = Organization::find($assignments->first()->org_id)?->expiringSoonDays()
+        $window = Organization::find($orgId)?->expiringSoonDays()
             ?? Organization::DEFAULT_EXPIRING_SOON_DAYS;
+
+        $ladder ??= TrainingLadder::forOrg($orgId);
+        $ancestors = $ladder->ancestorsOf($trainingId);
+        $latestByAncestor = $this->ancestorCompletions($userId, $ancestors);
+        $covering = $this->coveringCandidates(
+            $ancestors,
+            fn (string $ancestorId) => $latestByAncestor->get($ancestorId)?->first(),
+        );
 
         $statusService = new TrainingStatusService;
 
         foreach ($assignments as $assignment) {
-            $this->applyStatus($assignment, $latest, $training, $window, null, $statusService);
+            $this->applyStatus($assignment, $latest, $training, $window, null, $statusService, $covering);
         }
 
         return $assignments;
+    }
+
+    /**
+     * handle() plus the fan-down: a completion on training H changes the
+     * status of every training H (transitively) covers, so those pairs are
+     * recomputed in the same breath. The CompletionObserver calls this —
+     * without it, completing Competent leaves the person's Authorized row
+     * stale until the nightly watchdog.
+     *
+     * @return Collection<int, TrainingAssignment>
+     */
+    public function handleWithDescendants(string $userId, string $trainingId, string $orgId): Collection
+    {
+        $ladder = TrainingLadder::forOrg($orgId);
+
+        $affected = $this->handle($userId, $trainingId, $ladder);
+
+        foreach ($ladder->descendantsOf($trainingId) as $descendantId) {
+            $affected = $affected->merge($this->handle($userId, $descendantId, $ladder));
+        }
+
+        return $affected;
     }
 
     /**
@@ -118,11 +150,22 @@ class RecalculateTrainingStatus
             return $assignments;
         }
 
+        // Every training that could contribute a credit: the pair set's own
+        // plus everything above them in the hierarchy — a covering
+        // credential satisfies from outside the pair set.
+        $ancestorsByTraining = $trainingIds->mapWithKeys(
+            fn (string $id) => [$id => $context->ladder->ancestorsOf($id)],
+        );
+        $moduleIds = $trainingIds
+            ->merge($ancestorsByTraining->flatMap(fn (Collection $a) => $a->pluck('id')))
+            ->unique()
+            ->values();
+
         // Latest completion per (user, module) — ordered desc so the first row
         // in each group is the most recent.
         $completions = Completion::whereIn('user_id', $userIds)
             ->where('module_type', Training::class)
-            ->whereIn('module_id', $trainingIds)
+            ->whereIn('module_id', $moduleIds)
             ->orderByDesc('completion_date')
             ->get()
             ->groupBy(fn (Completion $c) => $c->user_id.'|'.$c->module_id);
@@ -132,8 +175,13 @@ class RecalculateTrainingStatus
         foreach ($assignments as $assignment) {
             $latest = $completions->get($assignment->user_id.'|'.$assignment->training_id)?->first();
             $training = $context->trainings->get($assignment->training_id);
+            $covering = $this->coveringCandidates(
+                $ancestorsByTraining->get($assignment->training_id) ?? collect(),
+                fn (string $ancestorId) => $completions
+                    ->get($assignment->user_id.'|'.$ancestorId)?->first(),
+            );
 
-            $this->applyStatus($assignment, $latest, $training, $context->window, $context->elements, $statusService);
+            $this->applyStatus($assignment, $latest, $training, $context->window, $context->elements, $statusService, $covering);
         }
 
         return $assignments;
@@ -206,7 +254,13 @@ class RecalculateTrainingStatus
      * handleMany(). When $elements is non-null the requirement timing is read
      * from the preloaded map instead of querying per assignment.
      *
+     * $covering holds one candidate per ancestor training that has a
+     * completion — the hierarchy's contribution. The best effective expiry
+     * wins, the training's own completion on ties, and the winner's identity
+     * lands in satisfied_via_training_id (null = satisfied itself).
+     *
      * @param  Collection<string, RqmtElement>|null  $elements
+     * @param  Collection<int, array{completion: Completion, expiry: CarbonInterface|null, via: string}>  $covering
      */
     private function applyStatus(
         TrainingAssignment $assignment,
@@ -215,12 +269,23 @@ class RecalculateTrainingStatus
         int $window,
         ?Collection $elements,
         TrainingStatusService $statusService,
+        ?Collection $covering = null,
     ): void {
         $timings = $this->sourceTimings($training, $assignment, $elements);
         [$expiresAt, $lastCompletedAt] = $this->computeStatus($latest, $timings);
 
-        $assignment->expires_at = $expiresAt;
-        $assignment->last_completed_at = $lastCompletedAt;
+        $best = ['completion' => $latest, 'expiry' => $expiresAt, 'via' => null];
+
+        foreach ($covering ?? collect() as $candidate) {
+            if ($this->outlasts($candidate['expiry'], $best)) {
+                $best = $candidate;
+                $lastCompletedAt = $candidate['completion']->completion_date;
+            }
+        }
+
+        $assignment->expires_at = $best['expiry'];
+        $assignment->last_completed_at = $best['completion']?->completion_date;
+        $assignment->satisfied_via_training_id = $best['via'];
         // As-needed-only TAs are visible but never scheduled (J3).
         $assignment->as_needed_only = $timings->every(
             fn (array $t) => $t['as_needed'] && ! $t['repeating'] && ! $t['initial_only'],
@@ -229,6 +294,95 @@ class RecalculateTrainingStatus
         // the denormalized status; the daily watchdog reconciles date-crossings).
         $assignment->status = $statusService->statusFor($assignment, $window);
         $assignment->save();
+    }
+
+    /**
+     * Does a covering candidate beat the current best credit?
+     *
+     * Strictly-better only: on equal expiries the training's own completion
+     * keeps satisfied_via null, which is the honest reading. A null expiry
+     * WITH a completion means "never expires" and beats any date; no
+     * completion at all loses to anything.
+     *
+     * @param  array{completion: Completion|null, expiry: CarbonInterface|null, via: string|null}  $best
+     */
+    private function outlasts(?CarbonInterface $candidateExpiry, array $best): bool
+    {
+        if ($best['completion'] === null) {
+            return true;
+        }
+
+        if ($best['expiry'] === null) {
+            return false; // current best never expires
+        }
+
+        if ($candidateExpiry === null) {
+            return true; // candidate never expires, best does
+        }
+
+        return $candidateExpiry->gt($best['expiry']);
+    }
+
+    /**
+     * One candidate per covering training the user holds a completion for.
+     * The expiry is the credential's own: its explicit expire_date, else its
+     * completion date pushed out by ITS training's cycle — never re-derived
+     * from the lower training's timing (the credential carries).
+     *
+     * @param  Collection<int, Training>  $ancestors
+     * @param  callable(string): ?Completion  $latestFor
+     * @return Collection<int, array{completion: Completion, expiry: CarbonInterface|null, via: string}>
+     */
+    private function coveringCandidates(Collection $ancestors, callable $latestFor): Collection
+    {
+        return $ancestors
+            ->map(function (Training $ancestor) use ($latestFor) {
+                $completion = $latestFor($ancestor->id);
+
+                if ($completion === null) {
+                    return null;
+                }
+
+                return [
+                    'completion' => $completion,
+                    'expiry' => $this->credentialExpiry($completion, $ancestor),
+                    'via' => $ancestor->id,
+                ];
+            })
+            ->filter()
+            ->values();
+    }
+
+    private function credentialExpiry(Completion $completion, Training $training): ?CarbonInterface
+    {
+        if ($completion->expire_date !== null) {
+            return $completion->expire_date;
+        }
+
+        return $training->repeating && $training->stdFrequency?->repeat_days !== null
+            ? $completion->completion_date->addDays($training->stdFrequency->repeat_days)
+            : null;
+    }
+
+    /**
+     * The user's completions of the given ancestor trainings, newest first,
+     * keyed by training id. One query for the whole chain.
+     *
+     * @param  Collection<int, Training>  $ancestors
+     * @return Collection<string, Collection<int, Completion>>
+     */
+    private function ancestorCompletions(string $userId, Collection $ancestors): Collection
+    {
+        if ($ancestors->isEmpty()) {
+            return collect();
+        }
+
+        return Completion::where('user_id', $userId)
+            ->where('module_type', Training::class)
+            ->whereIn('module_id', $ancestors->pluck('id'))
+            ->orderByDesc('completion_date')
+            ->get()
+            ->groupBy('module_id');
     }
 
     private function latestCompletion(string $userId, string $trainingId): ?Completion

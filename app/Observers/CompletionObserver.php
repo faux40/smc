@@ -33,6 +33,12 @@ class CompletionObserver
             return;
         }
 
-        $this->action->handle($completion->user_id, $completion->module_id);
+        // With descendants: this credential may be covering lower trainings in
+        // the hierarchy, whose assignments must move in the same breath.
+        $this->action->handleWithDescendants(
+            $completion->user_id,
+            $completion->module_id,
+            $completion->org_id,
+        );
     }
 }

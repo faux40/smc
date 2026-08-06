@@ -48,6 +48,9 @@ class TrainingAssignment extends Model
         'last_completed_at',
         'as_needed_only',
         'status',
+        // Set by the recalc when the governing credit came from a covering
+        // (higher) training; null when this training satisfied itself.
+        'satisfied_via_training_id',
     ];
 
     protected $casts = [
