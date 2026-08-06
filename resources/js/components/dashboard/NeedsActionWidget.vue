@@ -11,17 +11,18 @@
  * by user/training is applied to the current page client-side.
  */
 import { Link } from '@inertiajs/vue3';
+import { Printer } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import DashWidget from '@/components/dashboard/DashWidget.vue';
 import Pagination from '@/components/Pagination.vue';
 import { Input } from '@/components/ui/input';
+import { useRemind } from '@/composables/useRemind';
 import { useServerTable } from '@/composables/useServerTable';
 import CompletionFormModal from '@/pages/completions/Partials/CompletionFormModal.vue';
 import ComplianceStatusBadge from '@/pages/users/Partials/ComplianceStatusBadge.vue';
 import { show as userShow } from '@/routes/users';
 import { useDashboardStore } from '@/stores/dashboard';
 import type { NeedsActionRow } from '@/stores/dashboard';
-import { useRemind } from '@/composables/useRemind';
 
 type GroupBy = 'user' | 'training';
 type StatusFilter = 'all' | 'overdue' | 'due_soon' | 'not_started';
@@ -34,6 +35,28 @@ const loading = ref(true);
 const error = ref<string | null>(null);
 
 const groupBy = ref<GroupBy>('user');
+
+/**
+ * Print link. Carries the same filters the list is showing — including
+ * `groupBy`, which this widget applies client-side over the fetched page and
+ * so had never been sent anywhere. A sheet grouped differently from the screen
+ * it was printed from is worse than no sheet.
+ */
+const printHref = computed(() => {
+    const params = new URLSearchParams();
+
+    if (statusFilter.value !== 'all') {
+        params.set('status', statusFilter.value);
+    }
+
+    if (search.value) {
+        params.set('q', search.value);
+    }
+
+    params.append('group_by[]', groupBy.value);
+
+    return `/api/dashboard/needs-action/export?${params.toString()}`;
+});
 const statusFilter = ref<StatusFilter>('all');
 const search = ref('');
 
@@ -186,6 +209,17 @@ const { remindOne } = useRemind();
                         By training
                     </button>
                 </div>
+                <a
+                    :href="printHref"
+                    target="_blank"
+                    rel="noopener"
+                    data-test="print-needs-action"
+                    class="inline-flex h-8 items-center gap-1 rounded-md border border-input px-2 text-xs hover:bg-muted"
+                    title="Print this list with the filters and grouping shown"
+                >
+                    <Printer class="h-3.5 w-3.5" />
+                    Print
+                </a>
             </div>
         </template>
 

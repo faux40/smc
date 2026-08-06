@@ -7,9 +7,14 @@ use App\Models\Organization;
 use App\Models\TrainingAssignment;
 use App\Services\TrainingStatusService;
 use App\Support\CompletionSerializer;
+use App\Support\ReportGrouping;
 use App\Support\SourceChips;
+use App\Support\TableReport;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Spatie\LaravelPdf\PdfBuilder;
 
 /**
  * Phase 14 dashboard endpoints. One method per widget — when the
@@ -73,12 +78,18 @@ class DashboardController extends Controller
      * to SQL so a 10k-row org never ships the whole list. The widget groups
      * the returned page by user/training client-side.
      */
-    public function needsAction(Request $request): JsonResponse
+    /**
+     * The needs-action query: actionable buckets, worst-first, honouring the
+     * status chip and the search box.
+     *
+     * Extracted so the PDF export runs the *same* query as the widget rather
+     * than a lookalike — the two disagreeing is exactly the failure a printed
+     * sheet is used to catch.
+     *
+     * @return Builder<TrainingAssignment>
+     */
+    private function needsActionQuery(Request $request, Organization $org): Builder
     {
-        $this->authorize($request);
-
-        $org = $this->orgFor($request);
-
         // Optional status-chip filter, restricted to the actionable buckets.
         $statuses = array_keys(self::ACTION_RANK);
         if (in_array($request->query('status'), $statuses, true)) {
@@ -111,6 +122,16 @@ class DashboardController extends Controller
             });
         }
 
+        return $query;
+    }
+
+    public function needsAction(Request $request): JsonResponse
+    {
+        $this->authorize($request);
+
+        $org = $this->orgFor($request);
+        $query = $this->needsActionQuery($request, $org);
+
         $perPage = max(1, min(100, (int) $request->query('per_page', 50)));
         $page = max(1, (int) $request->query('page', 1));
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
@@ -137,6 +158,111 @@ class DashboardController extends Controller
                 'total' => $paginator->total(),
             ],
         ]);
+    }
+
+    /** Column catalog for the needs-action PDF. */
+    private const NEEDS_ACTION_COLUMNS = [
+        ['key' => 'user', 'label' => 'User'],
+        ['key' => 'training', 'label' => 'Training'],
+        ['key' => 'status', 'label' => 'Status'],
+        ['key' => 'expires_at', 'label' => 'Due'],
+        ['key' => 'due', 'label' => 'Overdue / due in'],
+        ['key' => 'sources', 'label' => 'Assigned by'],
+    ];
+
+    private const STATUS_LABELS = [
+        TrainingStatusService::STATUS_OVERDUE => 'Overdue',
+        TrainingStatusService::STATUS_NOT_STARTED => 'Not started',
+        TrainingStatusService::STATUS_DUE_SOON => 'Due soon',
+    ];
+
+    /**
+     * The needs-action list as a PDF — the copy you take into the room.
+     *
+     * Runs the widget's own query so the sheet and the screen cannot disagree,
+     * and accepts `group_by[]` because the widget's user|training toggle was
+     * applied client-side over the fetched page and never sent anywhere.
+     */
+    public function needsActionExport(Request $request): PdfBuilder
+    {
+        $this->authorize($request);
+
+        $org = $this->orgFor($request);
+
+        $all = $this->needsActionQuery($request, $org)
+            ->limit(TableReport::ROW_CAP + 1)
+            ->get();
+
+        $capped = $all->count() > TableReport::ROW_CAP;
+        $tas = $all->take(TableReport::ROW_CAP);
+        $names = SourceChips::names($tas);
+
+        $rows = $tas->map(fn (TrainingAssignment $ta) => [
+            'user' => $ta->user?->sort_name,
+            'training' => $ta->name,
+            'status' => self::STATUS_LABELS[$ta->status] ?? $ta->status,
+            'expires_at' => $ta->expires_at?->toDateString() ?? '—',
+            'due' => $this->dueLabel($this->status->daysUntilDue($ta)),
+            'sources' => (new Collection(SourceChips::for($ta, $names)))
+                ->pluck('label')->filter()->implode(', '),
+            // Grouping keys the blade never prints but ReportGrouping bands on.
+            '_group_user' => $ta->user?->sort_name,
+            '_group_training' => $ta->name,
+        ])->values()->all();
+
+        $groupBy = ReportGrouping::sanitize((array) $request->query('group_by', []));
+
+        return TableReport::render(
+            org: $org,
+            title: 'Needs action',
+            columns: self::NEEDS_ACTION_COLUMNS,
+            rows: $rows,
+            filename: 'needs-action-'.now(config('app.display_timezone'))->format('Y-m-d').'.pdf',
+            filters: $this->needsActionFilterSummary($request),
+            groups: $groupBy !== [] ? ReportGrouping::flatten($rows, $groupBy) : [],
+            capped: $capped,
+        );
+    }
+
+    /**
+     * "12 days overdue" / "due in 5 days" rather than a signed number — the
+     * sheet is read aloud in a meeting, and a leading minus sign is a puzzle.
+     */
+    private function dueLabel(?int $days): string
+    {
+        if ($days === null) {
+            return 'Not started';
+        }
+
+        if ($days < 0) {
+            $n = abs($days);
+
+            return $n === 1 ? '1 day overdue' : "{$n} days overdue";
+        }
+
+        if ($days === 0) {
+            return 'Due today';
+        }
+
+        return $days === 1 ? 'due in 1 day' : "due in {$days} days";
+    }
+
+    /** One line naming the filters the sheet was run with. */
+    private function needsActionFilterSummary(Request $request): ?string
+    {
+        $parts = [];
+
+        $status = $request->query('status');
+        if (isset(self::STATUS_LABELS[$status])) {
+            $parts[] = 'Status: '.self::STATUS_LABELS[$status];
+        }
+
+        $q = trim((string) $request->query('q', ''));
+        if ($q !== '') {
+            $parts[] = 'Search: '.$q;
+        }
+
+        return $parts === [] ? null : implode(' · ', $parts);
     }
 
     public function recentCompletions(Request $request): JsonResponse

@@ -251,4 +251,49 @@ describe('NeedsActionWidget — Remind row action (F10)', () => {
         );
         expect(toast.success).toHaveBeenCalledWith('Reminder sent.');
     });
+    describe('print link', () => {
+        const href = (w: Awaited<ReturnType<typeof mountWidget>>) =>
+            w.get('[data-test="print-needs-action"]').attributes('href');
+
+        it('points at the export endpoint', async () => {
+            const wrapper = await mountWidget();
+
+            expect(href(wrapper)).toBe('/api/dashboard/needs-action/export?group_by%5B%5D=user');
+        });
+
+        it('carries the grouping toggle, which the screen applies client-side', async () => {
+            // The whole point: the sheet has to be grouped the way the screen
+            // is, and the server never saw this toggle before.
+            const wrapper = await mountWidget();
+
+            await wrapper.get('[data-test="group-by-training"]').trigger('click');
+
+            expect(href(wrapper)).toContain('group_by%5B%5D=training');
+        });
+
+        it('carries the status chip', async () => {
+            const wrapper = await mountWidget();
+
+            await wrapper.get('select').setValue('overdue');
+
+            expect(href(wrapper)).toContain('status=overdue');
+        });
+
+        it('omits status when the filter is All', async () => {
+            // "all" is the widget's word for no filter; sending it would make
+            // the sheet's filter line claim a filter that isn't one.
+            const wrapper = await mountWidget();
+
+            expect(href(wrapper)).not.toContain('status=');
+        });
+
+        it('carries the search box', async () => {
+            const wrapper = await mountWidget();
+
+            await wrapper.get('input[type="search"], input').setValue('cpr');
+            await flushPromises();
+
+            expect(href(wrapper)).toContain('q=cpr');
+        });
+    });
 });

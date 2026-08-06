@@ -110,6 +110,8 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     Route::get('api/dashboard/summary', [DashboardController::class, 'summary'])->name('dashboard.summary');
     // K2 consolidated actionable-rows feed (replaced due-soon + training-due-soon + overdue-users).
     Route::get('api/dashboard/needs-action', [DashboardController::class, 'needsAction'])->name('dashboard.needs-action');
+    // Same query as the widget, rendered as the shared report sheet.
+    Route::get('api/dashboard/needs-action/export', [DashboardController::class, 'needsActionExport'])->name('dashboard.needs-action.export');
     Route::get('api/dashboard/recent-completions', [DashboardController::class, 'recentCompletions'])->name('dashboard.recent-completions');
     Route::get('api/dashboard/users-compliance', [DashboardController::class, 'usersCompliance'])->name('dashboard.users-compliance');
 
