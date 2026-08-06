@@ -170,6 +170,7 @@ const sourceClass: ClassDetail = {
     completion_date: '2026-03-01',
     was_completed: false,
     can_edit: false,
+    tag_ids: [],
     trainings: [
         topic('ct1', 't1', 'Fall Protection'),
         topic('ct2', null, 'Orphan Topic'),
@@ -231,6 +232,16 @@ describe('ClassFormModal duplicate mode', () => {
         document.body
             .querySelector('form')!
             .dispatchEvent(new Event('submit', { bubbles: true }));
+    }
+
+    // Duplicate mode deliberately blanks the date (a copy is a new session),
+    // so every submit from this describe has to supply one first.
+    async function setDate(value: string) {
+        const date =
+            document.body.querySelector<HTMLInputElement>('#class_date')!;
+        date.value = value;
+        date.dispatchEvent(new Event('input', { bubbles: true }));
+        await flushPromises();
     }
 
     it('titles the dialog Duplicate class and seeds the fields, date blank', async () => {
@@ -333,5 +344,68 @@ describe('ClassFormModal duplicate mode', () => {
                 '[data-testid="copy-include-students"]',
             ),
         ).toBeNull();
+    });
+
+    it("carries the source class's tags onto the copy", async () => {
+        // A duplicate rebuilds topics from the live training library rather
+        // than copying the source's rows, so inheritance alone would restore
+        // only the tags that trace back to a training — silently dropping any
+        // added to the source by hand. Send them explicitly; the server unions
+        // them with whatever the topics inherit.
+        const wrapper = await openDuplicate({
+            ...sourceClass,
+            tag_ids: ['tag-a', 'tag-b'],
+        });
+        await setDate('2026-09-01');
+
+        submitForm();
+        await flushPromises();
+
+        const payload = (axios.post as ReturnType<typeof vi.fn>).mock
+            .calls[0][1] as Record<string, unknown>;
+        expect(payload.tag_ids).toEqual(['tag-a', 'tag-b']);
+        wrapper.unmount();
+    });
+
+    it('omits tag_ids when the source class has none', async () => {
+        const wrapper = await openDuplicate({ ...sourceClass, tag_ids: [] });
+        await setDate('2026-09-01');
+
+        submitForm();
+        await flushPromises();
+
+        const payload = (axios.post as ReturnType<typeof vi.fn>).mock
+            .calls[0][1] as Record<string, unknown>;
+        expect(payload.tag_ids).toBeUndefined();
+        wrapper.unmount();
+    });
+
+    it('sends no tag_ids on a fresh create', async () => {
+        const wrapper = mount(ClassFormModal, {
+            props: { open: false },
+            attachTo: document.body,
+        });
+        await wrapper.setProps({ open: true });
+        await flushPromises();
+
+        document.body.querySelector<HTMLInputElement>('#class_name')!.value =
+            'New';
+        document
+            .body.querySelector<HTMLInputElement>('#class_name')!
+            .dispatchEvent(new Event('input', { bubbles: true }));
+        document.body.querySelector<HTMLInputElement>('#class_date')!.value =
+            '2026-09-01';
+        document
+            .body.querySelector<HTMLInputElement>('#class_date')!
+            .dispatchEvent(new Event('input', { bubbles: true }));
+        await flushPromises();
+
+        submitForm();
+        await flushPromises();
+
+        const payload = (axios.post as ReturnType<typeof vi.fn>).mock
+            .calls[0][1] as Record<string, unknown>;
+        expect(payload.tag_ids).toBeUndefined();
+        wrapper.unmount();
     });
 });

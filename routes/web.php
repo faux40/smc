@@ -374,6 +374,9 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
                 'name' => $requirement->name,
                 'description' => $requirement->description,
             ],
+            // TagsField is mounted on the page; hydrate it with the current
+            // attachments so it doesn't need a follow-up fetch.
+            'tagIds' => $requirement->tags()->pluck('tags.id')->all(),
         ]);
     })->name('requirements.show');
 
@@ -405,6 +408,10 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
                 'default_location' => $training->default_location,
                 'default_address' => $training->default_address,
             ],
+            // TagsField is mounted on the page; hydrate it with the current
+            // attachments so it doesn't need a follow-up fetch. Classes also
+            // inherit these on attach (ClassesController::snapshotTraining).
+            'tagIds' => $training->tags()->pluck('tags.id')->all(),
         ]);
     })->name('trainings.show');
 });

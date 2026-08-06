@@ -9,6 +9,7 @@ import AttachmentViewer from '@/components/AttachmentViewer.vue';
 import type { GeneratedDoc } from '@/components/AttachmentViewer.vue';
 import ClassFieldset from '@/components/ClassFieldset.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
+import TagsField from '@/components/TagsField.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -68,6 +69,17 @@ const page = usePage();
 const orgId = computed(
     () => (page.props.auth.user as { org_id?: string } | null)?.org_id ?? null,
 );
+// Attaching a tag is open to any org member; only creating library tags is
+// admin-only, which is all this flag controls.
+const canManageTagLibrary = computed(() => {
+    const u = page.props.auth.user as {
+        isOwner?: boolean;
+        isSuperAdmin?: boolean;
+        isAdmin?: boolean;
+    } | null;
+
+    return Boolean(u?.isOwner || u?.isSuperAdmin || u?.isAdmin);
+});
 
 const loading = ref(true);
 const error = ref<string | null>(null);
@@ -1024,6 +1036,26 @@ const timeLabel = computed(() => {
                                 <AttachmentsList
                                     morphable-type="App\Models\TrainingClass"
                                     :morphable-id="props.classId"
+                                />
+                            </div>
+
+                            <!--
+                                Seeded from this class's trainings as each topic
+                                is attached, then edited here on its own. Not
+                                gated on edit rights: tags are descriptive, and
+                                TagsController lets any org member attach one.
+                            -->
+                            <div class="space-y-2 border-t border-border pt-4">
+                                <h3
+                                    class="text-xs font-semibold text-muted-foreground"
+                                >
+                                    Tags
+                                </h3>
+                                <TagsField
+                                    morphable-type="App\Models\TrainingClass"
+                                    :morphable-id="props.classId"
+                                    :initial-tag-ids="detail.tag_ids"
+                                    :can-manage-library="canManageTagLibrary"
                                 />
                             </div>
                         </section>

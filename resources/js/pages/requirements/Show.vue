@@ -5,6 +5,7 @@ import AsyncState from '@/components/AsyncState.vue';
 import DualListShuttle from '@/components/DualListShuttle.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Heading from '@/components/Heading.vue';
+import TagsField from '@/components/TagsField.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,13 +22,17 @@ import { useTrainingsStore } from '@/stores/trainings';
 const FORM_CTX = 'form:requirement';
 const TRAINING_TYPE = 'App\\Models\\Training';
 
-const props = defineProps<{
-    requirement: {
-        id: string;
-        name: string;
-        description: string | null;
-    };
-}>();
+const props = withDefaults(
+    defineProps<{
+        requirement: {
+            id: string;
+            name: string;
+            description: string | null;
+        };
+        tagIds?: string[];
+    }>(),
+    { tagIds: () => [] },
+);
 
 defineOptions({
     layout: {
@@ -296,6 +301,21 @@ onMounted(async () => {
                             </dd>
                         </div>
                     </dl>
+                </section>
+
+                <!--
+                    Not gated on canManage: tags are descriptive, not
+                    access-control, and TagsController lets any org member
+                    attach one. Only the library is admin-only.
+                -->
+                <section class="space-y-3 rounded-md border border-border p-4">
+                    <h2 class="text-sm font-semibold">Tags</h2>
+                    <TagsField
+                        morphable-type="App\Models\Requirement"
+                        :morphable-id="requirement.id"
+                        :initial-tag-ids="props.tagIds"
+                        :can-manage-library="canManage"
+                    />
                 </section>
 
                 <!-- Trainings -->

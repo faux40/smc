@@ -2,6 +2,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import TagsField from '@/components/TagsField.vue';
 import type { TrainingFormSource } from '@/lib/trainingForm';
 import CardFieldsEditor from '@/pages/trainings/Partials/CardFieldsEditor.vue';
 import Show from '@/pages/trainings/Show.vue';
@@ -114,5 +115,30 @@ describe('trainings/Show', () => {
         const editor = wrapper.findComponent(CardFieldsEditor);
         expect(editor.exists()).toBe(true);
         expect(editor.props('trainingId')).toBe('t1');
+    });
+
+    it('mounts TagsField for this training, hydrated from the page prop', async () => {
+        // The tags store has no per-morphable fetch, so the page prop is the
+        // only hydration path — a wrong morphable type would attach the tag to
+        // the wrong record entirely.
+        const wrapper = mount(Show, {
+            props: { training, tagIds: ['tag-1', 'tag-2'] },
+        });
+        await flushPromises();
+
+        const field = wrapper.findComponent(TagsField);
+        expect(field.exists()).toBe(true);
+        expect(field.props('morphableType')).toBe('App\\Models\\Training');
+        expect(field.props('morphableId')).toBe('t1');
+        expect(field.props('initialTagIds')).toEqual(['tag-1', 'tag-2']);
+    });
+
+    it('defaults tagIds to empty rather than passing undefined through', async () => {
+        const wrapper = mount(Show, { props: { training } });
+        await flushPromises();
+
+        expect(wrapper.findComponent(TagsField).props('initialTagIds')).toEqual(
+            [],
+        );
     });
 });

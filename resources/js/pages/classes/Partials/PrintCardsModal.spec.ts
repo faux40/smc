@@ -177,6 +177,7 @@ function detail(
         completion_date: '2026-06-01',
         was_completed: false,
         can_edit: status === 'scheduled',
+        tag_ids: [],
         trainings: [t],
         enrollments: [],
     };

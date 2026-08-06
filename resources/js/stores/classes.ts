@@ -136,6 +136,12 @@ export interface ClassDetail {
      */
     was_completed: boolean;
     can_edit: boolean;
+    /**
+     * Seeded from the class's trainings when each topic is attached, then
+     * editable on its own — later edits to a training's tags don't reach a
+     * class that already exists.
+     */
+    tag_ids: string[];
     trainings: ClassTrainingRow[];
     enrollments: EnrollmentRow[];
 }
@@ -156,6 +162,10 @@ export interface ClassFormPayload {
     notes: string | null;
     // Create-only: snapshot these trainings onto the new class.
     training_ids?: string[];
+    // Create-only: tags to attach beyond those the trainings bring with them.
+    // The duplicate flow uses it to carry the source's hand-added tags, which
+    // no topic would reproduce.
+    tag_ids?: string[];
 }
 
 function defaultHeaders(): Record<string, string> {

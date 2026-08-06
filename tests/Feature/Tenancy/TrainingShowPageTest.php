@@ -5,6 +5,7 @@ namespace Tests\Feature\Tenancy;
 use App\Models\CardTemplate;
 use App\Models\Organization;
 use App\Models\StdFrequency;
+use App\Models\Tag;
 use App\Models\Training;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
@@ -73,6 +74,28 @@ class TrainingShowPageTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('training.card_template_id', $template->id)
+            );
+    }
+
+    public function test_page_hydrates_the_trainings_attached_tag_ids(): void
+    {
+        // TagsField mounts on this page and takes its initial state as a prop
+        // rather than fetching — the tags store has no per-morphable fetch, so
+        // without this the field renders empty on a training that has tags.
+        // Class tag inheritance also reads training tags, so this payload is
+        // the only source for it.
+        $org = Organization::factory()->create();
+        $admin = User::factory()->for($org, 'organization')->withRole('Admin')->create();
+        $training = Training::factory()->for($org, 'organization')->create();
+        $attached = Tag::factory()->for($org, 'organization')->create();
+        Tag::factory()->for($org, 'organization')->create();
+        $training->tags()->attach($attached->id);
+
+        $this->actingAs($admin)
+            ->get(route('trainings.show', $training))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('tagIds', [$attached->id])
             );
     }
 

@@ -54,6 +54,19 @@ class ClassRequest extends FormRequest
                     ->where('org_id', $this->user()->org_id)
                     ->whereNull('deleted_at'),
             ],
+            // Optional at-create-time tags. Classes also inherit their
+            // trainings' tags (ClassesController::snapshotTraining), so this
+            // exists for tags that have no training to come from — above all
+            // the duplicate-class flow, which rebuilds topics from the live
+            // library and would otherwise drop tags added to the source by
+            // hand. The two sets are unioned.
+            'tag_ids' => ['nullable', 'array'],
+            'tag_ids.*' => [
+                'string',
+                Rule::exists('tags', 'id')
+                    ->where('org_id', $this->user()->org_id)
+                    ->whereNull('deleted_at'),
+            ],
             // Optional at-create-time roster (the "duplicate class, include
             // students" flow) — enrolled atomically with the class.
             'user_ids' => ['nullable', 'array'],

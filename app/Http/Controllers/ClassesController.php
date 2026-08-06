@@ -112,14 +112,22 @@ class ClassesController extends Controller
         $data = $request->validated();
         $trainingIds = $data['training_ids'] ?? [];
         $userIds = array_values(array_unique($data['user_ids'] ?? []));
-        unset($data['training_ids'], $data['user_ids']);
+        $tagIds = array_values(array_unique($data['tag_ids'] ?? []));
+        unset($data['training_ids'], $data['user_ids'], $data['tag_ids']);
 
-        $class = DB::transaction(function () use ($request, $data, $trainingIds, $userIds) {
+        $class = DB::transaction(function () use ($request, $data, $trainingIds, $userIds, $tagIds) {
             $class = TrainingClass::create([
                 'org_id' => $request->user()->org_id,
                 'status' => 'scheduled',
                 ...$data,
             ]);
+
+            // Before the topics, so inheritance unions onto these rather than
+            // the other way round — the result is the same set either way, but
+            // this keeps "explicit wins nothing, adds everything" obvious.
+            if ($tagIds !== []) {
+                $class->tags()->syncWithoutDetaching($tagIds);
+            }
 
             if ($trainingIds !== []) {
                 $trainings = Training::query()
@@ -683,6 +691,28 @@ class ClassesController extends Controller
         ]);
 
         $this->prefillClassVenue($class, $training);
+        $this->inheritTrainingTags($class, $training);
+    }
+
+    /**
+     * Merge the training's tags onto the class.
+     *
+     * Additive and deduped: a second topic can only widen the set, and a tag
+     * added to the class by hand survives — the same spirit as
+     * prefillClassVenue(), which never clobbers or un-fills. Detaching a topic
+     * deliberately leaves these behind, because nothing records which tags were
+     * inherited and removing a deliberate one is the worse failure.
+     *
+     * Snapshot, not derived — like the cert content above, later edits to the
+     * training's tags don't reach classes that already exist.
+     */
+    private function inheritTrainingTags(TrainingClass $class, Training $training): void
+    {
+        $tagIds = $training->tags()->pluck('tags.id')->all();
+
+        if ($tagIds !== []) {
+            $class->tags()->syncWithoutDetaching($tagIds);
+        }
     }
 
     /** Class total hours = the sum of its topics' (adjusted) hours. */
@@ -776,6 +806,7 @@ class ClassesController extends Controller
             'classTrainings.training.cardFields',
             'classTrainings.cardValues',
             'enrollments.user:id,f_name,m_name,l_name,prefix_name,suffix_name,email',
+            'tags:id',
         ]);
 
         // Per-enrollee credit: which of this class's topics each user already
@@ -815,6 +846,10 @@ class ClassesController extends Controller
             // can't answer it: that's editable in advance now.
             'was_completed' => $c->completed_at !== null,
             'can_edit' => Gate::check('update', $c),
+            // TagsField mounts on the detail page and takes its initial state
+            // as a prop. Seeded from the class's trainings at attach time
+            // (snapshotTraining), then editable independently.
+            'tag_ids' => $c->tags->pluck('id')->all(),
             'trainings' => $c->classTrainings->map(fn (ClassTraining $ct) => [
                 'id' => $ct->id,
                 'training_id' => $ct->training_id,

@@ -10,6 +10,7 @@ use App\Events\TagUpdated;
 use App\Models\Requirement;
 use App\Models\Tag;
 use App\Models\Training;
+use App\Models\TrainingClass;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -29,6 +30,7 @@ class TagsController extends Controller
         User::class,
         Training::class,
         Requirement::class,
+        TrainingClass::class,
     ];
 
     /**

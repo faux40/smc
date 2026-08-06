@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToOrganization;
 use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasTags;
 use Database\Factories\TrainingClassFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class TrainingClass extends Model
 {
     /** @use HasFactory<TrainingClassFactory> */
-    use BelongsToOrganization, HasAttachments, HasFactory, HasUuids, SoftDeletes;
+    use BelongsToOrganization, HasAttachments, HasFactory, HasTags, HasUuids, SoftDeletes;
 
     protected $table = 'classes';
 

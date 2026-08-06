@@ -99,7 +99,7 @@ const remove = async (tag: TagRow) => {
         <div class="flex items-start justify-between gap-4">
             <Heading
                 title="Tags"
-                description="Org tag library. Attach to users, trainings, and requirements from their respective pages."
+                description="Org tag library. Attach to users, trainings, requirements and classes from their respective pages. A class also inherits the tags of every training it covers."
             />
             <Button v-if="canManage" @click="openCreate">+ New tag</Button>
         </div>

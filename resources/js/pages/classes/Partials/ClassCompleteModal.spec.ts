@@ -24,6 +24,7 @@ function detail(): ClassDetail {
         completion_date: null,
         was_completed: false,
         can_edit: true,
+        tag_ids: [],
         trainings: [
             {
                 id: 'ct1',

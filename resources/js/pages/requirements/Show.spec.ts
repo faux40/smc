@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import TagsField from '@/components/TagsField.vue';
 import RequirementsShow from '@/pages/requirements/Show.vue';
 import { useRequirementsStore } from '@/stores/requirements';
 import { useRqmtElementsStore } from '@/stores/rqmtElements';
@@ -118,10 +119,10 @@ function seedStores() {
     return { trainings, requirements, elements };
 }
 
-async function mountShow() {
+async function mountShow(props: Record<string, unknown> = {}) {
     const stores = seedStores();
     const wrapper = mount(RequirementsShow, {
-        props: { requirement: REQ },
+        props: { requirement: REQ, ...props },
         global: { stubs: STUBS },
     });
     await flushPromises();
@@ -220,5 +221,33 @@ describe('requirements/Show — inline details + training shuttle', () => {
         expect(wrapper.find('button[aria-label="Remove"]').exists()).toBe(
             false,
         );
+    });
+
+    it('mounts TagsField for this requirement, hydrated from the page prop', async () => {
+        const { wrapper } = await mountShow({ tagIds: ['tag-1'] });
+
+        const field = wrapper.findComponent(TagsField);
+        expect(field.exists()).toBe(true);
+        expect(field.props('morphableType')).toBe('App\\Models\\Requirement');
+        expect(field.props('morphableId')).toBe('req1');
+        expect(field.props('initialTagIds')).toEqual(['tag-1']);
+    });
+
+    it('defaults tagIds to empty rather than passing undefined through', async () => {
+        const { wrapper } = await mountShow();
+
+        expect(wrapper.findComponent(TagsField).props('initialTagIds')).toEqual(
+            [],
+        );
+    });
+
+    it('offers tagging to a non-manager — tags are descriptive, not access-control', async () => {
+        authUser.value = { id: 'me', org_id: 'org1', isAdmin: false };
+        const { wrapper } = await mountShow();
+
+        const field = wrapper.findComponent(TagsField);
+        expect(field.exists()).toBe(true);
+        // ...but creating library tags stays admin-only.
+        expect(field.props('canManageLibrary')).toBe(false);
     });
 });

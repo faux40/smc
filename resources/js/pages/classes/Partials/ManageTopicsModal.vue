@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { toast } from 'vue-sonner';
 import DualListShuttle from '@/components/DualListShuttle.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -94,13 +95,25 @@ const available = computed<TopicItem[]>(() => {
         }));
 });
 
+// Adding a topic also merges that training's tags onto the class
+// (ClassesController::snapshotTraining). That is intended, but it changes
+// something the operator didn't type, so it gets said out loud rather than
+// happening behind the dialog.
 const assign = (item: { id: string }) =>
-    run(() =>
-        store.attachTraining(props.classId, {
+    run(async () => {
+        const before = new Set(detail.value?.tag_ids ?? []);
+        const after = await store.attachTraining(props.classId, {
             training_id: item.id,
             hours: null,
-        }),
-    );
+        });
+        const gained = after.tag_ids.filter((id) => !before.has(id)).length;
+
+        toast.success(
+            gained > 0
+                ? `Topic added · ${gained} ${gained === 1 ? 'tag' : 'tags'} inherited`
+                : 'Topic added',
+        );
+    });
 const unassign = (item: { id: string }) =>
     run(() => store.detachTraining(props.classId, item.id));
 const changeHours = (item: { id: string }, value: string) =>

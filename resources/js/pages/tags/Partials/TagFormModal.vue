@@ -120,9 +120,9 @@ const submit = async () => {
                 <DialogHeader>
                     <DialogTitle>{{ title }}</DialogTitle>
                     <DialogDescription>
-                        Tags are org-scoped and attach to users, trainings, and
-                        requirements. Soft-deleted tags also drop their
-                        attachments.
+                        Tags are org-scoped and attach to users, trainings,
+                        requirements and classes. Soft-deleted tags also drop
+                        their attachments.
                     </DialogDescription>
                 </DialogHeader>
 

@@ -53,6 +53,8 @@ const sourceUserIds = computed(() => [
     ...new Set((props.copyFrom?.enrollments ?? []).map((e) => e.user_id)),
 ]);
 
+const sourceTagIds = computed(() => [...(props.copyFrom?.tag_ids ?? [])]);
+
 // Topics snapshot fresh from the current training templates, so only topics
 // whose training still exists (in the active library) can carry over.
 const copyableTrainingIds = computed(() => {
@@ -135,6 +137,13 @@ async function submit(): Promise<void> {
             includeStudents.value &&
             sourceUserIds.value.length > 0
                 ? { user_ids: sourceUserIds.value }
+                : {}),
+            // A copy rebuilds its topics from the live training library, so
+            // inheritance alone would restore only the tags that trace back to
+            // a training. Carry the source's set so hand-added ones survive;
+            // the server unions it with whatever the topics bring.
+            ...(props.copyFrom && sourceTagIds.value.length > 0
+                ? { tag_ids: sourceTagIds.value }
                 : {}),
         });
         emit('saved', detail);

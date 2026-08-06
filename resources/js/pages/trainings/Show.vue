@@ -3,6 +3,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Heading from '@/components/Heading.vue';
+import TagsField from '@/components/TagsField.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -22,7 +23,13 @@ import { useTrainingsStore } from '@/stores/trainings';
 
 const FORM_CTX = 'form:training';
 
-const props = defineProps<{ training: TrainingFormSource & { id: string } }>();
+const props = withDefaults(
+    defineProps<{
+        training: TrainingFormSource & { id: string };
+        tagIds?: string[];
+    }>(),
+    { tagIds: () => [] },
+);
 
 defineOptions({
     layout: {
@@ -139,6 +146,22 @@ const confirmDelete = async () => {
         <p v-else class="text-sm text-muted-foreground">
             You don't have permission to edit this training.
         </p>
+
+        <!--
+            Not gated on canManage: tags are descriptive, not access-control,
+            and TagsController lets any org member attach one. Only the library
+            (creating/renaming tags) is admin-only, which is what the flag says.
+            Classes inherit these tags when this training is added as a topic.
+        -->
+        <div class="max-w-5xl space-y-2">
+            <h2 class="text-sm font-semibold">Tags</h2>
+            <TagsField
+                morphable-type="App\Models\Training"
+                :morphable-id="training.id"
+                :initial-tag-ids="props.tagIds"
+                :can-manage-library="canManage"
+            />
+        </div>
 
         <!--
             Custom card fields: a set of definitions, saved on its own. Kept
