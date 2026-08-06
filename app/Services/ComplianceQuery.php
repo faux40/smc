@@ -7,6 +7,7 @@ use App\Models\Requirement;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Models\User;
+use App\Support\TableReport;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Date;
@@ -130,20 +131,26 @@ class ComplianceQuery
         $dir = ($opts['dir'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
         $query->orderByRaw("{$sort} {$dir}")->orderBy('name');
 
+        $shape = fn ($row) => [
+            'id' => $row->id,
+            'name' => $row->name,
+            'total' => (int) $row->total,
+            'counts' => [
+                'current' => (int) $row->current,
+                'expired' => (int) $row->expired,
+            ],
+        ];
+
+        if ($all = $this->allRows($query, $opts, $shape)) {
+            return $all;
+        }
+
         $perPage = max(1, min(100, (int) ($opts['per_page'] ?? 25)));
         $page = max(1, (int) ($opts['page'] ?? 1));
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
         return [
-            'data' => collect($paginator->items())->map(fn ($row) => [
-                'id' => $row->id,
-                'name' => $row->name,
-                'total' => (int) $row->total,
-                'counts' => [
-                    'current' => (int) $row->current,
-                    'expired' => (int) $row->expired,
-                ],
-            ])->all(),
+            'data' => collect($paginator->items())->map($shape)->all(),
             'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),
@@ -633,6 +640,39 @@ class ComplianceQuery
      * @param  array<string, mixed>  $opts
      * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>}
      */
+    /**
+     * The un-paged escape hatch, used only by the PDF exports.
+     *
+     * The screen pages at <=100; a printed sheet that inherited that would
+     * silently show the first page and look complete. Opt in with
+     * `['all' => true]` and rows come back capped at TableReport::ROW_CAP + 1,
+     * so the caller can tell "capped" from "that was everything" — the same
+     * contract the other exports use.
+     *
+     * Returns null when not opted in, so the paginated path stays the default.
+     *
+     * @param  array<string, mixed>  $opts
+     * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>}|null
+     */
+    private function allRows(Builder $query, array $opts, callable $shape): ?array
+    {
+        if (($opts['all'] ?? false) !== true) {
+            return null;
+        }
+
+        $rows = collect($query->limit(TableReport::ROW_CAP + 1)->get())->map($shape);
+
+        return [
+            'data' => $rows->take(TableReport::ROW_CAP)->values()->all(),
+            'meta' => [
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => TableReport::ROW_CAP,
+                'total' => $rows->count(),
+            ],
+        ];
+    }
+
     private function aggregate(Builder $base, string $idCol, string $nameCol, array $opts, string $statusCol = 'ta.status'): array
     {
         $buckets = <<<SQL
@@ -654,23 +694,29 @@ class ComplianceQuery
         // stable, page-consistent ordering.
         $query->orderByRaw("{$sort} {$dir}")->orderBy('name');
 
+        $shape = fn ($row) => [
+            'id' => $row->id,
+            'name' => $row->name,
+            'total' => (int) $row->total,
+            'counts' => [
+                'overdue' => (int) $row->overdue,
+                'due_soon' => (int) $row->due_soon,
+                'not_started' => (int) $row->not_started,
+                'current' => (int) $row->current,
+                'as_needed' => (int) $row->as_needed,
+            ],
+        ];
+
+        if ($all = $this->allRows($query, $opts, $shape)) {
+            return $all;
+        }
+
         $perPage = max(1, min(100, (int) ($opts['per_page'] ?? 25)));
         $page = max(1, (int) ($opts['page'] ?? 1));
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
         return [
-            'data' => collect($paginator->items())->map(fn ($row) => [
-                'id' => $row->id,
-                'name' => $row->name,
-                'total' => (int) $row->total,
-                'counts' => [
-                    'overdue' => (int) $row->overdue,
-                    'due_soon' => (int) $row->due_soon,
-                    'not_started' => (int) $row->not_started,
-                    'current' => (int) $row->current,
-                    'as_needed' => (int) $row->as_needed,
-                ],
-            ])->all(),
+            'data' => collect($paginator->items())->map($shape)->all(),
             'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),

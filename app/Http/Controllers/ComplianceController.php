@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Requirement;
 use App\Models\Training;
 use App\Services\ComplianceQuery;
+use App\Support\CsvExport;
+use App\Support\TableReport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Spatie\LaravelPdf\PdfBuilder;
 
 /**
  * Org-wide compliance roll-ups, pivoted by training or requirement. Manager+
@@ -90,6 +93,96 @@ class ComplianceController extends Controller
 
         return response()->json(
             $this->compliance->notRequired($request->user()->organization, $this->opts($request)),
+        );
+    }
+
+    /**
+     * The three roll-up tabs, each with the title, the query it runs, and the
+     * bucket columns it actually has. "Not required" counts Current/Expired
+     * only — giving it the five-bucket catalog would print three permanently
+     * empty columns.
+     */
+    private const EXPORT_DIMENSIONS = [
+        'training' => [
+            'title' => 'Compliance — by training',
+            'method' => 'byTraining',
+            'columns' => [
+                'name' => 'Training',
+                'overdue' => 'Overdue',
+                'due_soon' => 'Due soon',
+                'not_started' => 'Not started',
+                'current' => 'Current',
+                'as_needed' => 'As needed',
+                'total' => 'Total',
+            ],
+        ],
+        'requirement' => [
+            'title' => 'Compliance — by requirement',
+            'method' => 'byRequirement',
+            'columns' => [
+                'name' => 'Requirement',
+                'overdue' => 'Overdue',
+                'due_soon' => 'Due soon',
+                'not_started' => 'Not started',
+                'current' => 'Current',
+                'as_needed' => 'As needed',
+                'total' => 'Total',
+            ],
+        ],
+        'not-required' => [
+            'title' => 'Compliance — not required',
+            'method' => 'notRequired',
+            'columns' => [
+                'name' => 'Training',
+                'current' => 'Current',
+                'expired' => 'Expired',
+                'total' => 'Taken',
+            ],
+        ],
+    ];
+
+    /**
+     * A compliance roll-up tab as a PDF.
+     *
+     * Runs the tab's own ComplianceQuery method (with `all`, so the sheet isn't
+     * one page of results pretending to be the whole set) and flattens the
+     * nested bucket counts — the screen reads `counts.overdue`, `pdf.report`
+     * reads a flat `overdue`.
+     */
+    public function export(Request $request): PdfBuilder
+    {
+        $this->authorizeManager($request);
+
+        $key = (string) $request->query('dimension', 'training');
+        abort_unless(isset(self::EXPORT_DIMENSIONS[$key]), 422, 'Unknown compliance dimension.');
+
+        $dimension = self::EXPORT_DIMENSIONS[$key];
+        $org = $request->user()->organization;
+
+        $result = $this->compliance->{$dimension['method']}(
+            $org,
+            [...$this->opts($request), 'all' => true],
+        );
+
+        $rows = array_map(
+            // Flatten counts up to the top level; the blade indexes rows by
+            // column key and would print a blank cell for every bucket.
+            fn (array $row) => [
+                'name' => $row['name'],
+                'total' => $row['total'],
+                ...$row['counts'],
+            ],
+            $result['data'],
+        );
+
+        return TableReport::render(
+            org: $org,
+            title: $dimension['title'],
+            columns: CsvExport::columns($request, $dimension['columns']),
+            rows: $rows,
+            filename: 'compliance-'.$key.'-'.now(config('app.display_timezone'))->format('Y-m-d').'.pdf',
+            filters: $request->filled('q') ? 'Search: '.$request->query('q') : null,
+            capped: count($result['data']) >= TableReport::ROW_CAP,
         );
     }
 

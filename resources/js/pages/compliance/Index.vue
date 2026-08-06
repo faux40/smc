@@ -9,7 +9,6 @@ import { Head } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
-import type { ServerTableQuery } from '@/composables/useServerTable';
 import ComplianceRollupTable from '@/pages/compliance/Partials/ComplianceRollupTable.vue';
 import { useComplianceStore } from '@/stores/compliance';
 
@@ -44,6 +43,7 @@ const CONFIGS = {
         rowHref: (id: string) => `/compliance/training/${id}`,
         countColumns: undefined as CountColumn[] | undefined,
         initialSort: undefined as string | undefined,
+        exportDimension: 'training' as const,
     },
     requirement: {
         viewId: 'compliance-requirement',
@@ -53,6 +53,7 @@ const CONFIGS = {
         rowHref: (id: string) => `/compliance/requirement/${id}`,
         countColumns: undefined as CountColumn[] | undefined,
         initialSort: undefined as string | undefined,
+        exportDimension: 'requirement' as const,
     },
     // Not-required: people who took a training without being required to — only
     // two states matter, Current vs Taken-but-Expired.
@@ -67,6 +68,7 @@ const CONFIGS = {
             { key: 'expired', label: 'Taken but Expired' },
         ] as CountColumn[] | undefined,
         initialSort: 'expired' as string | undefined,
+        exportDimension: 'not-required' as const,
     },
 };
 
@@ -112,6 +114,7 @@ const activeConfig = computed(() => CONFIGS[tab.value]);
             :row-href="activeConfig.rowHref"
             :count-columns="activeConfig.countColumns"
             :initial-sort="activeConfig.initialSort"
+            :export-dimension="activeConfig.exportDimension"
         />
     </div>
 </template>

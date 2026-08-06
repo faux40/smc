@@ -6,6 +6,7 @@
  * come straight off the materialized status.
  */
 import { Link } from '@inertiajs/vue3';
+import { Printer } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
 import DataTable from '@/components/DataTable.vue';
@@ -18,6 +19,7 @@ import type {
     ServerTableQuery,
     ServerTableResponse,
 } from '@/composables/useServerTable';
+import { useTableView } from '@/composables/useTableView';
 import ComplianceDrilldown from '@/pages/compliance/Partials/ComplianceDrilldown.vue';
 import type { ComplianceRow, ComplianceUserRow } from '@/stores/compliance';
 
@@ -41,6 +43,9 @@ const props = defineProps<{
     // the not-required tab passes Current / Taken-but-Expired).
     countColumns?: Array<{ key: string; label: string }>;
     initialSort?: string;
+    // Which roll-up this table is: one export endpoint serves all three tabs,
+    // so this is what makes a printed sheet the *right* sheet.
+    exportDimension: 'training' | 'requirement' | 'not-required';
 }>();
 
 const DEFAULT_COUNT_COLUMNS = [
@@ -82,6 +87,32 @@ function onSearch(value: string | number): void {
     table.setQuery(search.value);
 }
 
+/**
+ * Print link. DataTable owns the column picker internally, so this mirrors it
+ * against the same view id to read what is visible — otherwise the sheet would
+ * print columns that were hidden on screen.
+ */
+const exportView = useTableView(props.viewId, COLUMNS.value);
+
+const exportHref = computed(() => {
+    const params = new URLSearchParams({ dimension: props.exportDimension });
+
+    if (search.value) {
+        params.set('q', search.value);
+    }
+
+    if (table.sort.value) {
+        params.set('sort', table.sort.value);
+        params.set('dir', table.dir.value);
+    }
+
+    for (const col of exportView.visibleColumns.value) {
+        params.append('columns[]', col.key);
+    }
+
+    return `/api/compliance/export?${params.toString()}`;
+});
+
 onMounted(async () => {
     try {
         await table.fetchPage();
@@ -115,6 +146,17 @@ onMounted(async () => {
                         @update:model-value="onSearch"
                     />
                 </div>
+                <a
+                    :href="exportHref"
+                    target="_blank"
+                    rel="noopener"
+                    data-testid="export-compliance"
+                    class="inline-flex h-8 items-center gap-1.5 self-end rounded-md border border-input px-2 text-xs hover:bg-muted"
+                    title="Print this roll-up with the search, sort and columns shown"
+                >
+                    <Printer class="h-3.5 w-3.5" />
+                    Print
+                </a>
             </template>
 
             <template #col-name="{ row }">
