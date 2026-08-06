@@ -413,6 +413,7 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
                 'default_trainer' => $training->default_trainer,
                 'default_location' => $training->default_location,
                 'default_address' => $training->default_address,
+                'superseded_by_id' => $training->superseded_by_id,
             ],
             // TagsField is mounted on the page; hydrate it with the current
             // attachments so it doesn't need a follow-up fetch. Classes also

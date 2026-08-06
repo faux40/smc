@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 import CertEditor from '@/components/CertEditor.vue';
 import InputError from '@/components/InputError.vue';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,6 +17,7 @@ import type { TrainingFormState } from '@/lib/trainingForm';
 import { useCardStocksStore } from '@/stores/cardStocks';
 import { useCardTemplatesStore } from '@/stores/cardTemplates';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
+import { useTrainingsStore } from '@/stores/trainings';
 
 /**
  * The shared editable fields for a training, used by both the create modal
@@ -25,12 +26,60 @@ import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
  * error store under `context`.
  */
 const form = defineModel<TrainingFormState>({ required: true });
-const props = defineProps<{ context: string }>();
+const props = defineProps<{
+    context: string;
+    /**
+     * The training being edited, when editing. The Satisfied-by picker uses
+     * it to exclude the training itself and anything whose chain runs through
+     * it — options that would loop the ladder. Absent on create, where no
+     * loop is possible yet.
+     */
+    selfId?: string | null;
+}>();
 
 const frequencies = useStdFrequenciesStore();
 const cardTemplates = useCardTemplatesStore();
 const cardStocks = useCardStocksStore();
+const trainings = useTrainingsStore();
 const fieldErrors = useFieldErrors(props.context);
+
+/**
+ * Library options for the Satisfied-by picker, minus self and minus every
+ * training that (transitively) points AT self — the server refuses those as
+ * cycles, so offering them would only manufacture a validation error.
+ * Cycle-safe by visited-set, like the server walk it mirrors.
+ */
+const supersededByOptions = computed(() => {
+    if (!props.selfId) {
+        return trainings.library;
+    }
+
+    const parentOf = new Map(
+        trainings.library.map((t) => [t.id, t.superseded_by_id]),
+    );
+
+    const chainsThroughSelf = (id: string): boolean => {
+        const seen = new Set<string>();
+        let current: string | null | undefined = id;
+
+        while (current != null && !seen.has(current)) {
+            if (current === props.selfId) {
+                return true;
+            }
+
+            seen.add(current);
+            current = parentOf.get(current);
+        }
+
+        return false;
+    };
+
+    return trainings.library.filter((t) => !chainsThroughSelf(t.id));
+});
+
+function chooseSupersededBy(value: string): void {
+    form.value.superseded_by_id = value === '' ? null : value;
+}
 
 onMounted(async () => {
     if (!frequencies.loaded) {
@@ -54,6 +103,14 @@ onMounted(async () => {
             await cardStocks.load();
         } catch {
             // Non-fatal — the picker will be empty.
+        }
+    }
+
+    if (!trainings.loaded) {
+        try {
+            await trainings.load();
+        } catch {
+            // Non-fatal — the Satisfied-by picker will be empty.
         }
     }
 });
@@ -190,6 +247,36 @@ watch(
                     placeholder="e.g. FPAP"
                 />
                 <InputError :message="fieldErrors.message('cert_code')" />
+            </div>
+
+            <div class="grid gap-2">
+                <Label for="t_superseded_by">Satisfied by (higher training)</Label>
+                <select
+                    id="t_superseded_by"
+                    class="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    :value="form.superseded_by_id ?? ''"
+                    @change="
+                        chooseSupersededBy(
+                            ($event.target as HTMLSelectElement).value,
+                        )
+                    "
+                >
+                    <option value="">None</option>
+                    <option
+                        v-for="t in supersededByOptions"
+                        :key="t.id"
+                        :value="t.id"
+                    >
+                        {{ t.name }}
+                    </option>
+                </select>
+                <p class="text-xs text-muted-foreground">
+                    A person holding a current credential for that training also
+                    counts as satisfying this one (their certificate stays the
+                    higher one). Chains upward: if that training names its own
+                    higher level, it counts here too.
+                </p>
+                <InputError :message="fieldErrors.message('superseded_by_id')" />
             </div>
 
             <div class="grid gap-2">

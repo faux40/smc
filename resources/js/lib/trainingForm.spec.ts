@@ -26,6 +26,7 @@ function source(
         default_trainer: null,
         default_location: null,
         default_address: null,
+        superseded_by_id: null,
         ...overrides,
     };
 }
@@ -70,5 +71,25 @@ describe('trainingForm — default card stock', () => {
         form.card_stock_id = null;
 
         expect(trainingFormPayload(form).card_stock_id).toBeNull();
+    });
+});
+
+describe('trainingForm — hierarchy pointer', () => {
+    it('starts with no higher training', () => {
+        expect(blankTrainingForm().superseded_by_id).toBeNull();
+    });
+
+    it('round-trips the pointer through the form', () => {
+        const form = trainingToForm(source({ superseded_by_id: 'tr-9' }));
+
+        expect(form.superseded_by_id).toBe('tr-9');
+        expect(trainingFormPayload(form).superseded_by_id).toBe('tr-9');
+    });
+
+    it('sends null when the pointer is cleared', () => {
+        const form = trainingToForm(source({ superseded_by_id: 'tr-9' }));
+        form.superseded_by_id = null;
+
+        expect(trainingFormPayload(form).superseded_by_id).toBeNull();
     });
 });

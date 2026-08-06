@@ -39,6 +39,8 @@ export interface TrainingRow {
     default_trainer: string | null;
     default_location: string | null;
     default_address: string | null;
+    /** The higher training whose credential satisfies this one; null = none. */
+    superseded_by_id: string | null;
     can_edit: boolean;
     can_delete: boolean;
 }
@@ -60,6 +62,7 @@ export interface TrainingFormPayload {
     default_trainer: string | null;
     default_location: string | null;
     default_address: string | null;
+    superseded_by_id: string | null;
 }
 
 function defaultHeaders(): Record<string, string> {

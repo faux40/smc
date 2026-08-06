@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\RecalculateTrainingStatus;
 use App\Events\TrainingCreated;
 use App\Events\TrainingDeleted;
 use App\Events\TrainingUpdated;
 use App\Http\Requests\TrainingRequest;
 use App\Models\Training;
+use App\Models\TrainingAssignment;
+use App\Support\RecalcContext;
+use App\Support\TrainingLadder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -91,6 +95,9 @@ class TrainingsController extends Controller
             'std_freq_repeat_days' => $t->stdFrequency?->repeat_days,
             'as_needed' => $t->as_needed,
             'default_hours' => $t->default_hours,
+            // Hierarchy pointer — the picker needs it to exclude options that
+            // would loop, and pills resolve "via" names from it.
+            'superseded_by_id' => $t->superseded_by_id,
             ...$this->certOutput($t),
             'can_edit' => Gate::check('update', $t),
             'can_delete' => Gate::check('delete', $t),
@@ -113,6 +120,7 @@ class TrainingsController extends Controller
             // Null when not repeating; the validator already required it when repeating=true.
             'std_freq_id' => ((bool) $data['repeating']) ? $data['std_freq_id'] : null,
             'as_needed' => (bool) $data['as_needed'],
+            'superseded_by_id' => $data['superseded_by_id'] ?? null,
             ...$this->certPayload($data),
         ]);
 
@@ -135,12 +143,45 @@ class TrainingsController extends Controller
             'repeating' => (bool) $data['repeating'],
             'std_freq_id' => ((bool) $data['repeating']) ? $data['std_freq_id'] : null,
             'as_needed' => (bool) $data['as_needed'],
+            'superseded_by_id' => $data['superseded_by_id'] ?? null,
             ...$this->certPayload($data),
         ]);
+
+        if ($training->wasChanged('superseded_by_id')) {
+            $this->resyncHierarchy($training);
+        }
 
         event(new TrainingUpdated($training->fresh()));
 
         return response()->json($this->serialize($training->fresh()));
+    }
+
+    /**
+     * Re-pointing a ladder changes which credentials satisfy this training —
+     * and everything below it, since descendants chain through here. Resync
+     * those assignments now: the admin wiring the hierarchy is looking at the
+     * compliance page, not waiting for the nightly watchdog.
+     */
+    private function resyncHierarchy(Training $training): void
+    {
+        $ladder = TrainingLadder::forOrg($training->org_id);
+        $affected = $ladder->descendantsOf($training->id)->push($training->id);
+
+        $pairs = TrainingAssignment::where('org_id', $training->org_id)
+            ->whereIn('training_id', $affected)
+            ->select(['user_id', 'training_id'])
+            ->distinct()
+            ->get()
+            ->map(fn ($p) => ['user_id' => $p->user_id, 'training_id' => $p->training_id]);
+
+        if ($pairs->isEmpty()) {
+            return;
+        }
+
+        app(RecalculateTrainingStatus::class)->handleMany(
+            $pairs,
+            RecalcContext::forOrg($training->org_id, $pairs->pluck('training_id')),
+        );
     }
 
     public function destroy(Training $training): JsonResponse
@@ -168,6 +209,9 @@ class TrainingsController extends Controller
             'std_freq_id' => $t->std_freq_id,
             'as_needed' => $t->as_needed,
             'default_hours' => $t->default_hours,
+            // Hierarchy: the higher training whose credential satisfies this
+            // one. The picker resolves the name from the library list.
+            'superseded_by_id' => $t->superseded_by_id,
             ...$this->certOutput($t),
         ];
     }

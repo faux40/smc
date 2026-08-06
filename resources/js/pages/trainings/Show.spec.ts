@@ -7,6 +7,7 @@ import TagsField from '@/components/TagsField.vue';
 import type { TrainingFormSource } from '@/lib/trainingForm';
 import CardFieldsEditor from '@/pages/trainings/Partials/CardFieldsEditor.vue';
 import Show from '@/pages/trainings/Show.vue';
+import { useTrainingsStore } from '@/stores/trainings';
 
 const visit = vi.fn();
 const { authUser } = vi.hoisted(() => ({
@@ -40,6 +41,7 @@ const training: TrainingFormSource & { id: string } = {
     default_trainer: null,
     default_location: null,
     default_address: null,
+    superseded_by_id: null,
 };
 
 describe('trainings/Show', () => {
@@ -120,6 +122,55 @@ describe('trainings/Show', () => {
         const editor = wrapper.findComponent(CardFieldsEditor);
         expect(editor.exists()).toBe(true);
         expect(editor.props('trainingId')).toBe('t1');
+    });
+
+    it('offers a Satisfied-by picker that excludes this training and its dependants', async () => {
+        // Options come from the library. The training itself is out (nothing
+        // satisfies itself), and so is anything whose chain already runs
+        // THROUGH this training — picking one would loop the ladder. Here
+        // t-below points at t1, so both are excluded; t-free is offered.
+        const trainings = useTrainingsStore();
+        trainings.loaded = true;
+        trainings.library = [
+            { id: 't1', name: 'Authorized', superseded_by_id: null },
+            { id: 't-below', name: 'Awareness', superseded_by_id: 't1' },
+            { id: 't-free', name: 'Competent', superseded_by_id: null },
+        ] as (typeof trainings)['library'];
+
+        const wrapper = mount(Show, { props: { training } });
+        await flushPromises();
+
+        const options = wrapper
+            .get('#t_superseded_by')
+            .findAll('option')
+            .map((o) => o.text());
+        expect(options).toContain('Competent');
+        expect(options).not.toContain('Authorized');
+        expect(options).not.toContain('Awareness');
+    });
+
+    it('saves the chosen higher training on the PATCH payload', async () => {
+        const trainings = useTrainingsStore();
+        trainings.loaded = true;
+        trainings.library = [
+            { id: 't-free', name: 'Competent', superseded_by_id: null },
+        ] as (typeof trainings)['library'];
+        (axios.patch as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { ...training, superseded_by_id: 't-free' },
+        });
+
+        const wrapper = mount(Show, { props: { training } });
+        await flushPromises();
+
+        await wrapper.get('#t_superseded_by').setValue('t-free');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+
+        expect(axios.patch).toHaveBeenCalledWith(
+            '/api/trainings/t1',
+            expect.objectContaining({ superseded_by_id: 't-free' }),
+            expect.anything(),
+        );
     });
 
     it('mounts TagsField for this training, hydrated from the page prop', async () => {

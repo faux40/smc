@@ -126,7 +126,11 @@ const confirmDelete = async () => {
             class="max-w-5xl space-y-4"
             @submit.prevent="save"
         >
-            <TrainingFields v-model="form" :context="FORM_CTX" />
+            <TrainingFields
+                v-model="form"
+                :context="FORM_CTX"
+                :self-id="training.id"
+            />
 
             <div
                 class="flex items-center justify-between border-t border-border pt-4"

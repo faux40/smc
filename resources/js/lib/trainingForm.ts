@@ -32,6 +32,8 @@ export interface TrainingFormSource {
     default_trainer: string | null;
     default_location: string | null;
     default_address: string | null;
+    /** The higher training whose credential satisfies this one; null = none. */
+    superseded_by_id: string | null;
 }
 
 export interface TrainingFormState {
@@ -53,6 +55,8 @@ export interface TrainingFormState {
     default_trainer: string;
     default_location: string;
     default_address: string;
+    /** The higher training whose credential satisfies this one; null = none. */
+    superseded_by_id: string | null;
 }
 
 export function blankTrainingForm(): TrainingFormState {
@@ -73,6 +77,7 @@ export function blankTrainingForm(): TrainingFormState {
         default_trainer: '',
         default_location: '',
         default_address: '',
+        superseded_by_id: null,
     };
 }
 
@@ -95,6 +100,7 @@ export function trainingToForm(t: TrainingFormSource): TrainingFormState {
         default_trainer: t.default_trainer ?? '',
         default_location: t.default_location ?? '',
         default_address: t.default_address ?? '',
+        superseded_by_id: t.superseded_by_id,
     };
 }
 
@@ -121,5 +127,6 @@ export function trainingFormPayload(
         default_trainer: blank(form.default_trainer),
         default_location: blank(form.default_location),
         default_address: blank(form.default_address),
+        superseded_by_id: form.superseded_by_id,
     };
 }

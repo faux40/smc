@@ -52,6 +52,7 @@ function training(over: Partial<TrainingRow>): TrainingRow {
         default_trainer: null,
         default_location: null,
         default_address: null,
+        superseded_by_id: null,
         can_edit: true,
         can_delete: true,
         ...over,
