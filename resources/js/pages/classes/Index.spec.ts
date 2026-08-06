@@ -282,4 +282,32 @@ describe('classes/Index — server-paged table', () => {
             expect(buttons[1].attributes('aria-label')).toContain('summary');
         });
     });
+    describe('export link', () => {
+        const href = (w: Awaited<ReturnType<typeof mountPage>>) =>
+            w.get('[data-testid="export-classes"]').attributes('href');
+
+        it('carries the search and sort the table is showing', async () => {
+            const wrapper = await mountPage();
+
+            const link = href(wrapper)!;
+            expect(link).toContain('/api/classes/export');
+            expect(link).toContain('sort=scheduled_date');
+            expect(link).toContain('dir=desc');
+        });
+
+        it('carries the visible columns so the sheet matches the table', async () => {
+            // DataTable owns the column picker internally, so the page has to
+            // mirror it — otherwise the export silently prints every column
+            // regardless of what was hidden on screen.
+            const wrapper = await mountPage();
+
+            expect(href(wrapper)).toContain('columns%5B%5D=name');
+        });
+
+        it('omits the search when the box is empty', async () => {
+            const wrapper = await mountPage();
+
+            expect(href(wrapper)).not.toContain('q=');
+        });
+    });
 });

@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useGeneratedDoc } from '@/composables/useGeneratedDoc';
 import { useServerTable } from '@/composables/useServerTable';
+import { useTableView } from '@/composables/useTableView';
+import type { ColumnDef } from '@/composables/useTableView';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import { page as classesPage, showPage } from '@/routes/classes';
 import { useClassesStore } from '@/stores/classes';
@@ -52,7 +54,7 @@ function printRow(row: ClassRow): void {
     );
 }
 
-const CLASSES_COLUMNS = [
+const CLASSES_COLUMNS: ColumnDef[] = [
     { key: 'name', label: 'Name', sortable: true },
     { key: 'instructor', label: 'Instructor', sortable: true },
     { key: 'date', label: 'Date', sortable: true },
@@ -135,6 +137,33 @@ function onSearch(value: string | number): void {
     table.setQuery(search.value);
 }
 
+/**
+ * Export link. DataTable owns the column picker internally, so the page runs a
+ * second useTableView against the same view id purely to read what is visible
+ * — without it the sheet would print every column regardless of what was
+ * hidden on screen. Same mirror the Reports exports use.
+ */
+const exportView = useTableView('classes', CLASSES_COLUMNS);
+
+const exportHref = computed(() => {
+    const params = new URLSearchParams();
+
+    if (search.value) {
+        params.set('q', search.value);
+    }
+
+    if (table.sort.value) {
+        params.set('sort', table.sort.value);
+        params.set('dir', table.dir.value);
+    }
+
+    for (const col of exportView.visibleColumns.value) {
+        params.append('columns[]', col.key);
+    }
+
+    return `/api/classes/export?${params.toString()}`;
+});
+
 // Realtime: a ClassChanged broadcast just re-pulls the current page.
 watch(
     () => store.revision,
@@ -169,9 +198,22 @@ onMounted(async () => {
                 title="Classes"
                 description="Schedule a class, attach trainings, and enroll users. Close it out to record completions."
             />
-            <Button v-if="canManage" @click="modalOpen = true">
-                + New class
-            </Button>
+            <div class="flex items-center gap-2">
+                <a
+                    :href="exportHref"
+                    target="_blank"
+                    rel="noopener"
+                    data-testid="export-classes"
+                    class="inline-flex h-9 items-center gap-1.5 rounded-md border border-input px-3 text-sm hover:bg-muted"
+                    title="Print this list with the filters, sort and columns shown"
+                >
+                    <Printer class="h-4 w-4" />
+                    Print list
+                </a>
+                <Button v-if="canManage" @click="modalOpen = true">
+                    + New class
+                </Button>
+            </div>
         </div>
 
         <AsyncState

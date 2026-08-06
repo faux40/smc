@@ -274,6 +274,8 @@ Route::middleware(['auth', 'verified', 'throttle:240,1'])->group(function () {
     // backs the Pinia store; Inertia pages are thin shells.
     Route::get('api/classes', [ClassesController::class, 'index'])->name('classes.index');
     Route::post('api/classes', [ClassesController::class, 'store'])->name('classes.store');
+    // Must precede the {class} routes below — "export" is not a class id.
+    Route::get('api/classes/export', [ClassesController::class, 'export'])->name('classes.export');
     Route::get('api/classes/{class}/certificates', [ClassDocumentsController::class, 'certificates'])->name('classes.certificates');
     Route::post('api/classes/{class}/certificates', [ClassDocumentsController::class, 'storeCertificates'])->name('classes.certificates.store');
     Route::get('api/classes/{class}/sign-in-sheet', [ClassDocumentsController::class, 'signInSheet'])->name('classes.sign-in-sheet');

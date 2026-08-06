@@ -17,14 +17,20 @@ use App\Models\Completion;
 use App\Models\Training;
 use App\Models\TrainingClass;
 use App\Support\Cards\CardFieldPresenter;
+use App\Support\CsvExport;
+use App\Support\TableReport;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Spatie\LaravelPdf\PdfBuilder;
 
 /**
  * Training System — Phase A: schedule classes + manage their training list
@@ -39,6 +45,27 @@ class ClassesController extends Controller
     {
         Gate::authorize('viewAny', TrainingClass::class);
 
+        $query = $this->listQuery($request);
+
+        // Always paginated ({data, meta}); the classes Pinia store is the only
+        // consumer and drives it via useServerTable.
+        $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
+        $p = $query->paginate($perPage);
+
+        return $this->pagedResponse($p);
+    }
+
+    /**
+     * The classes list: search, optional filters, and the whitelisted sort.
+     *
+     * Shared with the PDF export so a printed sheet cannot list a different
+     * set of classes — or a different order — than the table it was printed
+     * from. Paging is the caller's business; everything above it is here.
+     *
+     * @return Builder<TrainingClass>
+     */
+    private function listQuery(Request $request)
+    {
         $query = TrainingClass::query()
             ->where('org_id', $request->user()->org_id)
             ->withCount(['classTrainings', 'enrollments']);
@@ -74,11 +101,14 @@ class ClassesController extends Controller
         $dir = $request->query('dir') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sort, $dir)->orderBy('id');
 
-        // Always paginated ({data, meta}); the classes Pinia store is the only
-        // consumer and drives it via useServerTable.
-        $perPage = max(1, min(100, (int) $request->query('per_page', 25)));
-        $p = $query->paginate($perPage);
+        return $query;
+    }
 
+    /**
+     * @param  LengthAwarePaginator<int, TrainingClass>  $p
+     */
+    private function pagedResponse($p): JsonResponse
+    {
         return response()->json([
             'data' => collect($p->items())->map(fn (TrainingClass $c) => $this->summarize($c)),
             'meta' => [
@@ -88,6 +118,75 @@ class ClassesController extends Controller
                 'total' => $p->total(),
             ],
         ]);
+    }
+
+    /**
+     * Column catalog (key → label) for the classes PDF, in default order and
+     * mirroring classes/Index.vue's CLASSES_COLUMNS. Same key→label shape the
+     * Reports catalogs use, which is what CsvExport::columns() resolves against.
+     */
+    private const EXPORT_COLUMNS = [
+        'name' => 'Name',
+        'instructor' => 'Instructor',
+        'date' => 'Date',
+        'hours' => 'Hours',
+        'location' => 'Location',
+        'trainings' => 'Trainings',
+        'enrolled' => 'Enrolled',
+        'status' => 'Status',
+    ];
+
+    /**
+     * The classes list as a PDF — the schedule on screen, on paper.
+     *
+     * Runs listQuery() so filters and sort match the table exactly; `columns[]`
+     * follows the same convention as the Reports exports.
+     */
+    public function export(Request $request): PdfBuilder
+    {
+        Gate::authorize('viewAny', TrainingClass::class);
+
+        $org = $request->user()->organization;
+
+        $all = $this->listQuery($request)->limit(TableReport::ROW_CAP + 1)->get();
+        $capped = $all->count() > TableReport::ROW_CAP;
+
+        $rows = $all->take(TableReport::ROW_CAP)->map(fn (TrainingClass $c) => [
+            'name' => $c->name,
+            'instructor' => $c->instructor ?? '—',
+            'date' => $c->scheduled_date?->toDateString() ?? '—',
+            'hours' => $c->total_hours,
+            'location' => $c->location ?? '—',
+            'trainings' => (int) ($c->class_trainings_count ?? 0),
+            'enrolled' => (int) ($c->enrollments_count ?? 0),
+            'status' => Str::ucfirst((string) $c->status),
+        ])->values()->all();
+
+        return TableReport::render(
+            org: $org,
+            title: 'Classes',
+            columns: CsvExport::columns($request, self::EXPORT_COLUMNS),
+            rows: $rows,
+            filename: 'classes-'.now(config('app.display_timezone'))->format('Y-m-d').'.pdf',
+            filters: $this->exportFilterSummary($request),
+            capped: $capped,
+        );
+    }
+
+    /** One line naming the filters the sheet was run with. */
+    private function exportFilterSummary(Request $request): ?string
+    {
+        $parts = [];
+
+        if ($request->filled('q')) {
+            $parts[] = 'Search: '.$request->query('q');
+        }
+
+        if ($request->filled('status')) {
+            $parts[] = 'Status: '.Str::ucfirst((string) $request->query('status'));
+        }
+
+        return $parts === [] ? null : implode(' · ', $parts);
     }
 
     public function show(TrainingClass $class): JsonResponse
