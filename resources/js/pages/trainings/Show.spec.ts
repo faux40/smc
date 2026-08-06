@@ -2,18 +2,22 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import AttachmentsList from '@/components/AttachmentsList.vue';
 import TagsField from '@/components/TagsField.vue';
 import type { TrainingFormSource } from '@/lib/trainingForm';
 import CardFieldsEditor from '@/pages/trainings/Partials/CardFieldsEditor.vue';
 import Show from '@/pages/trainings/Show.vue';
 
 const visit = vi.fn();
+const { authUser } = vi.hoisted(() => ({
+    authUser: { value: { isAdmin: true } as Record<string, unknown> },
+}));
 
 vi.mock('axios');
 vi.mock('@inertiajs/vue3', () => ({
     Head: { template: '<div><slot /></div>' },
     Link: { template: '<a :href="href"><slot /></a>', props: ['href'] },
-    usePage: () => ({ props: { auth: { user: { isAdmin: true } } } }),
+    usePage: () => ({ props: { auth: { user: authUser.value } } }),
     router: { visit: (...args: unknown[]) => visit(...args) },
 }));
 vi.mock('@/routes/trainings', () => ({ page: () => ({ url: '/trainings' }) }));
@@ -44,6 +48,7 @@ describe('trainings/Show', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        authUser.value = { isAdmin: true };
         document.body.innerHTML = '';
         // std-frequencies load (TrainingFields onMounted) + any GET.
         (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
@@ -131,6 +136,27 @@ describe('trainings/Show', () => {
         expect(field.props('morphableType')).toBe('App\\Models\\Training');
         expect(field.props('morphableId')).toBe('t1');
         expect(field.props('initialTagIds')).toEqual(['tag-1', 'tag-2']);
+    });
+
+    it('lists this training’s supporting material, uploadable by a manager', async () => {
+        const wrapper = mount(Show, { props: { training } });
+        await flushPromises();
+
+        const files = wrapper.findComponent(AttachmentsList);
+        expect(files.exists()).toBe(true);
+        expect(files.props('morphableType')).toBe('App\\Models\\Training');
+        expect(files.props('morphableId')).toBe('t1');
+        expect(files.props('canUpload')).toBe(true);
+    });
+
+    it('shows the material read-only to someone who cannot manage the training', async () => {
+        authUser.value = { isAdmin: false };
+        const wrapper = mount(Show, { props: { training } });
+        await flushPromises();
+
+        const files = wrapper.findComponent(AttachmentsList);
+        expect(files.exists()).toBe(true);
+        expect(files.props('canUpload')).toBe(false);
     });
 
     it('defaults tagIds to empty rather than passing undefined through', async () => {

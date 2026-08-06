@@ -42,7 +42,7 @@ class AttachmentsController extends Controller
      * — not the client-declared one. Deliberately excludes anything
      * script-capable (notably SVG, which can carry inline <script>).
      */
-    private const ALLOWED_UPLOAD_EXTENSIONS = 'pdf,png,jpg,jpeg,gif,webp,doc,docx,xls,xlsx,txt';
+    private const ALLOWED_UPLOAD_EXTENSIONS = 'pdf,png,jpg,jpeg,gif,webp,doc,docx,xls,xlsx,ppt,pptx,odt,ods,odp,txt';
 
     /**
      * MIME types safe to render inline in the browser (raster images + PDF).
@@ -121,7 +121,8 @@ class AttachmentsController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $this->authorizeSameOrgMorphable($data['attachable_type'], $data['attachable_id']);
+        $morphable = $this->authorizeSameOrgMorphable($data['attachable_type'], $data['attachable_id']);
+        Gate::authorize('create', [Attachment::class, $morphable]);
 
         $file = $request->file('file');
         // Generate a UUID-keyed path so original filenames don't collide.
@@ -291,11 +292,13 @@ class AttachmentsController extends Controller
         return $name !== '' ? $name : 'download';
     }
 
-    private function authorizeSameOrgMorphable(string $type, string $id): void
+    private function authorizeSameOrgMorphable(string $type, string $id): Model
     {
         /** @var class-string<Model> $type */
         $morphable = $type::query()->withoutGlobalScope('organization')->find($id);
         abort_if($morphable === null, 404, 'Attachable not found.');
         abort_unless($morphable->org_id === Auth::user()->org_id, 403);
+
+        return $morphable;
     }
 }

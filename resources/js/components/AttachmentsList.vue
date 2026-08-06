@@ -29,10 +29,21 @@ import {
 import { useAttachmentsStore } from '@/stores/attachments';
 import type { AttachmentRow } from '@/stores/attachments';
 
-const props = defineProps<{
-    morphableType: string;
-    morphableId: string | number;
-}>();
+const props = withDefaults(
+    defineProps<{
+        morphableType: string;
+        morphableId: string | number;
+        /**
+         * Whether the viewer may add files. Defaults true because for most
+         * parents uploading is open to any org member; a host whose parent is
+         * role-managed (a Training) passes false, and the list still renders
+         * read-only. The server re-checks either way — this only removes an
+         * affordance that would 403.
+         */
+        canUpload?: boolean;
+    }>(),
+    { canUpload: true },
+);
 
 const store = useAttachmentsStore();
 const page = usePage();
@@ -129,7 +140,9 @@ const formatSize = (bytes: number | null): string => {
         </p>
 
         <div class="flex items-center gap-3">
-            <Button @click="uploadOpen = true">Upload files</Button>
+            <Button v-if="props.canUpload" @click="uploadOpen = true">
+                Upload files
+            </Button>
             <span
                 v-if="attachments.length === 0"
                 class="text-sm text-muted-foreground"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import AttachmentsList from '@/components/AttachmentsList.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Heading from '@/components/Heading.vue';
 import TagsField from '@/components/TagsField.vue';
@@ -146,6 +147,21 @@ const confirmDelete = async () => {
         <p v-else class="text-sm text-muted-foreground">
             You don't have permission to edit this training.
         </p>
+
+        <!--
+            Supporting material: the deck, handouts, checklists, test forms.
+            Listed for everyone — an instructor needs the handouts — but only
+            managers may add or retitle them, matching who owns the training
+            library itself. The server enforces the same rule.
+        -->
+        <div class="max-w-5xl space-y-2">
+            <h2 class="text-sm font-semibold">Files</h2>
+            <AttachmentsList
+                morphable-type="App\Models\Training"
+                :morphable-id="training.id"
+                :can-upload="canManage"
+            />
+        </div>
 
         <!--
             Not gated on canManage: tags are descriptive, not access-control,

@@ -26,7 +26,7 @@ import { useAttachmentsStore } from '@/stores/attachments';
 // only (the file picker filter); the server is the source of truth and
 // re-validates by sniffed content, not extension.
 const ACCEPT_EXTENSIONS =
-    '.pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.txt';
+    '.pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.txt';
 
 const props = defineProps<{
     open: boolean;

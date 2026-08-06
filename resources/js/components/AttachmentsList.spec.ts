@@ -123,4 +123,37 @@ describe('AttachmentsList', () => {
             expect.anything(),
         );
     });
+
+    it('offers Upload by default, so existing hosts are unchanged', async () => {
+        const wrapper = await mountList();
+
+        expect(
+            wrapper.findAll('button').some((b) => b.text() === 'Upload files'),
+        ).toBe(true);
+        wrapper.unmount();
+    });
+
+    it('hides Upload when the host says the viewer may not add files', async () => {
+        // A training's material is Owner/SA/Admin managed while reading stays
+        // open, so the list has to render without its upload affordance.
+        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: [pdfRow],
+        });
+        const wrapper = mount(AttachmentsList, {
+            props: {
+                morphableType: 'App\\Models\\Training',
+                morphableId: 't1',
+                canUpload: false,
+            },
+            attachTo: document.body,
+        });
+        await flushPromises();
+
+        expect(
+            wrapper.findAll('button').some((b) => b.text() === 'Upload files'),
+        ).toBe(false);
+        // ...but the files themselves are still listed.
+        expect(wrapper.text()).toContain('handout.pdf');
+        wrapper.unmount();
+    });
 });
