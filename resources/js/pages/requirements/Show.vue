@@ -142,10 +142,16 @@ const boundTrainingIds = computed(
 );
 
 // Assigned (right) — keyed by element id so unassign can delete the element.
+// A diverged override shows the live training name beside it ("Old Label →
+// Fall Protection Competent Person") so a rename never strands a label the
+// way the June "Fall Protection" fossil did.
 const assignedItems = computed<ShuttleItem[]>(() =>
     elements.value.map((e) => ({
         id: e.id,
-        name: e.name,
+        name:
+            e.custom_name && e.module_name && e.custom_name !== e.module_name
+                ? `${e.name} → ${e.module_name}`
+                : e.name,
         timing: elementTimingLabel(e),
     })),
 );
@@ -174,7 +180,8 @@ async function run(fn: () => Promise<unknown>): Promise<void> {
 }
 
 // Add a training: create an element snapped from the training's template
-// (mirrors the element form's create flow).
+// (mirrors the element form's create flow). The NAME is deliberately not
+// snapped — null means "follow the training's live name" through renames.
 const assignTraining = (item: { id: string }) => {
     const t = trainings.library.find((x) => x.id === item.id);
 
@@ -186,7 +193,7 @@ const assignTraining = (item: { id: string }) => {
         store.create(props.requirement.id, {
             module_type: TRAINING_TYPE,
             module_id: t.id,
-            name: t.name,
+            name: null,
             description: t.description ?? null,
             initial_only: t.initial_only,
             repeating: t.repeating,

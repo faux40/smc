@@ -48,7 +48,9 @@ class RqmtElementRequest extends FormRequest
         $isCreate = $this->isMethod('post');
 
         $rules = [
-            'name' => ['required', 'string', 'max:255'],
+            // Optional OVERRIDE label — null/blank means "display the
+            // module's live name" (rename-safe naming).
+            'name' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'initial_only' => ['required', 'boolean'],
             'repeating' => ['required', 'boolean'],

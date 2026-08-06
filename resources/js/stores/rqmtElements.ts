@@ -17,7 +17,12 @@ export interface RqmtElementRow {
     requirement_id: string;
     module_type: string;
     module_id: string;
+    /** Effective display name: the override when set, else the module's live name. */
     name: string;
+    /** The raw override — null means the element follows the training's name. */
+    custom_name: string | null;
+    /** The module's live name, for showing a diverged override beside the real one. */
+    module_name: string | null;
     description: string | null;
     initial_only: boolean;
     repeating: boolean;
@@ -30,7 +35,8 @@ export interface RqmtElementRow {
 export interface RqmtElementCreatePayload {
     module_type: string;
     module_id: string;
-    name: string;
+    /** Override label only — null follows the training's live name. */
+    name: string | null;
     description: string | null;
     initial_only: boolean;
     repeating: boolean;

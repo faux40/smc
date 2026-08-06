@@ -13,6 +13,7 @@ use App\Models\Training;
 use App\Services\TrainingAssignmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -42,20 +43,26 @@ class RqmtElementsController extends Controller
             ->where('module_type', $data['module_type'])
             ->where('module_id', $data['module_id'])
             ->with('requirement:id,name')
-            ->orderBy('name')
             ->get();
 
-        return response()->json($rows->map(fn (RqmtElement $e) => [
-            'id' => $e->id,
-            'requirement_id' => $e->requirement_id,
-            'requirement_name' => $e->requirement?->name,
-            'name' => $e->name,
-            'description' => $e->description,
-            'initial_only' => $e->initial_only,
-            'repeating' => $e->repeating,
-            'std_freq_id' => $e->std_freq_id,
-            'as_needed' => $e->as_needed,
-        ]));
+        $names = $this->moduleNames($rows);
+
+        return response()->json($rows
+            ->map(fn (RqmtElement $e) => [
+                'id' => $e->id,
+                'requirement_id' => $e->requirement_id,
+                'requirement_name' => $e->requirement?->name,
+                'name' => $e->name ?? $names[$e->module_id] ?? null,
+                'description' => $e->description,
+                'initial_only' => $e->initial_only,
+                'repeating' => $e->repeating,
+                'std_freq_id' => $e->std_freq_id,
+                'as_needed' => $e->as_needed,
+            ])
+            // Effective names live partly outside the table now, so the
+            // former orderBy('name') would sort overrides against nulls.
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values());
     }
 
     public function index(Requirement $requirement): JsonResponse
@@ -71,12 +78,19 @@ class RqmtElementsController extends Controller
             ->orderBy('created_at')
             ->get();
 
+        $names = $this->moduleNames($rows);
+
         return response()->json($rows->map(fn (RqmtElement $e) => [
             'id' => $e->id,
             'requirement_id' => $e->requirement_id,
             'module_type' => $e->module_type,
             'module_id' => $e->module_id,
-            'name' => $e->name,
+            // Effective display name; custom_name is the raw override (null =
+            // follows the training) and module_name the live training name,
+            // so the UI can show a diverged override beside the real one.
+            'name' => $e->name ?? $names[$e->module_id] ?? null,
+            'custom_name' => $e->name,
+            'module_name' => $names[$e->module_id] ?? null,
             'description' => $e->description,
             'initial_only' => $e->initial_only,
             'repeating' => $e->repeating,
@@ -98,7 +112,8 @@ class RqmtElementsController extends Controller
             'requirement_id' => $requirement->id,
             'module_type' => $data['module_type'],
             'module_id' => $data['module_id'],
-            'name' => $data['name'],
+            // '' must not freeze the current name — only a real label overrides.
+            'name' => ($data['name'] ?? null) ?: null,
             'description' => $data['description'] ?? null,
             'initial_only' => (bool) $data['initial_only'],
             'repeating' => (bool) $data['repeating'],
@@ -111,7 +126,7 @@ class RqmtElementsController extends Controller
         return response()->json([
             'id' => $element->id,
             'requirement_id' => $element->requirement_id,
-            'name' => $element->name,
+            'name' => $element->effectiveName(),
         ], 201);
     }
 
@@ -124,7 +139,7 @@ class RqmtElementsController extends Controller
 
         $data = $request->validated();
         $rqmtElement->update([
-            'name' => $data['name'],
+            'name' => ($data['name'] ?? null) ?: null,
             'description' => $data['description'] ?? null,
             'initial_only' => (bool) $data['initial_only'],
             'repeating' => (bool) $data['repeating'],
@@ -145,7 +160,7 @@ class RqmtElementsController extends Controller
 
         return response()->json([
             'id' => $rqmtElement->id,
-            'name' => $rqmtElement->name,
+            'name' => $rqmtElement->effectiveName(),
         ]);
     }
 
@@ -170,5 +185,31 @@ class RqmtElementsController extends Controller
         event(new RqmtElementDeleted($id, $reqId, $orgId));
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Live module names keyed by module_id, one query for a whole listing.
+     * withTrashed: a soft-deleted training must degrade the label, not blank
+     * it. Trainings only today — extend per type as future modules land.
+     *
+     * @param  Collection<int, RqmtElement>  $elements
+     * @return array<string, string>
+     */
+    private function moduleNames($elements): array
+    {
+        $ids = $elements
+            ->where('module_type', Training::class)
+            ->pluck('module_id')
+            ->unique();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        return Training::query()
+            ->withTrashed()
+            ->whereIn('id', $ids)
+            ->pluck('name', 'id')
+            ->all();
     }
 }

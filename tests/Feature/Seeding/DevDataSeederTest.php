@@ -308,4 +308,34 @@ class DevDataSeederTest extends TestCase
             Requirement::query()->withoutGlobalScope('organization')->where('org_id', $org->id)->count(),
         );
     }
+
+    public function test_reseeding_after_a_training_rename_stays_idempotent(): void
+    {
+        // The sentinel used to be "a training named Fall Protection exists" —
+        // a rename of that one training (which really happened in dev, June
+        // 19) disarmed it, so a later db:seed would have duplicated the whole
+        // demo data set. The sentinel must survive any rename.
+        $org = $this->bgOrg();
+        Training::query()
+            ->withoutGlobalScope('organization')
+            ->where('org_id', $org->id)
+            ->where('name', 'Fall Protection')
+            ->firstOrFail()
+            ->update(['name' => 'Fall Protection Competent Person']);
+
+        $this->seed(DevDataSeeder::class);
+
+        $this->assertSame(
+            8,
+            Training::query()->withoutGlobalScope('organization')->where('org_id', $org->id)->count(),
+        );
+        $this->assertSame(
+            4,
+            Requirement::query()->withoutGlobalScope('organization')->where('org_id', $org->id)->count(),
+        );
+        $this->assertSame(
+            21,
+            User::query()->withoutGlobalScope('organization')->where('org_id', $org->id)->count(),
+        );
+    }
 }

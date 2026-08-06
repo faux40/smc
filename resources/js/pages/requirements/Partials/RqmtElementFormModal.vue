@@ -104,7 +104,10 @@ watch(
             const t = props.target;
             form.module_type = t.module_type;
             form.module_id = t.module_id;
-            form.name = t.name;
+            // The OVERRIDE, never the effective name — hydrating the live
+            // name here would freeze it on an untouched save, and the element
+            // would stop following the training through renames.
+            form.name = t.custom_name ?? '';
             form.description = t.description ?? '';
             form.initial_only = t.initial_only;
             form.repeating = t.repeating;
@@ -142,7 +145,8 @@ watch(
             return;
         }
 
-        form.name = t.name;
+        // Timing + description snap from the template; the name deliberately
+        // does NOT — blank follows the training's live name through renames.
         form.description = t.description ?? '';
         form.initial_only = t.initial_only;
         form.repeating = t.repeating;
@@ -161,13 +165,27 @@ watch(
     },
 );
 
+// Placeholder shows what "blank" resolves to: the training's live name.
+const namePlaceholder = computed(() => {
+    const moduleName = isEdit.value
+        ? props.target?.module_name
+        : trainings.library.find((x: TrainingRow) => x.id === form.module_id)
+              ?.name;
+
+    return moduleName
+        ? `Follows the training: ${moduleName}`
+        : "Follows the training's name";
+});
+
 const submit = async () => {
     submitting.value = true;
     errorStore.clear(FORM_CTX);
 
     try {
+        const label = form.name.trim();
         const payload = {
-            name: form.name,
+            // Blank is "no override" — the element follows the training.
+            name: label === '' ? null : label,
             description:
                 form.description.trim() === '' ? null : form.description,
             initial_only: form.initial_only,
@@ -251,7 +269,15 @@ const submit = async () => {
 
                 <div class="grid gap-2">
                     <Label for="e_name">Name</Label>
-                    <Input id="e_name" v-model="form.name" required />
+                    <Input
+                        id="e_name"
+                        v-model="form.name"
+                        :placeholder="namePlaceholder"
+                    />
+                    <p class="text-xs text-muted-foreground">
+                        Leave blank to follow the training's name — it updates
+                        automatically if the training is renamed.
+                    </p>
                     <InputError :message="fieldErrors.message('name')" />
                 </div>
 

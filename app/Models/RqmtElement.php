@@ -56,6 +56,39 @@ class RqmtElement extends Model
     }
 
     /**
+     * The name this element displays: the override when one is set, else the
+     * module's live name. `name` is a deliberate label only — attach-time
+     * snapshots were retired after a training rename stranded three elements
+     * on a name no training carried anymore.
+     */
+    public function effectiveName(): ?string
+    {
+        if ($this->name !== null && $this->name !== '') {
+            return $this->name;
+        }
+
+        return $this->moduleLiveName();
+    }
+
+    /**
+     * The module's current name, tolerant of soft-deleted trainings and of
+     * running without an authenticated user (queued broadcasts) — a dead or
+     * unscoped module must degrade the label, never blank it.
+     */
+    public function moduleLiveName(): ?string
+    {
+        if ($this->module_type === Training::class) {
+            return Training::query()
+                ->withoutGlobalScope('organization')
+                ->withTrashed()
+                ->whereKey($this->module_id)
+                ->value('name');
+        }
+
+        return $this->module?->name;
+    }
+
+    /**
      * Completions that credit this element. v15 spec moved the link to the
      * `completion_elements` pivot — a completion may credit several elements.
      */

@@ -35,7 +35,11 @@ class RqmtElementCreated implements ShouldBroadcast
             'requirement_id' => $this->element->requirement_id,
             'module_type' => $this->element->module_type,
             'module_id' => $this->element->module_id,
-            'name' => $this->element->name,
+            // Peer tabs render straight from this payload — same effective-
+            // name contract as the index endpoint.
+            'name' => $this->element->effectiveName(),
+            'custom_name' => $this->element->name,
+            'module_name' => $this->element->moduleLiveName(),
             'description' => $this->element->description,
             'initial_only' => $this->element->initial_only,
             'repeating' => $this->element->repeating,

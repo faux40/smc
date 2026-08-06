@@ -85,6 +85,9 @@ class CardMergeData
             'start_time' => self::time($class?->start_time),
             'end_time' => self::time($class?->end_time),
             'training_name' => self::str($topic->training_name),
+            // Snapshot cert_title, else the snapshot name — mirrors
+            // CertificateData so card and certificate never disagree.
+            'cert_title' => self::str($topic->cert_title ?: $topic->training_name),
             'cert_code' => self::str($topic->cert_code),
             'org_name' => self::str($class?->organization?->name),
             'today' => Carbon::now(config('app.display_timezone'))->format(self::DATE_FORMAT),

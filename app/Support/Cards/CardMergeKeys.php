@@ -49,6 +49,10 @@ class CardMergeKeys
             // The class snapshot's name, not the live training's, for the same
             // reason certificates use it: reprints must stay stable.
             'training_name',
+            // The snapshot's certificate title, falling back to the snapshot
+            // name — the same resolution CertificateData uses, so a card and
+            // a certificate for the same class always agree.
+            'cert_title',
             'cert_code',
             'hours',
         ],

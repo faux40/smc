@@ -144,13 +144,14 @@ class DevDataSeeder extends Seeder
             return;
         }
 
-        // Sentinel: if "Fall Protection" already exists in BG, the seeder
-        // has run before — skip so re-running migrate:fresh --seed (or
-        // re-running this seeder alone) stays idempotent.
+        // Sentinel: if BG has ANY training, the seeder has run before — skip
+        // so re-running migrate:fresh --seed (or this seeder alone) stays
+        // idempotent. It used to match one training by name, and a rename of
+        // that training (which really happened in dev) disarmed it — a
+        // rename-proof check or none at all.
         $alreadySeeded = Training::query()
             ->withoutGlobalScope('organization')
             ->where('org_id', $org->id)
-            ->where('name', 'Fall Protection')
             ->exists();
         if ($alreadySeeded) {
             return;

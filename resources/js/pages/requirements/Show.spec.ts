@@ -66,6 +66,8 @@ function element(over: Partial<RqmtElementRow>): RqmtElementRow {
         module_type: 'App\\Models\\Training',
         module_id: 't1',
         name: 'Fall Arrest',
+        custom_name: null,
+        module_name: 'Fall Arrest',
         description: null,
         initial_only: false,
         repeating: true,
@@ -182,7 +184,10 @@ describe('requirements/Show — inline details + training shuttle', () => {
         expect(addButtons).toHaveLength(1);
     });
 
-    it('assigns a training by creating an element with snapped timing', async () => {
+    it('assigns a training by creating an element with snapped timing but NO snapped name', async () => {
+        // The name must stay null so the element follows the training through
+        // renames — snapshotting it here is how the "Fall Protection" fossil
+        // was born.
         const { wrapper, elements } = await mountShow();
         const spy = vi.spyOn(elements, 'create').mockResolvedValue(undefined);
 
@@ -192,13 +197,38 @@ describe('requirements/Show — inline details + training shuttle', () => {
         expect(spy).toHaveBeenCalledWith('req1', {
             module_type: 'App\\Models\\Training',
             module_id: 't2',
-            name: 'Ladder Safety',
+            name: null,
             description: 'ladders',
             initial_only: false,
             repeating: true,
             std_freq_id: 'f9',
             as_needed: false,
         });
+    });
+
+    it('shows the live training name beside a diverged override', async () => {
+        const { wrapper, elements } = await mountShow();
+        elements.lists = {
+            req1: [
+                element({
+                    id: 'el1',
+                    module_id: 't1',
+                    name: 'Old Label',
+                    custom_name: 'Old Label',
+                    module_name: 'Fall Arrest',
+                }),
+            ],
+        };
+        await flushPromises();
+
+        expect(wrapper.text()).toContain('Old Label → Fall Arrest');
+    });
+
+    it('shows just the name when the element follows its training', async () => {
+        const { wrapper } = await mountShow();
+
+        expect(wrapper.text()).toContain('Fall Arrest');
+        expect(wrapper.text()).not.toContain('→');
     });
 
     it('removes a bound training by destroying its element', async () => {

@@ -227,6 +227,36 @@ class CardMergeDataTest extends TestCase
         $this->assertSame('FA-CPR', $row['cert_code']);
     }
 
+    public function test_cert_title_prints_the_snapshot_cert_title(): void
+    {
+        // The training-level "what the paper says" knob, snapshotted onto the
+        // topic like cert_text/cert_code — cards get the same key certificates
+        // already honour.
+        $this->topic->update(['cert_title' => 'First Aid, CPR & AED — ANSI Z308.1']);
+        $this->holder();
+
+        $row = CardMergeData::forTopic($this->topic->fresh())[0];
+
+        $this->assertSame('First Aid, CPR & AED — ANSI Z308.1', $row['cert_title']);
+    }
+
+    public function test_cert_title_falls_back_to_the_frozen_training_name(): void
+    {
+        // No snapshot cert_title → the frozen topic name, NOT the live
+        // training's current name or its current cert_title. A rename (or a
+        // cert_title added later) must never rewrite what an old class prints
+        // — the trap that bit the requirement elements.
+        $this->holder();
+        $this->training->update([
+            'name' => 'Renamed Course',
+            'cert_title' => 'A Title Added Long After The Class Ran',
+        ]);
+
+        $row = CardMergeData::forTopic($this->topic->fresh())[0];
+
+        $this->assertSame('First Aid / CPR', $row['cert_title']);
+    }
+
     public function test_hours_print_without_trailing_zeros(): void
     {
         // "4.00 hours" on a wallet card reads like a bug; 4.5 must survive.

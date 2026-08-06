@@ -33,7 +33,10 @@ class RqmtElementUpdated implements ShouldBroadcast
         return [
             'id' => $this->element->id,
             'requirement_id' => $this->element->requirement_id,
-            'name' => $this->element->name,
+            // Same effective-name contract as the index endpoint.
+            'name' => $this->element->effectiveName(),
+            'custom_name' => $this->element->name,
+            'module_name' => $this->element->moduleLiveName(),
             'description' => $this->element->description,
             'initial_only' => $this->element->initial_only,
             'repeating' => $this->element->repeating,
