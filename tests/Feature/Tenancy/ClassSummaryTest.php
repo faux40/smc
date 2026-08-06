@@ -492,9 +492,17 @@ class ClassSummaryTest extends TestCase
 
     public function test_endpoint_returns_a_pdf(): void
     {
+        // Completed on purpose: a summary reports what the class awarded, and
+        // the endpoint now refuses one for a class that hasn't closed
+        // (ClassSummaryGuardTest). This test is about the rendering, not about
+        // reaching it from a state the UI never offers.
         $org = Organization::factory()->create();
         $manager = $this->manager($org);
-        $class = TrainingClass::factory()->for($org, 'organization')->create();
+        $class = TrainingClass::factory()->for($org, 'organization')->create([
+            'status' => 'completed',
+            'completion_date' => '2026-06-01',
+            'completed_at' => now(),
+        ]);
 
         $this->actingAs($manager)->get("/api/classes/{$class->id}/summary")->assertOk();
 

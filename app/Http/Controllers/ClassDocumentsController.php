@@ -67,6 +67,7 @@ class ClassDocumentsController extends Controller
     public function storeSummary(Request $request, TrainingClass $class, FileClassDocument $action): JsonResponse
     {
         Gate::authorize('view', $class);
+        $this->assertCompleted($class);
 
         [$type, $description] = $this->docInfo($request);
         $attachment = $action->handle(
@@ -189,8 +190,27 @@ class ClassDocumentsController extends Controller
     public function summary(TrainingClass $class): PdfBuilder
     {
         Gate::authorize('view', $class);
+        $this->assertCompleted($class);
 
         return $this->summaryPdf($class)->name("class-summary-{$class->id}.pdf");
+    }
+
+    /**
+     * A summary reports what a class awarded, so it is meaningless before
+     * close-out. The rule used to live only in classes/Show.vue, which chose
+     * which button to render; the per-row print icon on the classes index
+     * widens the ways these URLs are reached, so the server states it too.
+     *
+     * Deliberately not applied to the sign-in sheet: that is *for* a class that
+     * hasn't run, and reprinting one afterwards is a normal records request.
+     */
+    private function assertCompleted(TrainingClass $class): void
+    {
+        abort_unless(
+            $class->status === 'completed',
+            422,
+            'This class has not been completed yet, so it has no summary.',
+        );
     }
 
     /**

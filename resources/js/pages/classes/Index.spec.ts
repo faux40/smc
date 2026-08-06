@@ -226,4 +226,60 @@ describe('classes/Index — server-paged table', () => {
         await flushPromises();
         expect(lastParams().page).toBe(2);
     });
+
+    describe('per-row print', () => {
+        const printButtons = (wrapper: Awaited<ReturnType<typeof mountPage>>) =>
+            wrapper.findAll('[data-testid="print-class-doc"]');
+
+        it('offers a print action on every row', async () => {
+            const wrapper = await mountPage();
+
+            expect(printButtons(wrapper)).toHaveLength(CLASSES.length);
+        });
+
+        it('prints the sign-in sheet for a class that has not run', async () => {
+            const wrapper = await mountPage();
+
+            await printButtons(wrapper)[0].trigger('click');
+            await flushPromises();
+
+            const viewer = wrapper.findComponent({ name: 'AttachmentViewer' });
+            expect(viewer.props('generated')).toMatchObject({
+                classId: 'cl1',
+                kind: 'sign-in',
+                src: '/api/classes/cl1/sign-in-sheet',
+            });
+        });
+
+        it('prints the summary for a completed class', async () => {
+            // The two documents answer different questions, and only one of
+            // them exists at any given moment: a summary of a class that
+            // hasn't happened is meaningless (the server now refuses it), and
+            // a blank sign-in sheet for a closed class is no use either.
+            const wrapper = await mountPage();
+
+            await printButtons(wrapper)[1].trigger('click');
+            await flushPromises();
+
+            expect(
+                wrapper.findComponent({ name: 'AttachmentViewer' }).props('generated'),
+            ).toMatchObject({
+                classId: 'cl2',
+                kind: 'summary',
+                src: '/api/classes/cl2/summary',
+            });
+        });
+
+        it('labels the action with the document it will actually produce', async () => {
+            // One icon, two meanings — the row's state decides which, so the
+            // accessible name has to say which rather than reading "Print".
+            const wrapper = await mountPage();
+            const buttons = printButtons(wrapper);
+
+            expect(buttons[0].attributes('aria-label')).toContain(
+                'sign-in sheet',
+            );
+            expect(buttons[1].attributes('aria-label')).toContain('summary');
+        });
+    });
 });

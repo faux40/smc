@@ -34,6 +34,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { useClassForm } from '@/composables/useClassForm';
+import { useGeneratedDoc } from '@/composables/useGeneratedDoc';
 import CardPrintRunsList from '@/pages/classes/Partials/CardPrintRunsList.vue';
 import ClassCompleteModal from '@/pages/classes/Partials/ClassCompleteModal.vue';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
@@ -101,36 +102,21 @@ function onDuplicateSaved(created: ClassDetail): void {
     router.visit(showPage(created.id));
 }
 // Doc generators open in the in-app viewer (preview + browser download/print,
-// plus "save to this class's files"), instead of a second tab.
-const docOpen = ref(false);
-const activeDoc = ref<GeneratedDoc | null>(null);
-
-const DOC_PATHS: Record<GeneratedDoc['kind'], string> = {
-    certificates: 'certificates',
-    summary: 'summary',
-    'sign-in': 'sign-in-sheet',
-    'name-check': 'name-check',
-};
+// plus "save to this class's files"), instead of a second tab. The mechanics
+// live in useGeneratedDoc, shared with the classes index; this page always
+// targets its own class, so the id is bound once here.
+const {
+    open: docOpen,
+    active: activeDoc,
+    openDoc: openClassDoc,
+} = useGeneratedDoc();
 
 function openDoc(
     kind: GeneratedDoc['kind'],
     title: string,
     columns?: string[],
 ): void {
-    // Columns ride on the src AND on the doc, so the preview and the "save to
-    // this class's files" action render the same sheet.
-    const query = columns?.length
-        ? `?${columns.map((c) => `columns%5B%5D=${encodeURIComponent(c)}`).join('&')}`
-        : '';
-
-    activeDoc.value = {
-        kind,
-        title,
-        classId: props.classId,
-        src: `/api/classes/${props.classId}/${DOC_PATHS[kind]}${query}`,
-        columns,
-    };
-    docOpen.value = true;
+    openClassDoc(props.classId, kind, title, columns);
 }
 
 // Name-check sheet (spelling proof) — reached from Actions, since the column

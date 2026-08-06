@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Printer } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import AsyncState from '@/components/AsyncState.vue';
+import AttachmentViewer from '@/components/AttachmentViewer.vue';
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
 import Pagination from '@/components/Pagination.vue';
@@ -9,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useGeneratedDoc } from '@/composables/useGeneratedDoc';
 import { useServerTable } from '@/composables/useServerTable';
 import ClassFormModal from '@/pages/classes/Partials/ClassFormModal.vue';
 import { page as classesPage, showPage } from '@/routes/classes';
@@ -20,6 +23,34 @@ defineOptions({
         breadcrumbs: [{ title: 'Classes', href: classesPage() }],
     },
 });
+
+// Per-row print. Which document a row can produce is decided by its state:
+// a class that hasn't closed has nothing to summarise (the server refuses a
+// summary outright), and a blank sign-in sheet for a finished class is no use.
+// So one button, two meanings — and the label has to say which.
+const {
+    open: docOpen,
+    active: activeDoc,
+    openDoc: openClassDoc,
+} = useGeneratedDoc();
+
+const printKindFor = (row: ClassRow) =>
+    row.status === 'completed' ? ('summary' as const) : ('sign-in' as const);
+
+const printLabelFor = (row: ClassRow) =>
+    row.status === 'completed'
+        ? `Print summary for ${row.name}`
+        : `Print sign-in sheet for ${row.name}`;
+
+function printRow(row: ClassRow): void {
+    const kind = printKindFor(row);
+
+    openClassDoc(
+        row.id,
+        kind,
+        kind === 'summary' ? 'Class summary' : 'Sign-in sheet',
+    );
+}
 
 const CLASSES_COLUMNS = [
     { key: 'name', label: 'Name', sortable: true },
@@ -190,6 +221,27 @@ onMounted(async () => {
                     </td>
                 </template>
 
+                <template #trail-header>
+                    <th class="w-12 px-2 py-2">
+                        <span class="sr-only">Print</span>
+                    </th>
+                </template>
+                <template #trail-cells="{ row }">
+                    <td class="w-12 px-2 py-2 text-right">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            class="h-7 w-7"
+                            data-testid="print-class-doc"
+                            :aria-label="printLabelFor(row as ClassRow)"
+                            :title="printLabelFor(row as ClassRow)"
+                            @click="printRow(row as ClassRow)"
+                        >
+                            <Printer class="h-4 w-4" />
+                        </Button>
+                    </td>
+                </template>
+
                 <template #col-name="{ row }">
                     <Link
                         :href="showPage(row.id)"
@@ -257,5 +309,9 @@ onMounted(async () => {
         </AsyncState>
 
         <ClassFormModal v-model:open="modalOpen" @saved="onSaved" />
+
+        <!-- Same in-app viewer the class detail page uses: preview, print,
+             download, and "save to this class's files" — no second tab. -->
+        <AttachmentViewer v-model:open="docOpen" :generated="activeDoc" />
     </div>
 </template>
