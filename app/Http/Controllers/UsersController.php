@@ -382,7 +382,7 @@ class UsersController extends Controller
 
         $tas = TrainingAssignment::query()
             ->where('user_id', $user->id)
-            ->with('activeSources')
+            ->with(['activeSources', 'satisfiedVia:id,name'])
             ->orderBy('name')
             ->get();
 
@@ -424,6 +424,9 @@ class UsersController extends Controller
             'last_completed_at' => $ta->last_completed_at?->toDateString(),
             'days_until_due' => $status->daysUntilDue($ta),
             'sources' => SourceChips::for($ta, $requirementNames),
+            // Hierarchy: the covering training satisfying this row, if any.
+            'satisfied_via_training_id' => $ta->satisfied_via_training_id,
+            'satisfied_via_training_name' => $ta->satisfiedVia?->name,
         ];
     }
 

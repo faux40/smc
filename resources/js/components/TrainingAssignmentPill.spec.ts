@@ -100,3 +100,29 @@ describe('TrainingAssignmentPill', () => {
         expect(withCustom.text()).toContain(expires);
     });
 });
+
+describe('TrainingAssignmentPill — satisfied via a higher training', () => {
+    it('names the covering training on the pill', () => {
+        // A green pill with no completion of its own training is an audit
+        // question waiting to be asked; the pill answers it inline.
+        const wrapper = mount(TrainingAssignmentPill, {
+            props: {
+                row: completed({
+                    expires_at: '2099-01-01',
+                    satisfied_via_training_name: 'Competent Person',
+                }),
+            },
+        });
+
+        expect(wrapper.text()).toContain('via Competent Person');
+        expect(wrapper.attributes('title')).toContain('via Competent Person');
+    });
+
+    it('says nothing when the training satisfied itself', () => {
+        const wrapper = mount(TrainingAssignmentPill, {
+            props: { row: completed({ expires_at: '2099-01-01' }) },
+        });
+
+        expect(wrapper.text()).not.toContain('via');
+    });
+});

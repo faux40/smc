@@ -38,7 +38,7 @@ class TrainingAssignmentsController extends Controller
 
         $query = TrainingAssignment::query()
             ->where('org_id', $request->user()->org_id)
-            ->with(['activeSources']);
+            ->with(['activeSources', 'satisfiedVia:id,name']);
 
         if ($request->filled('user_id')) {
             $query->where('user_id', (string) $request->query('user_id'));
@@ -93,7 +93,7 @@ class TrainingAssignmentsController extends Controller
         $pageUserIds = $page->getCollection()->pluck('id');
         $tasByUser = TrainingAssignment::query()
             ->whereIn('user_id', $pageUserIds)
-            ->with('activeSources')
+            ->with(['activeSources', 'satisfiedVia:id,name'])
             ->get()
             ->groupBy('user_id');
 
@@ -327,6 +327,10 @@ class TrainingAssignmentsController extends Controller
             'status' => $this->status->statusFor($ta, $this->dueSoonDays()),
             'days_until_due' => $this->status->daysUntilDue($ta),
             'as_needed_only' => $ta->as_needed_only,
+            // Hierarchy: which covering training's credential is satisfying
+            // this row (null = its own) — the "via" badge's data.
+            'satisfied_via_training_id' => $ta->satisfied_via_training_id,
+            'satisfied_via_training_name' => $ta->satisfiedVia?->name,
             'active_sources' => $sources->map(fn (AssignmentSource $s) => [
                 'id' => $s->id,
                 'sourceable_type' => $s->sourceable_type,

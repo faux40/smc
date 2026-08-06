@@ -28,6 +28,7 @@ const allRows = [
         expires_at: '2026-04-01',
         days_until_due: -70,
         sources: [{ type: 'requirement', id: 'r1', name: 'OSHA General' }],
+        satisfied_via_training_name: 'Competent Person',
     },
     {
         id: 'ta2',
@@ -295,5 +296,12 @@ describe('NeedsActionWidget — Remind row action (F10)', () => {
 
             expect(href(wrapper)).toContain('q=cpr');
         });
+    });
+    it('names the covering training on a row satisfied via a higher credit', async () => {
+        // "Was covered via Competent Person, now lapsed" — the audit answer,
+        // inline where the status is read.
+        const wrapper = await mountWidget();
+
+        expect(wrapper.text()).toContain('via Competent Person');
     });
 });

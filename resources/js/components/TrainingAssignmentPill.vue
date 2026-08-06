@@ -15,12 +15,22 @@ const threshold = computed(() => props.expiringSoonDays ?? 30);
 const today = new Date().toISOString().slice(0, 10);
 
 const expiryStatus = computed<ExpiryStatus>(() => {
-    if (!props.row.last_completed_at) return 'never_completed';
-    if (!props.row.expires_at) return 'ok';
-    if (props.row.expires_at < today) return 'expired';
+    if (!props.row.last_completed_at) {
+        return 'never_completed';
+    }
+
+    if (!props.row.expires_at) {
+        return 'ok';
+    }
+
+    if (props.row.expires_at < today) {
+        return 'expired';
+    }
+
     const daysOut =
         (new Date(props.row.expires_at).getTime() - new Date(today).getTime()) /
         86_400_000;
+
     return daysOut <= threshold.value ? 'expiring' : 'ok';
 });
 </script>
@@ -36,7 +46,13 @@ const expiryStatus = computed<ExpiryStatus>(() => {
                   ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400'
                   : 'border-green-300 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-800 dark:bg-green-950 dark:text-green-400',
         ]"
-        :title="row.name + (row.expires_at ? ` — expires ${row.expires_at}` : '')"
+        :title="
+            row.name +
+            (row.expires_at ? ` — expires ${row.expires_at}` : '') +
+            (row.satisfied_via_training_name
+                ? ` — via ${row.satisfied_via_training_name}`
+                : '')
+        "
         @click="$emit('click')"
     >
         <span
@@ -47,5 +63,12 @@ const expiryStatus = computed<ExpiryStatus>(() => {
             v-if="row.expires_at"
             class="text-[10px] leading-tight"
         >{{ row.expires_at }}</span>
+        <!-- The credit came from a higher training — say so where the status
+             is read, or a green pill with no completion of its own training
+             is an unexplained fact at audit time. -->
+        <span
+            v-if="row.satisfied_via_training_name"
+            class="max-w-full truncate text-[10px] italic leading-tight"
+        >via {{ row.satisfied_via_training_name }}</span>
     </button>
 </template>

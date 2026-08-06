@@ -301,6 +301,15 @@ const { remindOne } = useRemind();
                                     >
                                 </span>
                                 <span v-else>never completed</span>
+                                <!-- The status came from a higher credential:
+                                     "was covered via Competent, now lapsed"
+                                     beats an unexplained overdue. -->
+                                <span
+                                    v-if="row.satisfied_via_training_name"
+                                    class="italic"
+                                >
+                                    via {{ row.satisfied_via_training_name }}
+                                </span>
                             </span>
 
                             <span class="flex items-center gap-3">

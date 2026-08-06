@@ -69,6 +69,16 @@ class TrainingAssignment extends Model
         return $this->belongsTo(Training::class, 'training_id');
     }
 
+    /**
+     * The covering (higher) training whose credential is currently satisfying
+     * this assignment; null when it satisfies itself. withTrashed: a deleted
+     * training's credentials still count, so its name must still resolve.
+     */
+    public function satisfiedVia(): BelongsTo
+    {
+        return $this->belongsTo(Training::class, 'satisfied_via_training_id')->withTrashed();
+    }
+
     public function sources(): HasMany
     {
         return $this->hasMany(AssignmentSource::class, 'training_assignment_id');

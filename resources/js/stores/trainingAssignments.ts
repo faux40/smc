@@ -15,11 +15,11 @@
 import axios from 'axios';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
+import { useRealtime } from '@/composables/useRealtime';
 import type {
     ServerTableQuery,
     ServerTableResponse,
 } from '@/composables/useServerTable';
-import { useRealtime } from '@/composables/useRealtime';
 import { realtimeTabId } from '@/echo';
 
 export interface AssignmentSourceRow {
@@ -38,6 +38,13 @@ export interface TrainingAssignmentRow {
     last_completed_at: string | null;
     active_sources: AssignmentSourceRow[];
     can_delete: boolean;
+    /**
+     * The covering (higher) training whose credential is satisfying this row;
+     * null when the training satisfied itself. Optional so fixtures and older
+     * payload shapes stay valid — the pill treats absent as null.
+     */
+    satisfied_via_training_id?: string | null;
+    satisfied_via_training_name?: string | null;
 }
 
 export interface TrainingAssignmentFilter {
@@ -138,16 +145,20 @@ export const useTrainingAssignmentsStore = defineStore(
             if (params.sort) {
                 query.sort = params.sort;
             }
+
             if (params.q) {
                 query.q = params.q;
             }
+
             if (params.user_q) {
                 query.user_q = params.user_q;
             }
+
             if (params.requirements && params.requirements.length > 0) {
                 query.requirements = params.requirements;
                 query.req_mode = params.req_mode ?? 'or';
             }
+
             if (params.tags && params.tags.length > 0) {
                 query.tags = params.tags;
                 query.tags_mode = params.tags_mode ?? 'and';
@@ -204,6 +215,7 @@ export const useTrainingAssignmentsStore = defineStore(
             if (filter.user_id) {
                 params.user_id = filter.user_id;
             }
+
             if (filter.training_id) {
                 params.training_id = filter.training_id;
             }
@@ -280,7 +292,10 @@ export const useTrainingAssignmentsStore = defineStore(
 
             const REQUIREMENT_CLASS = 'App\\Models\\Requirement';
             rows.value = rows.value.map((ta) => {
-                if (!data.updated_ids.includes(ta.id)) return ta;
+                if (!data.updated_ids.includes(ta.id)) {
+return ta;
+}
+
                 return {
                     ...ta,
                     active_sources: ta.active_sources.filter(

@@ -102,7 +102,7 @@ class DashboardController extends Controller
         $query = TrainingAssignment::query()
             ->where('org_id', $org->id)
             ->whereIn('status', $statuses)
-            ->with(['user:id,f_name,m_name,l_name,email', 'activeSources'])
+            ->with(['user:id,f_name,m_name,l_name,email', 'activeSources', 'satisfiedVia:id,name'])
             ->orderByRaw("CASE status WHEN 'overdue' THEN 0 WHEN 'not_started' THEN 1 ELSE 2 END")
             ->orderByRaw('expires_at IS NULL') // non-null expiries first
             ->orderBy('expires_at')
@@ -150,6 +150,9 @@ class DashboardController extends Controller
                 'expires_at' => $ta->expires_at?->toDateString(),
                 'days_until_due' => $this->status->daysUntilDue($ta),
                 'sources' => SourceChips::for($ta, $names),
+                // Hierarchy: names the covering credential, so the widget can
+                // say "via Competent" instead of an unexplained status.
+                'satisfied_via_training_name' => $ta->satisfiedVia?->name,
             ])->values(),
             'meta' => [
                 'current_page' => $paginator->currentPage(),

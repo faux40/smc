@@ -88,6 +88,8 @@ interface TrainingComplianceRow {
     last_completed_at: string | null;
     days_until_due: number | null;
     sources: SourceChip[];
+    /** Covering training satisfying this row, when the hierarchy applies. */
+    satisfied_via_training_name?: string | null;
 }
 
 interface CompletionHistoryRow {
@@ -610,6 +612,14 @@ function defaultHeaders(): Record<string, string> {
                             >
                                 <td class="px-3 py-2 font-medium">
                                     {{ row.training_name }}
+                                    <!-- The status came from a higher
+                                         credential — the audit answer, inline. -->
+                                    <span
+                                        v-if="row.satisfied_via_training_name"
+                                        class="block text-xs font-normal italic text-muted-foreground"
+                                    >
+                                        via {{ row.satisfied_via_training_name }}
+                                    </span>
                                 </td>
                                 <td class="px-3 py-2 text-xs">
                                     <span class="flex flex-wrap gap-1">

@@ -31,6 +31,8 @@ export interface NeedsActionRow {
     expires_at: string | null;
     days_until_due: number | null;
     sources: SourceChip[];
+    /** Covering training satisfying this row, when the hierarchy applies. */
+    satisfied_via_training_name?: string | null;
 }
 
 /** Server-table params plus the optional status-chip filter. */
