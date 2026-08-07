@@ -130,7 +130,17 @@ const confirmDelete = async () => {
                 v-model="form"
                 :context="FORM_CTX"
                 :self-id="training.id"
-            />
+            >
+                <!--
+                    Custom card fields: a set of definitions, saved on its own
+                    (it PUTs the whole set; membership and order are properties
+                    of the set, so it stays out of this form's payload). Lives
+                    in the Card box so one toggle covers the whole card story.
+                -->
+                <template #card-extra>
+                    <CardFieldsEditor :training-id="training.id" />
+                </template>
+            </TrainingFields>
 
             <div
                 class="flex items-center justify-between border-t border-border pt-4"
@@ -182,14 +192,6 @@ const confirmDelete = async () => {
                 :can-manage-library="canManage"
             />
         </div>
-
-        <!--
-            Custom card fields: a set of definitions, saved on its own. Kept
-            out of the form above because membership and order are properties
-            of the set, and it PUTs rather than PATCHes. Sits after the
-            permission notice so the form's v-if/v-else stay adjacent.
-        -->
-        <CardFieldsEditor v-if="canManage" :training-id="training.id" />
 
         <Dialog v-model:open="deleteOpen">
             <DialogContent>

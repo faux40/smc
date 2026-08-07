@@ -118,11 +118,18 @@ describe('trainings/Show', () => {
         expect(visit).toHaveBeenCalledWith('/trainings');
     });
 
-    it('offers the card-fields editor, scoped to this training', async () => {
-        // Its own section with its own save — the training form PATCHes fields,
-        // the editor PUTs a set.
+    it('offers the card-fields editor inside the Card box, scoped to this training', async () => {
+        // Its own save — the training form PATCHes fields, the editor PUTs a
+        // set — but it lives in the Card box so one toggle covers the whole
+        // card story.
         const wrapper = mount(Show, { props: { training } });
         await flushPromises();
+
+        expect(wrapper.findComponent(CardFieldsEditor).exists()).toBe(false);
+
+        await wrapper
+            .get('[data-testid="training-card-toggle"]')
+            .trigger('click');
 
         const editor = wrapper.findComponent(CardFieldsEditor);
         expect(editor.exists()).toBe(true);

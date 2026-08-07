@@ -359,6 +359,10 @@ watch(
                 </p>
                 <InputError :message="fieldErrors.message('card_stock_id')" />
             </div>
+
+            <!-- The detail page slots the card-fields editor in here so the
+                 whole card story hides and reveals with one toggle. -->
+            <slot name="card-extra" />
         </CollapsibleSection>
 
         <CollapsibleSection
