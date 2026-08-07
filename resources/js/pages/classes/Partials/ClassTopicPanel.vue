@@ -329,6 +329,11 @@ async function save(): Promise<void> {
                         :disabled="readOnly"
                         placeholder="e.g. FPAP"
                     />
+                    <p class="text-xs text-muted-foreground">
+                        Prefix for the certificate numbers minted at close-out
+                        &mdash; e.g. FPAP becomes FPAP20260806-001. Blank uses
+                        the generic CERT prefix.
+                    </p>
                 </div>
             </CollapsibleSection>
 
