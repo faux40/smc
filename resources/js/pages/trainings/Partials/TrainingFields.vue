@@ -2,6 +2,7 @@
 import { computed, onMounted, watch } from 'vue';
 import CertEditor from '@/components/CertEditor.vue';
 import InputError from '@/components/InputError.vue';
+import MultiSelectDropdown from '@/components/MultiSelectDropdown.vue';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +15,6 @@ import {
 } from '@/components/ui/select';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import type { TrainingFormState } from '@/lib/trainingForm';
-import TrainingMultiSelect from '@/pages/classes/Partials/TrainingMultiSelect.vue';
 import { useCardStocksStore } from '@/stores/cardStocks';
 import { useCardTemplatesStore } from '@/stores/cardTemplates';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
@@ -259,13 +259,20 @@ watch(
             </div>
 
             <div class="grid gap-2">
-                <TrainingMultiSelect
+                <Label for="t_satisfied_by">
+                    Satisfied by (higher trainings)
+                </Label>
+                <MultiSelectDropdown
                     id="t_satisfied_by"
                     v-model="form.satisfied_by_ids"
-                    :trainings="satisfierOptions"
-                    label="Satisfied by (higher trainings)"
-                    empty-text="No other trainings on file yet — create the higher training first."
-                    class="max-h-56"
+                    :options="
+                        satisfierOptions.map((t) => ({
+                            id: t.id,
+                            label: t.name,
+                        }))
+                    "
+                    placeholder="None — pick the higher trainings that count"
+                    search-placeholder="Search trainings…"
                 />
                 <p class="text-xs text-muted-foreground">
                     A person holding a current credential for ANY checked

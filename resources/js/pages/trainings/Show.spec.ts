@@ -3,6 +3,7 @@ import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AttachmentsList from '@/components/AttachmentsList.vue';
+import MultiSelectDropdown from '@/components/MultiSelectDropdown.vue';
 import TagsField from '@/components/TagsField.vue';
 import type { TrainingFormSource } from '@/lib/trainingForm';
 import CardFieldsEditor from '@/pages/trainings/Partials/CardFieldsEditor.vue';
@@ -145,13 +146,13 @@ describe('trainings/Show', () => {
         const wrapper = mount(Show, { props: { training } });
         await flushPromises();
 
-        const labels = wrapper
-            .get('#t_satisfied_by')
-            .findAll('li label')
-            .map((l) => l.text());
-        expect(labels.join(' ')).toContain('Competent');
-        expect(labels.join(' ')).not.toContain('Authorized');
-        expect(labels.join(' ')).not.toContain('Awareness');
+        const picker = wrapper.findComponent(MultiSelectDropdown);
+        const labels = (picker.props('options') as { label: string }[]).map(
+            (o) => o.label,
+        );
+        expect(labels).toContain('Competent');
+        expect(labels).not.toContain('Authorized');
+        expect(labels).not.toContain('Awareness');
     });
 
     it('saves the checked higher trainings on the PATCH payload', async () => {
@@ -168,12 +169,10 @@ describe('trainings/Show', () => {
         const wrapper = mount(Show, { props: { training } });
         await flushPromises();
 
-        await wrapper
-            .get('#t_satisfied_by input[value="t-free"]')
-            .setValue(true);
-        await wrapper
-            .get('#t_satisfied_by input[value="t-alt"]')
-            .setValue(true);
+        wrapper
+            .findComponent(MultiSelectDropdown)
+            .vm.$emit('update:modelValue', ['t-free', 't-alt']);
+        await flushPromises();
         await wrapper.get('form').trigger('submit');
         await flushPromises();
 
