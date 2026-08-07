@@ -167,7 +167,7 @@ const id = (field: string) => `${props.idPrefix ?? 'class'}_${field}`;
                     :id="id('requires_prior_completion')"
                     v-model="form.requires_prior_completion"
                 />
-                Students must have a prior completion (refresher)
+                Refresher &mdash; Students must have a prior completion
             </label>
             <p class="pl-6 text-xs text-muted-foreground">
                 The roster warns about anyone without an earlier completion of
