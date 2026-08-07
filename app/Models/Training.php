@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -39,7 +40,6 @@ class Training extends Model
         'default_address',
         // Hierarchy: the higher training whose credential satisfies this one
         // (Authorized points at Competent). Chains upward, transitively.
-        'superseded_by_id',
     ];
 
     protected $casts = [
@@ -52,6 +52,38 @@ class Training extends Model
     public function stdFrequency(): BelongsTo
     {
         return $this->belongsTo(StdFrequency::class, 'std_freq_id');
+    }
+
+    /**
+     * The higher trainings whose credentials satisfy this one — ANY of them
+     * (OR-semantics). Edges form a DAG walked by TrainingLadder; diamonds are
+     * legal, cycles are refused by TrainingRequest.
+     *
+     * @return BelongsToMany<Training, $this>
+     */
+    public function satisfiers(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            self::class,
+            'training_satisfiers',
+            'training_id',
+            'satisfied_by_id',
+        )->withTrashed();
+    }
+
+    /**
+     * Inverse: the lower trainings this one's credential (directly) satisfies.
+     *
+     * @return BelongsToMany<Training, $this>
+     */
+    public function satisfies(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            self::class,
+            'training_satisfiers',
+            'satisfied_by_id',
+            'training_id',
+        )->withTrashed();
     }
 
     /**

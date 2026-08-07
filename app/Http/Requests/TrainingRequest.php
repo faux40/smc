@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Training;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -76,12 +76,14 @@ class TrainingRequest extends FormRequest
                     ->where('org_id', $orgId)
                     ->whereNull('deleted_at'),
             ],
-            // Hierarchy: the higher training whose credential satisfies this
-            // one. Own-org and live only — the picker never offers deleted
-            // trainings, though existing chains keep hopping through them.
-            'superseded_by_id' => [
-                'nullable',
+            // Hierarchy: the higher trainings whose credentials satisfy this
+            // one — ANY of them (OR-semantics). Own-org and live only — the
+            // picker never offers deleted trainings, though existing edges
+            // keep hopping through them.
+            'satisfied_by_ids' => ['nullable', 'array', 'max:10'],
+            'satisfied_by_ids.*' => [
                 'string',
+                'distinct',
                 Rule::exists('trainings', 'id')
                     ->where('org_id', $orgId)
                     ->whereNull('deleted_at'),
@@ -109,20 +111,24 @@ class TrainingRequest extends FormRequest
                 $v->errors()->add('std_freq_id', 'Repeating trainings require a frequency.');
             }
 
-            $this->rejectHierarchyCycles($v, $data['superseded_by_id'] ?? null);
+            $this->rejectHierarchyCycles($v, array_values($data['satisfied_by_ids'] ?? []));
         });
     }
 
     /**
-     * A training may not (transitively) be satisfied by itself. Walk up from
-     * the proposed parent; reaching the edited training is a cycle. Deleted
-     * trainings are included in the walk — existing chains hop through them,
-     * so a cycle routed through one is just as much a cycle. The depth cap is
-     * a sanity bound, not a feature: no real discipline ladders ten levels.
+     * A training may not (transitively) be satisfied by itself. Walk UP from
+     * every proposed parent across the existing DAG; reaching the edited
+     * training is a cycle. Diamonds are fine — the visited set only refuses
+     * re-expansion, never a converging branch. Deleted trainings are included
+     * in the walk — existing edges hop through them, so a cycle routed
+     * through one is just as much a cycle. The depth cap is a sanity bound,
+     * not a feature: no real discipline ladders ten levels.
+     *
+     * @param  list<string>  $parentIds
      */
-    private function rejectHierarchyCycles(Validator $v, ?string $parentId): void
+    private function rejectHierarchyCycles(Validator $v, array $parentIds): void
     {
-        if ($parentId === null) {
+        if ($parentIds === []) {
             return;
         }
 
@@ -131,32 +137,42 @@ class TrainingRequest extends FormRequest
         $editing = $this->route('training');
         $editingId = is_object($editing) ? $editing->id : $editing;
 
-        if ($editingId !== null && $parentId === $editingId) {
-            $v->errors()->add('superseded_by_id', 'A training cannot be satisfied by itself.');
+        if ($editingId !== null && in_array($editingId, $parentIds, true)) {
+            $v->errors()->add('satisfied_by_ids', 'A training cannot be satisfied by itself.');
 
             return;
         }
 
         $seen = [];
-        $currentId = $parentId;
+        $frontier = $parentIds;
 
-        for ($depth = 0; $currentId !== null; $depth++) {
-            if ($currentId === $editingId || isset($seen[$currentId])) {
-                $v->errors()->add('superseded_by_id', 'This would create a loop in the training hierarchy.');
-
-                return;
-            }
-
+        for ($depth = 0; $frontier !== []; $depth++) {
             if ($depth >= 10) {
-                $v->errors()->add('superseded_by_id', 'The training hierarchy is too deep (10 levels at most).');
+                $v->errors()->add('satisfied_by_ids', 'The training hierarchy is too deep (10 levels at most).');
 
                 return;
             }
 
-            $seen[$currentId] = true;
-            $currentId = Training::withTrashed()
-                ->whereKey($currentId)
-                ->value('superseded_by_id');
+            $next = [];
+
+            foreach (DB::table('training_satisfiers')
+                ->whereIn('training_id', $frontier)
+                ->pluck('satisfied_by_id') as $parentId) {
+                if ($parentId === $editingId) {
+                    $v->errors()->add('satisfied_by_ids', 'This would create a loop in the training hierarchy.');
+
+                    return;
+                }
+
+                if (isset($seen[$parentId])) {
+                    continue;
+                }
+
+                $seen[$parentId] = true;
+                $next[] = $parentId;
+            }
+
+            $frontier = $next;
         }
     }
 }

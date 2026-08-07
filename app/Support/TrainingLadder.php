@@ -4,17 +4,19 @@ namespace App\Support;
 
 use App\Models\Training;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * An org's training hierarchy, walked in memory.
  *
- * `trainings.superseded_by_id` points UP: a lower training names the higher
- * one whose credential satisfies it. This loads the org's entire edge list
- * once (tens of rows) so ancestor/descendant walks cost nothing per pair —
- * the recalc is the only consumer, and every read-side surface just sees the
- * materialized result.
+ * `training_satisfiers` edges point UP: a lower training names the higher
+ * ones whose credentials satisfy it — ANY of them (OR-semantics), so the
+ * graph is a DAG, not a chain: diamonds are legal, cycles are refused at the
+ * write side. This loads the org's entire edge list once (tens of rows) so
+ * ancestor/descendant walks cost nothing per pair — the recalc is the only
+ * consumer, and every read-side surface just sees the materialized result.
  *
- * Soft-deleted trainings are loaded on purpose, twice over: the chain hops
+ * Soft-deleted trainings are loaded on purpose, twice over: the walk hops
  * through a deleted node (deleting Competent must not sever Qualified from
  * Authorized), and a deleted training's completions still count until they
  * expire — removing a training from the library doesn't un-train anyone.
@@ -26,24 +28,34 @@ final class TrainingLadder
 {
     /**
      * @param  Collection<string, Training>  $trainings  keyed by id, withTrashed, stdFrequency loaded
+     * @param  array<string, list<string>>  $parents  child id → parent ids (upward edges)
      */
     private function __construct(
         public readonly Collection $trainings,
+        private readonly array $parents,
     ) {}
 
     public static function forOrg(string $orgId): self
     {
-        return new self(
-            Training::withTrashed()
-                ->with('stdFrequency')
-                ->where('org_id', $orgId)
-                ->get()
-                ->keyBy('id'),
-        );
+        $trainings = Training::withTrashed()
+            ->with('stdFrequency')
+            ->where('org_id', $orgId)
+            ->get()
+            ->keyBy('id');
+
+        $parents = DB::table('training_satisfiers')
+            ->where('org_id', $orgId)
+            ->get(['training_id', 'satisfied_by_id'])
+            ->groupBy('training_id')
+            ->map(fn ($edges) => $edges->pluck('satisfied_by_id')->all())
+            ->all();
+
+        return new self($trainings, $parents);
     }
 
     /**
-     * The trainings whose credentials satisfy $trainingId, nearest first.
+     * The trainings whose credentials satisfy $trainingId — every transitive
+     * parent across every branch, nearest level first (BFS).
      *
      * @return Collection<int, Training>
      */
@@ -51,21 +63,30 @@ final class TrainingLadder
     {
         $ancestors = collect();
         $seen = [$trainingId => true];
-        $current = $this->trainings->get($trainingId);
+        $frontier = [$trainingId];
 
-        while (($nextId = $current?->superseded_by_id) !== null) {
-            if (isset($seen[$nextId])) {
-                break;
+        while ($frontier !== []) {
+            $next = [];
+
+            foreach ($frontier as $id) {
+                foreach ($this->parents[$id] ?? [] as $parentId) {
+                    if (isset($seen[$parentId])) {
+                        continue;
+                    }
+
+                    $seen[$parentId] = true;
+                    $parent = $this->trainings->get($parentId);
+
+                    if ($parent === null) {
+                        continue;
+                    }
+
+                    $ancestors->push($parent);
+                    $next[] = $parentId;
+                }
             }
 
-            $seen[$nextId] = true;
-            $current = $this->trainings->get($nextId);
-
-            if ($current === null) {
-                break;
-            }
-
-            $ancestors->push($current);
+            $frontier = $next;
         }
 
         return $ancestors;
@@ -73,17 +94,20 @@ final class TrainingLadder
 
     /**
      * The training ids that $trainingId's credential (transitively) satisfies
-     * — everything below it. This is the fan-down set: a completion on
-     * $trainingId must recalculate each of these for that user.
+     * — everything below it across every branch. This is the fan-down set: a
+     * completion on $trainingId must recalculate each of these for that user.
      *
      * @return Collection<int, string>
      */
     public function descendantsOf(string $trainingId): Collection
     {
-        // Child → parent edges inverted once per call; the table is tiny.
-        $children = $this->trainings
-            ->filter(fn (Training $t) => $t->superseded_by_id !== null)
-            ->groupBy('superseded_by_id');
+        // Upward edges inverted once per call; the table is tiny.
+        $children = [];
+        foreach ($this->parents as $childId => $parentIds) {
+            foreach ($parentIds as $parentId) {
+                $children[$parentId][] = $childId;
+            }
+        }
 
         $found = collect();
         $seen = [$trainingId => true];
@@ -93,14 +117,14 @@ final class TrainingLadder
             $next = [];
 
             foreach ($frontier as $id) {
-                foreach ($children->get($id, collect()) as $child) {
-                    if (isset($seen[$child->id])) {
+                foreach ($children[$id] ?? [] as $childId) {
+                    if (isset($seen[$childId])) {
                         continue;
                     }
 
-                    $seen[$child->id] = true;
-                    $found->push($child->id);
-                    $next[] = $child->id;
+                    $seen[$childId] = true;
+                    $found->push($childId);
+                    $next[] = $childId;
                 }
             }
 

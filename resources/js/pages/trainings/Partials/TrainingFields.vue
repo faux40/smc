@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { useFieldErrors } from '@/composables/useFieldErrors';
 import type { TrainingFormState } from '@/lib/trainingForm';
+import TrainingMultiSelect from '@/pages/classes/Partials/TrainingMultiSelect.vue';
 import { useCardStocksStore } from '@/stores/cardStocks';
 import { useCardTemplatesStore } from '@/stores/cardTemplates';
 import { useStdFrequenciesStore } from '@/stores/stdFrequencies';
@@ -45,30 +46,42 @@ const fieldErrors = useFieldErrors(props.context);
 
 /**
  * Library options for the Satisfied-by picker, minus self and minus every
- * training that (transitively) points AT self — the server refuses those as
- * cycles, so offering them would only manufacture a validation error.
- * Cycle-safe by visited-set, like the server walk it mirrors.
+ * training that (transitively) chains up THROUGH self — the server refuses
+ * those as cycles, so offering them would only manufacture a validation
+ * error. The walk follows every branch of the DAG (a training may name
+ * several satisfiers); diamonds converge harmlessly under the visited-set,
+ * like the server walk it mirrors.
  */
-const supersededByOptions = computed(() => {
+const satisfierOptions = computed(() => {
     if (!props.selfId) {
         return trainings.library;
     }
 
-    const parentOf = new Map(
-        trainings.library.map((t) => [t.id, t.superseded_by_id]),
+    const parentsOf = new Map(
+        trainings.library.map((t) => [t.id, t.satisfied_by_ids]),
     );
 
     const chainsThroughSelf = (id: string): boolean => {
-        const seen = new Set<string>();
-        let current: string | null | undefined = id;
+        const seen = new Set<string>([id]);
+        let frontier = [id];
 
-        while (current != null && !seen.has(current)) {
-            if (current === props.selfId) {
+        while (frontier.length > 0) {
+            if (frontier.includes(props.selfId!)) {
                 return true;
             }
 
-            seen.add(current);
-            current = parentOf.get(current);
+            const next: string[] = [];
+
+            for (const current of frontier) {
+                for (const parent of parentsOf.get(current) ?? []) {
+                    if (!seen.has(parent)) {
+                        seen.add(parent);
+                        next.push(parent);
+                    }
+                }
+            }
+
+            frontier = next;
         }
 
         return false;
@@ -76,10 +89,6 @@ const supersededByOptions = computed(() => {
 
     return trainings.library.filter((t) => !chainsThroughSelf(t.id));
 });
-
-function chooseSupersededBy(value: string): void {
-    form.value.superseded_by_id = value === '' ? null : value;
-}
 
 onMounted(async () => {
     if (!frequencies.loaded) {
@@ -250,33 +259,22 @@ watch(
             </div>
 
             <div class="grid gap-2">
-                <Label for="t_superseded_by">Satisfied by (higher training)</Label>
-                <select
-                    id="t_superseded_by"
-                    class="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                    :value="form.superseded_by_id ?? ''"
-                    @change="
-                        chooseSupersededBy(
-                            ($event.target as HTMLSelectElement).value,
-                        )
-                    "
-                >
-                    <option value="">None</option>
-                    <option
-                        v-for="t in supersededByOptions"
-                        :key="t.id"
-                        :value="t.id"
-                    >
-                        {{ t.name }}
-                    </option>
-                </select>
+                <TrainingMultiSelect
+                    id="t_satisfied_by"
+                    v-model="form.satisfied_by_ids"
+                    :trainings="satisfierOptions"
+                    label="Satisfied by (higher trainings)"
+                    empty-text="No other trainings on file yet — create the higher training first."
+                    class="max-h-56"
+                />
                 <p class="text-xs text-muted-foreground">
-                    A person holding a current credential for that training also
-                    counts as satisfying this one (their certificate stays the
-                    higher one). Chains upward: if that training names its own
-                    higher level, it counts here too.
+                    A person holding a current credential for ANY checked
+                    training also counts as satisfying this one (their
+                    certificate stays the higher one). Chains upward: if a
+                    checked training names its own higher levels, those count
+                    here too.
                 </p>
-                <InputError :message="fieldErrors.message('superseded_by_id')" />
+                <InputError :message="fieldErrors.message('satisfied_by_ids')" />
             </div>
 
             <div class="grid gap-2">

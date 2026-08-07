@@ -14,12 +14,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Write side of the training hierarchy: setting `superseded_by_id` through
- * the trainings API. The engine trusts the data, so the API must refuse what
- * the engine merely survives — cross-org pointers, self-reference, cycles.
- * Re-pointing a ladder resyncs the affected assignments immediately: an admin
- * who wires Authorized to Competent expects the compliance page to move now,
- * not at the nightly watchdog.
+ * Write side of the training hierarchy: setting `satisfied_by_ids` through
+ * the trainings API. A training may name SEVERAL higher trainings — any one
+ * of their credentials satisfies it (OR), so the graph is a DAG: diamonds are
+ * legal, cycles are not. The engine trusts the data, so the API must refuse
+ * what the engine merely survives — cross-org edges, self-reference, cycles.
+ * Re-wiring resyncs the affected assignments immediately: an admin who wires
+ * Authorized under Competent expects the compliance page to move now, not at
+ * the nightly watchdog.
  */
 class TrainingHierarchyApiTest extends TestCase
 {
@@ -49,6 +51,19 @@ class TrainingHierarchyApiTest extends TestCase
         ]);
     }
 
+    private function wire(Training $child, Training ...$parents): void
+    {
+        foreach ($parents as $parent) {
+            $child->satisfiers()->attach($parent->id, ['org_id' => $child->org_id]);
+        }
+    }
+
+    /** @return list<string> */
+    private function satisfierIds(Training $t): array
+    {
+        return $t->satisfiers()->pluck('trainings.id')->all();
+    }
+
     /** The full-form PATCH payload the page sends; hierarchy rides along. */
     private function payload(Training $t, array $over = []): array
     {
@@ -62,41 +77,44 @@ class TrainingHierarchyApiTest extends TestCase
         ];
     }
 
-    public function test_update_sets_and_returns_the_pointer(): void
+    public function test_update_sets_and_returns_the_satisfier_set(): void
     {
         $org = Organization::factory()->create();
         $admin = $this->admin($org);
         $authorized = $this->training($org, 'Authorized');
-        $competent = $this->training($org, 'Competent');
+        $initial = $this->training($org, 'Competent Initial');
+        $refresher = $this->training($org, 'Competent Refresher');
 
         $this->actingAs($admin)
             ->patchJson("/api/trainings/{$authorized->id}", $this->payload($authorized, [
-                'superseded_by_id' => $competent->id,
-            ]))
-            ->assertOk()
-            ->assertJsonPath('superseded_by_id', $competent->id);
-
-        $this->assertSame($competent->id, $authorized->fresh()->superseded_by_id);
-    }
-
-    public function test_update_clears_the_pointer_with_null(): void
-    {
-        $org = Organization::factory()->create();
-        $admin = $this->admin($org);
-        $competent = $this->training($org, 'Competent');
-        $authorized = $this->training($org, 'Authorized');
-        $authorized->update(['superseded_by_id' => $competent->id]);
-
-        $this->actingAs($admin)
-            ->patchJson("/api/trainings/{$authorized->id}", $this->payload($authorized, [
-                'superseded_by_id' => null,
+                'satisfied_by_ids' => [$initial->id, $refresher->id],
             ]))
             ->assertOk();
 
-        $this->assertNull($authorized->fresh()->superseded_by_id);
+        $this->assertEqualsCanonicalizing(
+            [$initial->id, $refresher->id],
+            $this->satisfierIds($authorized),
+        );
     }
 
-    public function test_store_accepts_a_pointer(): void
+    public function test_update_clears_the_set_with_an_empty_array(): void
+    {
+        $org = Organization::factory()->create();
+        $admin = $this->admin($org);
+        $competent = $this->training($org, 'Competent');
+        $authorized = $this->training($org, 'Authorized');
+        $this->wire($authorized, $competent);
+
+        $this->actingAs($admin)
+            ->patchJson("/api/trainings/{$authorized->id}", $this->payload($authorized, [
+                'satisfied_by_ids' => [],
+            ]))
+            ->assertOk();
+
+        $this->assertSame([], $this->satisfierIds($authorized));
+    }
+
+    public function test_store_accepts_satisfiers(): void
     {
         $org = Organization::factory()->create();
         $admin = $this->admin($org);
@@ -108,14 +126,17 @@ class TrainingHierarchyApiTest extends TestCase
                 'initial_only' => false,
                 'repeating' => false,
                 'as_needed' => true,
-                'superseded_by_id' => $competent->id,
+                'satisfied_by_ids' => [$competent->id],
             ])
             ->assertCreated();
 
-        $this->assertSame($competent->id, Training::findOrFail($response->json('id'))->superseded_by_id);
+        $this->assertSame(
+            [$competent->id],
+            $this->satisfierIds(Training::findOrFail($response->json('id'))),
+        );
     }
 
-    public function test_a_cross_org_pointer_is_refused(): void
+    public function test_a_cross_org_satisfier_is_refused(): void
     {
         $org = Organization::factory()->create();
         $otherOrg = Organization::factory()->create();
@@ -125,24 +146,26 @@ class TrainingHierarchyApiTest extends TestCase
 
         $this->actingAs($admin)
             ->patchJson("/api/trainings/{$authorized->id}", $this->payload($authorized, [
-                'superseded_by_id' => $foreign->id,
+                'satisfied_by_ids' => [$foreign->id],
             ]))
             ->assertStatus(422)
-            ->assertJsonValidationErrors('superseded_by_id');
+            ->assertJsonValidationErrors('satisfied_by_ids.0');
     }
 
-    public function test_pointing_a_training_at_itself_is_refused(): void
+    public function test_a_training_satisfying_itself_is_refused(): void
     {
         $org = Organization::factory()->create();
         $admin = $this->admin($org);
         $authorized = $this->training($org, 'Authorized');
+        $other = $this->training($org, 'Other');
 
+        // Buried in an otherwise-valid set — the whole set is refused.
         $this->actingAs($admin)
             ->patchJson("/api/trainings/{$authorized->id}", $this->payload($authorized, [
-                'superseded_by_id' => $authorized->id,
+                'satisfied_by_ids' => [$other->id, $authorized->id],
             ]))
             ->assertStatus(422)
-            ->assertJsonValidationErrors('superseded_by_id');
+            ->assertJsonValidationErrors('satisfied_by_ids');
     }
 
     public function test_a_two_node_cycle_is_refused(): void
@@ -151,35 +174,64 @@ class TrainingHierarchyApiTest extends TestCase
         $admin = $this->admin($org);
         $a = $this->training($org, 'A');
         $b = $this->training($org, 'B');
-        $a->update(['superseded_by_id' => $b->id]);
+        $this->wire($a, $b);
 
         $this->actingAs($admin)
             ->patchJson("/api/trainings/{$b->id}", $this->payload($b, [
-                'superseded_by_id' => $a->id,
+                'satisfied_by_ids' => [$a->id],
             ]))
             ->assertStatus(422)
-            ->assertJsonValidationErrors('superseded_by_id');
+            ->assertJsonValidationErrors('satisfied_by_ids');
     }
 
-    public function test_a_deep_cycle_is_refused(): void
+    public function test_a_deep_cycle_through_one_branch_is_refused(): void
     {
+        // C's proposed set is [D, A] — D is innocent, but A chains down to C
+        // through B. One bad branch poisons the whole set.
         $org = Organization::factory()->create();
         $admin = $this->admin($org);
         $a = $this->training($org, 'A');
         $b = $this->training($org, 'B');
         $c = $this->training($org, 'C');
-        $a->update(['superseded_by_id' => $b->id]);
-        $b->update(['superseded_by_id' => $c->id]);
+        $d = $this->training($org, 'D');
+        $this->wire($a, $b);
+        $this->wire($b, $c);
 
         $this->actingAs($admin)
             ->patchJson("/api/trainings/{$c->id}", $this->payload($c, [
-                'superseded_by_id' => $a->id,
+                'satisfied_by_ids' => [$d->id, $a->id],
             ]))
             ->assertStatus(422)
-            ->assertJsonValidationErrors('superseded_by_id');
+            ->assertJsonValidationErrors('satisfied_by_ids');
     }
 
-    public function test_repointing_resyncs_affected_assignments_immediately(): void
+    public function test_a_diamond_is_legal(): void
+    {
+        // Authorized ← {Initial, Refresher}, both ← Trainer. Two paths to the
+        // same ancestor is convergence, not a loop — the guard must tell the
+        // difference.
+        $org = Organization::factory()->create();
+        $admin = $this->admin($org);
+        $authorized = $this->training($org, 'Authorized');
+        $initial = $this->training($org, 'Competent Initial');
+        $refresher = $this->training($org, 'Competent Refresher');
+        $trainer = $this->training($org, 'Trainer');
+        $this->wire($initial, $trainer);
+        $this->wire($refresher, $trainer);
+
+        $this->actingAs($admin)
+            ->patchJson("/api/trainings/{$authorized->id}", $this->payload($authorized, [
+                'satisfied_by_ids' => [$initial->id, $refresher->id],
+            ]))
+            ->assertOk();
+
+        $this->assertEqualsCanonicalizing(
+            [$initial->id, $refresher->id],
+            $this->satisfierIds($authorized),
+        );
+    }
+
+    public function test_wiring_resyncs_affected_assignments_immediately(): void
     {
         // The admin wires the ladder AFTER people already hold credentials.
         // The compliance rows must move on save, not at the nightly watchdog.
@@ -206,7 +258,7 @@ class TrainingHierarchyApiTest extends TestCase
 
         $this->actingAs($admin)
             ->patchJson("/api/trainings/{$authorized->id}", $this->payload($authorized, [
-                'superseded_by_id' => $competent->id,
+                'satisfied_by_ids' => [$competent->id],
             ]))
             ->assertOk();
 
@@ -215,14 +267,51 @@ class TrainingHierarchyApiTest extends TestCase
         $this->assertSame($competent->id, $ta->satisfied_via_training_id);
     }
 
-    public function test_clearing_the_pointer_resyncs_back(): void
+    public function test_adding_a_second_satisfier_covers_through_it(): void
+    {
+        // John's case verbatim: the credit sits on Refresher, and Authorized
+        // is currently wired only under Initial. Widening the set to
+        // {Initial, Refresher} must light Authorized up via Refresher.
+        $org = Organization::factory()->create();
+        $admin = $this->admin($org);
+        $user = User::factory()->for($org, 'organization')->create();
+        $initial = $this->training($org, 'Competent Initial');
+        $refresher = $this->training($org, 'Competent Refresher');
+        $authorized = $this->training($org, 'Authorized');
+        $this->wire($authorized, $initial);
+        $ta = TrainingAssignment::factory()->for($org, 'organization')->create([
+            'user_id' => $user->id,
+            'training_id' => $authorized->id,
+            'name' => $authorized->name,
+        ]);
+        Completion::factory()->for($org, 'organization')->for($user, 'user')->create([
+            'module_type' => Training::class,
+            'module_id' => $refresher->id,
+            'completion_date' => now()->subDays(30)->toDateString(),
+            'expire_date' => now()->addDays(700)->toDateString(),
+        ]);
+        app(RecalculateTrainingStatus::class)->handle($user->id, $authorized->id);
+        $this->assertSame('not_started', $ta->fresh()->status);
+
+        $this->actingAs($admin)
+            ->patchJson("/api/trainings/{$authorized->id}", $this->payload($authorized, [
+                'satisfied_by_ids' => [$initial->id, $refresher->id],
+            ]))
+            ->assertOk();
+
+        $ta->refresh();
+        $this->assertSame('current', $ta->status);
+        $this->assertSame($refresher->id, $ta->satisfied_via_training_id);
+    }
+
+    public function test_clearing_the_set_resyncs_back(): void
     {
         $org = Organization::factory()->create();
         $admin = $this->admin($org);
         $user = User::factory()->for($org, 'organization')->create();
         $competent = $this->training($org, 'Competent');
         $authorized = $this->training($org, 'Authorized');
-        $authorized->update(['superseded_by_id' => $competent->id]);
+        $this->wire($authorized, $competent);
         $ta = TrainingAssignment::factory()->for($org, 'organization')->create([
             'user_id' => $user->id,
             'training_id' => $authorized->id,
@@ -239,7 +328,7 @@ class TrainingHierarchyApiTest extends TestCase
 
         $this->actingAs($admin)
             ->patchJson("/api/trainings/{$authorized->id}", $this->payload($authorized, [
-                'superseded_by_id' => null,
+                'satisfied_by_ids' => [],
             ]))
             ->assertOk();
 
@@ -248,9 +337,9 @@ class TrainingHierarchyApiTest extends TestCase
         $this->assertNull($ta->satisfied_via_training_id);
     }
 
-    public function test_repointing_resyncs_descendants_too(): void
+    public function test_rewiring_resyncs_descendants_too(): void
     {
-        // Repointing Competent re-routes everything BELOW it: Authorized
+        // Rewiring Competent re-routes everything BELOW it: Authorized
         // chains through Competent, so its coverage changes as well.
         $org = Organization::factory()->create();
         $admin = $this->admin($org);
@@ -258,7 +347,7 @@ class TrainingHierarchyApiTest extends TestCase
         $qualified = $this->training($org, 'Qualified');
         $competent = $this->training($org, 'Competent');
         $authorized = $this->training($org, 'Authorized');
-        $authorized->update(['superseded_by_id' => $competent->id]);
+        $this->wire($authorized, $competent);
         $ta = TrainingAssignment::factory()->for($org, 'organization')->create([
             'user_id' => $user->id,
             'training_id' => $authorized->id,
@@ -275,7 +364,7 @@ class TrainingHierarchyApiTest extends TestCase
         // Wiring Competent → Qualified links Authorized to Qualified transitively.
         $this->actingAs($admin)
             ->patchJson("/api/trainings/{$competent->id}", $this->payload($competent, [
-                'superseded_by_id' => $qualified->id,
+                'satisfied_by_ids' => [$qualified->id],
             ]))
             ->assertOk();
 
@@ -289,7 +378,7 @@ class TrainingHierarchyApiTest extends TestCase
     {
         $competent = $this->training($org, 'Competent Person');
         $authorized = $this->training($org, 'Authorized Person');
-        $authorized->update(['superseded_by_id' => $competent->id]);
+        $this->wire($authorized, $competent);
         $ta = TrainingAssignment::factory()->for($org, 'organization')->create([
             'user_id' => $user->id,
             'training_id' => $authorized->id,
@@ -351,7 +440,7 @@ class TrainingHierarchyApiTest extends TestCase
         $user = User::factory()->for($org, 'organization')->create();
         $competent = $this->training($org, 'Competent Person');
         $authorized = $this->training($org, 'Authorized Person');
-        $authorized->update(['superseded_by_id' => $competent->id]);
+        $this->wire($authorized, $competent);
         TrainingAssignment::factory()->for($org, 'organization')->create([
             'user_id' => $user->id,
             'training_id' => $authorized->id,
@@ -376,19 +465,19 @@ class TrainingHierarchyApiTest extends TestCase
         $this->assertSame('Competent Person', $row['satisfied_via_training_name']);
     }
 
-    public function test_show_page_exposes_the_pointer_for_the_form(): void
+    public function test_show_page_exposes_the_satisfier_set_for_the_form(): void
     {
         $org = Organization::factory()->create();
         $admin = $this->admin($org);
         $competent = $this->training($org, 'Competent');
         $authorized = $this->training($org, 'Authorized');
-        $authorized->update(['superseded_by_id' => $competent->id]);
+        $this->wire($authorized, $competent);
 
         $this->actingAs($admin)
             ->get(route('trainings.show', $authorized))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->where('training.superseded_by_id', $competent->id)
+                ->where('training.satisfied_by_ids', [$competent->id])
             );
     }
 }

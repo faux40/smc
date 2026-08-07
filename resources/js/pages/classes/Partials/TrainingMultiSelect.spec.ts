@@ -25,7 +25,7 @@ function training(id: string, name: string): TrainingRow {
         default_location: null,
         default_address: null,
         can_edit: true,
-        superseded_by_id: null,
+        satisfied_by_ids: [],
         can_delete: true,
     };
 }

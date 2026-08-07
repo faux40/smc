@@ -41,7 +41,7 @@ const training: TrainingFormSource & { id: string } = {
     default_trainer: null,
     default_location: null,
     default_address: null,
-    superseded_by_id: null,
+    satisfied_by_ids: [],
 };
 
 describe('trainings/Show', () => {
@@ -127,48 +127,61 @@ describe('trainings/Show', () => {
     it('offers a Satisfied-by picker that excludes this training and its dependants', async () => {
         // Options come from the library. The training itself is out (nothing
         // satisfies itself), and so is anything whose chain already runs
-        // THROUGH this training — picking one would loop the ladder. Here
-        // t-below points at t1, so both are excluded; t-free is offered.
+        // THROUGH this training — checking one would loop the DAG. Here
+        // t-below names t1 among its satisfiers, so both are excluded;
+        // t-free is offered.
         const trainings = useTrainingsStore();
         trainings.loaded = true;
         trainings.library = [
-            { id: 't1', name: 'Authorized', superseded_by_id: null },
-            { id: 't-below', name: 'Awareness', superseded_by_id: 't1' },
-            { id: 't-free', name: 'Competent', superseded_by_id: null },
+            { id: 't1', name: 'Authorized', satisfied_by_ids: [] },
+            {
+                id: 't-below',
+                name: 'Awareness',
+                satisfied_by_ids: ['t-free', 't1'],
+            },
+            { id: 't-free', name: 'Competent', satisfied_by_ids: [] },
         ] as (typeof trainings)['library'];
 
         const wrapper = mount(Show, { props: { training } });
         await flushPromises();
 
-        const options = wrapper
-            .get('#t_superseded_by')
-            .findAll('option')
-            .map((o) => o.text());
-        expect(options).toContain('Competent');
-        expect(options).not.toContain('Authorized');
-        expect(options).not.toContain('Awareness');
+        const labels = wrapper
+            .get('#t_satisfied_by')
+            .findAll('li label')
+            .map((l) => l.text());
+        expect(labels.join(' ')).toContain('Competent');
+        expect(labels.join(' ')).not.toContain('Authorized');
+        expect(labels.join(' ')).not.toContain('Awareness');
     });
 
-    it('saves the chosen higher training on the PATCH payload', async () => {
+    it('saves the checked higher trainings on the PATCH payload', async () => {
         const trainings = useTrainingsStore();
         trainings.loaded = true;
         trainings.library = [
-            { id: 't-free', name: 'Competent', superseded_by_id: null },
-        ] as (typeof trainings)['library'];
+            { id: 't-free', name: 'Competent', satisfied_by_ids: [] },
+            { id: 't-alt', name: 'Refresher', satisfied_by_ids: [] },
+        ] as unknown as (typeof trainings)['library'];
         (axios.patch as ReturnType<typeof vi.fn>).mockResolvedValue({
-            data: { ...training, superseded_by_id: 't-free' },
+            data: { ...training, satisfied_by_ids: ['t-free', 't-alt'] },
         });
 
         const wrapper = mount(Show, { props: { training } });
         await flushPromises();
 
-        await wrapper.get('#t_superseded_by').setValue('t-free');
+        await wrapper
+            .get('#t_satisfied_by input[value="t-free"]')
+            .setValue(true);
+        await wrapper
+            .get('#t_satisfied_by input[value="t-alt"]')
+            .setValue(true);
         await wrapper.get('form').trigger('submit');
         await flushPromises();
 
         expect(axios.patch).toHaveBeenCalledWith(
             '/api/trainings/t1',
-            expect.objectContaining({ superseded_by_id: 't-free' }),
+            expect.objectContaining({
+                satisfied_by_ids: ['t-free', 't-alt'],
+            }),
             expect.anything(),
         );
     });

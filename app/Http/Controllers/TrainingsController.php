@@ -27,7 +27,7 @@ class TrainingsController extends Controller
 
         $rows = Training::query()
             ->where('org_id', $request->user()->org_id)
-            ->with('stdFrequency:id,name,repeat_days')
+            ->with('stdFrequency:id,name,repeat_days', 'satisfiers:trainings.id')
             ->orderBy('name')
             ->get();
 
@@ -44,7 +44,7 @@ class TrainingsController extends Controller
 
         $query = Training::query()
             ->where('org_id', $request->user()->org_id)
-            ->with('stdFrequency:id,name,repeat_days');
+            ->with('stdFrequency:id,name,repeat_days', 'satisfiers:trainings.id');
 
         if ($request->filled('q')) {
             $term = '%'.mb_strtolower((string) $request->query('q')).'%';
@@ -95,9 +95,10 @@ class TrainingsController extends Controller
             'std_freq_repeat_days' => $t->stdFrequency?->repeat_days,
             'as_needed' => $t->as_needed,
             'default_hours' => $t->default_hours,
-            // Hierarchy pointer — the picker needs it to exclude options that
-            // would loop, and pills resolve "via" names from it.
-            'superseded_by_id' => $t->superseded_by_id,
+            // Hierarchy edges — the picker needs them to exclude options that
+            // would loop. ANY of these trainings' credentials satisfies this
+            // one (OR-semantics).
+            'satisfied_by_ids' => $t->satisfiers->pluck('id')->all(),
             ...$this->certOutput($t),
             'can_edit' => Gate::check('update', $t),
             'can_delete' => Gate::check('delete', $t),
@@ -120,9 +121,12 @@ class TrainingsController extends Controller
             // Null when not repeating; the validator already required it when repeating=true.
             'std_freq_id' => ((bool) $data['repeating']) ? $data['std_freq_id'] : null,
             'as_needed' => (bool) $data['as_needed'],
-            'superseded_by_id' => $data['superseded_by_id'] ?? null,
             ...$this->certPayload($data),
         ]);
+
+        $training->satisfiers()->sync(
+            $this->satisfierPivot($data['satisfied_by_ids'] ?? [], $training->org_id),
+        );
 
         event(new TrainingCreated($training));
 
@@ -143,17 +147,34 @@ class TrainingsController extends Controller
             'repeating' => (bool) $data['repeating'],
             'std_freq_id' => ((bool) $data['repeating']) ? $data['std_freq_id'] : null,
             'as_needed' => (bool) $data['as_needed'],
-            'superseded_by_id' => $data['superseded_by_id'] ?? null,
             ...$this->certPayload($data),
         ]);
 
-        if ($training->wasChanged('superseded_by_id')) {
+        $changes = $training->satisfiers()->sync(
+            $this->satisfierPivot($data['satisfied_by_ids'] ?? [], $training->org_id),
+        );
+
+        if ($changes['attached'] !== [] || $changes['detached'] !== []) {
             $this->resyncHierarchy($training);
         }
 
         event(new TrainingUpdated($training->fresh()));
 
         return response()->json($this->serialize($training->fresh()));
+    }
+
+    /**
+     * sync() payload with the tenant stamp on every edge — the pivot carries
+     * org_id so TrainingLadder can load an org's edges in one query.
+     *
+     * @param  list<string>  $ids
+     * @return array<string, array{org_id: string}>
+     */
+    private function satisfierPivot(array $ids, string $orgId): array
+    {
+        return collect($ids)
+            ->mapWithKeys(fn (string $id) => [$id => ['org_id' => $orgId]])
+            ->all();
     }
 
     /**
@@ -199,6 +220,8 @@ class TrainingsController extends Controller
 
     private function serialize(Training $t): array
     {
+        $t->loadMissing('satisfiers:trainings.id');
+
         return [
             'id' => $t->id,
             'name' => $t->name,
@@ -209,9 +232,9 @@ class TrainingsController extends Controller
             'std_freq_id' => $t->std_freq_id,
             'as_needed' => $t->as_needed,
             'default_hours' => $t->default_hours,
-            // Hierarchy: the higher training whose credential satisfies this
-            // one. The picker resolves the name from the library list.
-            'superseded_by_id' => $t->superseded_by_id,
+            // Hierarchy: the higher trainings whose credentials satisfy this
+            // one (any of them). The picker resolves names from the library.
+            'satisfied_by_ids' => $t->satisfiers->pluck('id')->all(),
             ...$this->certOutput($t),
         ];
     }

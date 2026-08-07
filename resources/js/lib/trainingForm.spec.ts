@@ -26,7 +26,7 @@ function source(
         default_trainer: null,
         default_location: null,
         default_address: null,
-        superseded_by_id: null,
+        satisfied_by_ids: [],
         ...overrides,
     };
 }
@@ -74,22 +74,35 @@ describe('trainingForm — default card stock', () => {
     });
 });
 
-describe('trainingForm — hierarchy pointer', () => {
-    it('starts with no higher training', () => {
-        expect(blankTrainingForm().superseded_by_id).toBeNull();
+describe('trainingForm — hierarchy satisfiers', () => {
+    it('starts with no higher trainings', () => {
+        expect(blankTrainingForm().satisfied_by_ids).toEqual([]);
     });
 
-    it('round-trips the pointer through the form', () => {
-        const form = trainingToForm(source({ superseded_by_id: 'tr-9' }));
+    it('round-trips the satisfier set through the form', () => {
+        const form = trainingToForm(
+            source({ satisfied_by_ids: ['tr-9', 'tr-10'] }),
+        );
 
-        expect(form.superseded_by_id).toBe('tr-9');
-        expect(trainingFormPayload(form).superseded_by_id).toBe('tr-9');
+        expect(form.satisfied_by_ids).toEqual(['tr-9', 'tr-10']);
+        expect(trainingFormPayload(form).satisfied_by_ids).toEqual([
+            'tr-9',
+            'tr-10',
+        ]);
     });
 
-    it('sends null when the pointer is cleared', () => {
-        const form = trainingToForm(source({ superseded_by_id: 'tr-9' }));
-        form.superseded_by_id = null;
+    it('hydrates a COPY — form edits must not mutate the source row', () => {
+        const src = source({ satisfied_by_ids: ['tr-9'] });
+        const form = trainingToForm(src);
+        form.satisfied_by_ids.push('tr-10');
 
-        expect(trainingFormPayload(form).superseded_by_id).toBeNull();
+        expect(src.satisfied_by_ids).toEqual(['tr-9']);
+    });
+
+    it('sends an empty array when the set is cleared', () => {
+        const form = trainingToForm(source({ satisfied_by_ids: ['tr-9'] }));
+        form.satisfied_by_ids = [];
+
+        expect(trainingFormPayload(form).satisfied_by_ids).toEqual([]);
     });
 });
