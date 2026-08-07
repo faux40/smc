@@ -150,22 +150,14 @@ onMounted(async () => {
             >
         </div>
 
-        <AsyncState
-            :loading="initialLoading"
-            :error="error"
-            :empty="table.total.value === 0"
-        >
-            <template #empty>
-                <div
-                    class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
-                >
-                    No requirements match the current filter.
-                    <span v-if="canCreate"
-                        >Click "+ New requirement" to add one.</span
-                    >
-                </div>
-            </template>
-
+        <!--
+            No `:empty` on AsyncState: its empty slot replaces the whole default
+            slot, and the filters live inside the DataTable below — so a search
+            matching nothing used to unmount the search box that caused it,
+            leaving no way back. The empty message goes in DataTable's own
+            #empty row instead, which keeps the filter bar and headers mounted.
+        -->
+        <AsyncState :loading="initialLoading" :error="error">
             <DataTable
                 view-id="requirements"
                 :default-columns="REQUIREMENTS_COLUMNS"
@@ -247,6 +239,13 @@ onMounted(async () => {
                             Delete
                         </button>
                     </td>
+                </template>
+
+                <template #empty>
+                    No requirements match the current filter.
+                    <span v-if="canCreate"
+                        >Click "+ New requirement" to add one.</span
+                    >
                 </template>
             </DataTable>
 

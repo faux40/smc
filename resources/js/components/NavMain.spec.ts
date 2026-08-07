@@ -1,6 +1,8 @@
 import { mount } from '@vue/test-utils';
+import { FileStack } from 'lucide-vue-next';
 import { describe, expect, it, vi } from 'vitest';
 import NavMain from '@/components/NavMain.vue';
+import type { NavItem } from '@/types';
 
 /*
  * NavMain renders one labelled sidebar group. The label used to be hardcoded
@@ -18,7 +20,11 @@ vi.mock('@/composables/useCurrentUrl', () => ({
     useCurrentUrl: () => ({ isCurrentUrl: () => false }),
 }));
 
-const ITEMS = [{ title: 'Documents', href: '/documents', icon: 'span' }];
+// A real Lucide icon rather than a string stub — NavItem['icon'] is typed as
+// LucideIcon, and vue-tsc rejects the shortcut.
+const ITEMS: NavItem[] = [
+    { title: 'Documents', href: '/documents', icon: FileStack },
+];
 
 const stubs = {
     SidebarGroup: { template: '<div><slot /></div>' },

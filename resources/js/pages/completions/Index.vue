@@ -222,22 +222,14 @@ const remove = async (row: CompletionRow) => {
             >
         </div>
 
-        <AsyncState
-            :loading="initialLoading"
-            :error="error"
-            :empty="table.total.value === 0"
-        >
-            <template #empty>
-                <div
-                    class="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
-                >
-                    No completions match the current filter.
-                    <span v-if="canCreate">
-                        Click "+ New completion" to record one.</span
-                    >
-                </div>
-            </template>
-
+        <!--
+            No `:empty` on AsyncState: its empty slot replaces the whole default
+            slot, and the filters live inside the DataTable below — so a search
+            matching nothing used to unmount the search box that caused it,
+            leaving no way back. The empty message goes in DataTable's own
+            #empty row instead, which keeps the filter bar and headers mounted.
+        -->
+        <AsyncState :loading="initialLoading" :error="error">
             <DataTable
                 view-id="completions"
                 :default-columns="COMPLETIONS_COLUMNS"
@@ -378,6 +370,13 @@ const remove = async (row: CompletionRow) => {
                             Delete
                         </button>
                     </td>
+                </template>
+
+                <template #empty>
+                    No completions match the current filter.
+                    <span v-if="canCreate">
+                        Click "+ New completion" to record one.</span
+                    >
                 </template>
             </DataTable>
 
