@@ -61,8 +61,20 @@ class CompletionsController extends Controller
 
         if ($needsTrainingJoin) {
             // Only match Training-type modules; non-Training rows get NULLs (safe for sort/search).
+            //
+            // The cast is load-bearing on Postgres: `completions.module_id` is a
+            // string column by design — the morph is meant to carry a future
+            // module whose id is not a UUID — while `trainings.id` is uuid, and
+            // Postgres refuses `uuid = character varying` rather than coercing.
+            // Without it every search and every training-name sort returned 500.
+            //
+            // Cast the uuid side, not the string one: `module_id::uuid` would
+            // throw on the first non-UUID module, i.e. exactly the case the
+            // string column exists for. Costs the index on trainings.id for this
+            // join; if that ever bites, a functional index on (id::text) buys it
+            // back without changing the query.
             $query->leftJoin('trainings', function ($join) {
-                $join->on('trainings.id', '=', 'completions.module_id')
+                $join->on(DB::raw('CAST("trainings"."id" AS TEXT)'), '=', 'completions.module_id')
                     ->where('completions.module_type', '=', Training::class);
             });
         }

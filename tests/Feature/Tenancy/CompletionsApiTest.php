@@ -16,6 +16,7 @@ use App\Models\TrainingClass;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -970,5 +971,73 @@ class CompletionsApiTest extends TestCase
             ->json('data.0');
 
         $this->assertSame('Retired Course', $row['training_name']);
+    }
+
+    // ------------------------------------------------------------------
+    // Driver portability — the trainings join
+    //
+    // This suite runs on sqlite, which is loosely typed and happily compares a
+    // uuid column to a varchar one. Dev and production are Postgres, which
+    // refuses `uuid = character varying` outright: `completions.module_id` is a
+    // string column by design (so a future module can carry a non-UUID id)
+    // while `trainings.id` is uuid. Every completions search returned 500, as
+    // did sorting by training name.
+    //
+    // The two search tests above exercise that join and pass on sqlite, which
+    // is exactly how this reached the browser unnoticed. Behaviour cannot catch
+    // a driver difference the driver under test does not have, so these assert
+    // the SQL shape instead. The uuid side is the one to cast — `module_id::uuid`
+    // would throw the moment a non-UUID module exists, which is the case the
+    // string column was chosen for in the first place.
+    // ------------------------------------------------------------------
+
+    private const CAST_JOIN = 'cast("trainings"."id" as text) = "completions"."module_id"';
+
+    /** Every statement a request ran, concatenated. */
+    private function sqlFor(string $url, User $admin): string
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->actingAs($admin)->getJson($url)->assertOk();
+
+        $sql = collect(DB::getQueryLog())->pluck('query')->implode("\n");
+        DB::disableQueryLog();
+
+        return $sql;
+    }
+
+    public function test_search_casts_the_uuid_side_of_the_trainings_join(): void
+    {
+        $s = $this->scaffold();
+
+        $this->assertStringContainsStringIgnoringCase(
+            self::CAST_JOIN,
+            $this->sqlFor('/api/completions?q=anything', $s['admin']),
+            'The trainings join must cast the uuid side, or Postgres 500s on every search.',
+        );
+    }
+
+    public function test_sort_by_training_name_casts_the_uuid_side_too(): void
+    {
+        // Same join, second trigger — it is added for the sort as well.
+        $s = $this->scaffold();
+
+        $this->assertStringContainsStringIgnoringCase(
+            self::CAST_JOIN,
+            $this->sqlFor('/api/completions?sort=training_name&dir=asc', $s['admin']),
+        );
+    }
+
+    public function test_the_uncast_comparison_is_gone_entirely(): void
+    {
+        // Guards against a well-meaning "simplification" back to a bare column
+        // comparison, which reads cleaner and breaks production.
+        $s = $this->scaffold();
+
+        $this->assertStringNotContainsString(
+            '"trainings"."id" = "completions"."module_id"',
+            $this->sqlFor('/api/completions?q=anything', $s['admin']),
+        );
     }
 }
