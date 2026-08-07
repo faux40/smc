@@ -263,8 +263,7 @@ watch(
             <p class="text-sm font-medium">SMC Certificate</p>
             <p class="text-xs text-muted-foreground">
                 The built-in certificate — defaults copied onto a class when
-                this topic is added, then printed on the certificate. Custom
-                card templates are separate.
+                this topic is added, then printed on the certificate.
             </p>
 
             <CertEditor
@@ -287,6 +286,10 @@ watch(
                 </p>
                 <InputError :message="fieldErrors.message('cert_code')" />
             </div>
+        </div>
+
+        <div class="space-y-3 border-t border-border pt-3">
+            <p class="text-sm font-medium">Card</p>
 
             <div class="grid gap-2">
                 <Label for="t_card_template">Custom card</Label>
@@ -347,6 +350,10 @@ watch(
                 </p>
                 <InputError :message="fieldErrors.message('card_stock_id')" />
             </div>
+        </div>
+
+        <div class="space-y-3 border-t border-border pt-3">
+            <p class="text-sm font-medium">Class defaults</p>
 
             <div class="grid gap-2">
                 <Label for="t_def_trainer">Default trainer</Label>

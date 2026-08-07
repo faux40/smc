@@ -240,6 +240,42 @@ async function save(): Promise<void> {
                 </div>
             </div>
 
+            <!-- Certificate: seeded from the training, overridden per class.
+                 Shut by default — an editor beside a live preview is the
+                 tallest thing here and the least often wanted. Above the card
+                 section to mirror the training form's order. -->
+            <CollapsibleSection
+                title="SMC certificate"
+                toggle-testid="cert-toggle"
+                nested
+                :summary="form.cert_title || null"
+                class="space-y-3"
+            >
+                <CertEditor
+                    v-model:title="form.cert_title"
+                    v-model:text="form.cert_text"
+                    :id-prefix="`t_${topic.id}`"
+                    :label="topic.training_name"
+                    :disabled="readOnly"
+                />
+
+                <div class="grid max-w-xs gap-1.5">
+                    <Label :for="`cert_code_${topic.id}`">Cert code</Label>
+                    <Input
+                        :id="`cert_code_${topic.id}`"
+                        data-testid="topic-cert-code"
+                        v-model="form.cert_code"
+                        :disabled="readOnly"
+                        placeholder="e.g. FPAP"
+                    />
+                    <p class="text-xs text-muted-foreground">
+                        Prefix for the certificate numbers minted at close-out
+                        &mdash; e.g. FPAP becomes FPAP20260806-001. Blank uses
+                        the generic CERT prefix.
+                    </p>
+                </div>
+            </CollapsibleSection>
+
             <!-- Card fields: this class's answers for the training's own. -->
             <CollapsibleSection
                 title="Card fields"
@@ -299,41 +335,6 @@ async function save(): Promise<void> {
                         :disabled="readOnly"
                         :placeholder="placeholderFor(field.default_value)"
                     />
-                </div>
-            </CollapsibleSection>
-
-            <!-- Certificate: seeded from the training, overridden per class.
-                 Shut by default — an editor beside a live preview is the
-                 tallest thing here and the least often wanted. -->
-            <CollapsibleSection
-                title="SMC certificate"
-                toggle-testid="cert-toggle"
-                nested
-                :summary="form.cert_title || null"
-                class="space-y-3"
-            >
-                <CertEditor
-                    v-model:title="form.cert_title"
-                    v-model:text="form.cert_text"
-                    :id-prefix="`t_${topic.id}`"
-                    :label="topic.training_name"
-                    :disabled="readOnly"
-                />
-
-                <div class="grid max-w-xs gap-1.5">
-                    <Label :for="`cert_code_${topic.id}`">Cert code</Label>
-                    <Input
-                        :id="`cert_code_${topic.id}`"
-                        data-testid="topic-cert-code"
-                        v-model="form.cert_code"
-                        :disabled="readOnly"
-                        placeholder="e.g. FPAP"
-                    />
-                    <p class="text-xs text-muted-foreground">
-                        Prefix for the certificate numbers minted at close-out
-                        &mdash; e.g. FPAP becomes FPAP20260806-001. Blank uses
-                        the generic CERT prefix.
-                    </p>
                 </div>
             </CollapsibleSection>
 
