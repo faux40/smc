@@ -176,6 +176,8 @@ function detail(
         status,
         completion_date: '2026-06-01',
         was_completed: false,
+        requires_prior_completion: false,
+        prior_completion_user_ids: {},
         can_edit: status === 'scheduled',
         tag_ids: [],
         trainings: [t],

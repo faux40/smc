@@ -27,6 +27,8 @@ function detail(over: Partial<ClassDetail> = {}): ClassDetail {
         status: 'scheduled',
         completion_date: null,
         was_completed: false,
+        requires_prior_completion: false,
+        prior_completion_user_ids: {},
         can_edit: true,
         tag_ids: [],
         trainings: [],

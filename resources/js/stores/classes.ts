@@ -135,6 +135,17 @@ export interface ClassDetail {
      * from `completion_date`: that can be filled in before close-out.
      */
     was_completed: boolean;
+    /**
+     * Refresher guard: enrollees should already hold each topic training's
+     * completion. Soft — drives roster warnings, never blocks enrollment.
+     */
+    requires_prior_completion: boolean;
+    /**
+     * Per topic training id, the org users holding a completion NOT issued by
+     * this class (existence, not currency). Whole-org so the roster picker
+     * can warn before someone is added. Empty when the flag is off.
+     */
+    prior_completion_user_ids: Record<string, string[]>;
     can_edit: boolean;
     /**
      * Seeded from the class's trainings when each topic is attached, then
@@ -156,6 +167,7 @@ export interface ClassFormPayload {
     address: string | null;
     instructor: string | null;
     show_signature: boolean;
+    requires_prior_completion: boolean;
     total_hours: number | null;
     min_students: number | null;
     max_students: number | null;

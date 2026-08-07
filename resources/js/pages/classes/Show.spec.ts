@@ -47,6 +47,8 @@ const detail: ClassDetail = {
     status: 'scheduled',
     completion_date: null,
     was_completed: false,
+    requires_prior_completion: false,
+    prior_completion_user_ids: {},
     can_edit: true,
     tag_ids: [],
     trainings: [],
@@ -556,6 +558,8 @@ const completedDetail: ClassDetail = {
     status: 'completed',
     completion_date: '2026-06-01',
     was_completed: true,
+    requires_prior_completion: false,
+    prior_completion_user_ids: {},
     can_edit: false,
     trainings: [
         {
@@ -866,6 +870,8 @@ describe('classes/Show — issue a single certificate', () => {
             ...reopenedDetail,
             completion_date: '2026-06-01',
             was_completed: false,
+            requires_prior_completion: false,
+            prior_completion_user_ids: {},
         });
         const wrapper = await mountShow();
         const labels = wrapper.findAll('button').map((b) => b.text());
@@ -897,6 +903,8 @@ describe('classes/Show — re-close (keep as-is)', () => {
             ...reopenedDetail,
             completion_date: '2026-06-01',
             was_completed: false,
+            requires_prior_completion: false,
+            prior_completion_user_ids: {},
         });
         const wrapper = await mountShow();
         const labels = wrapper.findAll('button').map((b) => b.text());

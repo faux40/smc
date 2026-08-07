@@ -169,6 +169,8 @@ const sourceClass: ClassDetail = {
     status: 'completed',
     completion_date: '2026-03-01',
     was_completed: false,
+    requires_prior_completion: false,
+    prior_completion_user_ids: {},
     can_edit: false,
     tag_ids: [],
     trainings: [

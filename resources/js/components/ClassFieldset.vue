@@ -161,6 +161,20 @@ const id = (field: string) => `${props.idPrefix ?? 'class'}_${field}`;
             Show signature line on certificates
         </label>
 
+        <div class="grid gap-1">
+            <label class="flex items-center gap-2 text-sm">
+                <Checkbox
+                    :id="id('requires_prior_completion')"
+                    v-model="form.requires_prior_completion"
+                />
+                Students must have a prior completion (refresher)
+            </label>
+            <p class="pl-6 text-xs text-muted-foreground">
+                The roster warns about anyone without an earlier completion of
+                each topic's training — it never blocks enrollment.
+            </p>
+        </div>
+
         <div class="grid gap-2">
             <Label :for="id('address')">Address</Label>
             <textarea

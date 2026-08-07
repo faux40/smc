@@ -923,6 +923,33 @@ class ClassesController extends Controller
 
         $creditsByTopic = $creditRows->groupBy('class_training_id');
 
+        // Refresher guard (soft): per topic training, which org users hold a
+        // completion NOT issued by this class — existence, not currency (a
+        // lapsed credential still proves they had the initial; the refresher
+        // is how they get current again). Whole-org rather than roster-only so
+        // the picker can warn BEFORE someone is enrolled. Computed only when
+        // the flag is on; the payload stays lean otherwise.
+        $priorByTraining = [];
+        if ($c->requires_prior_completion) {
+            $topicIds = $c->classTrainings->pluck('id');
+            $trainingIds = $c->classTrainings->pluck('training_id')->filter()->unique()->values();
+
+            $priorByTraining = Completion::query()
+                ->where('module_type', Training::class)
+                ->whereIn('module_id', $trainingIds)
+                ->where(fn ($q) => $q
+                    ->whereNull('class_training_id')
+                    ->orWhereNotIn('class_training_id', $topicIds))
+                ->get(['user_id', 'module_id'])
+                ->groupBy('module_id')
+                ->map(fn ($g) => $g->pluck('user_id')->unique()->values()->all())
+                ->all();
+
+            foreach ($trainingIds as $tid) {
+                $priorByTraining[$tid] ??= [];
+            }
+        }
+
         return [
             'id' => $c->id,
             'name' => $c->name,
@@ -944,6 +971,9 @@ class ClassesController extends Controller
             // standing precisely so this survives it. The completion date
             // can't answer it: that's editable in advance now.
             'was_completed' => $c->completed_at !== null,
+            // (bool) — a just-created instance hasn't seen the DB default.
+            'requires_prior_completion' => (bool) $c->requires_prior_completion,
+            'prior_completion_user_ids' => $priorByTraining,
             'can_edit' => Gate::check('update', $c),
             // TagsField mounts on the detail page and takes its initial state
             // as a prop. Seeded from the class's trainings at attach time

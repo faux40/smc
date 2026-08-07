@@ -41,6 +41,7 @@ class TrainingClass extends Model
         'status',
         'completion_date',
         'completed_at',
+        'requires_prior_completion',
     ];
 
     protected $casts = [
@@ -51,6 +52,7 @@ class TrainingClass extends Model
         'min_students' => 'integer',
         'max_students' => 'integer',
         'show_signature' => 'boolean',
+        'requires_prior_completion' => 'boolean',
     ];
 
     /** @return HasMany<ClassTraining, $this> */

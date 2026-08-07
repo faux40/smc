@@ -27,6 +27,8 @@ const detail: ClassDetail = {
     status: 'scheduled',
     completion_date: null,
     was_completed: false,
+    requires_prior_completion: false,
+    prior_completion_user_ids: {},
     can_edit: true,
     tag_ids: [],
     trainings: [],
@@ -543,5 +545,56 @@ describe('ManageRosterModal', () => {
             .querySelectorAll('tbody tr');
         expect(availRows).toHaveLength(1);
         expect(availRows[0].textContent).toContain('Lee, Sam');
+    });
+
+    it('warns on people without a prior completion when the class requires one', async () => {
+        // u1 (enrolled) has prior credit for the topic training; u2
+        // (available) does not — the badge shows on BOTH sides so the gap is
+        // visible before someone is added, and it names the training.
+        useClassesStore().detail = {
+            c1: {
+                ...detail,
+                requires_prior_completion: true,
+                trainings: [
+                    {
+                        id: 'ct1',
+                        training_id: 'tr1',
+                        training_name: 'Fall Protection Competent Person',
+                    } as ClassDetail['trainings'][number],
+                ],
+                prior_completion_user_ids: { tr1: ['u1'] },
+            },
+        };
+        await openModal();
+
+        const [enrolledTable, availableTable] =
+            document.body.querySelectorAll('table');
+        expect(enrolledTable.textContent).not.toContain('No prior completion');
+        expect(availableTable.textContent).toContain('No prior completion');
+        expect(
+            availableTable
+                .querySelector('[title*="Fall Protection Competent Person"]')
+                ?.textContent,
+        ).toContain('No prior completion');
+    });
+
+    it('shows no prior-completion warnings when the flag is off', async () => {
+        // Same data, flag off — the guard must be invisible.
+        useClassesStore().detail = {
+            c1: {
+                ...detail,
+                trainings: [
+                    {
+                        id: 'ct1',
+                        training_id: 'tr1',
+                        training_name: 'Fall Protection Competent Person',
+                    } as ClassDetail['trainings'][number],
+                ],
+                prior_completion_user_ids: {},
+            },
+        };
+        await openModal();
+
+        expect(document.body.textContent).not.toContain('No prior completion');
     });
 });

@@ -185,12 +185,36 @@ interface StudentItem {
     tags: TagRow[];
     searchText: string;
     disabled: boolean;
+    // Refresher guard: topic training names this person has no prior
+    // completion of. Empty unless the class requires prior completion.
+    missingPrior: string[];
 }
 
 // Plain-text cell value for the non-tag columns. Kept in the script (not the
 // template) so the `Record<…>` cast doesn't trip the SFC's HTML parser.
 const cellValue = (item: StudentItem, key: string): string =>
     (item as unknown as Record<string, string>)[key] || '—';
+
+// Refresher guard (soft): for each topic training, who already holds a
+// completion from outside this class. Warned on BOTH shuttle sides so the gap
+// is visible before someone is added — and never blocks.
+const missingPriorFor = (userId: string): string[] => {
+    const d = detail.value;
+
+    if (!d?.requires_prior_completion) {
+        return [];
+    }
+
+    return d.trainings
+        .filter(
+            (t) =>
+                t.training_id !== null &&
+                !(d.prior_completion_user_ids[t.training_id] ?? []).includes(
+                    userId,
+                ),
+        )
+        .map((t) => t.training_name);
+};
 
 const toItem = (u: PickerUser): StudentItem => {
     const tags = (u.tag_ids ?? [])
@@ -211,6 +235,7 @@ const toItem = (u: PickerUser): StudentItem => {
         // Rows without a status (older fixtures / other picker consumers)
         // are treated as active.
         disabled: u.status === 'disabled',
+        missingPrior: missingPriorFor(u.id),
     };
 };
 
@@ -476,6 +501,14 @@ function onOpenChange(value: boolean): void {
                             class="text-[10px]"
                         >
                             Disabled
+                        </Badge>
+                        <Badge
+                            v-if="(item as StudentItem).missingPrior.length"
+                            variant="outline"
+                            class="border-amber-400 text-[10px] text-amber-600 dark:border-amber-600 dark:text-amber-400"
+                            :title="`No prior completion: ${(item as StudentItem).missingPrior.join(', ')}`"
+                        >
+                            No prior completion
                         </Badge>
                     </span>
                     <template v-else>

@@ -36,6 +36,9 @@ class ClassRequest extends FormRequest
             'address' => ['nullable', 'string', 'max:1000'],
             'instructor' => ['nullable', 'string', 'max:255'],
             'show_signature' => ['boolean'],
+            // Refresher guard — enrollees should already hold each topic
+            // training's completion. Soft (roster warning), never a block.
+            'requires_prior_completion' => ['boolean'],
             'total_hours' => ['nullable', 'numeric', 'min:0'],
             // Reference-only planning counts — never enforced on enrollment.
             'min_students' => ['nullable', 'integer', 'min:0', 'max:9999'],

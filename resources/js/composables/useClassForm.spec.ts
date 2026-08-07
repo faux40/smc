@@ -23,6 +23,8 @@ const detail: ClassDetail = {
     status: 'scheduled',
     completion_date: null,
     was_completed: false,
+    requires_prior_completion: true,
+    prior_completion_user_ids: {},
     can_edit: true,
     tag_ids: [],
     trainings: [],
@@ -41,6 +43,20 @@ describe('useClassForm', () => {
         expect(form.value.end_time).toBe('12:00');
         expect(form.value.instructor).toBe('J. Cole');
         expect(form.value.show_signature).toBe(true);
+        expect(form.value.requires_prior_completion).toBe(true);
+    });
+
+    it('carries the refresher flag through payload, and duplication via setFrom', () => {
+        // Duplicate mode seeds the form with setFrom(source) — the flag must
+        // ride along so a duplicated refresher stays a refresher.
+        const { form, setFrom, payload } = useClassForm(CTX);
+        setFrom(detail);
+        form.value.name = 'FP Comp Person — Refresher (copy)';
+        const p = payload();
+        expect(p.requires_prior_completion).toBe(true);
+
+        setFrom(null);
+        expect(form.value.requires_prior_completion).toBe(false);
     });
 
     it('validate fails + reports field errors when name/date blank', () => {

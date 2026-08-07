@@ -22,6 +22,7 @@ export interface ClassFormFields {
     address: string;
     instructor: string;
     show_signature: boolean;
+    requires_prior_completion: boolean;
     total_hours: string | number;
     min_students: string | number;
     max_students: string | number;
@@ -39,6 +40,7 @@ function emptyFields(): ClassFormFields {
         address: '',
         instructor: '',
         show_signature: false,
+        requires_prior_completion: false,
         total_hours: '',
         min_students: '',
         max_students: '',
@@ -68,6 +70,8 @@ export function useClassForm(context: string) {
             address: target?.address ?? '',
             instructor: target?.instructor ?? '',
             show_signature: target?.show_signature ?? false,
+            requires_prior_completion:
+                target?.requires_prior_completion ?? false,
             total_hours: target?.total_hours ?? '',
             min_students: target?.min_students ?? '',
             max_students: target?.max_students ?? '',
@@ -119,6 +123,7 @@ export function useClassForm(context: string) {
             address: blank(form.value.address),
             instructor: blank(form.value.instructor),
             show_signature: form.value.show_signature,
+            requires_prior_completion: form.value.requires_prior_completion,
             total_hours: optionalNumber(String(form.value.total_hours)),
             min_students: optionalNumber(String(form.value.min_students)),
             max_students: optionalNumber(String(form.value.max_students)),
