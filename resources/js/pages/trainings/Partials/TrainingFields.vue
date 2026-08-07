@@ -234,6 +234,31 @@ watch(
             <InputError :message="fieldErrors.message('std_freq_id')" />
         </div>
 
+        <div class="grid gap-2 border-t border-border pt-3">
+            <Label for="t_satisfied_by">
+                Satisfied by (higher trainings)
+            </Label>
+            <MultiSelectDropdown
+                id="t_satisfied_by"
+                v-model="form.satisfied_by_ids"
+                :options="
+                    satisfierOptions.map((t) => ({
+                        id: t.id,
+                        label: t.name,
+                    }))
+                "
+                placeholder="None — pick the higher trainings that count"
+                search-placeholder="Search trainings…"
+            />
+            <p class="text-xs text-muted-foreground">
+                A person holding a current credential for ANY checked training
+                also counts as satisfying this one (their certificate stays the
+                higher one). Chains upward: if a checked training names its own
+                higher levels, those count here too.
+            </p>
+            <InputError :message="fieldErrors.message('satisfied_by_ids')" />
+        </div>
+
         <div class="space-y-3 border-t border-border pt-3">
             <p class="text-sm font-medium">SMC Certificate</p>
             <p class="text-xs text-muted-foreground">
@@ -256,32 +281,6 @@ watch(
                     placeholder="e.g. FPAP"
                 />
                 <InputError :message="fieldErrors.message('cert_code')" />
-            </div>
-
-            <div class="grid gap-2">
-                <Label for="t_satisfied_by">
-                    Satisfied by (higher trainings)
-                </Label>
-                <MultiSelectDropdown
-                    id="t_satisfied_by"
-                    v-model="form.satisfied_by_ids"
-                    :options="
-                        satisfierOptions.map((t) => ({
-                            id: t.id,
-                            label: t.name,
-                        }))
-                    "
-                    placeholder="None — pick the higher trainings that count"
-                    search-placeholder="Search trainings…"
-                />
-                <p class="text-xs text-muted-foreground">
-                    A person holding a current credential for ANY checked
-                    training also counts as satisfying this one (their
-                    certificate stays the higher one). Chains upward: if a
-                    checked training names its own higher levels, those count
-                    here too.
-                </p>
-                <InputError :message="fieldErrors.message('satisfied_by_ids')" />
             </div>
 
             <div class="grid gap-2">
