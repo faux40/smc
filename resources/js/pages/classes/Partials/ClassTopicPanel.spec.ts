@@ -115,6 +115,17 @@ async function openCert(wrapper: ReturnType<typeof mountPanel>['wrapper']) {
     }
 }
 
+/** The card-fields box is shut by default too. */
+async function openCards(wrapper: ReturnType<typeof mountPanel>['wrapper']) {
+    await openPanel(wrapper);
+
+    const toggle = wrapper.get('[data-testid="card-fields-toggle"]');
+
+    if (toggle.attributes('aria-expanded') === 'false') {
+        await toggle.trigger('click');
+    }
+}
+
 const shortInputs = (w: ReturnType<typeof mountPanel>['wrapper']) =>
     w.findAll<HTMLInputElement>('[data-testid="card-value-short"]');
 const richAreas = (w: ReturnType<typeof mountPanel>['wrapper']) =>
@@ -273,7 +284,7 @@ describe('ClassTopicPanel', () => {
                     ],
                 }),
             );
-            await openPanel(wrapper);
+            await openCards(wrapper);
 
             expect(shortInputs(wrapper)[0].element.value).toBe('INST-4471');
             expect(richAreas(wrapper)[0].element.value).toBe('Signed off');
@@ -293,7 +304,7 @@ describe('ClassTopicPanel', () => {
                     ],
                 }),
             );
-            await openPanel(wrapper);
+            await openCards(wrapper);
 
             expect(shortInputs(wrapper)[0].element.value).toBe('');
             expect(
@@ -309,7 +320,7 @@ describe('ClassTopicPanel', () => {
                     ],
                 }),
             );
-            await openPanel(wrapper);
+            await openCards(wrapper);
 
             expect(wrapper.text()).toContain('Trainer ID');
             expect(wrapper.text()).toContain('${trainer_id}');
@@ -330,7 +341,7 @@ describe('ClassTopicPanel', () => {
                     ],
                 }),
             );
-            await openPanel(wrapper);
+            await openCards(wrapper);
 
             const hints = wrapper.findAll(
                 '[data-testid="card-value-format-hint"]',
@@ -342,23 +353,22 @@ describe('ClassTopicPanel', () => {
 
         it('says so when the training defines none', async () => {
             const { wrapper } = mountPanel();
-            await openPanel(wrapper);
+            await openCards(wrapper);
 
             expect(wrapper.text()).toContain('No card fields');
         });
     });
 
     describe('its two inner boxes', () => {
-        it('shows the card fields and keeps the certificate rolled up', async () => {
-            // The certificate carries an editor and a live preview, so it is
-            // by far the tallest thing here and the least often wanted. Card
-            // fields are short and are usually what the panel was opened for.
+        it('starts with the certificate and the card fields both rolled up', async () => {
+            // Both boxes are secondary to the timing/expiry fields the panel
+            // opens onto — each unrolls on request.
             const { wrapper } = mountPanel(
                 topic({ card_fields: [field({ id: 'f1' })] }),
             );
             await openPanel(wrapper);
 
-            expect(shortInputs(wrapper)).toHaveLength(1);
+            expect(shortInputs(wrapper)).toHaveLength(0);
             expect(
                 wrapper.find('[data-testid="topic-cert-code"]').exists(),
             ).toBe(false);
@@ -389,7 +399,7 @@ describe('ClassTopicPanel', () => {
             ).toContain('First Aid / CPR');
         });
 
-        it('rolls the card fields shut on request', async () => {
+        it('rolls the card fields open on request', async () => {
             const { wrapper } = mountPanel(
                 topic({ card_fields: [field({ id: 'f1' })] }),
             );
@@ -399,7 +409,7 @@ describe('ClassTopicPanel', () => {
                 .get('[data-testid="card-fields-toggle"]')
                 .trigger('click');
 
-            expect(shortInputs(wrapper)).toHaveLength(0);
+            expect(shortInputs(wrapper)).toHaveLength(1);
         });
 
         it('keeps an edit made in a box that was rolled shut again', async () => {
@@ -448,7 +458,7 @@ describe('ClassTopicPanel', () => {
             const save = vi
                 .spyOn(store, 'updateTopic')
                 .mockResolvedValue(detail());
-            await openPanel(wrapper);
+            await openCards(wrapper);
 
             await shortInputs(wrapper)[0].setValue('INST-4471');
             await wrapper.get('[data-testid="topic-hours"]').setValue('8');
@@ -481,7 +491,7 @@ describe('ClassTopicPanel', () => {
             const save = vi
                 .spyOn(store, 'updateTopic')
                 .mockResolvedValue(detail());
-            await openPanel(wrapper);
+            await openCards(wrapper);
 
             await shortInputs(wrapper)[0].setValue('');
             await wrapper.get('[data-testid="topic-save"]').trigger('click');
@@ -539,7 +549,7 @@ describe('ClassTopicPanel', () => {
                 topic({ card_fields: [field({ id: 'f1', value: 'INST-4471' })] }),
                 { readOnly: true },
             );
-            await openPanel(wrapper);
+            await openCards(wrapper);
 
             expect(shortInputs(wrapper)[0].attributes('disabled')).toBeDefined();
             expect(

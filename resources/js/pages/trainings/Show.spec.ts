@@ -70,6 +70,10 @@ describe('trainings/Show', () => {
             .find((b) => b.text().includes('Save changes'))!;
         expect(saveBtn.attributes('disabled')).toBeDefined();
 
+        // The certificate box starts rolled up.
+        await wrapper
+            .get('[data-testid="training-cert-toggle"]')
+            .trigger('click');
         await wrapper.get('#cert_title').setValue('New Title');
         expect(saveBtn.attributes('disabled')).toBeUndefined();
 

@@ -276,13 +276,13 @@ async function save(): Promise<void> {
                 </div>
             </CollapsibleSection>
 
-            <!-- Card fields: this class's answers for the training's own. -->
+            <!-- Card fields: this class's answers for the training's own.
+                 Shut by default, like the certificate box above it. -->
             <CollapsibleSection
                 title="Card fields"
                 toggle-testid="card-fields-toggle"
                 nested
                 :summary="cardFieldsSummary"
-                default-open
                 class="space-y-3"
             >
                 <p

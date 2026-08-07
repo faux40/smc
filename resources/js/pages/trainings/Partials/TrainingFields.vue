@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue';
 import CertEditor from '@/components/CertEditor.vue';
+import CollapsibleSection from '@/components/CollapsibleSection.vue';
 import InputError from '@/components/InputError.vue';
 import MultiSelectDropdown from '@/components/MultiSelectDropdown.vue';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -259,8 +260,13 @@ watch(
             <InputError :message="fieldErrors.message('satisfied_by_ids')" />
         </div>
 
-        <div class="space-y-3 border-t border-border pt-3">
-            <p class="text-sm font-medium">SMC Certificate</p>
+        <CollapsibleSection
+            title="SMC Certificate"
+            toggle-testid="training-cert-toggle"
+            nested
+            :summary="form.cert_title || null"
+            class="space-y-3"
+        >
             <p class="text-xs text-muted-foreground">
                 The built-in certificate — defaults copied onto a class when
                 this topic is added, then printed on the certificate.
@@ -286,11 +292,14 @@ watch(
                 </p>
                 <InputError :message="fieldErrors.message('cert_code')" />
             </div>
-        </div>
+        </CollapsibleSection>
 
-        <div class="space-y-3 border-t border-border pt-3">
-            <p class="text-sm font-medium">Card</p>
-
+        <CollapsibleSection
+            title="Card"
+            toggle-testid="training-card-toggle"
+            nested
+            class="space-y-3"
+        >
             <div class="grid gap-2">
                 <Label for="t_card_template">Custom card</Label>
                 <select
@@ -350,11 +359,14 @@ watch(
                 </p>
                 <InputError :message="fieldErrors.message('card_stock_id')" />
             </div>
-        </div>
+        </CollapsibleSection>
 
-        <div class="space-y-3 border-t border-border pt-3">
-            <p class="text-sm font-medium">Class defaults</p>
-
+        <CollapsibleSection
+            title="Class defaults"
+            toggle-testid="training-defaults-toggle"
+            nested
+            class="space-y-3"
+        >
             <div class="grid gap-2">
                 <Label for="t_def_trainer">Default trainer</Label>
                 <Input id="t_def_trainer" v-model="form.default_trainer" />
@@ -374,6 +386,6 @@ watch(
                     ></textarea>
                 </div>
             </div>
-        </div>
+        </CollapsibleSection>
     </div>
 </template>

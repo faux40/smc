@@ -80,6 +80,11 @@ describe('TrainingFields', () => {
         });
         await nextTick();
 
+        // The Card box starts rolled up.
+        await wrapper
+            .get('[data-testid="training-card-toggle"]')
+            .trigger('click');
+
         const select = wrapper.get('#t_card_template');
         expect(select.text()).toContain('CPR wallet card');
 
