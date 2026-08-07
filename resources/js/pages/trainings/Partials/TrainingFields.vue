@@ -280,6 +280,11 @@ watch(
                     v-model="form.cert_code"
                     placeholder="e.g. FPAP"
                 />
+                <p class="text-xs text-muted-foreground">
+                    Prefix for the certificate numbers minted at class
+                    close-out &mdash; e.g. FPAP becomes FPAP20260806-001.
+                    Blank uses the generic CERT prefix.
+                </p>
                 <InputError :message="fieldErrors.message('cert_code')" />
             </div>
 
