@@ -33,7 +33,10 @@ import { page as assignmentsPage } from '@/routes/assignments';
 import { page as cardsPage } from '@/routes/cards';
 import { page as classesPage } from '@/routes/classes';
 import { page as completionsPage } from '@/routes/completions';
-import { data as documentDataPage, page as documentsPage } from '@/routes/documents';
+import {
+    data as documentDataPage,
+    page as documentsPage,
+} from '@/routes/documents';
 import { page as requirementsPage } from '@/routes/requirements';
 import { page as tagsPage } from '@/routes/tags';
 import { page as trainingsPage } from '@/routes/trainings';
@@ -115,28 +118,33 @@ const mainNavItems = computed<NavItem[]>(() => {
             href: classesPage(),
             icon: CalendarDays,
         });
-        // Documents module (Phases D1/D2) — template generation + the org
-        // merge data feeding it. Becomes a sidebar group per F40 as the
-        // module grows.
-        items.push({
-            title: 'Documents',
-            href: documentsPage(),
-            icon: FileStack,
-        });
-        items.push({
-            title: 'Document data',
-            href: documentDataPage(),
-            icon: Database,
-        });
-        // Cards (custom-certs C2) — stocks now, card templates next.
-        items.push({
-            title: 'Cards',
-            href: cardsPage(),
-            icon: IdCard,
-        });
     }
 
     return items;
+});
+
+/*
+ * The Documents module gets its own labelled group rather than three more
+ * entries on the flat list (F40): template generation (D1/D2), the org merge
+ * data feeding it, and cards (custom-certs C2) are one thing, and reading as
+ * one thing is the point. Later modules land the same way.
+ *
+ * Same Manager+ gate the block carried inside mainNavItems. Empty for everyone
+ * below that, and the template drops the whole group rather than render a
+ * heading over nothing.
+ */
+const documentNavItems = computed<NavItem[]>(() => {
+    const u = authUser.value;
+
+    if (!u || !(u.isOwner || u.isSuperAdmin || u.isAdmin || u.isManager)) {
+        return [];
+    }
+
+    return [
+        { title: 'Documents', href: documentsPage(), icon: FileStack },
+        { title: 'Document data', href: documentDataPage(), icon: Database },
+        { title: 'Cards', href: cardsPage(), icon: IdCard },
+    ];
 });
 </script>
 
@@ -156,6 +164,11 @@ const mainNavItems = computed<NavItem[]>(() => {
 
         <SidebarContent>
             <NavMain :items="mainNavItems" />
+            <NavMain
+                v-if="documentNavItems.length"
+                :items="documentNavItems"
+                label="Documents"
+            />
         </SidebarContent>
 
         <SidebarFooter>
